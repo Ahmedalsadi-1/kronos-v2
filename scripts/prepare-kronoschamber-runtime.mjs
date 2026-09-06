@@ -2,6 +2,7 @@
 
 import { build } from "esbuild";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 const SourceRoot = path.resolve("third_party/kronoschamber-web");
@@ -11,37 +12,55 @@ const McpOutputRoot = path.resolve("dist/mcp-kron-term");
 const HermesPluginSourceRoot = path.resolve("agents/hermes/plugins");
 const HermesPluginOutputRoot = path.resolve("dist/hermes-plugins");
 
+const chamberServerPresent = existsSync(path.join(SourceRoot, "server", "index.js"));
+const chamberDistPresent = existsSync(path.join(SourceRoot, "dist"));
+// The server bundle needs the chamber's own node_modules (openai, jsonc-parser, …)
+// — an untracked tree that disappears whenever the directory is rebuilt.
+const chamberDepsPresent = existsSync(path.join(SourceRoot, "node_modules", "jsonc-parser"));
+const chamberComplete = chamberServerPresent && chamberDistPresent && chamberDepsPresent;
+if (!chamberComplete) {
+  console.warn(
+    "[prepare] third_party/kronoschamber-web is incomplete (server: " +
+      `${chamberServerPresent}, dist: ${chamberDistPresent}, node_modules: ${chamberDepsPresent}) — ` +
+      "skipping the chamber runtime bundle. KronosChamber's embedded webview will be unavailable " +
+      "until that UI dist and its dependencies are regenerated."
+  );
+}
+
 await rm(OutputRoot, { recursive: true, force: true });
 await rm(McpOutputRoot, { recursive: true, force: true });
 await rm(HermesPluginOutputRoot, { recursive: true, force: true });
-await mkdir(path.join(OutputRoot, "server"), { recursive: true });
+if (chamberComplete) {
+  await mkdir(path.join(OutputRoot, "server"), { recursive: true });
+}
 await mkdir(path.join(McpOutputRoot, "dist"), { recursive: true });
 await mkdir(HermesPluginOutputRoot, { recursive: true });
 
 await Promise.all([
-  cp(path.join(SourceRoot, "dist"), path.join(OutputRoot, "dist"), { recursive: true }),
-  copyRuntimePackage("node-pty"),
-  copyRuntimePackage("node-addon-api"),
+  ...(chamberDistPresent ? [cp(path.join(SourceRoot, "dist"), path.join(OutputRoot, "dist"), { recursive: true })] : []),
+  ...(chamberComplete ? [copyRuntimePackage("node-pty"), copyRuntimePackage("node-addon-api")] : []),
   cp(HermesPluginSourceRoot, HermesPluginOutputRoot, { recursive: true }),
 ]);
 
-await build({
-  entryPoints: [path.join(SourceRoot, "server/index.js")],
-  outfile: path.join(OutputRoot, "server/index.js"),
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  target: "node22",
-  sourcemap: false,
-  external: ["bun-pty", "node-pty"],
-  alias: {
-    "jsonc-parser": path.join(SourceRoot, "node_modules/jsonc-parser/lib/esm/main.js"),
-  },
-  banner: {
-    js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
-  },
-  logLevel: "warning",
-});
+if (chamberComplete) {
+  await build({
+    entryPoints: [path.join(SourceRoot, "server/index.js")],
+    outfile: path.join(OutputRoot, "server/index.js"),
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node22",
+    sourcemap: false,
+    external: ["bun-pty", "node-pty"],
+    alias: {
+      "jsonc-parser": path.join(SourceRoot, "node_modules/jsonc-parser/lib/esm/main.js"),
+    },
+    banner: {
+      js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
+    },
+    logLevel: "warning",
+  });
+}
 
 await build({
   entryPoints: [path.join(McpSourceRoot, "dist/index.js")],
@@ -76,21 +95,23 @@ await build({
   logLevel: "warning",
 });
 
-const sourcePackage = JSON.parse(await readFile(path.join(SourceRoot, "package.json"), "utf8"));
-await writeFile(
-  path.join(OutputRoot, "package.json"),
-  `${JSON.stringify(
-    {
-      name: sourcePackage.name,
-      version: sourcePackage.version,
-      private: true,
-      type: "module",
-      main: "./server/index.js",
-    },
-    null,
-    2
-  )}\n`
-);
+if (chamberComplete) {
+  const sourcePackage = JSON.parse(await readFile(path.join(SourceRoot, "package.json"), "utf8"));
+  await writeFile(
+    path.join(OutputRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: sourcePackage.name,
+        version: sourcePackage.version,
+        private: true,
+        type: "module",
+        main: "./server/index.js",
+      },
+      null,
+      2
+    )}\n`
+  );
+}
 
 const mcpPackage = JSON.parse(await readFile(path.join(McpSourceRoot, "package.json"), "utf8"));
 await writeFile(
@@ -111,6 +132,10 @@ await writeFile(
 async function copyRuntimePackage(packageName) {
   const source = path.join(SourceRoot, "node_modules", packageName);
   const destination = path.join(OutputRoot, "node_modules", packageName);
+  if (!existsSync(source)) {
+    console.warn(`[prepare] skipping runtime package ${packageName} — ${source} is missing`);
+    return;
+  }
   await cp(source, destination, {
     recursive: true,
     filter: (entry) => !entry.endsWith(".pdb") && !entry.includes(`${path.sep}.git${path.sep}`),

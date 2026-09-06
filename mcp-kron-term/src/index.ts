@@ -5,17 +5,19 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { DeveloperActionRegistry, DeveloperMemoryStore } from "./developer-memory.js";
 import { runInteraction, type InteractionAction, type InteractionResult } from "./interaction-contract.js";
 import {
     KronComputerUseClient,
     previewImageUrl as kronComputerUsePreviewImageUrl,
+    type KronComputerUseCall,
     type KronComputerUseToolResult,
 } from "./kron-computer-use.js";
 import { SharedSkillCatalog } from "./shared-skills.js";
 import { WshBridge } from "./wsh-bridge.js";
 
-const wsh = new WshBridge();
+let wsh = new WshBridge();
 const kronComputerUse = new KronComputerUseClient();
 const developerMemoryStore = new DeveloperMemoryStore();
 const sharedSkills = new SharedSkillCatalog();
@@ -26,6 +28,54 @@ export const server = new McpServer({
         "KronTerm block/widget control, layout management, notifications, connections, and secrets. " +
         "Provides AI agents with block manipulation, widget interaction, terminal/file management, and more.",
 });
+
+export function setKronTermToolBridge(bridge: WshBridge): void {
+    wsh = bridge;
+}
+
+export async function warmKronComputerUse(): Promise<void> {
+    await kronComputerUse.warm();
+}
+
+export type NativeToolManifestEntry = {
+    name: string;
+    title?: string;
+    description?: string;
+    inputSchema: Record<string, unknown>;
+    annotations?: Record<string, unknown>;
+};
+
+type NativeRegisteredToolLike = {
+    enabled: boolean;
+    title?: string;
+    description?: string;
+    inputSchema?: z.ZodRawShape | z.ZodType;
+    annotations?: Record<string, unknown>;
+};
+
+// The SDK stores each tool's params either as a raw shape or as a ZodObject,
+// and every schema belongs to THIS package's zod (v3). Converting them with a
+// different zod major (e.g. emain's z.toJSONSchema on v4) throws, so the
+// JSON-schema conversion must live here where the versions always match.
+function isZodSchema(value: z.ZodRawShape | z.ZodType): value is z.ZodType {
+    return (value as { _def?: unknown })._def != null;
+}
+
+export function nativeToolManifest(toolAllowed: (name: string) => boolean): NativeToolManifestEntry[] {
+    const tools = (server as unknown as { _registeredTools: Record<string, NativeRegisteredToolLike> })
+        ._registeredTools;
+    return Object.entries(tools)
+        .filter(([name, tool]) => tool.enabled && toolAllowed(name))
+        .map(([name, tool]) => ({
+            name,
+            title: tool.title,
+            description: tool.description,
+            inputSchema: (tool.inputSchema
+                ? zodToJsonSchema(isZodSchema(tool.inputSchema) ? tool.inputSchema : z.object(tool.inputSchema))
+                : { type: "object" }) as Record<string, unknown>,
+            annotations: tool.annotations,
+        }));
+}
 
 const SERVER_UNAVAILABLE = " (unavailable — wsh command not exposed by this version of KronTerm)";
 
@@ -99,6 +149,15 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
     workspace_focus_widget: (a) => ({ action: "focus", detail: `Focusing workspace widget ${a.blockId}` }),
     workspace_move_widget: (a) => ({ action: "execute", detail: `Moving workspace widget ${a.blockId}` }),
     workspace_resize_widget: (a) => ({ action: "execute", detail: `Resizing workspace widget ${a.blockId}` }),
+    workspace_open_app: (a) => ({ action: "open", detail: `Opening ${a.view}` }),
+    workspace_dock_widget: (a) => ({ action: "execute", detail: `Docking ${a.blockId} ${a.side}` }),
+    workspace_detach_widget: (a) => ({ action: "execute", detail: `Detaching ${a.blockId}` }),
+    workspace_set_widget_collapsed: (a) => ({
+        action: "execute",
+        detail: `${a.collapsed ? "Collapsing" : "Restoring"} ${a.blockId}`,
+    }),
+    workspace_show_overview: () => ({ action: "focus", detail: "Showing all workspace applications" }),
+    workspace_switch_workspace: (a) => ({ action: "focus", detail: `Switching to workspace ${a.workspaceId}` }),
     workspace_swap_widgets: (a) => ({
         action: "execute",
         detail: `Swapping workspace widgets ${a.blockId} and ${a.targetBlockId}`,
@@ -165,6 +224,7 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
     widget_clear: () => ({ action: "type", detail: "Clearing input" }),
     widget_select: (a) => ({ action: "click", detail: `Select option: ${a.option ?? ""}` }),
     widget_toggle: (a) => ({ action: "click", detail: `Toggle ${a.elementRef ?? ""}` }),
+    widget_sequence: () => ({ action: "execute", detail: "Running a fast widget action sequence" }),
     widget_wait_for: (a) => ({ action: "inspect", detail: `Wait for ${a.condition ?? ""}` }),
     widget_get_state: () => ({ action: "inspect", detail: "Getting widget state" }),
     widget_clipboard_get: () => ({ action: "inspect", detail: "Getting clipboard" }),
@@ -272,6 +332,22 @@ function validateInteractionArgs(toolName: string, args: Record<string, unknown>
     return undefined;
 }
 
+const WidgetFocusActions = new Set([
+    "widget_click",
+    "widget_mouse_move",
+    "widget_hover",
+    "widget_type",
+    "widget_press",
+    "widget_scroll_to",
+    "widget_drag",
+    "widget_long_press",
+    "widget_set_value",
+    "widget_clear",
+    "widget_select",
+    "widget_toggle",
+    "widget_clipboard_set",
+]);
+
 function wrapActivity(toolName: string, blockIdArg?: string) {
     return function activityDecorator<T extends Record<string, unknown>>(
         fn: (args: T) => Promise<any>
@@ -317,15 +393,36 @@ function wrapActivity(toolName: string, blockIdArg?: string) {
                         },
                         {
                             preflight: async () => {
-                                if (surface === "kronterm") await wsh.getBlockInfo(surfaceId);
+                                if (surface === "kronterm") {
+                                    await wsh.getBlockInfo(surfaceId);
+                                    if (WidgetFocusActions.has(toolName)) {
+                                        await wsh.focusBlock(surfaceId);
+                                    }
+                                }
                                 if (surface === "sandbox" && toolName !== "sandbox_start")
                                     await wsh.sandboxStatus(surfaceId);
                             },
-                            verify: async () => ({
-                                observedBefore: true,
-                                verifiedAfter: true,
-                                summary: `${toolName} completed on ${surfaceId}`,
-                            }),
+                            verify: async () => {
+                                if (surface !== "kronterm" || !WidgetFocusActions.has(toolName)) {
+                                    return {
+                                        observedBefore: true,
+                                        verifiedAfter: true,
+                                        summary: `${toolName} completed on ${surfaceId}`,
+                                    };
+                                }
+                                const state = JSON.parse(await wsh.widgetGetState(surfaceId)) as {
+                                    focused?: boolean;
+                                    isfocused?: boolean;
+                                };
+                                const focused = state.focused ?? state.isfocused ?? false;
+                                return {
+                                    observedBefore: true,
+                                    verifiedAfter: focused,
+                                    summary: focused
+                                        ? `${toolName} completed with widget ${surfaceId} focused`
+                                        : `${toolName} completed but widget ${surfaceId} did not report focus`,
+                                };
+                            },
                         }
                     );
                     const result = execution.value
@@ -783,6 +880,94 @@ server.tool(
     }
 );
 
+const kronComputerSequenceActionSchema = z.object({
+    action: z.enum(["click", "type_text", "press_key", "scroll", "drag", "set_value", "secondary_action"]),
+    elementIndex: z.string().optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    clickCount: z.number().int().min(1).max(3).optional(),
+    mouseButton: z.enum(["left", "right", "middle"]).optional(),
+    text: z.string().optional(),
+    key: z.string().optional(),
+    direction: z.enum(["up", "down", "left", "right"]).optional(),
+    pages: z.number().positive().optional(),
+    fromX: z.number().optional(),
+    fromY: z.number().optional(),
+    toX: z.number().optional(),
+    toY: z.number().optional(),
+    value: z.string().optional(),
+    secondaryAction: z.string().optional(),
+});
+
+server.tool(
+    "kron_computer_sequence",
+    "Execute a short deterministic sequence in one native app without an LLM round trip between every click or keystroke. Use element indices from a fresh app-state snapshot. Stops on the first failed action and returns a fresh accessibility tree and screenshot by default.",
+    {
+        app: z.string().min(1).describe("App name or bundle identifier"),
+        actions: z.array(kronComputerSequenceActionSchema).min(1).max(12),
+        observeAfter: z.boolean().optional().describe("Return a fresh app state after the sequence (default: true)"),
+    },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    async ({ app, actions, observeAfter = true }) => {
+        const names = {
+            click: "click",
+            type_text: "type_text",
+            press_key: "press_key",
+            scroll: "scroll",
+            drag: "drag",
+            set_value: "set_value",
+            secondary_action: "perform_secondary_action",
+        } as const;
+        const calls: KronComputerUseCall[] = actions.map((action) => ({
+            name: names[action.action],
+            args: {
+                app,
+                element_index: action.elementIndex,
+                x: action.x,
+                y: action.y,
+                click_count: action.clickCount,
+                mouse_button: action.mouseButton,
+                text: action.text,
+                key: action.key,
+                direction: action.direction,
+                pages: action.pages,
+                from_x: action.fromX,
+                from_y: action.fromY,
+                to_x: action.toX,
+                to_y: action.toY,
+                value: action.value,
+                action: action.secondaryAction,
+            },
+        }));
+        if (observeAfter) {
+            calls.push({ name: "get_app_state", args: { app } });
+        }
+        publishKronComputerUseActivity("execute", "start", `Running ${actions.length} actions in ${app}`, { app });
+        try {
+            const results = await kronComputerUse.callSequence(calls);
+            const failed = results.find((result) => result.isError);
+            const finalResult = results.at(-1);
+            publishKronComputerUseActivity(
+                "execute",
+                failed ? "error" : "finish",
+                `Ran ${Math.min(actions.length, results.length)} actions in ${app}`,
+                { app },
+                finalResult
+            );
+            return {
+                content: results.flatMap((result, index) => [
+                    { type: "text" as const, text: `Step ${index + 1}:` },
+                    ...result.content,
+                ]),
+                ...(failed ? { isError: true } : {}),
+            };
+        } catch (err: any) {
+            publishKronComputerUseActivity("execute", "error", `Native action sequence failed in ${app}`, { app });
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    }
+);
+
 server.tool(
     "kron_computer_turn_ended",
     "Clear the kron-computer-use software cursor overlay when a native desktop interaction turn is complete.",
@@ -831,7 +1016,7 @@ const workspaceDirectionSchema = z.enum(["up", "right", "down", "left"]);
 
 server.tool(
     "workspace_snapshot",
-    "Read the authoritative active KronTerm presentation before operating. Returns widgets/tabs/canvas mode, ordered widget identities, titles and views, focus and visibility, on-screen bounds, canvas world bounds/camera, split tree, and the actions supported by each presentation.",
+    "Read the authoritative active KronTerm presentation before operating. Returns widgets/tabs/canvas/OS mode, ordered live identities, focus and visibility, on-screen and world bounds, camera, OS scene/groups, split tree, and supported actions.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_snapshot")(async () => {
@@ -845,7 +1030,7 @@ server.tool(
 
 server.tool(
     "workspace_screenshot",
-    "Capture the complete active KronTerm widgets, tabs, or canvas presentation. Use with workspace_snapshot when visual appearance matters; use widget_screenshot for one widget's content.",
+    "Capture the complete active KronTerm widgets, tabs, canvas, or OS presentation. Use with workspace_snapshot when visual appearance matters; use widget_screenshot for one widget's content.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_screenshot")(async () => {
@@ -860,8 +1045,8 @@ server.tool(
 
 server.tool(
     "workspace_set_presentation",
-    "Switch the active workspace between tiled widgets, focused widget tabs, and spatial canvas. Snapshot again after switching because visibility and geometry semantics change.",
-    { presentation: z.enum(["widgets", "tabs", "canvas"]) },
+    "Switch the active workspace between tiled widgets, focused widget tabs, spatial canvas, and OS mode. Snapshot again after switching because visibility and geometry semantics change.",
+    { presentation: z.enum(["widgets", "tabs", "canvas", "os"]) },
     workspaceWriteAnnotations,
     wrapActivity("workspace_set_presentation")(async ({ presentation }) => {
         try {
@@ -979,6 +1164,223 @@ server.tool(
                     {
                         type: "text",
                         text: await wsh.workspaceSurfaceControl({ action: "swap", blockId, targetBlockId }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_open_app",
+    "Open a live application block in the active KronTerm OS workspace.",
+    { view: z.string().min(1) },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_open_app")(async ({ view }) => {
+        try {
+            return {
+                content: [{ type: "text", text: await wsh.workspaceSurfaceControl({ action: "spatial.open", view }) }],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_open_native_app",
+    "Open an installed desktop application as a live KronTerm OS app-stream session.",
+    { appId: z.string().min(1), appName: z.string().min(1).optional() },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_open_native_app")(async ({ appId, appName }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({
+                            action: "spatial.openApp",
+                            appId,
+                            appName: appName ?? appId,
+                        }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_set_os_view",
+    "Switch KronTerm OS between Canvas and File without replacing or restarting any live session.",
+    { view: z.enum(["canvas", "file"]) },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_set_os_view")(async ({ view }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({ action: "os.view.set", presentation: view }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_open_file",
+    "Open a file or directory as a live preview session in the current KronTerm OS workspace.",
+    { file: z.string().min(1) },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_open_file")(async ({ file }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({ action: "spatial.openFile", file }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_open_command_center",
+    "Open KronTerm's unified command center for apps, sessions, files, settings, and compatibility layouts.",
+    {},
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_open_command_center")(async () => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({ action: "spatial.openCommandCenter" }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_dock_widget",
+    "Dock one live OS workspace window beside another without replacing either session.",
+    { blockId: z.string().min(1), targetBlockId: z.string().min(1), side: z.enum(["left", "right"]) },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_dock_widget")(async ({ blockId, targetBlockId, side }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({
+                            action: "spatial.dock",
+                            blockId,
+                            targetBlockId,
+                            side,
+                        }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_detach_widget",
+    "Detach a live side window from its OS workspace group while preserving its session.",
+    { blockId: z.string().min(1) },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_detach_widget")(async ({ blockId }) => {
+        try {
+            return {
+                content: [
+                    { type: "text", text: await wsh.workspaceSurfaceControl({ action: "spatial.detach", blockId }) },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_set_widget_collapsed",
+    "Minimize or restore a live window in KronTerm OS without closing its underlying session.",
+    { blockId: z.string().min(1), collapsed: z.boolean() },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_set_widget_collapsed")(async ({ blockId, collapsed }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({
+                            action: collapsed ? "spatial.collapse" : "spatial.restore",
+                            blockId,
+                        }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_show_overview",
+    "Show all live KronTerm OS windows in a calm, flat overview while preserving every session.",
+    { selectedBlockId: z.string().min(1).optional() },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_show_overview")(async ({ selectedBlockId }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({
+                            action: "spatial.showOverview",
+                            blockId: selectedBlockId,
+                        }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_switch_workspace",
+    "Switch the active KronTerm window to another persisted workspace.",
+    { workspaceId: z.string().min(1) },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_switch_workspace")(async ({ workspaceId }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({ action: "spatial.switchWorkspace", workspaceId }),
                     },
                 ],
             };
@@ -2093,6 +2495,151 @@ server.tool(
 // WIDGET HUMAN SIMULATION TOOLS
 // ══════════════════════════════════════════════════════════════════════════
 
+const widgetSequenceActionSchema = z
+    .object({
+        action: z.enum([
+            "click",
+            "hover",
+            "type",
+            "press",
+            "scroll_to",
+            "drag",
+            "set_value",
+            "clear",
+            "select",
+            "toggle",
+        ]),
+        elementRef: z.string().optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        button: z.enum(["left", "right", "middle"]).optional(),
+        clickType: z.enum(["single", "double", "triple"]).optional(),
+        text: z.string().optional(),
+        keys: z.array(z.string()).optional(),
+        startX: z.number().optional(),
+        startY: z.number().optional(),
+        endX: z.number().optional(),
+        endY: z.number().optional(),
+        value: z.string().optional(),
+        option: z.string().optional(),
+    })
+    .superRefine((value, context) => {
+        const requiresRef = ["set_value", "clear", "select", "toggle"].includes(value.action);
+        const hasCoordinates = value.x != null && value.y != null;
+        if ((value.action === "click" || value.action === "hover") && Boolean(value.elementRef) === hasCoordinates) {
+            context.addIssue({
+                code: "custom",
+                message: `${value.action} requires exactly one ref or coordinate pair`,
+            });
+        }
+        if (requiresRef && !value.elementRef) {
+            context.addIssue({ code: "custom", message: `${value.action} requires elementRef` });
+        }
+        if (value.action === "type" && value.text == null) {
+            context.addIssue({ code: "custom", message: "type requires text" });
+        }
+        if (value.action === "press" && !value.keys?.length) {
+            context.addIssue({ code: "custom", message: "press requires keys" });
+        }
+        if (
+            value.action === "drag" &&
+            [value.startX, value.startY, value.endX, value.endY].some((coordinate) => coordinate == null)
+        ) {
+            context.addIssue({ code: "custom", message: "drag requires all start and end coordinates" });
+        }
+        if (value.action === "set_value" && value.value == null) {
+            context.addIssue({ code: "custom", message: "set_value requires value" });
+        }
+        if (value.action === "select" && value.option == null) {
+            context.addIssue({ code: "custom", message: "select requires option" });
+        }
+    });
+
+server.tool(
+    "widget_sequence",
+    "Run a short deterministic browser or widget interaction sequence in one tool call. This avoids an LLM round trip between known actions, keeps the widget focused, stops on the first failure, and returns a fresh semantic snapshot by default. Use refs from a recent widget_snapshot and avoid batching across navigation boundaries.",
+    {
+        blockId: z.string().describe("Target browser or widget block ID"),
+        actions: z.array(widgetSequenceActionSchema).min(1).max(12),
+        snapshotAfter: z
+            .boolean()
+            .optional()
+            .describe("Return a fresh semantic snapshot after the sequence (default: true)"),
+    },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    async ({ blockId, actions, snapshotAfter = true }) => {
+        publishActivity("widget_sequence", "start", blockId, { blockId });
+        const results: Array<{ step: number; action: string; result: string }> = [];
+        try {
+            await wsh.getBlockInfo(blockId);
+            await wsh.focusBlock(blockId);
+            for (const [index, action] of actions.entries()) {
+                let result: string;
+                switch (action.action) {
+                    case "click":
+                        result = await wsh.widgetClick(
+                            blockId,
+                            action.elementRef,
+                            action.x,
+                            action.y,
+                            action.button,
+                            action.clickType
+                        );
+                        break;
+                    case "hover":
+                        result = await wsh.widgetHover(blockId, action.elementRef, action.x, action.y);
+                        break;
+                    case "type":
+                        result = await wsh.widgetType(blockId, action.text ?? "", 0);
+                        break;
+                    case "press":
+                        result = await wsh.widgetPress(blockId, action.keys ?? []);
+                        break;
+                    case "scroll_to":
+                        result = await wsh.widgetScrollTo(blockId, action.elementRef, action.x, action.y);
+                        break;
+                    case "drag":
+                        result = await wsh.widgetDrag(
+                            blockId,
+                            action.startX ?? 0,
+                            action.startY ?? 0,
+                            action.endX ?? 0,
+                            action.endY ?? 0,
+                            action.button
+                        );
+                        break;
+                    case "set_value":
+                        result = await wsh.widgetSetValue(blockId, action.elementRef ?? "", action.value ?? "");
+                        break;
+                    case "clear":
+                        result = await wsh.widgetClear(blockId, action.elementRef ?? "");
+                        break;
+                    case "select":
+                        result = await wsh.widgetSelect(blockId, action.elementRef ?? "", action.option ?? "");
+                        break;
+                    case "toggle":
+                        result = await wsh.widgetToggle(blockId, action.elementRef ?? "");
+                        break;
+                }
+                results.push({ step: index + 1, action: action.action, result });
+            }
+            const state = JSON.parse(await wsh.widgetGetState(blockId)) as { focused?: boolean };
+            if (!state.focused) {
+                throw new Error(`Widget ${blockId} did not retain focus after the sequence`);
+            }
+            const snapshot = snapshotAfter ? JSON.parse(await wsh.widgetSnapshot(blockId)) : undefined;
+            publishActivity("widget_sequence", "finish", blockId, { blockId });
+            return jsonText({ results, focused: true, snapshot });
+        } catch (err: any) {
+            publishActivity("widget_sequence", "error", blockId, { blockId });
+            return {
+                ...jsonText({ results, error: err.message, stoppedAt: results.length + 1 }),
+                isError: true,
+            };
+        }
+    }
+);
+
 // ── Element Discovery ──────────────────────────────────────────────────
 
 server.tool(
@@ -2295,7 +2842,7 @@ server.tool(
     {
         blockId: z.string().describe("Block ID"),
         text: z.string().describe("Text to type"),
-        delayMs: z.number().int().min(0).max(5000).optional().describe("Delay between keystrokes in ms (default: 50)"),
+        delayMs: z.number().int().min(0).max(5000).optional().describe("Delay between keystrokes in ms (default: 0)"),
     },
     wrapActivity("widget_type")(async ({ blockId, text, delayMs }) => {
         try {
@@ -2878,7 +3425,7 @@ const memoryScopeSchema = z
     .optional();
 const memoryEvidenceSchema = z
     .object({
-        sourceType: sourceTypeSchema,
+        sourceType: sourceTypeSchema.optional(),
         sourceId: z.string().optional(),
         blockId: z.string().optional(),
         path: z.string().optional(),
@@ -2887,7 +3434,11 @@ const memoryEvidenceSchema = z
         excerpt: z.string().optional(),
         createdAt: z.string().optional(),
     })
-    .transform((value) => ({ ...value, createdAt: value.createdAt ?? new Date().toISOString() }));
+    .transform(({ sourceType, ...rest }) => ({
+        sourceType: sourceType ?? "manual",
+        ...rest,
+        createdAt: rest.createdAt ?? new Date().toISOString(),
+    }));
 
 server.tool(
     "developer_memory_status",

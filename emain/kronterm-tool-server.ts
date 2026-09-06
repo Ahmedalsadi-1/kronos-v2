@@ -6,8 +6,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage, MessageExtraInfo, RequestId } from "@modelcontextprotocol/sdk/types.js";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { z } from "zod";
-import { server as mcpServer, setKronTermToolBridge, warmKronComputerUse } from "../mcp-kron-term/src/index";
+import { server as mcpServer, nativeToolManifest, setKronTermToolBridge, warmKronComputerUse } from "../mcp-kron-term/src/index";
 import { isToolAllowedBySurfaceCapability } from "../mcp-kron-term/src/surface-policy";
 import type { SurfaceCapability } from "../mcp-kron-term/src/wsh-bridge";
 import type { HermesSurfaceContext } from "./hermes-runtime";
@@ -21,11 +20,18 @@ export type KronTermToolServerDescriptor = {
 
 type SurfaceContextProvider = () => HermesSurfaceContext | null;
 
+// Schemas registered on the MCP server belong to mcp-kron-term's zod (v3), not
+// this file's import graph — treat them structurally so the versions can never
+// silently diverge here.
+type RegisteredToolSchema = {
+    parseAsync(args: unknown): Promise<unknown>;
+};
+
 type NativeRegisteredTool = {
     enabled: boolean;
     title?: string;
     description?: string;
-    inputSchema?: z.ZodType;
+    inputSchema?: RegisteredToolSchema;
     annotations?: Record<string, unknown>;
     handler: (args: Record<string, unknown>, extra: Record<string, never>) => Promise<unknown> | unknown;
 };
@@ -290,19 +296,9 @@ class KronTermToolServer {
             const capability = surfaceCapability(this.contextProvider());
             const tools = registeredTools();
             if (payload.method === "manifest" || payload.method === "list") {
-                const manifest = Object.entries(tools)
-                    .filter(
-                        ([name, tool]) =>
-                            tool.enabled &&
-                            (payload.method === "manifest" || isToolAllowedBySurfaceCapability(name, capability))
-                    )
-                    .map(([name, tool]) => ({
-                        name,
-                        title: tool.title,
-                        description: tool.description,
-                        inputSchema: tool.inputSchema ? z.toJSONSchema(tool.inputSchema) : { type: "object" },
-                        annotations: tool.annotations,
-                    }));
+                const manifest = nativeToolManifest((name) =>
+                    payload.method === "manifest" ? true : isToolAllowedBySurfaceCapability(name, capability)
+                );
                 this.writeNativeResponse(response, { tools: manifest });
                 return;
             }

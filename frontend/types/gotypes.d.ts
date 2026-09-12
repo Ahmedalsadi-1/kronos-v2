@@ -1933,6 +1933,32 @@ declare global {
         meta?: {[key: string]: any};
     };
 
+    // wshrpc.OSWorkspaceScript
+    type OSWorkspaceScript = {
+        id: string;
+        stage: string;
+        command: string;
+    };
+
+    // wshrpc.OSWorkspaceScriptRunRequest
+    type OSWorkspaceScriptRunRequest = {
+        spaceid: string;
+        scriptid: string;
+    };
+
+    // wshrpc.OSWorkspaceScriptRunResponse
+    type OSWorkspaceScriptRunResponse = {
+        ok: boolean;
+        exitcode: number;
+        output?: string;
+    };
+
+    // wshrpc.OSWorkspaceScriptSaveRequest
+    type OSWorkspaceScriptSaveRequest = {
+        spaceid: string;
+        scripts: OSWorkspaceScript[];
+    };
+
     // wshrpc.OSWorktree
     type OSWorktree = {
         id: string;

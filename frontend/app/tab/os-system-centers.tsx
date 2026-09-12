@@ -697,6 +697,133 @@ function OSAutomationsSection({ spaceId }: { spaceId: string }) {
     );
 }
 
+function OSWorkspaceScriptsSection({ spaceId }: { spaceId: string }) {
+    const [scripts, setScripts] = useState<OSWorkspaceScript[]>([]);
+    const [draft, setDraft] = useState({ stage: "setup", command: "" });
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    const refresh = useCallback(() => {
+        if (!spaceId) {
+            setScripts([]);
+            return;
+        }
+        void RpcApi.OSWorkspaceScriptListCommand(TabRpcClient, spaceId)
+            .then((result) => {
+                setScripts(result);
+                setError("");
+            })
+            .catch(() => setError("Could not read lifecycle scripts"));
+    }, [spaceId]);
+
+    useEffect(refresh, [refresh]);
+
+    const save = useCallback(
+        (next: OSWorkspaceScript[]) => {
+            if (!spaceId || busy) return;
+            setBusy(true);
+            void RpcApi.OSWorkspaceScriptSaveCommand(TabRpcClient, { spaceid: spaceId, scripts: next })
+                .then((result) => {
+                    setScripts(result);
+                    setError("");
+                })
+                .catch((e) => setError(String(e)))
+                .finally(() => setBusy(false));
+        },
+        [spaceId, busy]
+    );
+
+    const runScript = useCallback(
+        (id: string) => {
+            if (!spaceId || busy) return;
+            setBusy(true);
+            void RpcApi.OSWorkspaceScriptRunCommand(TabRpcClient, { spaceid: spaceId, scriptid: id })
+                .then((result) => {
+                    if (!result.ok) throw new Error(`Script exited with code ${result.exitcode}`);
+                    setError("");
+                })
+                .then(refresh)
+                .catch((e) => setError(String(e)))
+                .finally(() => setBusy(false));
+        },
+        [spaceId, busy, refresh]
+    );
+
+    const add = useCallback(() => {
+        const command = draft.command.trim();
+        if (!spaceId || busy || command === "") return;
+        const next = [...scripts, { id: "", stage: draft.stage, command }];
+        setDraft({ stage: draft.stage, command: "" });
+        void save(next);
+    }, [spaceId, busy, scripts, draft, save]);
+
+    const remove = useCallback(
+        (id: string) => {
+            void save(scripts.filter((item) => item.id !== id));
+        },
+        [scripts, save]
+    );
+
+    if (!spaceId) return null;
+
+    return (
+        <section>
+            <header>
+                <div>
+                    <strong>Lifecycle scripts</strong>
+                    <span>Runs with sh in the first workspace root</span>
+                </div>
+                <SystemButton type="button" size="small" onClick={refresh} aria-label="Refresh lifecycle scripts">
+                    <RefreshCw aria-hidden="true" />
+                </SystemButton>
+            </header>
+            {error && <p className="os-control-error" role="alert">{error}</p>}
+            <div className="os-grant-list">
+                {scripts.length === 0 && <p>No lifecycle scripts. Setup, teardown, and run commands show up here.</p>}
+                {scripts.map((item) => (
+                    <div key={item.id}>
+                        <History aria-hidden="true" />
+                        <span>
+                            <strong>{item.stage}</strong>
+                            <small>{item.command}</small>
+                        </span>
+                        <div className="os-change-actions">
+                            <SystemButton type="button" size="small" onClick={() => runScript(item.id)} disabled={busy}>
+                                Run
+                            </SystemButton>
+                            <SystemButton type="button" size="small" onClick={() => remove(item.id)} disabled={busy}>
+                                Delete
+                            </SystemButton>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="os-automation-add">
+                <div className="os-automation-add-row">
+                    <select aria-label="Stage" value={draft.stage} onChange={(event) => setDraft({ ...draft, stage: event.target.value })}>
+                        <option value="setup">Setup</option>
+                        <option value="teardown">Teardown</option>
+                        <option value="run">Run</option>
+                    </select>
+                    <input
+                        type="text"
+                        aria-label="Script command"
+                        placeholder="npm install"
+                        value={draft.command}
+                        onChange={(event) => setDraft({ ...draft, command: event.target.value })}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter") add();
+                        }}
+                    />
+                    <SystemButton type="button" size="small" onClick={add} disabled={busy || draft.command.trim() === ""}>
+                        Add
+                    </SystemButton>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function OSControlCenter() {
     const model = OSSystemModel.getInstance();
     const profile = useAtomValue(model.profileAtom);
@@ -869,6 +996,8 @@ function OSControlCenter() {
             <OSWorktreeChangesSection root={profile.roots[0] ?? ""} />
 
             <OSAutomationsSection spaceId={spaceId} />
+
+            <OSWorkspaceScriptsSection spaceId={spaceId} />
 
             <section>
                 <header>

@@ -127,3 +127,25 @@ type OSAutomationRunRequest struct {
 	SpaceId      string `json:"spaceid"`
 	AutomationId string `json:"automationid"`
 }
+
+type OSWorkspaceScript struct {
+	Id      string `json:"id"`
+	Stage   string `json:"stage"`
+	Command string `json:"command"`
+}
+
+type OSWorkspaceScriptSaveRequest struct {
+	SpaceId string              `json:"spaceid"`
+	Scripts []OSWorkspaceScript `json:"scripts"`
+}
+
+type OSWorkspaceScriptRunRequest struct {
+	SpaceId  string `json:"spaceid"`
+	ScriptId string `json:"scriptid"`
+}
+
+type OSWorkspaceScriptRunResponse struct {
+	Ok       bool   `json:"ok"`
+	ExitCode int    `json:"exitcode"`
+	Output   string `json:"output,omitempty"`
+}

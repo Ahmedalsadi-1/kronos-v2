@@ -918,6 +918,24 @@ export class RpcApiType {
         return client.wshRpcCall("osspaceprofileset", data, opts);
     }
 
+    // command "osworkspacescriptlist" [call]
+    OSWorkspaceScriptListCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<OSWorkspaceScript[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworkspacescriptlist", data, opts);
+        return client.wshRpcCall("osworkspacescriptlist", data, opts);
+    }
+
+    // command "osworkspacescriptrun" [call]
+    OSWorkspaceScriptRunCommand(client: WshClient, data: OSWorkspaceScriptRunRequest, opts?: RpcOpts): Promise<OSWorkspaceScriptRunResponse> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworkspacescriptrun", data, opts);
+        return client.wshRpcCall("osworkspacescriptrun", data, opts);
+    }
+
+    // command "osworkspacescriptsave" [call]
+    OSWorkspaceScriptSaveCommand(client: WshClient, data: OSWorkspaceScriptSaveRequest, opts?: RpcOpts): Promise<OSWorkspaceScript[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworkspacescriptsave", data, opts);
+        return client.wshRpcCall("osworkspacescriptsave", data, opts);
+    }
+
     // command "osworktreechanges" [call]
     OSWorktreeChangesCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<OSWorktreeChange[]> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreechanges", data, opts);

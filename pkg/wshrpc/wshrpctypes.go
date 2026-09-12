@@ -190,6 +190,9 @@ type WshRpcInterface interface {
 	OSAutomationListCommand(ctx context.Context, spaceId string) ([]OSAutomation, error)
 	OSAutomationSaveCommand(ctx context.Context, data OSAutomationSaveRequest) ([]OSAutomation, error)
 	OSAutomationRunCommand(ctx context.Context, data OSAutomationRunRequest) error
+	OSWorkspaceScriptListCommand(ctx context.Context, spaceId string) ([]OSWorkspaceScript, error)
+	OSWorkspaceScriptSaveCommand(ctx context.Context, data OSWorkspaceScriptSaveRequest) ([]OSWorkspaceScript, error)
+	OSWorkspaceScriptRunCommand(ctx context.Context, data OSWorkspaceScriptRunRequest) (OSWorkspaceScriptRunResponse, error)
 	CanvasLoadCommand(ctx context.Context, data CanvasLoadRequest) (*CanvasLoadResponse, error)
 	CanvasSaveCommand(ctx context.Context, data CanvasSaveRequest) error
 	CanvasSnapshotCommand(ctx context.Context, data CanvasSnapshotRequest) (*CanvasSnapshotResponse, error)

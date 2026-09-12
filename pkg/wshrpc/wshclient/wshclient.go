@@ -915,6 +915,24 @@ func OSSpaceProfileSetCommand(w *wshutil.WshRpc, data wshrpc.OSSpaceProfileSetRe
 	return resp, err
 }
 
+// command "osworkspacescriptlist", wshserver.OSWorkspaceScriptListCommand
+func OSWorkspaceScriptListCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) ([]wshrpc.OSWorkspaceScript, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSWorkspaceScript](w, "osworkspacescriptlist", data, opts)
+	return resp, err
+}
+
+// command "osworkspacescriptrun", wshserver.OSWorkspaceScriptRunCommand
+func OSWorkspaceScriptRunCommand(w *wshutil.WshRpc, data wshrpc.OSWorkspaceScriptRunRequest, opts *wshrpc.RpcOpts) (wshrpc.OSWorkspaceScriptRunResponse, error) {
+	resp, err := sendRpcRequestCallHelper[wshrpc.OSWorkspaceScriptRunResponse](w, "osworkspacescriptrun", data, opts)
+	return resp, err
+}
+
+// command "osworkspacescriptsave", wshserver.OSWorkspaceScriptSaveCommand
+func OSWorkspaceScriptSaveCommand(w *wshutil.WshRpc, data wshrpc.OSWorkspaceScriptSaveRequest, opts *wshrpc.RpcOpts) ([]wshrpc.OSWorkspaceScript, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSWorkspaceScript](w, "osworkspacescriptsave", data, opts)
+	return resp, err
+}
+
 // command "osworktreechanges", wshserver.OSWorktreeChangesCommand
 func OSWorktreeChangesCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) ([]wshrpc.OSWorktreeChange, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSWorktreeChange](w, "osworktreechanges", data, opts)

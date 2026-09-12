@@ -837,6 +837,84 @@ func NotifySystemResumeCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) error {
 	return err
 }
 
+// command "osactivityappend", wshserver.OSActivityAppendCommand
+func OSActivityAppendCommand(w *wshutil.WshRpc, data wshrpc.OSSystemEventInput, opts *wshrpc.RpcOpts) (*waveobj.OSSystemEvent, error) {
+	resp, err := sendRpcRequestCallHelper[*waveobj.OSSystemEvent](w, "osactivityappend", data, opts)
+	return resp, err
+}
+
+// command "osactivitylist", wshserver.OSActivityListCommand
+func OSActivityListCommand(w *wshutil.WshRpc, data wshrpc.OSActivityListRequest, opts *wshrpc.RpcOpts) ([]*waveobj.OSSystemEvent, error) {
+	resp, err := sendRpcRequestCallHelper[[]*waveobj.OSSystemEvent](w, "osactivitylist", data, opts)
+	return resp, err
+}
+
+// command "osactivityread", wshserver.OSActivityReadCommand
+func OSActivityReadCommand(w *wshutil.WshRpc, data wshrpc.OSActivityReadRequest, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "osactivityread", data, opts)
+	return err
+}
+
+// command "oscapabilitygrant", wshserver.OSCapabilityGrantCommand
+func OSCapabilityGrantCommand(w *wshutil.WshRpc, data wshrpc.OSCapabilityGrantRequest, opts *wshrpc.RpcOpts) (*waveobj.OSCapabilityGrant, error) {
+	resp, err := sendRpcRequestCallHelper[*waveobj.OSCapabilityGrant](w, "oscapabilitygrant", data, opts)
+	return resp, err
+}
+
+// command "oscapabilitylist", wshserver.OSCapabilityListCommand
+func OSCapabilityListCommand(w *wshutil.WshRpc, data wshrpc.OSCapabilityListRequest, opts *wshrpc.RpcOpts) ([]*waveobj.OSCapabilityGrant, error) {
+	resp, err := sendRpcRequestCallHelper[[]*waveobj.OSCapabilityGrant](w, "oscapabilitylist", data, opts)
+	return resp, err
+}
+
+// command "oscapabilityrevoke", wshserver.OSCapabilityRevokeCommand
+func OSCapabilityRevokeCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "oscapabilityrevoke", data, opts)
+	return err
+}
+
+// command "oscheckpointlatest", wshserver.OSCheckpointLatestCommand
+func OSCheckpointLatestCommand(w *wshutil.WshRpc, data wshrpc.OSCheckpointLatestRequest, opts *wshrpc.RpcOpts) (*waveobj.OSRecoveryCheckpoint, error) {
+	resp, err := sendRpcRequestCallHelper[*waveobj.OSRecoveryCheckpoint](w, "oscheckpointlatest", data, opts)
+	return resp, err
+}
+
+// command "oscheckpointsave", wshserver.OSCheckpointSaveCommand
+func OSCheckpointSaveCommand(w *wshutil.WshRpc, data wshrpc.OSCheckpointSaveRequest, opts *wshrpc.RpcOpts) (*waveobj.OSRecoveryCheckpoint, error) {
+	resp, err := sendRpcRequestCallHelper[*waveobj.OSRecoveryCheckpoint](w, "oscheckpointsave", data, opts)
+	return resp, err
+}
+
+// command "osspaceprofileget", wshserver.OSSpaceProfileGetCommand
+func OSSpaceProfileGetCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) (wshrpc.OSSpaceProfile, error) {
+	resp, err := sendRpcRequestCallHelper[wshrpc.OSSpaceProfile](w, "osspaceprofileget", data, opts)
+	return resp, err
+}
+
+// command "osspaceprofileset", wshserver.OSSpaceProfileSetCommand
+func OSSpaceProfileSetCommand(w *wshutil.WshRpc, data wshrpc.OSSpaceProfileSetRequest, opts *wshrpc.RpcOpts) (wshrpc.OSSpaceProfile, error) {
+	resp, err := sendRpcRequestCallHelper[wshrpc.OSSpaceProfile](w, "osspaceprofileset", data, opts)
+	return resp, err
+}
+
+// command "osworktreecreate", wshserver.OSWorktreeCreateCommand
+func OSWorktreeCreateCommand(w *wshutil.WshRpc, data wshrpc.OSWorktreeCreateRequest, opts *wshrpc.RpcOpts) (wshrpc.OSWorktree, error) {
+	resp, err := sendRpcRequestCallHelper[wshrpc.OSWorktree](w, "osworktreecreate", data, opts)
+	return resp, err
+}
+
+// command "osworktreelist", wshserver.OSWorktreeListCommand
+func OSWorktreeListCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) ([]wshrpc.OSWorktree, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSWorktree](w, "osworktreelist", data, opts)
+	return resp, err
+}
+
+// command "osworktreeremove", wshserver.OSWorktreeRemoveCommand
+func OSWorktreeRemoveCommand(w *wshutil.WshRpc, data wshrpc.OSWorktreeRemoveRequest, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "osworktreeremove", data, opts)
+	return err
+}
+
 // command "path", wshserver.PathCommand
 func PathCommand(w *wshutil.WshRpc, data wshrpc.PathCommandData, opts *wshrpc.RpcOpts) (string, error) {
 	resp, err := sendRpcRequestCallHelper[string](w, "path", data, opts)

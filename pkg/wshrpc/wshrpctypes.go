@@ -170,6 +170,19 @@ type WshRpcInterface interface {
 	AppStreamStartCommand(ctx context.Context, data AppStreamStartRequest) (AppStreamStartResponse, error)
 	AppStreamStopCommand(ctx context.Context, data AppStreamStopRequest) error
 	AppStreamActionCommand(ctx context.Context, data AppStreamActionRequest) error
+	OSSpaceProfileGetCommand(ctx context.Context, spaceId string) (OSSpaceProfile, error)
+	OSSpaceProfileSetCommand(ctx context.Context, data OSSpaceProfileSetRequest) (OSSpaceProfile, error)
+	OSActivityAppendCommand(ctx context.Context, data OSSystemEventInput) (*waveobj.OSSystemEvent, error)
+	OSActivityListCommand(ctx context.Context, data OSActivityListRequest) ([]*waveobj.OSSystemEvent, error)
+	OSActivityReadCommand(ctx context.Context, data OSActivityReadRequest) error
+	OSCapabilityGrantCommand(ctx context.Context, data OSCapabilityGrantRequest) (*waveobj.OSCapabilityGrant, error)
+	OSCapabilityListCommand(ctx context.Context, data OSCapabilityListRequest) ([]*waveobj.OSCapabilityGrant, error)
+	OSCapabilityRevokeCommand(ctx context.Context, grantId string) error
+	OSCheckpointSaveCommand(ctx context.Context, data OSCheckpointSaveRequest) (*waveobj.OSRecoveryCheckpoint, error)
+	OSCheckpointLatestCommand(ctx context.Context, data OSCheckpointLatestRequest) (*waveobj.OSRecoveryCheckpoint, error)
+	OSWorktreeListCommand(ctx context.Context, repoPath string) ([]OSWorktree, error)
+	OSWorktreeCreateCommand(ctx context.Context, data OSWorktreeCreateRequest) (OSWorktree, error)
+	OSWorktreeRemoveCommand(ctx context.Context, data OSWorktreeRemoveRequest) error
 	CanvasLoadCommand(ctx context.Context, data CanvasLoadRequest) (*CanvasLoadResponse, error)
 	CanvasSaveCommand(ctx context.Context, data CanvasSaveRequest) error
 	CanvasSnapshotCommand(ctx context.Context, data CanvasSnapshotRequest) (*CanvasSnapshotResponse, error)
@@ -1222,6 +1235,12 @@ type CommandWorkspaceSurfaceControlData struct {
 	ToObjectId    string   `json:"toobjectid,omitempty"`
 	Text          string   `json:"text,omitempty"`
 	Color         string   `json:"color,omitempty"`
+	Side          string   `json:"side,omitempty"`
+	View          string   `json:"view,omitempty"`
+	AppId         string   `json:"appid,omitempty"`
+	AppName       string   `json:"appname,omitempty"`
+	File          string   `json:"file,omitempty"`
+	WorkspaceId   string   `json:"workspaceid,omitempty"`
 }
 
 type WidgetSnapshotRtnData struct {

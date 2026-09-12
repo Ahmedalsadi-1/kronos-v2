@@ -1275,6 +1275,12 @@ declare global {
         toobjectid?: string;
         text?: string;
         color?: string;
+        side?: string;
+        view?: string;
+        appid?: string;
+        appname?: string;
+        file?: string;
+        workspaceid?: string;
     };
 
     // wshrpc.CommandWriteTempFileData
@@ -1789,6 +1795,146 @@ declare global {
     // waveobj.ORef
     type ORef = string;
 
+    // wshrpc.OSActivityListRequest
+    type OSActivityListRequest = {
+        spaceid: string;
+        limit?: number;
+        includeread?: boolean;
+    };
+
+    // wshrpc.OSActivityReadRequest
+    type OSActivityReadRequest = {
+        spaceid: string;
+        eventids?: string[];
+        all?: boolean;
+    };
+
+    // wshrpc.OSArtifactShelfItem
+    type OSArtifactShelfItem = {
+        id: string;
+        kind: string;
+        name: string;
+        resource: string;
+        detail?: string;
+        addedat: number;
+    };
+
+    // waveobj.OSCapabilityGrant
+    type OSCapabilityGrant = WaveObj & {
+        spaceid: string;
+        capability: string;
+        scope: string;
+        resource?: string;
+        agentsessionid: string;
+        createdts: number;
+        expirests?: number;
+        revokedts?: number;
+    };
+
+    // wshrpc.OSCapabilityGrantRequest
+    type OSCapabilityGrantRequest = {
+        spaceid: string;
+        capability: string;
+        scope: string;
+        resource?: string;
+        agentsessionid: string;
+        expirests?: number;
+    };
+
+    // wshrpc.OSCapabilityListRequest
+    type OSCapabilityListRequest = {
+        spaceid: string;
+        agentsessionid?: string;
+        includeinactive?: boolean;
+    };
+
+    // wshrpc.OSCheckpointLatestRequest
+    type OSCheckpointLatestRequest = {
+        spaceid: string;
+        tabid?: string;
+    };
+
+    // wshrpc.OSCheckpointSaveRequest
+    type OSCheckpointSaveRequest = {
+        spaceid: string;
+        tabid: string;
+        reason: string;
+        snapshotjson: string;
+    };
+
+    // waveobj.OSRecoveryCheckpoint
+    type OSRecoveryCheckpoint = WaveObj & {
+        spaceid: string;
+        tabid: string;
+        reason: string;
+        snapshotjson: string;
+        createdts: number;
+    };
+
+    // wshrpc.OSSpaceProfile
+    type OSSpaceProfile = {
+        version: number;
+        roots: string[];
+        pinnedappids: string[];
+        restorepolicy: string;
+        artifactshelf?: OSArtifactShelfItem[];
+    };
+
+    // wshrpc.OSSpaceProfileSetRequest
+    type OSSpaceProfileSetRequest = {
+        spaceid: string;
+        profile: OSSpaceProfile;
+    };
+
+    // waveobj.OSSystemEvent
+    type OSSystemEvent = WaveObj & {
+        spaceid: string;
+        kind: string;
+        status: string;
+        title: string;
+        source?: string;
+        blockid?: string;
+        createdts: number;
+        readts?: number;
+        actions?: string[];
+    };
+
+    // wshrpc.OSSystemEventInput
+    type OSSystemEventInput = {
+        spaceid: string;
+        kind: string;
+        status: string;
+        title: string;
+        source?: string;
+        blockid?: string;
+        actions?: string[];
+    };
+
+    // wshrpc.OSWorktree
+    type OSWorktree = {
+        id: string;
+        path: string;
+        branch: string;
+        name: string;
+        head?: string;
+        ismain: boolean;
+        createdts: number;
+    };
+
+    // wshrpc.OSWorktreeCreateRequest
+    type OSWorktreeCreateRequest = {
+        repopath: string;
+        name: string;
+        basebranch?: string;
+    };
+
+    // wshrpc.OSWorktreeRemoveRequest
+    type OSWorktreeRemoveRequest = {
+        repopath: string;
+        path: string;
+        force?: boolean;
+    };
+
     // waveobj.ObjRTInfo
     type ObjRTInfo = {
         "tsunami:appmeta"?: AppMeta;
@@ -1953,6 +2099,9 @@ declare global {
         "app:quickcomposer"?: boolean;
         "app:minimalui"?: boolean;
         "feature:waveappbuilder"?: boolean;
+        "feature:systemlayer"?: boolean;
+        "feature:nativesurfacev2"?: boolean;
+        "feature:ambientos"?: boolean;
         "mcp:*"?: boolean;
         "mcp:enabled"?: boolean;
         "mcp:servers"?: {[key: string]: MCPConfig};

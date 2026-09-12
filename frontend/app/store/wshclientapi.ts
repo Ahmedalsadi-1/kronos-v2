@@ -840,6 +840,84 @@ export class RpcApiType {
         return client.wshRpcCall("notifysystemresume", null, opts);
     }
 
+    // command "osactivityappend" [call]
+    OSActivityAppendCommand(client: WshClient, data: OSSystemEventInput, opts?: RpcOpts): Promise<OSSystemEvent> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osactivityappend", data, opts);
+        return client.wshRpcCall("osactivityappend", data, opts);
+    }
+
+    // command "osactivitylist" [call]
+    OSActivityListCommand(client: WshClient, data: OSActivityListRequest, opts?: RpcOpts): Promise<OSSystemEvent[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osactivitylist", data, opts);
+        return client.wshRpcCall("osactivitylist", data, opts);
+    }
+
+    // command "osactivityread" [call]
+    OSActivityReadCommand(client: WshClient, data: OSActivityReadRequest, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osactivityread", data, opts);
+        return client.wshRpcCall("osactivityread", data, opts);
+    }
+
+    // command "oscapabilitygrant" [call]
+    OSCapabilityGrantCommand(client: WshClient, data: OSCapabilityGrantRequest, opts?: RpcOpts): Promise<OSCapabilityGrant> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "oscapabilitygrant", data, opts);
+        return client.wshRpcCall("oscapabilitygrant", data, opts);
+    }
+
+    // command "oscapabilitylist" [call]
+    OSCapabilityListCommand(client: WshClient, data: OSCapabilityListRequest, opts?: RpcOpts): Promise<OSCapabilityGrant[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "oscapabilitylist", data, opts);
+        return client.wshRpcCall("oscapabilitylist", data, opts);
+    }
+
+    // command "oscapabilityrevoke" [call]
+    OSCapabilityRevokeCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "oscapabilityrevoke", data, opts);
+        return client.wshRpcCall("oscapabilityrevoke", data, opts);
+    }
+
+    // command "oscheckpointlatest" [call]
+    OSCheckpointLatestCommand(client: WshClient, data: OSCheckpointLatestRequest, opts?: RpcOpts): Promise<OSRecoveryCheckpoint> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "oscheckpointlatest", data, opts);
+        return client.wshRpcCall("oscheckpointlatest", data, opts);
+    }
+
+    // command "oscheckpointsave" [call]
+    OSCheckpointSaveCommand(client: WshClient, data: OSCheckpointSaveRequest, opts?: RpcOpts): Promise<OSRecoveryCheckpoint> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "oscheckpointsave", data, opts);
+        return client.wshRpcCall("oscheckpointsave", data, opts);
+    }
+
+    // command "osspaceprofileget" [call]
+    OSSpaceProfileGetCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<OSSpaceProfile> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osspaceprofileget", data, opts);
+        return client.wshRpcCall("osspaceprofileget", data, opts);
+    }
+
+    // command "osspaceprofileset" [call]
+    OSSpaceProfileSetCommand(client: WshClient, data: OSSpaceProfileSetRequest, opts?: RpcOpts): Promise<OSSpaceProfile> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osspaceprofileset", data, opts);
+        return client.wshRpcCall("osspaceprofileset", data, opts);
+    }
+
+    // command "osworktreecreate" [call]
+    OSWorktreeCreateCommand(client: WshClient, data: OSWorktreeCreateRequest, opts?: RpcOpts): Promise<OSWorktree> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreecreate", data, opts);
+        return client.wshRpcCall("osworktreecreate", data, opts);
+    }
+
+    // command "osworktreelist" [call]
+    OSWorktreeListCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<OSWorktree[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreelist", data, opts);
+        return client.wshRpcCall("osworktreelist", data, opts);
+    }
+
+    // command "osworktreeremove" [call]
+    OSWorktreeRemoveCommand(client: WshClient, data: OSWorktreeRemoveRequest, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreeremove", data, opts);
+        return client.wshRpcCall("osworktreeremove", data, opts);
+    }
+
     // command "path" [call]
     PathCommand(client: WshClient, data: PathCommandData, opts?: RpcOpts): Promise<string> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "path", data, opts);

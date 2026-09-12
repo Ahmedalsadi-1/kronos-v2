@@ -1921,11 +1921,25 @@ declare global {
         createdts: number;
     };
 
+    // wshrpc.OSWorktreeChange
+    type OSWorktreeChange = {
+        path: string;
+        status: string;
+        insertions: number;
+        deletions: number;
+    };
+
     // wshrpc.OSWorktreeCreateRequest
     type OSWorktreeCreateRequest = {
         repopath: string;
         name: string;
         basebranch?: string;
+    };
+
+    // wshrpc.OSWorktreeFileRequest
+    type OSWorktreeFileRequest = {
+        repopath: string;
+        path: string;
     };
 
     // wshrpc.OSWorktreeRemoveRequest

@@ -900,10 +900,34 @@ export class RpcApiType {
         return client.wshRpcCall("osspaceprofileset", data, opts);
     }
 
+    // command "osworktreechanges" [call]
+    OSWorktreeChangesCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<OSWorktreeChange[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreechanges", data, opts);
+        return client.wshRpcCall("osworktreechanges", data, opts);
+    }
+
     // command "osworktreecreate" [call]
     OSWorktreeCreateCommand(client: WshClient, data: OSWorktreeCreateRequest, opts?: RpcOpts): Promise<OSWorktree> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreecreate", data, opts);
         return client.wshRpcCall("osworktreecreate", data, opts);
+    }
+
+    // command "osworktreefilediff" [call]
+    OSWorktreeFileDiffCommand(client: WshClient, data: OSWorktreeFileRequest, opts?: RpcOpts): Promise<string> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreefilediff", data, opts);
+        return client.wshRpcCall("osworktreefilediff", data, opts);
+    }
+
+    // command "osworktreefilerevert" [call]
+    OSWorktreeFileRevertCommand(client: WshClient, data: OSWorktreeFileRequest, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreefilerevert", data, opts);
+        return client.wshRpcCall("osworktreefilerevert", data, opts);
+    }
+
+    // command "osworktreefilestage" [call]
+    OSWorktreeFileStageCommand(client: WshClient, data: OSWorktreeFileRequest, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osworktreefilestage", data, opts);
+        return client.wshRpcCall("osworktreefilestage", data, opts);
     }
 
     // command "osworktreelist" [call]

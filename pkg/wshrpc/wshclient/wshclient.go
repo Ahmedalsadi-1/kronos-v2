@@ -897,10 +897,34 @@ func OSSpaceProfileSetCommand(w *wshutil.WshRpc, data wshrpc.OSSpaceProfileSetRe
 	return resp, err
 }
 
+// command "osworktreechanges", wshserver.OSWorktreeChangesCommand
+func OSWorktreeChangesCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) ([]wshrpc.OSWorktreeChange, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSWorktreeChange](w, "osworktreechanges", data, opts)
+	return resp, err
+}
+
 // command "osworktreecreate", wshserver.OSWorktreeCreateCommand
 func OSWorktreeCreateCommand(w *wshutil.WshRpc, data wshrpc.OSWorktreeCreateRequest, opts *wshrpc.RpcOpts) (wshrpc.OSWorktree, error) {
 	resp, err := sendRpcRequestCallHelper[wshrpc.OSWorktree](w, "osworktreecreate", data, opts)
 	return resp, err
+}
+
+// command "osworktreefilediff", wshserver.OSWorktreeFileDiffCommand
+func OSWorktreeFileDiffCommand(w *wshutil.WshRpc, data wshrpc.OSWorktreeFileRequest, opts *wshrpc.RpcOpts) (string, error) {
+	resp, err := sendRpcRequestCallHelper[string](w, "osworktreefilediff", data, opts)
+	return resp, err
+}
+
+// command "osworktreefilerevert", wshserver.OSWorktreeFileRevertCommand
+func OSWorktreeFileRevertCommand(w *wshutil.WshRpc, data wshrpc.OSWorktreeFileRequest, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "osworktreefilerevert", data, opts)
+	return err
+}
+
+// command "osworktreefilestage", wshserver.OSWorktreeFileStageCommand
+func OSWorktreeFileStageCommand(w *wshutil.WshRpc, data wshrpc.OSWorktreeFileRequest, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "osworktreefilestage", data, opts)
+	return err
 }
 
 // command "osworktreelist", wshserver.OSWorktreeListCommand

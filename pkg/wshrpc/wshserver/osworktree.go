@@ -6,10 +6,12 @@ package wshserver
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -158,6 +160,140 @@ func (ws *WshServer) OSWorktreeRemoveCommand(ctx context.Context, data wshrpc.OS
 	if _, err := runOSGit(data.RepoPath, "branch", "-D", osWorktreeBranchPrefix+branch); err != nil {
 		// branch deletion is best-effort; the worktree removal already succeeded
 		_ = err
+	}
+	return nil
+}
+
+func validateOSWorktreeFilePath(repoPath string, path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" || len(path) > 4096 {
+		return fmt.Errorf("path is required")
+	}
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "..") {
+		return fmt.Errorf("path must be relative to the repository")
+	}
+	return nil
+}
+
+// OSWorktreeChangesCommand lists working-tree changes with numstat counts (diff viewer foundation).
+func (ws *WshServer) OSWorktreeChangesCommand(ctx context.Context, repoPath string) ([]wshrpc.OSWorktreeChange, error) {
+	if err := validateOSWorktreeRepo(repoPath); err != nil {
+		return nil, err
+	}
+	statusOut, err := runOSGit(repoPath, "status", "--porcelain")
+	if err != nil {
+		return nil, fmt.Errorf("read changes: %w", err)
+	}
+	insertions := make(map[string]int)
+	deletions := make(map[string]int)
+	numstatOut, _ := runOSGit(repoPath, "diff", "HEAD", "--numstat")
+	for _, line := range strings.Split(numstatOut, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		insertions[fields[2]] = parseIntOrZero(fields[0])
+		deletions[fields[2]] = parseIntOrZero(fields[1])
+	}
+	changes := make([]wshrpc.OSWorktreeChange, 0)
+	for _, line := range strings.Split(statusOut, "\n") {
+		if len(line) < 4 {
+			continue
+		}
+		code := line[:2]
+		path := strings.TrimSpace(line[3:])
+		if renameAt := strings.Index(path, " -> "); renameAt >= 0 {
+			path = path[renameAt+4:]
+		}
+		status := "modified"
+		switch {
+		case code == "??":
+			status = "untracked"
+		case strings.HasPrefix(code, "A"):
+			status = "added"
+		case strings.Contains(code, "D"):
+			status = "deleted"
+		}
+		changes = append(changes, wshrpc.OSWorktreeChange{
+			Path:       path,
+			Status:     status,
+			Insertions: insertions[path],
+			Deletions:  deletions[path],
+		})
+	}
+	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+	return changes, nil
+}
+
+func parseIntOrZero(value string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(value))
+	return n
+}
+
+// OSWorktreeFileDiffCommand returns the unified diff for a file (untracked files diff against /dev/null).
+func (ws *WshServer) OSWorktreeFileDiffCommand(ctx context.Context, data wshrpc.OSWorktreeFileRequest) (string, error) {
+	if err := validateOSWorktreeRepo(data.RepoPath); err != nil {
+		return "", err
+	}
+	if err := validateOSWorktreeFilePath(data.RepoPath, data.Path); err != nil {
+		return "", err
+	}
+	fullPath := filepath.Join(data.RepoPath, data.Path)
+	out, err := runOSGit(data.RepoPath, "diff", "HEAD", "--", data.Path)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(out) == "" {
+		if statusOut, _ := runOSGit(data.RepoPath, "status", "--porcelain", "--", data.Path); strings.HasPrefix(strings.TrimSpace(statusOut), "??") {
+			content, readErr := os.ReadFile(fullPath)
+			if readErr != nil {
+				return "", fmt.Errorf("read file: %w", readErr)
+			}
+			// git has no native diff output for untracked files, so synthesize the add-file diff
+			if len(content) == 0 {
+				return "", nil
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("--- /dev/null\n+++ %s\n@@ -0,0 +1,%d @@\n", data.Path, len(content)))
+			for _, line := range strings.Split(strings.TrimRight(string(content), "\n"), "\n") {
+				sb.WriteString("+" + line + "\n")
+			}
+			return sb.String(), nil
+		}
+	}
+	return out, nil
+}
+
+// OSWorktreeFileRevertCommand discards working-tree changes for a file (reject agent change).
+func (ws *WshServer) OSWorktreeFileRevertCommand(ctx context.Context, data wshrpc.OSWorktreeFileRequest) error {
+	if err := validateOSWorktreeRepo(data.RepoPath); err != nil {
+		return err
+	}
+	if err := validateOSWorktreeFilePath(data.RepoPath, data.Path); err != nil {
+		return err
+	}
+	if statusOut, _ := runOSGit(data.RepoPath, "status", "--porcelain", "--", data.Path); strings.HasPrefix(strings.TrimSpace(statusOut), "??") {
+		if err := os.Remove(filepath.Join(data.RepoPath, data.Path)); err != nil {
+			return fmt.Errorf("revert untracked file: %w", err)
+		}
+		return nil
+	}
+	if _, err := runOSGit(data.RepoPath, "checkout", "HEAD", "--", data.Path); err != nil {
+		return fmt.Errorf("revert file: %w", err)
+	}
+	return nil
+}
+
+// OSWorktreeFileStageCommand stages a file (accept agent change).
+func (ws *WshServer) OSWorktreeFileStageCommand(ctx context.Context, data wshrpc.OSWorktreeFileRequest) error {
+	if err := validateOSWorktreeRepo(data.RepoPath); err != nil {
+		return err
+	}
+	if err := validateOSWorktreeFilePath(data.RepoPath, data.Path); err != nil {
+		return err
+	}
+	if _, err := runOSGit(data.RepoPath, "add", "--", data.Path); err != nil {
+		return fmt.Errorf("stage file: %w", err)
 	}
 	return nil
 }

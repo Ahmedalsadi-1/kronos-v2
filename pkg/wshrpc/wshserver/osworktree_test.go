@@ -107,3 +107,59 @@ func TestOSWorktreeValidation(t *testing.T) {
 		t.Errorf("expected error for invalid worktree name")
 	}
 }
+
+func TestOSWorktreeDiffFlow(t *testing.T) {
+	repo := makeTestGitRepo(t)
+	ws := &WshServer{}
+	ctx := context.Background()
+	readme := filepath.Join(repo, "README.md")
+
+	changes, err := ws.OSWorktreeChangesCommand(ctx, repo)
+	if err != nil || len(changes) != 0 {
+		t.Fatalf("expected clean tree, got %v (%v)", changes, err)
+	}
+
+	os.WriteFile(readme, []byte("test\nnew line\n"), 0644)
+	changes, err = ws.OSWorktreeChangesCommand(ctx, repo)
+	if err != nil || len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %v (%v)", changes, err)
+	}
+	if changes[0].Path != "README.md" || changes[0].Status != "modified" || changes[0].Insertions != 1 {
+		t.Errorf("unexpected change %+v", changes[0])
+	}
+
+	diff, err := ws.OSWorktreeFileDiffCommand(ctx, wshrpc.OSWorktreeFileRequest{RepoPath: repo, Path: "README.md"})
+	if err != nil || !strings.Contains(diff, "+new line") {
+		t.Fatalf("expected diff with new line, got %q (%v)", diff, err)
+	}
+
+	if err := ws.OSWorktreeFileStageCommand(ctx, wshrpc.OSWorktreeFileRequest{RepoPath: repo, Path: "README.md"}); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if err := ws.OSWorktreeFileRevertCommand(ctx, wshrpc.OSWorktreeFileRequest{RepoPath: repo, Path: "README.md"}); err != nil {
+		t.Fatalf("revert staged file: %v", err)
+	}
+	content, _ := os.ReadFile(readme)
+	if string(content) != "test\n" {
+		t.Errorf("revert did not restore HEAD content: %q", content)
+	}
+
+	os.WriteFile(filepath.Join(repo, "NEWFILE.md"), []byte("added\nlines\n"), 0644)
+	changes, _ = ws.OSWorktreeChangesCommand(ctx, repo)
+	if len(changes) != 1 || changes[0].Status != "untracked" {
+		t.Fatalf("expected untracked change, got %v", changes)
+	}
+	diff, err = ws.OSWorktreeFileDiffCommand(ctx, wshrpc.OSWorktreeFileRequest{RepoPath: repo, Path: "NEWFILE.md"})
+	if err != nil || !strings.Contains(diff, "+++ NEWFILE.md") {
+		t.Fatalf("expected synthesized untracked diff, got %q (%v)", diff, err)
+	}
+	if err := ws.OSWorktreeFileRevertCommand(ctx, wshrpc.OSWorktreeFileRequest{RepoPath: repo, Path: "NEWFILE.md"}); err != nil {
+		t.Fatalf("revert untracked: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "NEWFILE.md")); !os.IsNotExist(err) {
+		t.Errorf("untracked file still exists after revert")
+	}
+	if _, err := ws.OSWorktreeFileDiffCommand(ctx, wshrpc.OSWorktreeFileRequest{RepoPath: repo, Path: "../outside.txt"}); err == nil {
+		t.Errorf("expected error for path outside repo")
+	}
+}

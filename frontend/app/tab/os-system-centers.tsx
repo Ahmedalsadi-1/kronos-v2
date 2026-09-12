@@ -446,6 +446,114 @@ function OSWorktreesSection({ root }: { root: string }) {
     );
 }
 
+function OSWorktreeChangesSection({ root }: { root: string }) {
+    const [changes, setChanges] = useState<OSWorktreeChange[]>([]);
+    const [openPath, setOpenPath] = useState("");
+    const [diff, setDiff] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    const refresh = useCallback(() => {
+        if (!root) {
+            setChanges([]);
+            return;
+        }
+        void RpcApi.OSWorktreeChangesCommand(TabRpcClient, root)
+            .then((result) => {
+                setChanges(result);
+                setError("");
+            })
+            .catch(() => setError("Could not read changes for this root"));
+    }, [root]);
+
+    useEffect(refresh, [refresh]);
+
+    const toggleDiff = useCallback(
+        (path: string) => {
+            if (openPath === path) {
+                setOpenPath("");
+                setDiff("");
+                return;
+            }
+            setOpenPath(path);
+            setDiff("loading…");
+            void RpcApi.OSWorktreeFileDiffCommand(TabRpcClient, { repopath: root, path })
+                .then((result) => setDiff(result || "no diff"))
+                .catch(() => setDiff("could not load diff"));
+        },
+        [root, openPath]
+    );
+
+    const act = useCallback(
+        (action: "revert" | "stage", path: string) => {
+            if (!root || busy) return;
+            setBusy(true);
+            const call = action === "revert" ? RpcApi.OSWorktreeFileRevertCommand : RpcApi.OSWorktreeFileStageCommand;
+            void call(TabRpcClient, { repopath: root, path })
+                .then(() => {
+                    if (openPath === path) {
+                        setOpenPath("");
+                        setDiff("");
+                    }
+                    setError("");
+                })
+                .then(refresh)
+                .catch((e) => setError(String(e)))
+                .finally(() => setBusy(false));
+        },
+        [root, busy, openPath, refresh]
+    );
+
+    if (!root) return null;
+
+    return (
+        <section>
+            <header>
+                <div>
+                    <strong>Changes</strong>
+                    <span>{changes.length} uncommitted · {root.split("/").pop()}</span>
+                </div>
+                <SystemButton type="button" size="small" onClick={refresh} aria-label="Refresh changes">
+                    <RefreshCw aria-hidden="true" />
+                </SystemButton>
+            </header>
+            {error && <p className="os-control-error" role="alert">{error}</p>}
+            <div className="os-grant-list">
+                {changes.length === 0 && <p>No uncommitted changes. Agent edits appear here for review.</p>}
+                {changes.map((change) => (
+                    <div key={change.path}>
+                        <button
+                            type="button"
+                            className="os-change-row"
+                            aria-expanded={openPath === change.path}
+                            onClick={() => toggleDiff(change.path)}
+                        >
+                            <span>
+                                <strong>{change.path}</strong>
+                                <small>
+                                    {change.status}
+                                    {change.insertions + change.deletions > 0 ? ` · +${change.insertions} / -${change.deletions}` : ""}
+                                </small>
+                            </span>
+                        </button>
+                        {openPath === change.path && (
+                            <div className="os-change-actions">
+                                <SystemButton type="button" size="small" onClick={() => act("stage", change.path)} disabled={busy}>
+                                    Accept
+                                </SystemButton>
+                                <SystemButton type="button" size="small" onClick={() => act("revert", change.path)} disabled={busy}>
+                                    Discard
+                                </SystemButton>
+                            </div>
+                        )}
+                        {openPath === change.path && <pre className="os-diff-view">{diff}</pre>}
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
 function OSControlCenter() {
     const model = OSSystemModel.getInstance();
     const profile = useAtomValue(model.profileAtom);
@@ -613,6 +721,8 @@ function OSControlCenter() {
             </section>
 
             <OSWorktreesSection root={profile.roots[0] ?? ""} />
+
+            <OSWorktreeChangesSection root={profile.roots[0] ?? ""} />
 
             <section>
                 <header>

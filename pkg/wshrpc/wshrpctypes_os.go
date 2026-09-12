@@ -95,3 +95,15 @@ type OSWorktreeRemoveRequest struct {
 	Path     string `json:"path"`
 	Force    bool   `json:"force,omitempty"`
 }
+
+type OSWorktreeChange struct {
+	Path       string `json:"path"`
+	Status     string `json:"status"`
+	Insertions int    `json:"insertions"`
+	Deletions  int    `json:"deletions"`
+}
+
+type OSWorktreeFileRequest struct {
+	RepoPath string `json:"repopath"`
+	Path     string `json:"path"`
+}

@@ -855,6 +855,24 @@ func OSActivityReadCommand(w *wshutil.WshRpc, data wshrpc.OSActivityReadRequest,
 	return err
 }
 
+// command "osautomationlist", wshserver.OSAutomationListCommand
+func OSAutomationListCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) ([]wshrpc.OSAutomation, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSAutomation](w, "osautomationlist", data, opts)
+	return resp, err
+}
+
+// command "osautomationrun", wshserver.OSAutomationRunCommand
+func OSAutomationRunCommand(w *wshutil.WshRpc, data wshrpc.OSAutomationRunRequest, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "osautomationrun", data, opts)
+	return err
+}
+
+// command "osautomationsave", wshserver.OSAutomationSaveCommand
+func OSAutomationSaveCommand(w *wshutil.WshRpc, data wshrpc.OSAutomationSaveRequest, opts *wshrpc.RpcOpts) ([]wshrpc.OSAutomation, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.OSAutomation](w, "osautomationsave", data, opts)
+	return resp, err
+}
+
 // command "oscapabilitygrant", wshserver.OSCapabilityGrantCommand
 func OSCapabilityGrantCommand(w *wshutil.WshRpc, data wshrpc.OSCapabilityGrantRequest, opts *wshrpc.RpcOpts) (*waveobj.OSCapabilityGrant, error) {
 	resp, err := sendRpcRequestCallHelper[*waveobj.OSCapabilityGrant](w, "oscapabilitygrant", data, opts)

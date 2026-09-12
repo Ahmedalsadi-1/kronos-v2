@@ -187,6 +187,9 @@ type WshRpcInterface interface {
 	OSWorktreeFileDiffCommand(ctx context.Context, data OSWorktreeFileRequest) (string, error)
 	OSWorktreeFileRevertCommand(ctx context.Context, data OSWorktreeFileRequest) error
 	OSWorktreeFileStageCommand(ctx context.Context, data OSWorktreeFileRequest) error
+	OSAutomationListCommand(ctx context.Context, spaceId string) ([]OSAutomation, error)
+	OSAutomationSaveCommand(ctx context.Context, data OSAutomationSaveRequest) ([]OSAutomation, error)
+	OSAutomationRunCommand(ctx context.Context, data OSAutomationRunRequest) error
 	CanvasLoadCommand(ctx context.Context, data CanvasLoadRequest) (*CanvasLoadResponse, error)
 	CanvasSaveCommand(ctx context.Context, data CanvasSaveRequest) error
 	CanvasSnapshotCommand(ctx context.Context, data CanvasSnapshotRequest) (*CanvasSnapshotResponse, error)

@@ -858,6 +858,24 @@ export class RpcApiType {
         return client.wshRpcCall("osactivityread", data, opts);
     }
 
+    // command "osautomationlist" [call]
+    OSAutomationListCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<OSAutomation[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osautomationlist", data, opts);
+        return client.wshRpcCall("osautomationlist", data, opts);
+    }
+
+    // command "osautomationrun" [call]
+    OSAutomationRunCommand(client: WshClient, data: OSAutomationRunRequest, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osautomationrun", data, opts);
+        return client.wshRpcCall("osautomationrun", data, opts);
+    }
+
+    // command "osautomationsave" [call]
+    OSAutomationSaveCommand(client: WshClient, data: OSAutomationSaveRequest, opts?: RpcOpts): Promise<OSAutomation[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "osautomationsave", data, opts);
+        return client.wshRpcCall("osautomationsave", data, opts);
+    }
+
     // command "oscapabilitygrant" [call]
     OSCapabilityGrantCommand(client: WshClient, data: OSCapabilityGrantRequest, opts?: RpcOpts): Promise<OSCapabilityGrant> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "oscapabilitygrant", data, opts);

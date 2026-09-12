@@ -33,6 +33,7 @@ type OSSystemEventInput struct {
 	Source  string   `json:"source,omitempty"`
 	BlockId string   `json:"blockid,omitempty"`
 	Actions []string `json:"actions,omitempty"`
+	Meta    map[string]any `json:"meta,omitempty"`
 }
 
 type OSActivityListRequest struct {
@@ -106,4 +107,23 @@ type OSWorktreeChange struct {
 type OSWorktreeFileRequest struct {
 	RepoPath string `json:"repopath"`
 	Path     string `json:"path"`
+}
+
+type OSAutomation struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Schedule  string `json:"schedule"`
+	Prompt    string `json:"prompt,omitempty"`
+	Enabled   bool   `json:"enabled"`
+	LastRunTs int64  `json:"lastrunts"`
+}
+
+type OSAutomationSaveRequest struct {
+	SpaceId     string        `json:"spaceid"`
+	Automations []OSAutomation `json:"automations"`
+}
+
+type OSAutomationRunRequest struct {
+	SpaceId      string `json:"spaceid"`
+	AutomationId string `json:"automationid"`
 }

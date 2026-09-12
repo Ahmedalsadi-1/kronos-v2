@@ -1819,6 +1819,28 @@ declare global {
         addedat: number;
     };
 
+    // wshrpc.OSAutomation
+    type OSAutomation = {
+        id: string;
+        name: string;
+        schedule: string;
+        prompt?: string;
+        enabled: boolean;
+        lastrunts: number;
+    };
+
+    // wshrpc.OSAutomationRunRequest
+    type OSAutomationRunRequest = {
+        spaceid: string;
+        automationid: string;
+    };
+
+    // wshrpc.OSAutomationSaveRequest
+    type OSAutomationSaveRequest = {
+        spaceid: string;
+        automations: OSAutomation[];
+    };
+
     // waveobj.OSCapabilityGrant
     type OSCapabilityGrant = WaveObj & {
         spaceid: string;
@@ -1908,6 +1930,7 @@ declare global {
         source?: string;
         blockid?: string;
         actions?: string[];
+        meta?: {[key: string]: any};
     };
 
     // wshrpc.OSWorktree

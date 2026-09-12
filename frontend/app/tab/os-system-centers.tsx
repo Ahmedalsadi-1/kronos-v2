@@ -554,9 +554,153 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
     );
 }
 
+function OSAutomationsSection({ spaceId }: { spaceId: string }) {
+    const [automations, setAutomations] = useState<OSAutomation[]>([]);
+    const [draft, setDraft] = useState({ name: "", schedule: "@daily", prompt: "" });
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    const refresh = useCallback(() => {
+        if (!spaceId) {
+            setAutomations([]);
+            return;
+        }
+        void RpcApi.OSAutomationListCommand(TabRpcClient, spaceId)
+            .then((result) => {
+                setAutomations(result);
+                setError("");
+            })
+            .catch(() => setError("Could not read automations for this space"));
+    }, [spaceId]);
+
+    useEffect(refresh, [refresh]);
+
+    const save = useCallback(
+        (next: OSAutomation[]) => {
+            if (!spaceId || busy) return;
+            setBusy(true);
+            void RpcApi.OSAutomationSaveCommand(TabRpcClient, { spaceid: spaceId, automations: next })
+                .then((result) => {
+                    setAutomations(result);
+                    setError("");
+                })
+                .catch((e) => setError(String(e)))
+                .finally(() => setBusy(false));
+        },
+        [spaceId, busy]
+    );
+
+    const runNow = useCallback(
+        (id: string) => {
+            if (!spaceId || busy) return;
+            setBusy(true);
+            void RpcApi.OSAutomationRunCommand(TabRpcClient, { spaceid: spaceId, automationid: id })
+                .then(refresh)
+                .catch((e) => setError(String(e)))
+                .finally(() => setBusy(false));
+        },
+        [spaceId, busy, refresh]
+    );
+
+    const add = useCallback(() => {
+        const name = draft.name.trim();
+        if (!spaceId || busy || name === "") return;
+        const next = [...automations, { id: "", name, schedule: draft.schedule, prompt: draft.prompt.trim(), enabled: true, lastrunts: 0 }];
+        setDraft({ name: "", schedule: draft.schedule, prompt: "" });
+        void save(next);
+    }, [spaceId, busy, automations, draft, save]);
+
+    const toggle = useCallback(
+        (id: string) => {
+            void save(automations.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
+        },
+        [automations, save]
+    );
+
+    const remove = useCallback(
+        (id: string) => {
+            void save(automations.filter((item) => item.id !== id));
+        },
+        [automations, save]
+    );
+
+    if (!spaceId) return null;
+
+    return (
+        <section>
+            <header>
+                <div>
+                    <strong>Automations</strong>
+                    <span>Scheduled agent prompts for this space</span>
+                </div>
+                <SystemButton type="button" size="small" onClick={refresh} aria-label="Refresh automations">
+                    <RefreshCw aria-hidden="true" />
+                </SystemButton>
+            </header>
+            {error && <p className="os-control-error" role="alert">{error}</p>}
+            <div className="os-grant-list">
+                {automations.length === 0 && <p>No automations. Schedule a recurring agent prompt below.</p>}
+                {automations.map((item) => (
+                    <div key={item.id}>
+                        <CalendarClock aria-hidden="true" />
+                        <span>
+                            <strong>{item.name}</strong>
+                            <small>
+                                {item.schedule} · {item.enabled ? "on" : "off"}
+                            </small>
+                        </span>
+                        <div className="os-change-actions">
+                            <SystemButton type="button" size="small" onClick={() => runNow(item.id)} disabled={busy}>
+                                Run
+                            </SystemButton>
+                            <SystemButton type="button" size="small" onClick={() => toggle(item.id)} disabled={busy}>
+                                {item.enabled ? "Pause" : "Resume"}
+                            </SystemButton>
+                            <SystemButton type="button" size="small" onClick={() => remove(item.id)} disabled={busy}>
+                                Delete
+                            </SystemButton>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="os-automation-add">
+                <input
+                    type="text"
+                    aria-label="Automation name"
+                    placeholder="e.g. Nightly triage"
+                    value={draft.name}
+                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") add();
+                    }}
+                />
+                <div className="os-automation-add-row">
+                    <select aria-label="Schedule" value={draft.schedule} onChange={(event) => setDraft({ ...draft, schedule: event.target.value })}>
+                        <option value="@15m">Every 15 minutes</option>
+                        <option value="@hourly">Hourly</option>
+                        <option value="@daily">Daily</option>
+                        <option value="@weekly">Weekly</option>
+                    </select>
+                    <input
+                        type="text"
+                        aria-label="Automation prompt"
+                        placeholder="Agent prompt…"
+                        value={draft.prompt}
+                        onChange={(event) => setDraft({ ...draft, prompt: event.target.value })}
+                    />
+                    <SystemButton type="button" size="small" onClick={add} disabled={busy || draft.name.trim() === ""}>
+                        Add
+                    </SystemButton>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function OSControlCenter() {
     const model = OSSystemModel.getInstance();
     const profile = useAtomValue(model.profileAtom);
+    const spaceId = useAtomValue(model.activeSpaceIdAtom);
     const grants = useAtomValue(model.grantsAtom);
     const nativeSurfaceV2Enabled = useAtomValue(getSettingsKeyAtom("feature:nativesurfacev2")) ?? false;
     const ambientOSEnabled = useAtomValue(getSettingsKeyAtom("feature:ambientos")) ?? false;
@@ -723,6 +867,8 @@ function OSControlCenter() {
             <OSWorktreesSection root={profile.roots[0] ?? ""} />
 
             <OSWorktreeChangesSection root={profile.roots[0] ?? ""} />
+
+            <OSAutomationsSection spaceId={spaceId} />
 
             <section>
                 <header>

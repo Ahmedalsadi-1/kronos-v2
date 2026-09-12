@@ -446,6 +446,10 @@ function OSWorktreesSection({ root }: { root: string }) {
     );
 }
 
+function osChangeAbsolutePath(root: string, path: string): string {
+    return root.endsWith("/") ? root + path : root + "/" + path;
+}
+
 function OSWorktreeChangesSection({ root }: { root: string }) {
     const [changes, setChanges] = useState<OSWorktreeChange[]>([]);
     const [openPath, setOpenPath] = useState("");
@@ -526,6 +530,12 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
                             type="button"
                             className="os-change-row"
                             aria-expanded={openPath === change.path}
+                            draggable
+                            onDragStart={(event) => {
+                                const absolute = osChangeAbsolutePath(root, change.path);
+                                event.dataTransfer.setData("application/x-hermes-paths", JSON.stringify([{ path: absolute }]));
+                                event.dataTransfer.setData("text/plain", absolute);
+                            }}
                             onClick={() => toggleDiff(change.path)}
                         >
                             <span>

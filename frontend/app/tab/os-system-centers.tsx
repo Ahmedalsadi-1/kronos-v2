@@ -10,6 +10,7 @@ import {
     type OSResourceReference,
 } from "@/app/store/os-resource-service";
 import { OSSystemModel } from "@/app/store/os-system";
+import { ContextMenuModel } from "@/app/store/contextmenu";
 import type { SystemEvent } from "@/app/store/os-system-types";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
@@ -37,7 +38,7 @@ import {
     Trash2,
     X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 type OSSystemCenter = "activity" | "control";
 type OSActivityView = "attention" | "timeline" | "artifacts";
@@ -391,6 +392,27 @@ function OSWorktreesSection({ root }: { root: string }) {
         [root, busy, refresh]
     );
 
+    const showWorktreeMenu = useCallback(
+        (event: ReactMouseEvent, worktree: OSWorktree) => {
+            const menu: ContextMenuItem[] = [
+                {
+                    label: "Copy path",
+                    click: () => {
+                        void navigator.clipboard.writeText(worktree.path);
+                    },
+                },
+            ];
+            if (!worktree.ismain) {
+                menu.push(
+                    { type: "separator" },
+                    { label: "Remove worktree", enabled: !busy, click: () => remove(worktree.path) }
+                );
+            }
+            ContextMenuModel.getInstance().showContextMenu(menu, event);
+        },
+        [busy, remove]
+    );
+
     if (!root) return null;
 
     return (
@@ -407,8 +429,9 @@ function OSWorktreesSection({ root }: { root: string }) {
             {error && <p className="os-control-error" role="alert">{error}</p>}
             <div className="os-grant-list">
                 {worktrees.map((worktree) => (
-                    <div key={worktree.path}>
+                    <div key={worktree.path} onContextMenu={(event) => showWorktreeMenu(event, worktree)}>
                         <GitBranch aria-hidden="true" />
+                        <span className={cn("os-permission-dot", worktree.ismain ? "is-granted" : "is-unknown")} />
                         <span>
                             <strong>{worktree.branch || worktree.name}</strong>
                             <small>{worktree.ismain ? "main checkout" : worktree.name}</small>
@@ -508,6 +531,29 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
         [root, busy, openPath, refresh]
     );
 
+    const showChangeMenu = useCallback(
+        (event: ReactMouseEvent, change: OSWorktreeChange) => {
+            ContextMenuModel.getInstance().showContextMenu(
+                [
+                    {
+                        label: "Copy diff",
+                        enabled: !busy,
+                        click: () => {
+                            void RpcApi.OSWorktreeFileDiffCommand(TabRpcClient, { repopath: root, path: change.path }).then((diff) => {
+                                void navigator.clipboard.writeText(diff);
+                            });
+                        },
+                    },
+                    { type: "separator" },
+                    { label: "Accept (stage)", enabled: !busy, click: () => act("stage", change.path) },
+                    { label: "Discard changes", enabled: !busy, click: () => act("revert", change.path) },
+                ] satisfies ContextMenuItem[],
+                event
+            );
+        },
+        [root, busy, act]
+    );
+
     if (!root) return null;
 
     return (
@@ -525,7 +571,7 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
             <div className="os-grant-list">
                 {changes.length === 0 && <p>No uncommitted changes. Agent edits appear here for review.</p>}
                 {changes.map((change) => (
-                    <div key={change.path}>
+                    <div key={change.path} onContextMenu={(event) => showChangeMenu(event, change)}>
                         <button
                             type="button"
                             className="os-change-row"
@@ -538,6 +584,7 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
                             }}
                             onClick={() => toggleDiff(change.path)}
                         >
+                            <span className={cn("os-permission-dot", change.status === "deleted" ? "is-denied" : change.status === "added" ? "is-granted" : "is-unknown")} />
                             <span>
                                 <strong>{change.path}</strong>
                                 <small>

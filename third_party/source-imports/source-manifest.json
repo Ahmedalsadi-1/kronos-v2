@@ -1,0 +1,50 @@
+{
+    "version": 1,
+    "entries": [
+        {
+            "path": "frontend/app/plugins/manifest/plugin-path-safety.ts",
+            "upstream": "orca",
+            "upstreamPaths": ["src/shared/plugins/plugin-path-safety.ts", "src/shared/plugins/plugin-id-format.ts"],
+            "mode": "adapted",
+            "changes": "Merged into one module; added reserved publishers; KronTerm code style."
+        },
+        {
+            "path": "frontend/app/plugins/manifest/plugin-capabilities.ts",
+            "upstream": "orca",
+            "upstreamPaths": ["src/shared/plugins/plugin-capabilities.ts"],
+            "mode": "adapted",
+            "changes": "KronTerm capability kinds, risk tiers, and consent copy; scoped arrays canonicalized; host:port and *.suffix network grammar."
+        },
+        {
+            "path": "frontend/app/plugins/manifest/plugin-manifest.ts",
+            "upstream": "orca",
+            "upstreamPaths": ["src/shared/plugins/plugin-manifest.ts", "src/shared/plugins/plugin-manifest-fields.ts"],
+            "mode": "adapted",
+            "changes": "Schema structure, semver/engine grammar, and parse helpers kept; contribution types replaced with KronTerm widgets, applications, settings, skills, Hermes tools, ACP agents, MCP servers, artifact renderers, providers, and attention sources."
+        },
+        {
+            "path": "frontend/app/plugins/manifest/plugin-manifest-validation.ts",
+            "upstream": "orca",
+            "upstreamPaths": ["src/shared/plugins/plugin-manifest-contribution-validation.ts"],
+            "mode": "adapted",
+            "changes": "Duplicate-detection pattern kept; cross-reference and capability rules rewritten for KronTerm contributions."
+        },
+        {
+            "path": "frontend/app/plugins/manifest/plugin-consent.ts",
+            "upstream": "orca",
+            "upstreamPaths": ["src/shared/plugins/plugin-consent-fingerprint.ts"],
+            "mode": "adapted",
+            "changes": "Split canonicalization (renderer-safe) from hashing (emain/plugins/plugin-consent-fingerprint.ts); deferred-execution content covers skills, agents, and MCP servers."
+        },
+        {
+            "path": "frontend/app/plugins/manifest/plugin-manifest.test.ts",
+            "upstream": "orca",
+            "upstreamPaths": [
+                "src/shared/plugins/plugin-manifest.test.ts",
+                "src/shared/plugins/plugin-path-safety.test.ts"
+            ],
+            "mode": "adapted",
+            "changes": "Boundary and path-portability cases kept; KronTerm capability and contribution cases added."
+        }
+    ]
+}

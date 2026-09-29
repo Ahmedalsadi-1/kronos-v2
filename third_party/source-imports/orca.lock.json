@@ -1,0 +1,8 @@
+{
+    "upstream": "https://github.com/stablyai/orca.git",
+    "commit": "12f53da542d03473367e48a63b85a49eae7c5f8b",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 Lovecast Inc.",
+    "auditedAt": "2026-09-28",
+    "imports": ["src/shared/plugins"]
+}

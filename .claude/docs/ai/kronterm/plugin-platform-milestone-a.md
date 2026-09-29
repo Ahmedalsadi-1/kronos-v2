@@ -53,6 +53,13 @@ placement specs, file-by-file plan). Implementation should not start until the o
 
 ### ADR-1 Ownership split
 
+> **Revised 2026-09-28 (Milestone B):** Orca (MIT) ships a tested, Electron-free TypeScript plugin manifest and
+> capability model (`src/shared/plugins/`). Adapting it is cheaper and safer than a Go rewrite, so **manifest types,
+> validation, capability definitions, and consent canonicalization now live in TypeScript** at
+> `frontend/app/plugins/manifest/` (zod), shared by Electron main and the renderer. Go still owns persistence
+> (grants, enablement, receipts in SQLite) and exposes them over RPC; it never parses manifests. The table below is
+> superseded for the "Manifest types, validation" row only.
+
 | Concern | Owner | Reason |
 | --- | --- | --- |
 | Manifest types, validation, package store, grants DB, enablement | **Go (`pkg/plugin`)** | wavesrv already owns config, filestore, and SQLite; `wsh` and MCP need the same answers; types flow to TS via `task generate` (single source of truth) |
@@ -446,7 +453,7 @@ All seven questions below were resolved in favor of the recommendation in this d
 | 4 | Plugin-supplied migrations deferred to v2 |
 | 5 | Implementation on dedicated worktrees/branches, not the dirty `feat/kronsettings-from-kronoschamber` tree |
 | 6 | Orca pinned at `d606be3adef44c80214de3c29e28717b4c80d2be` until a release tag is chosen |
-| 7 | Manifest JSON uses lowercase field names |
+| 7 | ~~Manifest JSON uses lowercase field names~~ **Revised:** camelCase, because the manifest is TypeScript-owned (ADR-1 revision), Go never parses it, and it stays close to Orca's manifest for adaptation. Engines use Orca's closed `">=x.y.z"` grammar. |
 
 Original questions, kept for the record:
 

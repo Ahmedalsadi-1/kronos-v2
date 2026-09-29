@@ -3,11 +3,14 @@
 
 import { Block as BlockView } from "@/app/block/block";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
+import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { LayoutModel } from "@/layout/lib/layoutModel";
 import { useNodeModel, useTileLayout } from "@/layout/lib/layoutModelHooks";
 import { DropDirection, LayoutNode, NodeModel, TileLayoutContents } from "@/layout/lib/types";
-import { refocusNode } from "@/store/global";
+import { getApi, refocusNode } from "@/store/global";
 import * as WOS from "@/store/wos";
 import { makeIconClass } from "@/util/util";
 import { Atom, atom, useAtomValue, useSetAtom } from "jotai";
@@ -25,10 +28,16 @@ import {
 } from "./tabs-agent-workspace";
 import { WidgetPickerPopover } from "./widget-picker-popover";
 import {
+    computeWidgetTabStripScrollMetrics,
     getVisibleWidgetPaneIds,
     getWidgetFocusAfterClose,
     getWidgetTabCloseAccessibility,
+    getWidgetTabCloseTargets,
     moveWidgetTab,
+    orderWidgetTabsByPinned,
+    reorderWidgetTab,
+    resolveWidgetNativePath,
+    type WidgetTabDropSide,
 } from "./widget-tabs-layout-utils";
 import "./widget-tabs-layout.scss";
 
@@ -42,6 +51,23 @@ interface WidgetTabProps {
     active: boolean;
     onSelect: () => void;
     onClose: () => void;
+    onRename: (title: string) => void;
+    onTogglePin: () => void;
+    pinned: boolean;
+    dropSide: WidgetTabDropSide | null;
+    onTabDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
+    onTabDragLeave: (event: React.DragEvent<HTMLDivElement>) => void;
+    onTabDrop: (event: React.DragEvent<HTMLDivElement>) => void;
+    onContextMenu: (
+        event: React.MouseEvent<HTMLDivElement>,
+        details: {
+            beginRename: () => void;
+            blockId: string;
+            title: string;
+            viewType: string;
+            nativePath?: string;
+        }
+    ) => void;
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
     onDragStart: (event: React.DragEvent<HTMLDivElement>) => void;
     onDragEnd: () => void;
@@ -61,6 +87,15 @@ function readNodeView(node?: LayoutNode): string {
     }
     const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
     return String(block?.meta?.view ?? "term");
+}
+
+function readNodePinned(node?: LayoutNode): boolean {
+    const blockId = node?.data?.blockId;
+    if (!blockId) {
+        return false;
+    }
+    const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
+    return block?.meta?.["frame:pinned"] === true;
 }
 
 function activityLabel(activity?: LiveAgentSurfaceActivity): string {
@@ -86,59 +121,177 @@ const SplitDropTargets = [
     { direction: DropDirection.Left, name: "left", icon: "arrow-left", label: "Split left" },
 ];
 
-const WidgetTab = memo(({ node, active, onSelect, onClose, onKeyDown, onDragStart, onDragEnd }: WidgetTabProps) => {
-    const blockId = node.data?.blockId;
-    const blockAtom = useMemo(() => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)), [blockId]);
-    const blockData = useAtomValue(blockAtom);
-    const viewType = String(blockData?.meta?.view ?? "term");
-    const viewName = blockViewToName(viewType);
-    const title = String(blockData?.meta?.["frame:title"] ?? "").trim() || viewName;
-    const displayTitle = viewType === "chathubv2" ? "Chamber V2" : title;
-    const icon = resolveBlockIcon(viewType, blockData?.meta);
-    const closeAccessibility = getWidgetTabCloseAccessibility(active);
+const WidgetTab = memo(
+    ({
+        node,
+        active,
+        onSelect,
+        onClose,
+        onRename,
+        onTogglePin,
+        pinned,
+        dropSide,
+        onTabDragOver,
+        onTabDragLeave,
+        onTabDrop,
+        onContextMenu,
+        onKeyDown,
+        onDragStart,
+        onDragEnd,
+    }: WidgetTabProps) => {
+        const blockId = node.data?.blockId;
+        const blockAtom = useMemo(() => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)), [blockId]);
+        const blockData = useAtomValue(blockAtom);
+        const viewType = String(blockData?.meta?.view ?? "term");
+        const viewName = blockViewToName(viewType);
+        const title = String(blockData?.meta?.["frame:title"] ?? "").trim() || viewName;
+        const displayTitle = viewType === "chathubv2" ? "Chamber V2" : title;
+        const icon = resolveBlockIcon(viewType, blockData?.meta);
+        const closeAccessibility = getWidgetTabCloseAccessibility(active);
+        const [isEditing, setIsEditing] = useState(false);
+        const [renameValue, setRenameValue] = useState(displayTitle);
+        const renameInputRef = useRef<HTMLInputElement>(null);
 
-    return (
-        <div
-            className={`widget-surface-tab ${active ? "is-active" : ""} ${viewType === "chathubv2" ? "is-chamber" : ""}`}
-            draggable
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-        >
-            <button
-                type="button"
-                id={`widget-surface-tab-${blockId}`}
-                className="widget-surface-tab-main"
-                role="tab"
-                aria-selected={active}
-                aria-controls={`widget-surface-panel-${blockId}`}
-                tabIndex={active ? 0 : -1}
-                onClick={onSelect}
-                onKeyDown={onKeyDown}
-                title={displayTitle}
+        const beginRename = useCallback(() => {
+            setRenameValue(displayTitle);
+            setIsEditing(true);
+        }, [displayTitle]);
+
+        const commitRename = useCallback(() => {
+            const nextTitle = renameValue.trim();
+            setIsEditing(false);
+            if (nextTitle === displayTitle) {
+                return;
+            }
+            onRename(nextTitle);
+        }, [displayTitle, onRename, renameValue]);
+
+        useEffect(() => {
+            if (!isEditing) {
+                return;
+            }
+            window.requestAnimationFrame(() => {
+                renameInputRef.current?.focus();
+                renameInputRef.current?.select();
+            });
+        }, [isEditing]);
+
+        return (
+            <div
+                className={`widget-surface-tab ${active ? "is-active" : ""} ${pinned ? "is-pinned" : ""} ${isEditing ? "is-editing" : ""} ${viewType === "chathubv2" ? "is-chamber" : ""} ${dropSide ? `is-drop-${dropSide}` : ""}`}
+                draggable={!isEditing}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragOver={onTabDragOver}
+                onDragLeave={onTabDragLeave}
+                onDrop={onTabDrop}
+                onContextMenu={(event) =>
+                    onContextMenu(event, {
+                        beginRename,
+                        blockId,
+                        title: displayTitle,
+                        viewType,
+                        nativePath: resolveWidgetNativePath(blockData?.meta),
+                    })
+                }
             >
-                <i className={makeIconClass(icon, true, { defaultIcon: "square" })} aria-hidden="true" />
-                <span className="widget-surface-tab-copy">
-                    <span>{displayTitle}</span>
-                    <span>{viewName}</span>
-                </span>
-            </button>
-            <button
-                type="button"
-                className="widget-surface-tab-close"
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onClose();
-                }}
-                aria-label={`Close ${displayTitle}`}
-                aria-hidden={closeAccessibility.ariaHidden}
-                tabIndex={closeAccessibility.tabIndex}
-                title={`Close ${displayTitle}`}
-            >
-                <i className="fa-solid fa-xmark" aria-hidden="true" />
-            </button>
-        </div>
-    );
-});
+                {isEditing ? (
+                    <input
+                        ref={renameInputRef}
+                        className="widget-surface-tab-rename"
+                        value={renameValue}
+                        aria-label={`Rename ${displayTitle}`}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(event) => {
+                            if (event.nativeEvent.isComposing) {
+                                return;
+                            }
+                            if (event.key === "Enter") {
+                                event.preventDefault();
+                                commitRename();
+                            } else if (event.key === "Escape") {
+                                event.preventDefault();
+                                setIsEditing(false);
+                            }
+                        }}
+                    />
+                ) : (
+                    <button
+                        type="button"
+                        id={`widget-surface-tab-${blockId}`}
+                        className="widget-surface-tab-main"
+                        role="tab"
+                        aria-selected={active}
+                        aria-controls={`widget-surface-panel-${blockId}`}
+                        tabIndex={active ? 0 : -1}
+                        onClick={onSelect}
+                        onDoubleClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            beginRename();
+                        }}
+                        onKeyDown={onKeyDown}
+                        onMouseDown={(event) => {
+                            if (event.button === 1) {
+                                event.preventDefault();
+                            }
+                        }}
+                        onAuxClick={(event) => {
+                            if (event.button !== 1) {
+                                return;
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (!pinned) {
+                                onClose();
+                            }
+                        }}
+                        title={`${displayTitle} · ${viewName}`}
+                    >
+                        <i
+                            className={`widget-surface-tab-icon ${makeIconClass(icon, true, { defaultIcon: "square" })}`}
+                            aria-hidden="true"
+                        />
+                        {pinned && <i className="widget-surface-tab-pin fa-solid fa-thumbtack" aria-hidden="true" />}
+                        <span className="widget-surface-tab-label">{displayTitle}</span>
+                    </button>
+                )}
+                {active && <span className="widget-surface-tab-indicator" aria-hidden="true" />}
+                {!isEditing && !pinned && (
+                    <button
+                        type="button"
+                        className="widget-surface-tab-close"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onClose();
+                        }}
+                        aria-label={`Close ${displayTitle}`}
+                        aria-hidden={closeAccessibility.ariaHidden}
+                        tabIndex={closeAccessibility.tabIndex}
+                        title={`Close ${displayTitle}`}
+                    >
+                        <i className="fa-solid fa-xmark" aria-hidden="true" />
+                    </button>
+                )}
+                {!isEditing && pinned && (
+                    <button
+                        type="button"
+                        className="widget-surface-tab-unpin"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onTogglePin();
+                        }}
+                        aria-label={`Unpin ${displayTitle}`}
+                        title={`Unpin ${displayTitle}`}
+                    >
+                        <i className="fa-solid fa-thumbtack" aria-hidden="true" />
+                    </button>
+                )}
+            </div>
+        );
+    }
+);
 WidgetTab.displayName = "WidgetTab";
 
 const WidgetTabPane = memo(
@@ -256,21 +409,97 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
     const activeNodeIdRef = useRef(activeNode?.id);
     const pendingCompanionRef = useRef<{ agentNodeId: string; blockId: string } | null>(null);
     const addButtonRef = useRef<HTMLButtonElement>(null);
+    const tabStripRef = useRef<HTMLDivElement>(null);
+    const firstSplitTargetRef = useRef<HTMLButtonElement>(null);
+    const dragScrollTimerRef = useRef<number>(null);
     const [widgetPickerOpen, setWidgetPickerOpen] = useState(false);
     const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+    const [keyboardSplitNodeId, setKeyboardSplitNodeId] = useState<string | null>(null);
     const [dropDirection, setDropDirection] = useState<DropDirection | null>(null);
+    const [tabDropTarget, setTabDropTarget] = useState<{ nodeId: string; side: WidgetTabDropSide } | null>(null);
     const [workbenchPair, setWorkbenchPair] = useState<AgentWorkbenchPair | null>(null);
     const [workbenchWidth, setWorkbenchWidth] = useState(40);
     const [recentActivity, setRecentActivity] = useState<LiveAgentSurfaceActivity[]>([]);
+    const [pinnedNodeIds, setPinnedNodeIds] = useState<Set<string>>(
+        () => new Set(orderedNodes.filter(readNodePinned).map((node) => node.id))
+    );
+    const [tabStripScroll, setTabStripScroll] = useState(() => ({
+        hasOverflow: false,
+        canScrollStart: false,
+        canScrollEnd: false,
+    }));
     const initializedWorkbenchRef = useRef(false);
     nodesRef.current = orderedNodes;
     activeNodeIdRef.current = activeNode?.id;
+    const splitSourceNodeId = draggedNodeId ?? keyboardSplitNodeId;
+
+    const refreshTabStripScroll = useCallback(() => {
+        const tabStrip = tabStripRef.current;
+        if (!tabStrip) {
+            return;
+        }
+        setTabStripScroll(computeWidgetTabStripScrollMetrics(tabStrip));
+    }, []);
+
+    useEffect(() => {
+        const tabStrip = tabStripRef.current;
+        if (!tabStrip) {
+            return;
+        }
+        refreshTabStripScroll();
+        const resizeObserver = new ResizeObserver(refreshTabStripScroll);
+        resizeObserver.observe(tabStrip);
+        tabStrip.addEventListener("scroll", refreshTabStripScroll, { passive: true });
+        return () => {
+            resizeObserver.disconnect();
+            tabStrip.removeEventListener("scroll", refreshTabStripScroll);
+        };
+    }, [orderedNodes.length, refreshTabStripScroll]);
+
+    const scrollTabs = useCallback((direction: -1 | 1) => {
+        tabStripRef.current?.scrollBy({ left: direction * 220, behavior: "smooth" });
+    }, []);
+
+    const stopTabDragScroll = useCallback(() => {
+        if (dragScrollTimerRef.current == null) {
+            return;
+        }
+        window.clearInterval(dragScrollTimerRef.current);
+        dragScrollTimerRef.current = null;
+    }, []);
+
+    const startTabDragScroll = useCallback(
+        (direction: -1 | 1) => {
+            stopTabDragScroll();
+            scrollTabs(direction);
+            dragScrollTimerRef.current = window.setInterval(() => scrollTabs(direction), 260);
+        },
+        [scrollTabs, stopTabDragScroll]
+    );
+
+    useEffect(() => stopTabDragScroll, [stopTabDragScroll]);
 
     const visibleTabNodes = useMemo(
-        () => (workbenchPair ? orderedNodes.filter((node) => node.id !== workbenchPair.companionNodeId) : orderedNodes),
-        [orderedNodes, workbenchPair]
+        () =>
+            orderWidgetTabsByPinned(
+                workbenchPair ? orderedNodes.filter((node) => node.id !== workbenchPair.companionNodeId) : orderedNodes,
+                pinnedNodeIds
+            ),
+        [orderedNodes, pinnedNodeIds, workbenchPair]
     );
+    const visibleTabNodesRef = useRef(visibleTabNodes);
+    visibleTabNodesRef.current = visibleTabNodes;
     const selectedTabNodeId = workbenchPair?.agentNodeId ?? activeNode?.id;
+    const selectedTabBlockId = visibleTabNodes.find((node) => node.id === selectedTabNodeId)?.data?.blockId;
+
+    useEffect(() => {
+        if (!selectedTabBlockId) {
+            return;
+        }
+        const tab = document.getElementById(`widget-surface-tab-${selectedTabBlockId}`);
+        tab?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }, [selectedTabBlockId]);
+
     const mountedPaneIds = useMemo(
         () => getVisibleWidgetPaneIds(activeNode?.id, workbenchPair),
         [activeNode?.id, workbenchPair]
@@ -304,6 +533,13 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
     useEffect(() => {
         setReady(true);
     }, [setReady]);
+
+    useEffect(() => {
+        if (!keyboardSplitNodeId) {
+            return;
+        }
+        window.requestAnimationFrame(() => firstSplitTargetRef.current?.focus());
+    }, [keyboardSplitNodeId]);
 
     useEffect(() => {
         if (initializedWorkbenchRef.current) {
@@ -436,7 +672,7 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
 
     const closeNode = useCallback(
         (nodeId: string) => {
-            const nodes = nodesRef.current;
+            const nodes = visibleTabNodesRef.current;
             const nextNodeId = getWidgetFocusAfterClose(nodes, nodeId, activeNodeIdRef.current);
             if (nextNodeId) {
                 layoutModel.focusNode(nextNodeId);
@@ -457,104 +693,331 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
         [focusNode, visibleTabNodes]
     );
 
-    const splitDraggedNode = useCallback(
+    const splitSelectedNode = useCallback(
         (direction: DropDirection) => {
             const targetNodeId = activeNodeIdRef.current;
-            if (!draggedNodeId || !targetNodeId || draggedNodeId === targetNodeId) {
+            if (!splitSourceNodeId || !targetNodeId || splitSourceNodeId === targetNodeId) {
                 return;
             }
-            moveWidgetTab(layoutModel, draggedNodeId, targetNodeId, direction);
+            moveWidgetTab(layoutModel, splitSourceNodeId, targetNodeId, direction);
             setDraggedNodeId(null);
+            setKeyboardSplitNodeId(null);
             setDropDirection(null);
         },
-        [draggedNodeId, layoutModel]
+        [layoutModel, splitSourceNodeId]
+    );
+
+    const closeNodes = useCallback(
+        async (nodeIds: readonly string[], focusNodeId?: string) => {
+            if (focusNodeId) {
+                layoutModel.focusNode(focusNodeId);
+            }
+            for (const nodeId of nodeIds) {
+                await layoutModel.closeNode(nodeId);
+            }
+        },
+        [layoutModel]
+    );
+
+    const renameNode = useCallback((blockId: string, title: string) => {
+        void RpcApi.SetMetaCommand(TabRpcClient, {
+            oref: WOS.makeORef("block", blockId),
+            meta: { "frame:title": title || null },
+        });
+    }, []);
+
+    const togglePinnedNode = useCallback((node: LayoutNode) => {
+        const blockId = node.data?.blockId;
+        if (!blockId) {
+            return;
+        }
+        setPinnedNodeIds((current) => {
+            const next = new Set(current);
+            const pinned = !next.has(node.id);
+            if (pinned) {
+                next.add(node.id);
+            } else {
+                next.delete(node.id);
+            }
+            void RpcApi.SetMetaCommand(TabRpcClient, {
+                oref: WOS.makeORef("block", blockId),
+                meta: { "frame:pinned": pinned || null } as unknown as MetaType,
+            });
+            return next;
+        });
+    }, []);
+
+    const showTabContextMenu = useCallback(
+        (
+            event: React.MouseEvent<HTMLDivElement>,
+            node: LayoutNode,
+            index: number,
+            details: {
+                beginRename: () => void;
+                blockId: string;
+                title: string;
+                viewType: string;
+                nativePath?: string;
+            }
+        ) => {
+            event.preventDefault();
+            const nodeIds = visibleTabNodes.map((entry) => entry.id);
+            const closeOthers = getWidgetTabCloseTargets(nodeIds, node.id, "others", pinnedNodeIds);
+            const closeRight = getWidgetTabCloseTargets(nodeIds, node.id, "right", pinnedNodeIds);
+            const activeTargetId = activeNodeIdRef.current;
+            const canSplit = Boolean(activeTargetId && activeTargetId !== node.id);
+            const isMacOS = getApi().getPlatform() === "darwin";
+            const menu: ContextMenuItem[] = [
+                {
+                    label: "Focus Tab",
+                    click: () => focusNode(node),
+                },
+                {
+                    label: "Rename Tab…",
+                    click: details.beginRename,
+                },
+                {
+                    label: pinnedNodeIds.has(node.id) ? "Unpin Tab" : "Pin Tab",
+                    click: () => togglePinnedNode(node),
+                },
+                {
+                    label: "Split",
+                    enabled: canSplit,
+                    submenu: SplitDropTargets.map((target) => ({
+                        label: target.label,
+                        click: () => {
+                            if (!activeTargetId || activeTargetId === node.id) {
+                                return;
+                            }
+                            moveWidgetTab(layoutModel, node.id, activeTargetId, target.direction);
+                        },
+                    })),
+                },
+                ...(isMacOS
+                    ? [
+                          {
+                              label: "Open as Floating Island",
+                              click: () => {
+                                  void getApi().openNativeHudIsland({
+                                      blockId: details.blockId,
+                                      title: details.title,
+                                      view: details.viewType,
+                                  });
+                              },
+                          } satisfies ContextMenuItem,
+                      ]
+                    : []),
+                ...(details.nativePath
+                    ? [
+                          { type: "separator" as const },
+                          {
+                              label: "Open in Default App",
+                              click: () => getApi().openNativePath(details.nativePath),
+                          },
+                          ...(isMacOS
+                              ? [
+                                    {
+                                        label: "Quick Look",
+                                        click: () => getApi().onQuicklook(details.nativePath),
+                                    } satisfies ContextMenuItem,
+                                    {
+                                        label: "Reveal in Finder",
+                                        click: () => getApi().revealNativePath(details.nativePath),
+                                    } satisfies ContextMenuItem,
+                                ]
+                              : []),
+                          {
+                              label: "Copy Path",
+                              click: () => void getApi().writeClipboard(details.nativePath),
+                          },
+                      ]
+                    : []),
+                { type: "separator" },
+                {
+                    label: "Close Tab",
+                    click: () => closeNode(node.id),
+                },
+                {
+                    label: "Close Other Tabs",
+                    enabled: closeOthers.length > 0,
+                    click: () => void closeNodes(closeOthers, node.id),
+                },
+                {
+                    label: "Close Tabs to the Right",
+                    enabled: closeRight.length > 0 && index < visibleTabNodes.length - 1,
+                    click: () => void closeNodes(closeRight, node.id),
+                },
+            ];
+            ContextMenuModel.getInstance().showContextMenu(menu, event);
+        },
+        [closeNode, closeNodes, focusNode, layoutModel, pinnedNodeIds, togglePinnedNode, visibleTabNodes]
     );
 
     return (
         <div className="widget-tabs-layout">
-            <aside className="widget-surface-sidebar" aria-label="Widget tabs">
-                <div className="widget-surface-sidebar-header">
-                    <span className="widget-surface-sidebar-title">
-                        <span className="widget-surface-sidebar-mark" aria-hidden="true">
-                            <i className="fa-solid fa-window-restore" />
-                        </span>
-                    </span>
-                </div>
-                <div
-                    className="widget-surface-tabstrip"
-                    role="tablist"
-                    aria-label="Widgets in this workspace tab"
-                    aria-orientation="horizontal"
-                >
-                    {visibleTabNodes.map((node, index) => (
-                        <WidgetTab
-                            key={node.id}
-                            node={node}
-                            active={node.id === selectedTabNodeId}
-                            onSelect={() => focusNode(node)}
-                            onClose={() => closeNode(node.id)}
-                            onDragStart={(event) => {
-                                event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData("text/plain", node.id);
-                                setDraggedNodeId(node.id);
-                                setWidgetPickerOpen(false);
-                            }}
-                            onDragEnd={() => {
-                                setDraggedNodeId(null);
-                                setDropDirection(null);
-                            }}
-                            onKeyDown={(event) => {
-                                if (event.key === "ArrowRight") {
-                                    event.preventDefault();
-                                    focusByIndex(index + 1);
-                                } else if (event.key === "ArrowLeft") {
-                                    event.preventDefault();
-                                    focusByIndex(index - 1);
-                                } else if (event.key === "Home") {
-                                    event.preventDefault();
-                                    focusByIndex(0);
-                                } else if (event.key === "End") {
-                                    event.preventDefault();
-                                    focusByIndex(visibleTabNodes.length - 1);
-                                }
-                            }}
-                        />
-                    ))}
-                </div>
-                <div className="widget-surface-sidebar-footer">
-                    <button
-                        ref={addButtonRef}
-                        type="button"
-                        className={`widget-surface-add ${widgetPickerOpen ? "is-open" : ""}`}
-                        onClick={() => setWidgetPickerOpen((current) => !current)}
-                        aria-haspopup="menu"
-                        aria-expanded={widgetPickerOpen}
-                        aria-label="Add widget"
-                        title="Add widget"
+            <header className="widget-surface-tabbar" aria-label="Widget tabs">
+                <div className="widget-surface-tabstrip-shell">
+                    {tabStripScroll.hasOverflow && (
+                        <button
+                            type="button"
+                            className="widget-surface-tabstrip-scroll"
+                            aria-label="Scroll tabs left"
+                            disabled={!tabStripScroll.canScrollStart}
+                            onClick={() => scrollTabs(-1)}
+                            onDragEnter={() => draggedNodeId && startTabDragScroll(-1)}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDragLeave={stopTabDragScroll}
+                            onDrop={stopTabDragScroll}
+                        >
+                            <i className="fa-solid fa-chevron-left" aria-hidden="true" />
+                        </button>
+                    )}
+                    <div
+                        ref={tabStripRef}
+                        className="widget-surface-tabstrip"
+                        role="tablist"
+                        aria-label="Widgets in this workspace tab"
+                        aria-orientation="horizontal"
                     >
-                        <i className="fa-solid fa-plus" aria-hidden="true" />
-                        <span>New widget</span>
-                    </button>
-                    {addButtonRef.current && (
-                        <WidgetPickerPopover
-                            anchorElement={addButtonRef.current}
-                            open={widgetPickerOpen}
-                            onClose={() => setWidgetPickerOpen(false)}
-                        />
+                        {visibleTabNodes.map((node, index) => (
+                            <WidgetTab
+                                key={node.id}
+                                node={node}
+                                active={node.id === selectedTabNodeId}
+                                pinned={pinnedNodeIds.has(node.id)}
+                                dropSide={tabDropTarget?.nodeId === node.id ? tabDropTarget.side : null}
+                                onTabDragOver={(event) => {
+                                    if (!draggedNodeId || draggedNodeId === node.id) {
+                                        return;
+                                    }
+                                    event.preventDefault();
+                                    event.dataTransfer.dropEffect = "move";
+                                    const bounds = event.currentTarget.getBoundingClientRect();
+                                    const side = event.clientX < bounds.left + bounds.width / 2 ? "before" : "after";
+                                    if (tabDropTarget?.nodeId !== node.id || tabDropTarget.side !== side) {
+                                        setTabDropTarget({ nodeId: node.id, side });
+                                    }
+                                }}
+                                onTabDragLeave={(event) => {
+                                    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                                        setTabDropTarget((current) => (current?.nodeId === node.id ? null : current));
+                                    }
+                                }}
+                                onTabDrop={(event) => {
+                                    if (!draggedNodeId || !tabDropTarget) {
+                                        return;
+                                    }
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    reorderWidgetTab(
+                                        layoutModel,
+                                        orderedNodes.map((entry) => entry.id),
+                                        draggedNodeId,
+                                        tabDropTarget.nodeId,
+                                        tabDropTarget.side
+                                    );
+                                    setTabDropTarget(null);
+                                    setDraggedNodeId(null);
+                                    setKeyboardSplitNodeId(null);
+                                    setDropDirection(null);
+                                }}
+                                onSelect={() => focusNode(node)}
+                                onClose={() => closeNode(node.id)}
+                                onRename={(title) => renameNode(node.data?.blockId, title)}
+                                onTogglePin={() => togglePinnedNode(node)}
+                                onContextMenu={(event, details) => showTabContextMenu(event, node, index, details)}
+                                onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData("text/plain", node.id);
+                                    setDraggedNodeId(node.id);
+                                    setWidgetPickerOpen(false);
+                                }}
+                                onDragEnd={() => {
+                                    stopTabDragScroll();
+                                    setTabDropTarget(null);
+                                    setDraggedNodeId(null);
+                                    setKeyboardSplitNodeId(null);
+                                    setDropDirection(null);
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === "ArrowRight") {
+                                        event.preventDefault();
+                                        focusByIndex(index + 1);
+                                    } else if (event.key === "ArrowLeft") {
+                                        event.preventDefault();
+                                        focusByIndex(index - 1);
+                                    } else if (event.key === "Home") {
+                                        event.preventDefault();
+                                        focusByIndex(0);
+                                    } else if (event.key === "End") {
+                                        event.preventDefault();
+                                        focusByIndex(visibleTabNodes.length - 1);
+                                    }
+                                }}
+                            />
+                        ))}
+                    </div>
+                    {tabStripScroll.hasOverflow && (
+                        <button
+                            type="button"
+                            className="widget-surface-tabstrip-scroll"
+                            aria-label="Scroll tabs right"
+                            disabled={!tabStripScroll.canScrollEnd}
+                            onClick={() => scrollTabs(1)}
+                            onDragEnter={() => draggedNodeId && startTabDragScroll(1)}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDragLeave={stopTabDragScroll}
+                            onDrop={stopTabDragScroll}
+                        >
+                            <i className="fa-solid fa-chevron-right" aria-hidden="true" />
+                        </button>
                     )}
                 </div>
-            </aside>
+                <button
+                    ref={addButtonRef}
+                    type="button"
+                    className={`widget-surface-add ${widgetPickerOpen ? "is-open" : ""}`}
+                    onClick={() => setWidgetPickerOpen((current) => !current)}
+                    aria-haspopup="menu"
+                    aria-expanded={widgetPickerOpen}
+                    aria-label="New tab"
+                    title="New tab"
+                >
+                    <i className="fa-solid fa-plus" aria-hidden="true" />
+                </button>
+                {addButtonRef.current && (
+                    <WidgetPickerPopover
+                        anchorElement={addButtonRef.current}
+                        open={widgetPickerOpen}
+                        onClose={() => setWidgetPickerOpen(false)}
+                    />
+                )}
+                <div className="widget-surface-tabbar-spacer" />
+            </header>
             <div
                 ref={layoutModel.displayContainerRef}
                 className={`widget-surface-content ${workbenchPair ? "is-agent-workbench" : ""}`}
                 style={{ "--agent-workbench-chat-width": `${workbenchWidth}%` } as React.CSSProperties}
             >
-                {draggedNodeId && draggedNodeId !== activeNode?.id && (
-                    <div className="widget-surface-split-overlay" aria-label="Choose where to split the focused widget">
-                        {SplitDropTargets.map((target) => (
-                            <div
+                {splitSourceNodeId && splitSourceNodeId !== activeNode?.id && (
+                    <div
+                        className="widget-surface-split-overlay"
+                        role="group"
+                        aria-label="Choose where to place the selected widget"
+                    >
+                        {SplitDropTargets.map((target, index) => (
+                            <button
+                                ref={index === 0 ? firstSplitTargetRef : undefined}
+                                type="button"
                                 key={target.name}
                                 className={`widget-surface-split-target is-${target.name} ${dropDirection === target.direction ? "is-hovered" : ""}`}
+                                onClick={() => splitSelectedNode(target.direction)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Escape") {
+                                        setKeyboardSplitNodeId(null);
+                                        setDropDirection(null);
+                                    }
+                                }}
                                 onDragEnter={() => setDropDirection(target.direction)}
                                 onDragOver={(event) => {
                                     event.preventDefault();
@@ -568,12 +1031,12 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
                                 }}
                                 onDrop={(event) => {
                                     event.preventDefault();
-                                    splitDraggedNode(target.direction);
+                                    splitSelectedNode(target.direction);
                                 }}
                             >
                                 <i className={`fa-solid fa-${target.icon}`} aria-hidden="true" />
                                 <span>{target.label}</span>
-                            </div>
+                            </button>
                         ))}
                     </div>
                 )}
@@ -651,4 +1114,4 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
 });
 WidgetTabsLayout.displayName = "WidgetTabsLayout";
 
-export { WidgetTabsLayout };
+export { WidgetTab, WidgetTabsLayout };

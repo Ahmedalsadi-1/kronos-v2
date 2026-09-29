@@ -22,9 +22,13 @@ import {
     setAgentWidgetInspectMode,
     type AgentWidgetDesignSelection,
 } from "@/app/view/agent-widget-bridge";
-import { CURSOR_OVERLAY_SCRIPT, reportCursorToPet } from "@/app/view/cursor-overlay";
+import { CURSOR_OVERLAY_SCRIPT, CursorOverlay, reportCursorToPet } from "@/app/view/cursor-overlay";
 import { useAgentOverlays } from "@/app/view/use-agent-overlays";
 import { WaterFlowOverlay } from "@/app/view/waterflow-overlay";
+import { BrowserAnnotationTray } from "@/app/view/webview/browser-annotation-tray";
+import { displayWebviewUrl } from "@/app/view/webview/browser-annotations";
+import { BrowserNavigationRow, type BrowserNavigationControls } from "@/app/view/webview/browser-nav-controls";
+import { BrowserToolbarMenu, type BrowserDeviceProfile } from "@/app/view/webview/browser-toolbar-menu";
 import { MockBoundary } from "@/app/waveenv/mockboundary";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { adaptFromReactOrNativeKeyEvent, checkKeyPressed } from "@/util/keyutil";
@@ -63,9 +67,17 @@ const WebViewBrowserChrome = memo(({ model }: { model: WebViewModel }) => {
     const homepageUrl = useAtomValue(model.homepageUrl);
     const canGoBack = useAtomValue(model.canGoBack);
     const canGoForward = useAtomValue(model.canGoForward);
+    const isLoading = useAtomValue(model.isLoading);
     const refreshIcon = useAtomValue(model.refreshIcon);
+    const faviconUrl = useAtomValue(model.faviconUrl);
+    const urlInputFocused = useAtomValue(model.urlInputFocused);
+    const userAgentType = (useAtomValue(model.userAgentType) || "default") as BrowserDeviceProfile;
+    const zoomValue = Number(block?.meta?.["web:zoom"] ?? 1);
+    const zoom = Number.isFinite(zoomValue) ? zoomValue : 1;
+    const [faviconBroken, setFaviconBroken] = useState(false);
     const [inspectMode, setInspectMode] = useState(() => isAgentWidgetInspectModeActive(model.blockId));
     const url = currentUrl ?? block?.meta?.url ?? homepageUrl ?? "";
+    const shownUrl = displayWebviewUrl(url, urlInputFocused);
 
     useEffect(() => {
         const handleInspectMode = (event: Event) => {
@@ -83,43 +95,48 @@ const WebViewBrowserChrome = memo(({ model }: { model: WebViewModel }) => {
         return () => window.removeEventListener(AgentWidgetInspectModeEvent, handleInspectMode);
     }, [model]);
 
+    const navControls: BrowserNavigationControls = {
+        canGoBack,
+        canGoForward,
+        loading: isLoading,
+        goBack: () => model.handleBack(),
+        goForward: () => model.handleForward(),
+        reload: () => model.handleRefresh(null),
+        navigate: (nextUrl: string) => model.loadUrl(nextUrl, "navigation-row"),
+    };
+
     return (
         <div className="webview-browser-chrome">
-            <div className="webview-navigation" role="toolbar" aria-label="Browser navigation">
-                <button
-                    type="button"
-                    onClick={() => model.handleBack()}
-                    disabled={!canGoBack}
-                    aria-label="Back"
-                    title="Back"
-                >
-                    <i className="fa-solid fa-chevron-left" aria-hidden="true" />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => model.handleForward()}
-                    disabled={!canGoForward}
-                    aria-label="Forward"
-                    title="Forward"
-                >
-                    <i className="fa-solid fa-chevron-right" aria-hidden="true" />
-                </button>
-                <button type="button" onClick={() => model.handleRefresh(null)} aria-label="Reload" title="Reload">
-                    <i className={`fa-solid fa-${refreshIcon}`} aria-hidden="true" />
-                </button>
-                <div className="webview-omnibox">
-                    <i className="fa-solid fa-shield-halved" aria-hidden="true" />
-                    <input
-                        ref={model.urlInputRef}
-                        value={url}
-                        onChange={(event) => model.handleUrlChange(event)}
-                        onKeyDown={(event) => model.handleKeyDown(event)}
-                        onFocus={(event) => model.handleFocus(event)}
-                        onBlur={(event) => model.handleBlur(event)}
-                        aria-label="Address and search"
-                        spellCheck={false}
-                    />
-                </div>
+            <BrowserNavigationRow
+                addressSlot={
+                    <>
+                        {faviconUrl && !faviconBroken ? (
+                            <img
+                                src={faviconUrl}
+                                alt=""
+                                aria-hidden="true"
+                                className="webview-favicon"
+                                onError={() => setFaviconBroken(true)}
+                            />
+                        ) : (
+                            <i className="fa-solid fa-shield-halved" aria-hidden="true" />
+                        )}
+                        <input
+                            ref={model.urlInputRef}
+                            value={shownUrl}
+                            onChange={(event) => model.handleUrlChange(event)}
+                            onKeyDown={(event) => model.handleKeyDown(event)}
+                            onFocus={(event) => model.handleFocus(event)}
+                            onBlur={(event) => model.handleBlur(event)}
+                            aria-label="Address and search"
+                            spellCheck={false}
+                        />
+                    </>
+                }
+                controls={navControls}
+                reloadIcon={refreshIcon}
+                reloadLabel={isLoading ? "Stop" : "Reload"}
+            >
                 <button
                     type="button"
                     className={clsx("webview-open-design", inspectMode && "is-active")}
@@ -130,7 +147,18 @@ const WebViewBrowserChrome = memo(({ model }: { model: WebViewModel }) => {
                         inspectMode ? "Stop Open Design inspection" : "Open Design: select and comment on components"
                     }
                 >
-                    <i className="fa-solid fa-object-group" aria-hidden="true" />
+                    <i className="fa-solid fa-crosshairs" aria-hidden="true" />
+                </button>
+                <button type="button" onClick={() => model.openFind()} aria-label="Find in page" title="Find in page">
+                    <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => model.toggleDevTools()}
+                    aria-label="Open browser DevTools"
+                    title="Open browser DevTools"
+                >
+                    <i className="fa-solid fa-square-code" aria-hidden="true" />
                 </button>
                 <button
                     type="button"
@@ -144,7 +172,18 @@ const WebViewBrowserChrome = memo(({ model }: { model: WebViewModel }) => {
                 >
                     <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true" />
                 </button>
-            </div>
+                <BrowserToolbarMenu
+                    deviceProfile={userAgentType}
+                    zoom={zoom}
+                    onHome={() => model.handleHome()}
+                    onHardReload={() => model.hardReload()}
+                    onCopyUrl={() => model.copyUrlToClipboard()}
+                    onZoomChange={(nextZoom) => model.setZoomFactor(nextZoom)}
+                    onDeviceProfileChange={(profile) => model.setUserAgentType(profile)}
+                    onClearHistory={() => model.clearHistory()}
+                    onClearSiteData={() => void model.clearCookiesAndStorage()}
+                />
+            </BrowserNavigationRow>
         </div>
     );
 });
@@ -182,6 +221,7 @@ export class WebViewModel implements ViewModel {
     hideViewName: Atom<boolean>;
     url: PrimitiveAtom<string>;
     homepageUrl: Atom<string>;
+    faviconUrl: PrimitiveAtom<string | null>;
     urlInputFocused: PrimitiveAtom<boolean>;
     isLoading: PrimitiveAtom<boolean>;
     urlWrapperClassName: PrimitiveAtom<string>;
@@ -212,6 +252,7 @@ export class WebViewModel implements ViewModel {
         this.noPadding = atom(true);
         this.blockAtom = this.env.wos.getWaveObjectAtom<Block>(`block:${blockId}`);
         this.url = atom();
+        this.faviconUrl = atom(null) as PrimitiveAtom<string | null>;
         const defaultUrlAtom = this.env.getSettingsKeyAtom("web:defaulturl");
         this.homepageUrl = atom((get) => {
             const defaultUrl = get(defaultUrlAtom);
@@ -474,7 +515,7 @@ export class WebViewModel implements ViewModel {
         } catch (_) {}
     }
 
-    handleRefresh(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
+    handleRefresh(e?: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         e.preventDefault();
         e.stopPropagation();
         try {
@@ -490,6 +531,37 @@ export class WebViewModel implements ViewModel {
         }
     }
 
+    hardReload() {
+        try {
+            this.webviewRef.current?.reloadIgnoringCache();
+        } catch (error) {
+            console.warn("Failed to hard reload browser", error);
+        }
+    }
+
+    openFind() {
+        if (this.searchAtoms == null) return;
+        globalStore.set(this.searchAtoms.isOpen, true);
+        const focusCount = Number(globalStore.get(this.searchAtoms.focusInput) ?? 0);
+        globalStore.set(this.searchAtoms.focusInput, focusCount + 1);
+    }
+
+    toggleDevTools() {
+        const webview = this.webviewRef.current;
+        if (!webview) return;
+        if (webview.isDevToolsOpened()) webview.closeDevTools();
+        else webview.openDevTools();
+    }
+
+    setUserAgentType(profile: BrowserDeviceProfile) {
+        fireAndForget(() =>
+            this.env.rpc.SetMetaCommand(TabRpcClient, {
+                oref: makeORef("block", this.blockId),
+                meta: { "web:useragenttype": profile } as unknown as MetaType,
+            })
+        );
+    }
+
     handleUrlChange(event: React.ChangeEvent<HTMLInputElement>) {
         globalStore.set(this.url, event.target.value);
     }
@@ -503,6 +575,8 @@ export class WebViewModel implements ViewModel {
             return;
         }
         if (checkKeyPressed(waveEvent, "Escape")) {
+            // Discard an uncommitted edit so the omnibox shows the page URL again, like every mainstream browser.
+            globalStore.set(this.url, this.webviewRef.current?.getURL() ?? "");
             this.webviewRef.current?.focus();
         }
     }
@@ -514,7 +588,7 @@ export class WebViewModel implements ViewModel {
         event.target.select();
     }
 
-    handleBlur(event: React.FocusEvent<HTMLInputElement>) {
+    handleBlur(_event: React.FocusEvent<HTMLInputElement>) {
         globalStore.set(this.urlWrapperClassName, "");
         globalStore.set(this.urlInputFocused, false);
     }
@@ -714,6 +788,20 @@ export class WebViewModel implements ViewModel {
     }
 
     keyDownHandler(e: WaveKeyboardEvent): boolean {
+        if (checkKeyPressed(e, "Cmd:f")) {
+            const searchAtoms = this.searchAtoms;
+            if (searchAtoms != null) {
+                const nextOpen = !globalStore.get(searchAtoms.isOpen);
+                globalStore.set(searchAtoms.isOpen, nextOpen);
+                if (!nextOpen) {
+                    this.webviewRef.current?.stopFindInPage("clearSelection");
+                } else {
+                    const focusCount = Number(globalStore.get(searchAtoms.focusInput) ?? 0);
+                    globalStore.set(searchAtoms.focusInput, focusCount + 1);
+                }
+                return true;
+            }
+        }
         if (checkKeyPressed(e, "Cmd:l")) {
             this.urlInputRef?.current?.focus();
             this.urlInputRef?.current?.select();
@@ -977,6 +1065,14 @@ function getWebPreviewDisplayUrl(url?: string | null): string {
     return url?.trim() || "about:blank";
 }
 
+function isWebviewReadyForElectronCall(
+    webview: Pick<WebviewTag, "isConnected"> | null | undefined,
+    currentWebview: Pick<WebviewTag, "isConnected"> | null | undefined,
+    domReady: boolean
+): boolean {
+    return webview != null && webview === currentWebview && webview.isConnected && domReady;
+}
+
 function normalizeOpenDesignSelection(blockId: string, payload: unknown): AgentWidgetDesignSelection | null {
     const raw = payload as Record<string, any> | null;
     const element = raw?.element as Record<string, any> | null;
@@ -1027,6 +1123,67 @@ function WebViewPreviewFallback({ url }: { url?: string | null }) {
         </div>
     );
 }
+
+function WebViewFailureOverlay({ model, errorText }: { model: WebViewModel; errorText: string }) {
+    const [dismissed, setDismissed] = useState(false);
+    if (dismissed) {
+        return null;
+    }
+    const url = model.webviewRef.current?.getURL();
+    return (
+        <div className="webview-error-inline" role="alert">
+            <p className="webview-error-inline-text">{errorText}</p>
+            <div className="webview-error-inline-actions">
+                <button
+                    type="button"
+                    className="webview-error-reload"
+                    onClick={() => {
+                        setDismissed(true);
+                        model.handleRefresh(null);
+                    }}
+                >
+                    <i className="fa-solid fa-rotate-right" aria-hidden="true" /> Reload
+                </button>
+                <button
+                    type="button"
+                    className="webview-error-clear"
+                    onClick={() =>
+                        fireAndForget(() => {
+                            const webContentsId = model.webviewRef.current?.getWebContentsId();
+                            if (webContentsId != null) {
+                                return model.env.electron.clearWebviewStorage(webContentsId).then(() => {
+                                    model.webviewRef.current?.reload();
+                                });
+                            }
+                        })
+                    }
+                    title="Clear cookies and storage for this page, then reload"
+                >
+                    <i className="fa-solid fa-broom" aria-hidden="true" /> Clear page data
+                </button>
+                {url ? (
+                    <button
+                        type="button"
+                        className="webview-error-external"
+                        onClick={() => void model.env.electron.openExternal(url)}
+                    >
+                        <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true" /> Open externally
+                    </button>
+                ) : null}
+                <button
+                    type="button"
+                    className="webview-error-dismiss"
+                    onClick={() => setDismissed(true)}
+                    aria-label="Dismiss error"
+                >
+                    <i className="fa-solid fa-xmark" aria-hidden="true" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+const BrowserAnnotationTrayLazy = BrowserAnnotationTray;
 
 const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps) => {
     const env = useWaveEnv<WebViewEnv>();
@@ -1200,6 +1357,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         }
         const navigateListener = (e: any) => {
             setErrorText("");
+            globalStore.set(model.faviconUrl, null);
             if (e.isMainFrame) {
                 model.handleNavigate(e.url);
                 publishCrossViewEvent("browser:navigate", model.blockId, makeBrowserPayload(model.blockId, e.url));
@@ -1225,6 +1383,10 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                 makeBrowserPayload(model.blockId, undefined, e.title)
             );
         };
+        const faviconUpdatedHandler = (e: any) => {
+            const icons = e?.favicons;
+            globalStore.set(model.faviconUrl, icons?.[0] ?? null);
+        };
         const startLoadingHandler = () => {
             model.setRefreshIcon("xmark-large");
             model.setIsLoading(true);
@@ -1233,6 +1395,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         const stopLoadingHandler = () => {
             model.setRefreshIcon("rotate-right");
             model.setIsLoading(false);
+            setErrorText("");
             setBgColor();
         };
         const failLoadHandler = (e: any) => {
@@ -1290,6 +1453,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         webview.addEventListener("did-stop-loading", stopLoadingHandler);
         webview.addEventListener("new-window", newWindowHandler);
         webview.addEventListener("page-title-updated", titleUpdatedHandler);
+        webview.addEventListener("page-favicon-updated", faviconUpdatedHandler);
         webview.addEventListener("did-fail-load", failLoadHandler);
         webview.addEventListener("focus", webviewFocus);
         webview.addEventListener("blur", webviewBlur);
@@ -1306,6 +1470,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             webview.removeEventListener("did-navigate-in-page", navigateListener);
             webview.removeEventListener("new-window", newWindowHandler);
             webview.removeEventListener("page-title-updated", titleUpdatedHandler);
+            webview.removeEventListener("page-favicon-updated", faviconUpdatedHandler);
             webview.removeEventListener("did-fail-load", failLoadHandler);
             webview.removeEventListener("did-start-loading", startLoadingHandler);
             webview.removeEventListener("did-stop-loading", stopLoadingHandler);
@@ -1401,12 +1566,17 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         };
     }, [model.blockId]);
 
-    const { waterflowActive, markers } = useAgentOverlays("browser", model.blockId);
+    const { waterflowActive, markers, cursorPoint, cursorActive, cursorLabel, clickFlashCount } = useAgentOverlays(
+        "browser",
+        model.blockId
+    );
+    const stageRef = useRef<HTMLDivElement>(null);
+    const cursorContainerRect = stageRef.current?.getBoundingClientRect() ?? null;
 
     return (
         <Fragment>
             <div className="webview-shell">
-                <div className="webview-stage">
+                <div className="webview-stage" ref={stageRef}>
                     <MockBoundary fallback={<WebViewPreviewFallback url={metaUrl} />}>
                         <webview
                             id="webview"
@@ -1422,11 +1592,14 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                             useragent={userAgent}
                         />
                     </MockBoundary>
-                    {errorText && (
-                        <div className="webview-error">
-                            <div>{errorText}</div>
-                        </div>
-                    )}
+                    {errorText ? <WebViewFailureOverlay key={errorText} model={model} errorText={errorText} /> : null}
+                    <CursorOverlay
+                        cursorPoint={cursorPoint}
+                        containerRect={cursorContainerRect}
+                        active={cursorActive}
+                        triggerClickFlash={clickFlashCount}
+                        label={cursorLabel}
+                    />
                     <WaterFlowOverlay active={waterflowActive} />
                     {markers.map((m) => (
                         <ActionMarker
@@ -1438,6 +1611,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                             active={true}
                         />
                     ))}
+                    <BrowserAnnotationTrayLazy blockId={model.blockId} />
                 </div>
             </div>
             <Search {...searchProps} />
@@ -1446,4 +1620,4 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     );
 });
 
-export { WebView, WebViewPreviewFallback, getWebPreviewDisplayUrl };
+export { WebView, WebViewPreviewFallback, getWebPreviewDisplayUrl, isWebviewReadyForElectronCall };

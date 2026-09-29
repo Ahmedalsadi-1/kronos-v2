@@ -76,21 +76,23 @@
 }
 
 .webview-navigation {
+    position: relative;
     display: flex;
     width: 100%;
-    height: 49px;
-    min-height: 49px;
+    height: 50px;
+    min-height: 50px;
     align-items: center;
-    gap: 5px;
-    padding: 7px 10px;
-    border-bottom: 1px solid rgb(from var(--border-color) r g b / 0.38);
-    background: rgb(from var(--surface-base-color) r g b / 0.78);
+    gap: 8px;
+    padding: 6px 12px;
+    overflow: hidden;
+    border-bottom: 1px solid rgb(from var(--border-color) r g b / 0.7);
+    background: rgb(from var(--surface-base-color) r g b / 0.95);
 
     > button {
         display: grid;
-        width: 30px;
-        height: 30px;
-        flex: 0 0 30px;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
         cursor: pointer;
         place-items: center;
         border: 0;
@@ -122,17 +124,54 @@
     }
 }
 
+// Indeterminate sweep while the guest page loads, echoing Orca's browser-pane loading bar.
+.webview-loading-bar {
+    position: absolute;
+    z-index: 5;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: 32%;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-color) 55%, transparent);
+    animation: webview-loading-sweep 1.1s var(--ease-standard, ease-in-out) infinite;
+}
+
+@keyframes webview-loading-sweep {
+    0% {
+        transform: translateX(-110%);
+    }
+
+    100% {
+        transform: translateX(425%);
+    }
+}
+
+.webview-navigation > button:not(:disabled):active,
+.webview-navigation .webview-open-design:active {
+    transform: scale(0.94);
+}
+
+.webview-navigation > button,
+.webview-navigation .webview-open-design {
+    transition:
+        color 120ms ease,
+        background-color 120ms ease,
+        transform 80ms ease;
+}
+
 .webview-omnibox {
     display: flex;
     min-width: 90px;
-    height: 34px;
+    height: 38px;
     flex: 1;
     align-items: center;
     gap: 8px;
-    padding: 0 12px;
+    padding: 0 10px;
     border: 1px solid rgb(from var(--border-color) r g b / 0.5);
-    border-radius: 999px;
-    background: rgb(from var(--surface-raised-color) r g b / 0.68);
+    border-radius: 9px;
+    background: rgb(from var(--surface-raised-color) r g b / 0.82);
     color: var(--text-muted-color);
 
     &:focus-within {
@@ -155,6 +194,261 @@
         background: transparent;
         font: inherit;
         font-size: 11px;
+    }
+
+    img.webview-favicon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 14px;
+        border-radius: 3px;
+    }
+}
+
+.webview-toolbar-menu {
+    position: relative;
+    flex: 0 0 auto;
+
+    > summary {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        place-items: center;
+        border-radius: 8px;
+        color: var(--text-secondary-color);
+        list-style: none;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        &:hover,
+        &:focus-visible {
+            color: var(--text-primary-color);
+            background: var(--surface-hover-color);
+        }
+    }
+}
+
+.webview-toolbar-menu-popover {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 100;
+    width: 240px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px;
+    border: 1px solid rgb(from var(--border-color) r g b / 0.7);
+    border-radius: 11px;
+    color: var(--text-primary-color);
+    background: rgb(from var(--surface-raised-color) r g b / 0.98);
+    box-shadow: 0 16px 40px rgb(0 0 0 / 0.35);
+    backdrop-filter: blur(20px);
+
+    > button,
+    .webview-toolbar-menu-row button {
+        display: flex;
+        min-height: 30px;
+        cursor: pointer;
+        align-items: center;
+        gap: 9px;
+        border: 0;
+        border-radius: 7px;
+        color: inherit;
+        background: transparent;
+        padding: 0 9px;
+        font: inherit;
+        font-size: 11px;
+        text-align: left;
+
+        &:hover,
+        &:focus-visible {
+            background: var(--surface-hover-color);
+            outline: none;
+        }
+
+        i {
+            width: 14px;
+            color: var(--text-secondary-color);
+            text-align: center;
+        }
+    }
+}
+
+.webview-toolbar-menu-separator {
+    height: 1px;
+    margin: 4px 2px;
+    background: rgb(from var(--border-color) r g b / 0.55);
+}
+
+.webview-toolbar-menu-label,
+.webview-toolbar-menu-select {
+    color: var(--text-secondary-color);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.webview-toolbar-menu-label {
+    padding: 2px 9px 0;
+}
+
+.webview-toolbar-menu-row {
+    display: grid;
+    grid-template-columns: 30px 1fr 30px 48px;
+    align-items: center;
+    gap: 3px;
+
+    button {
+        min-height: 28px !important;
+        justify-content: center;
+        padding: 0 !important;
+    }
+
+    output {
+        color: var(--text-secondary-color);
+        font-size: 10px;
+        text-align: center;
+    }
+}
+
+.webview-toolbar-menu-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 3px 9px;
+
+    select {
+        min-width: 104px;
+        cursor: pointer;
+        border: 1px solid rgb(from var(--border-color) r g b / 0.6);
+        border-radius: 6px;
+        color: var(--text-primary-color);
+        background: var(--surface-base-color);
+        padding: 4px 6px;
+        font: inherit;
+    }
+}
+
+.browser-annotation-tray {
+    display: flex;
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 30;
+    width: min(320px, calc(100% - 24px));
+    max-height: 45%;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgb(from var(--border-color) r g b / 0.5);
+    border-radius: 10px;
+    color: var(--text-primary-color);
+    background: rgb(from var(--surface-raised-color) r g b / 0.96);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 0.25);
+    font-size: 11px;
+}
+
+.browser-annotation-tray-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgb(from var(--border-color) r g b / 0.4);
+    font-weight: 600;
+}
+
+.browser-annotation-tray-count {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.browser-annotation-tray-actions {
+    display: flex;
+    gap: 2px;
+
+    button {
+        display: grid;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        place-items: center;
+        border: 0;
+        border-radius: 6px;
+        color: var(--text-secondary-color);
+        background: transparent;
+
+        &:hover {
+            color: var(--text-primary-color);
+            background: var(--surface-hover-color);
+        }
+    }
+}
+
+.browser-annotation-tray-list {
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+}
+
+.browser-annotation-tray-item {
+    padding: 6px 8px;
+    border-radius: 8px;
+
+    &:hover {
+        background: rgb(from var(--surface-hover-color) r g b / 0.5);
+    }
+}
+
+.browser-annotation-tray-label {
+    overflow: hidden;
+    color: var(--text-secondary-color);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.browser-annotation-tray-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+
+    input {
+        min-width: 0;
+        flex: 1;
+        border: 1px solid rgb(from var(--border-color) r g b / 0.5);
+        border-radius: 6px;
+        color: var(--text-primary-color);
+        background: transparent;
+        padding: 4px 6px;
+        font: inherit;
+    }
+
+    select {
+        border: 1px solid rgb(from var(--border-color) r g b / 0.5);
+        border-radius: 6px;
+        color: var(--text-primary-color);
+        background: var(--surface-raised-color);
+        padding: 4px;
+        font: inherit;
+    }
+
+    button {
+        cursor: pointer;
+        border: 0;
+        border-radius: 6px;
+        color: var(--text-secondary-color);
+        background: transparent;
+        padding: 4px 6px;
+
+        &:hover {
+            color: var(--text-primary-color);
+            background: var(--surface-hover-color);
+        }
     }
 }
 
@@ -393,21 +687,60 @@
     }
 }
 
-.webview-error {
-    display: flex;
+.webview-error-inline {
     position: absolute;
-    background-color: black;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 100%;
+    right: 12px;
+    bottom: 12px;
     z-index: 100;
-    div {
-        font-size: x-large;
-        color: var(--error-color);
-        display: flex;
-        margin: auto;
-        padding: 30px;
+    display: flex;
+    max-width: calc(100% - 24px);
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgb(from var(--error-color) r g b / 0.35);
+    border-radius: 10px;
+    background: rgb(from var(--surface-raised-color) r g b / 0.96);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.webview-error-inline-text {
+    min-width: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: var(--error-color);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.webview-error-inline-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+
+    button {
+        display: inline-flex;
+        cursor: pointer;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 8px;
+        border: 1px solid rgb(from var(--border-color) r g b / 0.5);
+        border-radius: 7px;
+        color: var(--text-primary-color);
+        background: var(--surface-raised-color);
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+
+        &:hover {
+            background: var(--surface-hover-color);
+        }
+    }
+
+    .webview-error-dismiss {
+        padding: 4px 6px;
     }
 }
 
@@ -444,10 +777,10 @@
 }
 
 .block-frame-default-header:has(.block-frame-div-url) {
-    min-height: 49px !important;
-    max-height: 49px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
     gap: 5px !important;
-    padding: 7px 10px !important;
+    padding: 5px 8px !important;
     border: 0 !important;
     border-bottom: 1px solid rgb(from var(--border-color) r g b / 0.38) !important;
     background: rgb(from var(--surface-base-color) r g b / 0.78) !important;
@@ -471,4 +804,15 @@
     opacity: 0.3 !important;
     cursor: default !important;
     pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .webview-loading-bar {
+        display: none;
+    }
+
+    .webview-navigation > button,
+    .webview-navigation .webview-open-design {
+        transition: none;
+    }
 }

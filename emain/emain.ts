@@ -4,6 +4,7 @@
 import { RpcApi } from "@/app/store/wshclientapi";
 import * as electron from "electron";
 import { globalEvents } from "emain/emain-events";
+import path from "path";
 import { sprintf } from "sprintf-js";
 import * as services from "../frontend/app/store/services";
 import { initElectronWshrpc, shutdownWshrpc } from "../frontend/app/store/wshrpcutil-base";
@@ -45,6 +46,7 @@ import {
 } from "./emain-platform";
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
 import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady, runWaveSrv } from "./emain-wavesrv";
+import { applyWebviewAttachPolicy } from "./emain-webview-policy";
 import {
     createBrowserWindow,
     createNewWaveWindow,
@@ -390,6 +392,19 @@ async function appMain() {
         electronApp.quit();
         return;
     }
+    const allowedWebviewPreloads = [path.join(getElectronAppBasePath(), "preload", "preload-webview.cjs")];
+    electronApp.on("web-contents-created", (_event, contents) => {
+        contents.on("will-attach-webview", (attachEvent, webPreferences, params) => {
+            const decision = applyWebviewAttachPolicy(webPreferences, params, allowedWebviewPreloads);
+            if (decision.strippedPreload != null) {
+                console.log("webview attach: stripped unapproved preload", decision.strippedPreload);
+            }
+            if (!decision.allow) {
+                console.log("webview attach denied:", decision.reason);
+                attachEvent.preventDefault();
+            }
+        });
+    });
     electronApp.on("second-instance", (_event, argv, workingDirectory) => {
         console.log("second-instance event, argv:", argv, "workingDirectory:", workingDirectory);
         fireAndForget(createNewWaveWindow);

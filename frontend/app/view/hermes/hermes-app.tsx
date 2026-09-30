@@ -7,10 +7,13 @@ import { RootErrorBoundary } from "@hermes/components/error-boundary";
 import { removeTreePane, resetLayoutTree, revealTreePane } from "@hermes/components/pane-shell/tree/store";
 import { RootTooltipProvider } from "@hermes/components/ui/tooltip";
 import { I18nProvider } from "@hermes/i18n";
-import { HermesShellModeProvider, markKronTermHudHost } from "@hermes/lib/kronterm-host";
+import { HermesShellModeProvider, markKronTermHudHost, type HermesHostMode } from "@hermes/lib/kronterm-host";
 import { queryClient } from "@hermes/lib/query-client";
+import { ensureWebModeAgentProfile } from "@hermes/lib/web-mode-profile";
 import { setEmbeddedHudMode } from "@hermes/store/hud";
 import { setFileBrowserOpen, setSidebarOpen } from "@hermes/store/layout";
+import { selectProfile } from "@hermes/store/profile";
+import { $selectedStoredSessionId } from "@hermes/store/session";
 import "@hermes/styles.css";
 import { ThemeProvider } from "@hermes/themes/context";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -22,13 +25,21 @@ const HermesDesignHeight = 900;
 const HermesMaximumScale = 1;
 const HermesMinimumScale = 0.65;
 
-interface HermesAppProps {
+export interface HermesAppProps {
     kronSettingsModel?: KronSettingsViewModel;
+    hostMode?: HermesHostMode;
     hudMode?: boolean;
     panelMode?: boolean;
+    webMode?: boolean;
 }
 
-export function HermesApp({ kronSettingsModel, hudMode = false, panelMode = false }: HermesAppProps) {
+export function HermesApp({
+    kronSettingsModel,
+    hostMode,
+    hudMode = false,
+    panelMode = false,
+    webMode = false,
+}: HermesAppProps) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(HermesMaximumScale);
     const kronTermSettingsHost = useMemo(
@@ -107,8 +118,22 @@ export function HermesApp({ kronSettingsModel, hudMode = false, panelMode = fals
         };
     }, [hudMode, panelMode]);
 
+    useEffect(() => {
+        if (!webMode) {
+            return;
+        }
+        const preserveSession = Boolean($selectedStoredSessionId.get());
+        void ensureWebModeAgentProfile()
+            .then((profile) => {
+                if (!preserveSession && !$selectedStoredSessionId.get()) {
+                    selectProfile(profile);
+                }
+            })
+            .catch((error) => console.warn("Kronos web-agent profile could not be provisioned", error));
+    }, [webMode]);
+
     return (
-        <div ref={viewportRef} className="relative h-full w-full overflow-hidden">
+        <div ref={viewportRef} data-hermes-app="" className="relative h-full w-full overflow-hidden">
             <div
                 className="origin-top-left"
                 style={{
@@ -123,7 +148,12 @@ export function HermesApp({ kronSettingsModel, hudMode = false, panelMode = fals
                             <ThemeProvider>
                                 <RootTooltipProvider>
                                     <KronTermSettingsHostProvider value={kronTermSettingsHost}>
-                                        <HermesShellModeProvider hudMode={hudMode} panelMode={panelMode}>
+                                        <HermesShellModeProvider
+                                            hostMode={hostMode}
+                                            hudMode={hudMode}
+                                            panelMode={panelMode}
+                                            webMode={webMode}
+                                        >
                                             <HashRouter useTransitions={false}>
                                                 <App />
                                             </HashRouter>

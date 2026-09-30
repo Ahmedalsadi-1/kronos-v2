@@ -22,6 +22,8 @@ import {
 } from "@/app/store/global";
 import { getActiveTabModel } from "@/app/store/tab-model";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
+import { toggleCommandCenter } from "@/app/workspace/command-center-events";
+import { registerKronTermPaletteRows } from "@/app/workspace/kronterm-palette-rows";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { deleteLayoutModelForTab, getLayoutModelForStaticTab } from "@/layout/lib/layoutModelHooks";
 import { NavigateDirection } from "@/layout/lib/types";
@@ -29,6 +31,8 @@ import * as keyutil from "@/util/keyutil";
 import { isWindows } from "@/util/platformutil";
 import { CHORD_TIMEOUT } from "@/util/sharedconst";
 import { fireAndForget } from "@/util/util";
+import { openCommandPalette } from "@hermes/store/command-palette";
+import { isKronTermWidgetHost } from "@hermes/lib/kronterm-host";
 import * as jotai from "jotai";
 import { routeBlockClose } from "./block-close-routing";
 import { modalsModel } from "./modalmodel";
@@ -739,7 +743,17 @@ function registerGlobalKeys() {
         }
         return true;
     });
+    // The command palette lives in the Hermes surface; the KronTerm modal stays
+    // as a fallback only when the Hermes app is not mounted in this window.
     const toggleCommandPalette = () => {
+        const presentation = hermesSurfaceController.getSnapshot().presentation;
+        if (presentation === "closed") {
+            hermesSurfaceController.requestOpenPanel();
+        }
+        if (isKronTermWidgetHost()) {
+            openCommandPalette();
+            return true;
+        }
         if (modalsModel.isModalOpen("CommandPaletteModal")) {
             modalsModel.popModal();
         } else {
@@ -747,8 +761,12 @@ function registerGlobalKeys() {
         }
         return true;
     };
+    registerKronTermPaletteRows();
     globalKeyMap.set("Cmd:Shift:p", toggleCommandPalette);
-    globalKeyMap.set("Cmd:Shift:Space", toggleCommandPalette);
+    globalKeyMap.set("Cmd:Shift:Space", () => {
+        toggleCommandCenter();
+        return true;
+    });
     globalKeyMap.set("Ctrl:Shift:t", () => {
         const blockId = getFocusedBlockInStaticTab();
         if (!blockId) return false;

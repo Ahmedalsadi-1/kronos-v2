@@ -22,7 +22,7 @@ function desktopApi<T>(path: string, body?: Record<string, unknown>): Promise<T>
     const desktop = window.hermesDesktop;
 
     if (!desktop) {
-        throw new Error("Kronos desktop bridge is unavailable");
+        throw new Error("KronTerm Agent desktop bridge is unavailable");
     }
 
     return desktop.api<T>(

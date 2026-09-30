@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { getKronosCodeBinaryCandidates } from "./kronoscode-runtime";
 import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
+import { startKronTermToolServer, type KronTermToolServerDescriptor } from "./kronterm-tool-server";
 
 const StartupTimeoutMs = 90_000;
 const HealthTimeoutMs = 10_000;
@@ -25,6 +26,18 @@ type KronTermSkillRootOptions = {
 export type HermesSurfaceContext = {
     tabId?: string;
     blockId?: string;
+    workspaceId?: string;
+    hostMode?: "kronterm" | "web-fullscreen";
+    capabilities?: HermesWebCapabilities;
+};
+
+export type HermesWebCapabilities = {
+    browser: boolean;
+    terminal: boolean;
+    files: boolean;
+    sandbox: boolean;
+    computerControl: boolean;
+    customTools?: Record<string, boolean>;
 };
 
 export type HermesConnectionDescriptor = {
@@ -119,7 +132,7 @@ function resolveHermesBinary(): string {
     }
 
     throw new Error(
-        "Hermes is not installed. Run the KronTerm Hermes installer or set KRONTERM_HERMES_BIN to the Hermes executable."
+        "Kronos agent runtime is not installed. Reinstall KronTerm or set KRONTERM_HERMES_BIN to the compatible runtime executable."
     );
 }
 
@@ -157,6 +170,24 @@ export function resolveKronTermSharedSkillDirs(options: KronTermSkillRootOptions
     );
 }
 
+function resolveHermesToolAdapterRoot(): string {
+    const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
+    const candidates = [
+        process.env.KRONTERM_HERMES_PLUGINS,
+        path.join(process.cwd(), "agents", "hermes", "plugins"),
+        path.resolve(import.meta.dirname, "..", "agents", "hermes", "plugins"),
+        resourcesPath ? path.join(resourcesPath, "hermes-plugins") : undefined,
+    ];
+    const resolved = candidates.find(
+        (candidate): candidate is string =>
+            Boolean(candidate) && fs.existsSync(candidate!) && fs.statSync(candidate!).isDirectory()
+    );
+    if (!resolved) {
+        throw new Error("KronTerm's built-in Agent tool adapter is missing. Rebuild or reinstall KronTerm.");
+    }
+    return resolved;
+}
+
 export function makeKronTermToolEnvironment(
     capabilityFile: string,
     wshPath: string,
@@ -173,7 +204,7 @@ export function makeKronTermToolEnvironment(
     };
 }
 
-export function makeHermesManagedConfig(): Record<string, unknown> {
+export function makeHermesManagedConfig(toolServer?: KronTermToolServerDescriptor): Record<string, unknown> {
     return {
         delegation: {
             provider: "copilot-acp",
@@ -181,6 +212,10 @@ export function makeHermesManagedConfig(): Record<string, unknown> {
         },
         agent: {
             system_prompt: KronTermSurfaceSystemPrompt,
+            reasoning_effort: "minimal",
+            environment_probe: false,
+            task_completion_guidance: false,
+            max_turns: 30,
         },
         display: {
             personality: "",
@@ -203,9 +238,9 @@ export function makeHermesRuntimeEnvironment(
     options: {
         managedDir?: string;
         kronosCodeBinary?: string;
-        toolBridgeCommand?: string[];
         toolEnvironment?: Record<string, string>;
         enableKronTermTools?: boolean;
+        toolServer?: KronTermToolServerDescriptor;
     } = {}
 ): NodeJS.ProcessEnv {
     return {
@@ -215,10 +250,13 @@ export function makeHermesRuntimeEnvironment(
         HERMES_PARENT_PID: String(process.pid),
         HERMES_EPHEMERAL_SYSTEM_PROMPT: KronTermSurfaceSystemPrompt,
         ...(options.managedDir ? { HERMES_MANAGED_DIR: options.managedDir } : {}),
-        ...(options.toolBridgeCommand
-            ? { HERMES_KRONTERM_TOOL_BRIDGE_COMMAND: JSON.stringify(options.toolBridgeCommand) }
+        ...(options.toolServer
+            ? {
+                  HERMES_KRONTERM_NATIVE_TOOL_URL: options.toolServer.nativeUrl,
+                  KRONTERM_NATIVE_TOOL_TOKEN: options.toolServer.token,
+              }
             : {}),
-        ...(options.enableKronTermTools ? { HERMES_TUI_TOOLSETS: "hermes-cli,kronterm" } : {}),
+        ...(options.enableKronTermTools ? { HERMES_TUI_TOOLSETS: "kronterm,hermes-cli,desktop_ui" } : {}),
         ...options.toolEnvironment,
         ...(options.kronosCodeBinary
             ? {
@@ -260,16 +298,21 @@ class ManagedHermesRuntime extends EventEmitter {
     }
 
     async ensureSurface(context: HermesSurfaceContext = {}): Promise<HermesConnectionDescriptor> {
+        const previousContext = this.surfaceContext;
+        if (context.tabId) {
+            this.surfaceContext = { ...context };
+        }
         const connection = await this.ensure();
         if (context.tabId) {
             if (
                 this.surfaceCapabilityReady &&
-                this.surfaceContext?.tabId === context.tabId &&
-                this.surfaceContext.blockId === context.blockId
+                previousContext?.tabId === context.tabId &&
+                previousContext.blockId === context.blockId &&
+                previousContext.hostMode === context.hostMode &&
+                JSON.stringify(previousContext.capabilities) === JSON.stringify(context.capabilities)
             ) {
                 return connection;
             }
-            this.surfaceContext = { tabId: context.tabId, ...(context.blockId ? { blockId: context.blockId } : {}) };
             const generation = ++this.surfaceGeneration;
             await this.refreshSurfaceCapability(generation);
         }
@@ -282,60 +325,6 @@ class ManagedHermesRuntime extends EventEmitter {
 
     private managedConfigDir(): string {
         return path.join(os.tmpdir(), `kronterm-${process.pid}`, "hermes-managed");
-    }
-
-    private resolveToolBridgePath(): string | undefined {
-        const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
-        const candidates = [
-            process.env.KRONTERM_NATIVE_TOOL_BRIDGE,
-            path.join(process.cwd(), "mcp-kron-term", "dist", "native-bridge.js"),
-            path.resolve(import.meta.dirname, "..", "mcp-kron-term", "dist", "native-bridge.js"),
-            resourcesPath ? path.join(resourcesPath, "mcp-kron-term", "dist", "native-bridge.js") : undefined,
-        ];
-        return candidates.find((candidate) => candidate && fs.existsSync(candidate));
-    }
-
-    private resolveHermesPluginsDir(): string | undefined {
-        const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
-        const candidates = [
-            process.env.KRONTERM_HERMES_PLUGINS,
-            path.join(process.cwd(), "agents", "hermes", "plugins"),
-            path.resolve(import.meta.dirname, "..", "agents", "hermes", "plugins"),
-            resourcesPath ? path.join(resourcesPath, "hermes-plugins") : undefined,
-        ];
-        return candidates.find((candidate) => candidate && fs.existsSync(candidate));
-    }
-
-    private resolveHermesBundledPluginsDir(binary: string): string | undefined {
-        const binaryDir = path.dirname(binary);
-        const pythonNames = process.platform === "win32" ? ["python.exe"] : ["python3", "python"];
-        for (const pythonName of pythonNames) {
-            const python = existingExecutable(path.join(binaryDir, pythonName));
-            if (!python) {
-                continue;
-            }
-            const env = { ...process.env };
-            delete env.HERMES_BUNDLED_PLUGINS;
-            const probe = spawnSync(
-                python,
-                ["-c", "from hermes_cli.plugins import get_bundled_plugins_dir; print(get_bundled_plugins_dir())"],
-                { encoding: "utf8", env, windowsHide: true }
-            );
-            const candidate = probe.status === 0 ? probe.stdout.trim().split(/\r?\n/, 1)[0] : undefined;
-            if (candidate && fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-                return candidate;
-            }
-        }
-        return undefined;
-    }
-
-    private installHermesToolsPlugin(sourceRoot: string, destinationRoot: string): void {
-        const source = path.join(sourceRoot, "kronterm-tools");
-        if (!fs.existsSync(source)) {
-            throw new Error(`KronTerm Hermes tools plugin is missing at ${source}.`);
-        }
-        const destination = path.join(destinationRoot, "kronterm-tools");
-        fs.cpSync(source, destination, { recursive: true, force: true });
     }
 
     private async refreshSurfaceCapability(generation: number): Promise<void> {
@@ -358,7 +347,14 @@ class ManagedHermesRuntime extends EventEmitter {
         fs.mkdirSync(path.dirname(capabilityFile), { recursive: true, mode: 0o700 });
         fs.writeFileSync(
             capabilityFile,
-            JSON.stringify({ token: token.token, tabId: token.tabid, blockId: token.blockid ?? "" }),
+            JSON.stringify({
+                token: token.token,
+                tabId: token.tabid,
+                blockId: token.blockid ?? "",
+                workspaceId: context.workspaceId ?? "",
+                hostMode: context.hostMode ?? "kronterm",
+                capabilities: context.capabilities,
+            }),
             { encoding: "utf8", mode: 0o600 }
         );
         fs.chmodSync(capabilityFile, 0o600);
@@ -422,7 +418,7 @@ class ManagedHermesRuntime extends EventEmitter {
             });
         } catch (error) {
             if (error instanceof DOMException && error.name === "TimeoutError") {
-                throw new Error(`Timed out connecting to Kronos after ${timeoutMs}ms`);
+                throw new Error(`Timed out connecting to the KronTerm Agent after ${timeoutMs}ms`);
             }
             throw error;
         }
@@ -454,15 +450,7 @@ class ManagedHermesRuntime extends EventEmitter {
         const token = randomBytes(32).toString("base64url");
         const capabilityFile = this.capabilityFilePath();
         const managedDir = this.managedConfigDir();
-        const toolBridgePath = this.resolveToolBridgePath();
-        const pluginSourceDir = this.resolveHermesPluginsDir();
-        const hermesBundledPluginsDir = this.resolveHermesBundledPluginsDir(binary);
-        if (!toolBridgePath || !pluginSourceDir || !hermesBundledPluginsDir) {
-            throw new Error(
-                "KronTerm could not install its native Hermes tools. Rebuild the bundled tool runtime or reinstall Hermes."
-            );
-        }
-        this.installHermesToolsPlugin(pluginSourceDir, hermesBundledPluginsDir);
+        const toolServer = await startKronTermToolServer(() => this.surfaceContext);
         const wshPath =
             [
                 process.env.KRONTERM_WSH,
@@ -471,16 +459,24 @@ class ManagedHermesRuntime extends EventEmitter {
                 path.join(process.cwd(), "wsh"),
             ].find((candidate) => candidate && fs.existsSync(candidate)) ?? "wsh";
         fs.mkdirSync(managedDir, { recursive: true, mode: 0o700 });
-        fs.writeFileSync(path.join(managedDir, "config.yaml"), JSON.stringify(makeHermesManagedConfig(), null, 2), {
-            encoding: "utf8",
-            mode: 0o600,
-        });
+        const adapterSource = path.join(resolveHermesToolAdapterRoot(), "kronterm-tools");
+        const adapterTarget = path.join(managedDir, "plugins", "kronterm-tools");
+        fs.mkdirSync(path.dirname(adapterTarget), { recursive: true, mode: 0o700 });
+        fs.cpSync(adapterSource, adapterTarget, { recursive: true, force: true });
+        fs.writeFileSync(
+            path.join(managedDir, "config.yaml"),
+            JSON.stringify(makeHermesManagedConfig(toolServer), null, 2),
+            {
+                encoding: "utf8",
+                mode: 0o600,
+            }
+        );
         const child = spawn(binary, ["serve", "--host", "127.0.0.1", "--port", "0"], {
             env: makeHermesRuntimeEnvironment(binary, token, {
                 managedDir,
                 kronosCodeBinary: resolveKronosCodeDelegationBinary(),
-                toolBridgeCommand: toolBridgePath ? [process.execPath, toolBridgePath] : undefined,
                 enableKronTermTools: true,
+                toolServer,
                 toolEnvironment: makeKronTermToolEnvironment(
                     capabilityFile,
                     wshPath,
@@ -621,7 +617,10 @@ class ManagedHermesRuntime extends EventEmitter {
             if (fs.existsSync(managedConfig)) {
                 fs.unlinkSync(managedConfig);
             }
-            fs.rmdirSync(this.managedConfigDir());
+            // The managed directory can already be gone when a renderer or the
+            // runtime exits concurrently. `rm(..., force)` makes shutdown
+            // idempotent without masking failures for other cleanup steps.
+            fs.rmSync(this.managedConfigDir(), { recursive: true, force: true });
         } catch (error) {
             console.log("Hermes managed overlay cleanup failed", error);
         }

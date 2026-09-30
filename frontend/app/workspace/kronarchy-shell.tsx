@@ -1,22 +1,34 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { AppIcon } from "@/app/components/app-icon";
+import { SystemListRow, SystemPopover, SystemUIProvider } from "@/app/components/system-ui";
+import {
+    fetchInstalledApps,
+    launchSystemApp,
+    makeInstalledAppDescriptor,
+    makeViewAppDescriptor,
+    type AppDescriptor,
+} from "@/app/store/app-registry";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { isWorkspacePresentation, type WorkspacePresentation } from "@/app/tab/workspace-presentation";
-import { applyThemePreset, readStoredThemePresetId } from "@/app/view/kronsettings/kronsettings-theme-presets";
-import { createBlock, getApi, setActiveTab } from "@/store/global";
-import { isMacOS } from "@/util/platformutil";
+import {
+    publishWorkspacePresentation,
+    readWorkspacePresentation,
+    subscribeWorkspacePresentation,
+    type WorkspacePresentation,
+} from "@/app/tab/workspace-presentation";
+import { createBlock, getApi, globalStore, refocusNode, setActiveTab } from "@/store/global";
+import * as WOS from "@/store/wos";
 import { cn } from "@/util/util";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { requestKronTermSettings } from "@hermes/app/settings/kronterm-settings-host";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { CommandCenterToggleEvent, focusOSSession, openSystemCenter } from "./command-center-events";
 import "./kronarchy-shell.scss";
 import { applyWorkspaceAppearance, readWorkspaceAppearance } from "./workspace-appearance";
-import { WorkspaceLayoutModel } from "./workspace-layout-model";
 
 const KronarchyEnabledStorageKey = "kronterm:kronarchy-enabled";
-const KronarchyEnabledChangedEvent = "kronterm:kronarchy-enabled-changed";
-const LayoutModeStorageKey = "kronterm:layoutmode";
-const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
+const CommandSpaceCompatibilityStorageKey = "kronterm:command-center-command-space-compat";
 
 type LauncherItem = {
     id: string;
@@ -34,93 +46,63 @@ type LauncherSection = {
     items: LauncherItem[];
 };
 
-function readKronarchyEnabled(): boolean {
+type StorageLike = Pick<Storage, "getItem" | "removeItem" | "setItem">;
+
+function migrateKronarchyPreference(storage: StorageLike): boolean {
     try {
-        return window.localStorage.getItem(KronarchyEnabledStorageKey) === "true";
+        const compatibilityValue = storage.getItem(CommandSpaceCompatibilityStorageKey);
+        const legacyValue = storage.getItem(KronarchyEnabledStorageKey);
+        if (legacyValue != null) {
+            storage.removeItem(KronarchyEnabledStorageKey);
+            if (compatibilityValue == null && legacyValue === "true") {
+                storage.setItem(CommandSpaceCompatibilityStorageKey, "true");
+                return true;
+            }
+        }
+        return compatibilityValue === "true";
     } catch {
         return false;
     }
 }
 
-function readLayoutMode(): WorkspacePresentation {
-    try {
-        const stored = window.localStorage.getItem(LayoutModeStorageKey);
-        return isWorkspacePresentation(stored) ? stored : "widgets";
-    } catch {
-        return "widgets";
-    }
+function readKronarchyEnabled(): boolean {
+    return migrateKronarchyPreference(window.localStorage);
 }
 
 function publishLayoutMode(mode: WorkspacePresentation): void {
-    try {
-        window.localStorage.setItem(LayoutModeStorageKey, mode);
-        window.dispatchEvent(new CustomEvent(LayoutModeChangedEvent, { detail: { mode } }));
-    } catch (error) {
-        console.warn("[Kronarchy] local layout preference update failed", error);
-    }
-    void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": mode }).catch((error) => {
-        console.warn("[Kronarchy] workspace presentation update failed", error);
+    const presentation = publishWorkspacePresentation(mode);
+    void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": presentation }).catch((error) => {
+        console.warn("[Command Center] workspace presentation update failed", error);
     });
-}
-
-function publishKronarchyEnabled(enabled: boolean): void {
-    try {
-        window.localStorage.setItem(KronarchyEnabledStorageKey, String(enabled));
-        window.dispatchEvent(new CustomEvent(KronarchyEnabledChangedEvent, { detail: { enabled } }));
-    } catch (error) {
-        console.warn("[Kronarchy] local mode preference update failed", error);
-    }
-}
-
-function formatClock(date: Date): string {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function shouldOpenKronarchyLauncher(
     event: Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey">,
-    enabled: boolean
+    legacyCommandSpace: boolean
 ): boolean {
     const isCommandSpace = event.code === "Space" && event.metaKey && !event.altKey && !event.ctrlKey;
-    return isCommandSpace && (event.shiftKey || enabled);
+    return isCommandSpace && (event.shiftKey || legacyCommandSpace);
 }
 
-const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; activeTabId: string }) => {
-    const workspaceLayoutModel = WorkspaceLayoutModel.getInstance();
-    const [enabled, setEnabled] = useState(readKronarchyEnabled);
+const SystemCommandCenterHost = ({ workspace, activeTabId }: { workspace: Workspace; activeTabId: string }) => {
+    const [legacyCommandSpace] = useState(readKronarchyEnabled);
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [activeItemId, setActiveItemId] = useState<string>();
-    const [layoutMode, setLayoutMode] = useState<WorkspacePresentation>(readLayoutMode);
-    const [clock, setClock] = useState(() => formatClock(new Date()));
-    const [online, setOnline] = useState(() => window.navigator.onLine);
-    const [addConnOpen, setAddConnOpen] = useState(false);
-    const [connValue, setConnValue] = useState("");
-    const [addingConn, setAddingConn] = useState(false);
     const [installedApps, setInstalledApps] = useState<InstalledAppInfo[]>([]);
     const [systemItems, setSystemItems] = useState<SystemSearchItem[]>([]);
     const [systemSearching, setSystemSearching] = useState(false);
+    const layoutMode = useSyncExternalStore(
+        subscribeWorkspacePresentation,
+        () => readWorkspacePresentation("os"),
+        () => "os"
+    );
     const searchRef = useRef<HTMLInputElement>(null);
     const launcherReturnFocusRef = useRef<HTMLElement | null>(null);
     const tabIds = workspace?.tabids ?? [];
 
-    const setKronarchyMode = useCallback((nextEnabled: boolean) => {
-        setEnabled(nextEnabled);
-        publishKronarchyEnabled(nextEnabled);
-    }, []);
-
     const chooseLayout = useCallback((mode: WorkspacePresentation) => {
         publishLayoutMode(mode);
-        setLayoutMode(mode);
-        setOpen(false);
-    }, []);
-
-    const openSettings = useCallback(async (section: "theme" | "visual" | "shortcuts") => {
-        await createBlock({
-            meta: {
-                view: "kronsettings",
-                "kronsettings:section": section,
-            } as MetaType,
-        });
         setOpen(false);
     }, []);
 
@@ -129,47 +111,67 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
         setOpen(false);
     }, []);
 
-    const openConnectionsEditor = useCallback(() => {
-        void launchWidget({ meta: { view: "waveconfig", file: "connections.json" } });
-        setAddConnOpen(false);
-    }, [launchWidget]);
-
-    const handleAddConnection = useCallback(
-        async (event: React.FormEvent) => {
-            event.preventDefault();
-            const host = connValue.trim();
-            if (!host || addingConn) {
-                return;
-            }
-            setAddingConn(true);
-            try {
-                await RpcApi.SetConnectionsConfigCommand(TabRpcClient, { host, metamaptype: {} });
-                RpcApi.ConnConnectCommand(TabRpcClient, { host }, { timeout: 60000 }).catch((error) =>
-                    console.warn("[Kronarchy] connection attempt failed", error)
+    const launchRegisteredApp = useCallback(
+        async (descriptor: AppDescriptor, blockDef?: BlockDef, options: { newWindow?: boolean } = {}) => {
+            const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", activeTabId)));
+            const runningBlockIds = (tab?.blockids ?? []).filter((blockId) => {
+                const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
+                if (descriptor.view != null) {
+                    return block?.meta?.view === descriptor.view;
+                }
+                return (
+                    block?.meta?.view === "appstream" && block.meta?.["appstream:appid"] === descriptor.installedAppId
                 );
-                setConnValue("");
-                setAddConnOpen(false);
-            } catch (error) {
-                console.warn("[Kronarchy] failed to save connection profile", error);
-            } finally {
-                setAddingConn(false);
-            }
+            });
+            await launchSystemApp(
+                { ...descriptor, runningBlockIds },
+                {
+                    focusBlock: (blockId) => {
+                        focusOSSession(blockId);
+                        refocusNode(blockId);
+                        setOpen(false);
+                    },
+                    createView: (view) => launchWidget(blockDef ?? { meta: { view } }),
+                    createAppStream: (appId, appName) =>
+                        launchWidget({
+                            meta: {
+                                view: "appstream",
+                                "appstream:appid": appId,
+                                "appstream:appname": appName,
+                            } as MetaType,
+                        }),
+                },
+                options
+            );
         },
-        [addingConn, connValue]
+        [activeTabId, launchWidget]
+    );
+
+    const openKronos = useCallback(async () => {
+        await launchRegisteredApp(makeViewAppDescriptor("hermes", []));
+    }, [launchRegisteredApp]);
+
+    const openSettings = useCallback(
+        async (section: "theme" | "visual" | "shortcuts") => {
+            requestKronTermSettings(section);
+            await openKronos();
+            setOpen(false);
+        },
+        [openKronos]
     );
 
     const sections = useMemo<LauncherSection[]>(
         () => [
             {
-                id: "workspace-tabs",
-                label: "Workspace tabs",
+                id: "spaces",
+                label: "Project spaces",
                 items: tabIds.map((tabId, index) => ({
                     id: `workspace-tab-${tabId}`,
-                    label: `Workspace tab ${index + 1}`,
-                    description: tabId === activeTabId ? "Current workspace tab" : "Switch to this workspace tab",
+                    label: `Space ${index + 1}`,
+                    description: tabId === activeTabId ? "Current project space" : "Switch to this project space",
                     icon: tabId === activeTabId ? "fa-folder-open" : "fa-folder",
-                    keywords: `workspace tab ${index + 1} switch open`,
-                    shortcut: index < 9 ? `Super + ${index + 1}` : undefined,
+                    keywords: `project space workspace ${index + 1} switch open`,
+                    shortcut: index < 9 ? `⌘${index + 1}` : undefined,
                     action: () => {
                         setActiveTab(tabId);
                         setOpen(false);
@@ -178,7 +180,7 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
             },
             {
                 id: "apps",
-                label: "Apps",
+                label: "Applications",
                 items: [
                     {
                         id: "terminal",
@@ -186,64 +188,77 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
                         description: "Open a local shell",
                         icon: "fa-square-terminal",
                         keywords: "shell command cli",
-                        shortcut: "Super + Enter",
-                        action: () => launchWidget({ meta: { view: "term", controller: "shell" } }),
+                        shortcut: "⌘↩",
+                        action: () =>
+                            launchRegisteredApp(
+                                makeViewAppDescriptor("term", []),
+                                { meta: { view: "term", controller: "shell" } },
+                                { newWindow: true }
+                            ),
                     },
                     {
                         id: "browser",
                         label: "Browser",
-                        description: "Open a web widget",
+                        description: "Open a web session",
                         icon: "fa-globe",
                         keywords: "web internet",
-                        shortcut: "Super + Shift + Enter",
-                        action: () => launchWidget({ meta: { view: "web" } }),
+                        action: () =>
+                            launchRegisteredApp(
+                                makeViewAppDescriptor("web", []),
+                                { meta: { view: "web" } },
+                                { newWindow: true }
+                            ),
                     },
                     {
                         id: "files",
                         label: "Files",
-                        description: "Browse your home directory",
+                        description: "Browse local files and folders",
                         icon: "fa-folder",
-                        keywords: "preview directory explorer",
-                        shortcut: "Super + Shift + F",
-                        action: () => launchWidget({ meta: { view: "preview", file: "~" } }),
+                        keywords: "preview directory explorer resource",
+                        action: () =>
+                            launchRegisteredApp(
+                                makeViewAppDescriptor("preview", []),
+                                { meta: { view: "preview", file: "~" } },
+                                { newWindow: true }
+                            ),
                     },
                     {
-                        id: "agents",
-                        label: "AI Agents",
-                        description: "Open KronosChamber",
-                        icon: "fa-circle-nodes",
-                        keywords: "kronoscode chamber chat ai",
-                        shortcut: "Super + Shift + A",
-                        action: () => launchWidget({ meta: { view: "chathubv2" } }),
+                        id: "kronos",
+                        label: "KronTerm Agent",
+                        description: "Open the system assistant",
+                        icon: "fa-sparkles",
+                        keywords: "kronoscode chamber chat ai hermes agent",
+                        action: openKronos,
                     },
                     {
-                        id: "system-monitor",
-                        label: "Activity",
-                        description: "Inspect live machine metrics",
-                        icon: "fa-chart-line",
-                        keywords: "system monitor cpu memory network sysinfo btop",
-                        shortcut: "Super + Ctrl + T",
-                        action: () => launchWidget({ meta: { view: "sysinfo" } }),
+                        id: "activity",
+                        label: "Activity Center",
+                        description: "Inspect system and agent activity",
+                        icon: "fa-bell",
+                        keywords: "system notifications approvals jobs agents progress timeline",
+                        action: () => {
+                            openSystemCenter("activity");
+                            setOpen(false);
+                        },
                     },
                 ],
             },
             {
-                id: "trigger",
-                label: "Trigger",
+                id: "workspace",
+                label: "Workspace",
                 items: [
                     {
                         id: "scratchpad",
                         label: "Scratchpad",
-                        description: "Open a temporary terminal overlay",
+                        description: "Open a temporary terminal",
                         icon: "fa-layer-group",
                         keywords: "floating ephemeral terminal overlay",
-                        shortcut: "Super + S",
                         action: () => launchWidget({ meta: { view: "term", controller: "shell" } }, true),
                     },
                     {
                         id: "layout-widgets",
                         label: "Tiled Widgets",
-                        description: "Omarchy-style resizable splits",
+                        description: "Resizable split workspace",
                         icon: "fa-table-cells-large",
                         keywords: "windows tile split grid layout",
                         action: () => chooseLayout("widgets"),
@@ -251,7 +266,7 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
                     {
                         id: "layout-tabs",
                         label: "Widget Tabs",
-                        description: "One focused widget with a tab strip",
+                        description: "Focused sessions with a tab strip",
                         icon: "fa-window-restore",
                         keywords: "tabs focused window layout",
                         action: () => chooseLayout("tabs"),
@@ -259,54 +274,37 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
                     {
                         id: "layout-canvas",
                         label: "Canvas",
-                        description: "Spatial pan-and-zoom workspace",
+                        description: "Spatial project canvas",
                         icon: "fa-object-group",
                         keywords: "spatial infinite layout",
                         action: () => chooseLayout("canvas"),
                     },
                     {
-                        id: "layout-web",
-                        label: "Kronos",
-                        description: "Full-screen Kronos surface",
-                        icon: "fa-robot",
-                        keywords: "kronos hermes full screen",
-                        action: () => chooseLayout("web"),
+                        id: "layout-os",
+                        label: "KronTerm OS",
+                        description: "System workspace with live application windows",
+                        icon: "fa-desktop",
+                        keywords: "os desktop spatial windows system",
+                        action: () => chooseLayout("os"),
                     },
-
                 ],
             },
             {
-                id: "style",
-                label: "Style",
+                id: "system",
+                label: "System",
                 items: [
                     {
                         id: "themes",
-                        label: "Themes",
-                        description: "Choose colors and appearance",
+                        label: "System Appearance",
+                        description: "Configure color, contrast, and motion",
                         icon: "fa-swatchbook",
-                        keywords: "omarchy kronarchy wallpaper color style",
+                        keywords: "theme wallpaper color contrast motion appearance",
                         action: () => openSettings("theme"),
                     },
                     {
-                        id: "kronarchy-mode",
-                        label: "Kronarchy Shell",
-                        description: enabled
-                            ? "Disable the Omarchy-inspired shell"
-                            : "Enable the Omarchy-inspired shell",
-                        icon: "fa-border-all",
-                        keywords: "toggle mode shell top bar square chrome",
-                        action: () => setKronarchyMode(!enabled),
-                    },
-                ],
-            },
-            {
-                id: "setup",
-                label: "Setup",
-                items: [
-                    {
                         id: "settings",
                         label: "Settings",
-                        description: "Configure the workspace",
+                        description: "Configure KronTerm",
                         icon: "fa-sliders",
                         keywords: "preferences options visual setup",
                         action: () => openSettings("visual"),
@@ -320,18 +318,28 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
                         action: () => launchWidget({ meta: { view: "waveconfig" } }),
                     },
                     {
+                        id: "control-center",
+                        label: "Control Center",
+                        description: "Review permissions, restoration, and services",
+                        icon: "fa-sliders",
+                        keywords: "permissions grants capture restore services control center",
+                        action: () => {
+                            openSystemCenter("control");
+                            setOpen(false);
+                        },
+                    },
+                    {
                         id: "keyboard-shortcuts",
                         label: "Keyboard Shortcuts",
-                        description: "See every command binding",
+                        description: "Review command bindings",
                         icon: "fa-keyboard",
-                        keywords: "keys hotkeys super space setup",
-                        shortcut: "Super + K",
+                        keywords: "keys hotkeys command space setup",
                         action: () => openSettings("shortcuts"),
                     },
                 ],
             },
         ],
-        [activeTabId, chooseLayout, enabled, launchWidget, openSettings, setKronarchyMode, tabIds]
+        [activeTabId, chooseLayout, launchRegisteredApp, launchWidget, openKronos, openSettings, tabIds]
     );
 
     const normalizedQuery = query.trim().toLowerCase();
@@ -339,37 +347,33 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
         if (!normalizedQuery) {
             return sections;
         }
-        const appItems = installedApps.map((app): LauncherItem => ({
-            id: `installed-app-${app.bundleid || app.appid}`,
-            label: app.name,
-            description: app.description || app.category || "Installed application",
-            icon: "fa-window-maximize",
-            keywords: `application app desktop ${app.category ?? ""} ${app.path}`,
-            action: () =>
-                launchWidget({
-                    meta: {
-                        view: "appstream",
-                        "appstream:appid": app.bundleid || app.appid,
-                        "appstream:appname": app.name,
-                    } as MetaType,
-                }),
-        }));
-        const nativeItems = systemItems.map((item): LauncherItem => ({
-            id: `system-${item.kind}-${item.path}`,
+        const appItems = installedApps.map((app): LauncherItem => {
+            const descriptor = makeInstalledAppDescriptor(app);
+            return {
+                id: `installed-app-${app.bundleid || app.appid}`,
+                label: app.name,
+                description: app.description || app.category || "Installed application",
+                icon: app.icon || "fa-window-maximize",
+                keywords: `application app desktop ${app.category ?? ""} ${app.path}`,
+                action: () => launchRegisteredApp(descriptor),
+            };
+        });
+        const resourceItems = systemItems.map((item): LauncherItem => ({
+            id: `resource-${item.kind}-${item.path}`,
             label: item.name,
             description: item.detail,
             icon: item.kind === "folder" ? "fa-folder" : item.kind === "wallpaper" ? "fa-image" : "fa-file-lines",
-            keywords: `${item.kind} file wallpaper background ${item.path}`,
+            keywords: `${item.kind} file folder resource ${item.path}`,
             action: () => launchWidget({ meta: { view: "preview", file: item.path } }),
         }));
         return [
             ...sections,
-            ...(appItems.length > 0 ? [{ id: "installed-apps", label: "Computer apps", items: appItems }] : []),
-            ...(nativeItems.length > 0
-                ? [{ id: "system-files", label: "Files & wallpapers", items: nativeItems }]
+            ...(appItems.length > 0 ? [{ id: "installed-apps", label: "Computer applications", items: appItems }] : []),
+            ...(resourceItems.length > 0
+                ? [{ id: "resources", label: "Files and resources", items: resourceItems }]
                 : []),
         ];
-    }, [installedApps, launchWidget, normalizedQuery, sections, systemItems]);
+    }, [installedApps, launchRegisteredApp, launchWidget, normalizedQuery, sections, systemItems]);
     const visibleSections = useMemo(
         () =>
             extendedSections
@@ -386,23 +390,12 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
     const activeLauncherItem = visibleItems.find((item) => item.id === activeItemId) ?? visibleItems[0];
 
     useEffect(() => {
-        document.documentElement.classList.toggle("kronarchy-mode", enabled);
-        return () => document.documentElement.classList.remove("kronarchy-mode");
-    }, [enabled]);
-
-    useEffect(() => {
         applyWorkspaceAppearance(readWorkspaceAppearance());
     }, []);
 
     useEffect(() => {
-        if (enabled) {
-            applyThemePreset(readStoredThemePresetId());
-        }
-    }, [enabled]);
-
-    useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (shouldOpenKronarchyLauncher(event, enabled)) {
+            if (shouldOpenKronarchyLauncher(event, legacyCommandSpace)) {
                 event.preventDefault();
                 event.stopPropagation();
                 setOpen((current) => !current);
@@ -410,101 +403,16 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
             }
             if (event.key === "Escape") {
                 setOpen(false);
-                return;
-            }
-            if (!enabled || !event.metaKey || event.repeat) {
-                return;
-            }
-
-            const run = (action: () => void | Promise<void>) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void action();
-            };
-            const key = event.key.toLowerCase();
-
-            if (event.code === "Enter" && !event.altKey && !event.ctrlKey) {
-                run(() =>
-                    event.shiftKey
-                        ? launchWidget({ meta: { view: "web" } })
-                        : launchWidget({ meta: { view: "term", controller: "shell" } })
-                );
-                return;
-            }
-            if (key === "s" && !event.altKey && !event.ctrlKey && !event.shiftKey) {
-                run(() => launchWidget({ meta: { view: "term", controller: "shell" } }, true));
-                return;
-            }
-            if (key === "f" && event.shiftKey && !event.altKey && !event.ctrlKey) {
-                run(() => launchWidget({ meta: { view: "preview", file: "~" } }));
-                return;
-            }
-            if (key === "a" && event.shiftKey && !event.altKey && !event.ctrlKey) {
-                run(() => launchWidget({ meta: { view: "chathubv2" } }));
-                return;
-            }
-            if (key === "t" && event.ctrlKey && !event.altKey && !event.shiftKey) {
-                run(() => launchWidget({ meta: { view: "sysinfo" } }));
-                return;
-            }
-            if (key === "k" && !event.altKey && !event.ctrlKey && !event.shiftKey) {
-                run(() => openSettings("shortcuts"));
-                return;
-            }
-            if (/^Digit[1-9]$/.test(event.code) && !event.altKey && !event.ctrlKey && !event.shiftKey) {
-                const tabId = tabIds[Number(event.code.slice(-1)) - 1];
-                if (tabId) {
-                    run(() => setActiveTab(tabId));
-                }
-                return;
-            }
-            if (event.code === "Tab" && !event.altKey && !event.ctrlKey) {
-                const activeIndex = Math.max(0, tabIds.indexOf(activeTabId));
-                const direction = event.shiftKey ? -1 : 1;
-                const nextIndex = (activeIndex + direction + tabIds.length) % tabIds.length;
-                const nextTabId = tabIds[nextIndex];
-                if (nextTabId) {
-                    run(() => setActiveTab(nextTabId));
-                }
             }
         };
-        const handleLayoutChanged = (event: Event) => {
-            const mode = (event as CustomEvent<{ mode?: string }>).detail?.mode;
-            if (isWorkspacePresentation(mode)) {
-                setLayoutMode(mode);
-            }
-        };
-        const handleEnabledChanged = (event: Event) => {
-            const nextEnabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
-            if (typeof nextEnabled === "boolean") {
-                setEnabled(nextEnabled);
-            }
-        };
+        const handleCommandCenterToggle = () => setOpen((current) => !current);
         window.addEventListener("keydown", handleKeyDown, true);
-        window.addEventListener(LayoutModeChangedEvent, handleLayoutChanged);
-        window.addEventListener(KronarchyEnabledChangedEvent, handleEnabledChanged);
+        window.addEventListener(CommandCenterToggleEvent, handleCommandCenterToggle);
         return () => {
             window.removeEventListener("keydown", handleKeyDown, true);
-            window.removeEventListener(LayoutModeChangedEvent, handleLayoutChanged);
-            window.removeEventListener(KronarchyEnabledChangedEvent, handleEnabledChanged);
+            window.removeEventListener(CommandCenterToggleEvent, handleCommandCenterToggle);
         };
-    }, [activeTabId, enabled, launchWidget, openSettings, tabIds]);
-
-    useEffect(() => {
-        const interval = window.setInterval(() => setClock(formatClock(new Date())), 30_000);
-        return () => window.clearInterval(interval);
-    }, []);
-
-    useEffect(() => {
-        const handleOnline = () => setOnline(true);
-        const handleOffline = () => setOnline(false);
-        window.addEventListener("online", handleOnline);
-        window.addEventListener("offline", handleOffline);
-        return () => {
-            window.removeEventListener("online", handleOnline);
-            window.removeEventListener("offline", handleOffline);
-        };
-    }, []);
+    }, [legacyCommandSpace]);
 
     useEffect(() => {
         if (!open) {
@@ -523,13 +431,13 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
             return;
         }
         let cancelled = false;
-        void RpcApi.ListInstalledAppsCommand(TabRpcClient)
+        void fetchInstalledApps()
             .then((apps) => {
                 if (!cancelled) {
                     setInstalledApps(apps.sort((left, right) => left.name.localeCompare(right.name)));
                 }
             })
-            .catch((error) => console.warn("[Kronarchy] failed to list installed apps", error));
+            .catch((error) => console.warn("[Command Center] failed to list installed applications", error));
         return () => {
             cancelled = true;
         };
@@ -552,7 +460,7 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
                     }
                 })
                 .catch((error) => {
-                    console.warn("[Kronarchy] system search failed", error);
+                    console.warn("[Command Center] system search failed", error);
                     if (!cancelled) {
                         setSystemItems([]);
                     }
@@ -626,211 +534,97 @@ const KronarchyShell = ({ workspace, activeTabId }: { workspace: Workspace; acti
         [activeItemId, visibleItems]
     );
 
-    return (
-        <>
-            {enabled && addConnOpen && (
-                <div
-                    className="kronarchy-popover-backdrop"
-                    role="presentation"
-                    onMouseDown={() => setAddConnOpen(false)}
-                />
-            )}
-            {enabled && (
-                <header className={cn("kronarchy-bar", isMacOS() && "is-macos")}>
-                    <div className="kronarchy-bar-section kronarchy-bar-left">
-                        <button
-                            type="button"
-                            className="kronarchy-menu-trigger"
-                            onClick={() => setOpen(true)}
-                            onContextMenu={(event) => {
-                                event.preventDefault();
-                                void launchWidget({ meta: { view: "term", controller: "shell" } });
-                            }}
-                            aria-label="Open Kronarchy launcher"
-                            title="Launcher · right-click for terminal"
-                        >
-                            <span aria-hidden="true">K</span>
-                        </button>
-                        <nav className="kronarchy-workspaces" aria-label="Workspace tabs">
-                            {tabIds.slice(0, 10).map((tabId, index) => {
-                                const active = tabId === activeTabId;
-                                return (
-                                    <button
-                                        key={tabId}
-                                        type="button"
-                                        className={cn(active && "is-active")}
-                                        onClick={() => setActiveTab(tabId)}
-                                        aria-label={`Open workspace tab ${index + 1}`}
-                                        aria-current={active ? "page" : undefined}
-                                        title={`Workspace tab ${index + 1}`}
-                                    >
-                                        {active ? <i className="fa-solid fa-circle-dot" aria-hidden="true" /> : index + 1}
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                    </div>
-                    <div className="kronarchy-bar-section kronarchy-bar-center">
-                        <time title={new Date().toLocaleDateString()}>{clock}</time>
-                    </div>
-                    <div className="kronarchy-bar-section kronarchy-bar-right">
-                        <button
-                            type="button"
-                            className="kronarchy-layout-status"
-                            onClick={() => setOpen(true)}
-                            aria-label={`Change workspace layout. Current layout: ${layoutMode}`}
-                            title="Change workspace layout"
-                        >
-                            {layoutMode}
-                        </button>
-                        <button
-                            type="button"
-                            className={cn("kronarchy-connected", !online && "is-offline")}
-                            onClick={() => void launchWidget({ meta: { view: "waveconfig" } })}
-                            aria-label={`${online ? "Online" : "Offline"}. Open connections`}
-                            title="Open connections"
-                        >
-                            <span aria-hidden="true" /> {online ? "online" : "offline"}
-                        </button>
-                        <div className="kronarchy-add-connection-wrap">
-                            <button
-                                type="button"
-                                className={cn("kronarchy-add-connection", addConnOpen && "is-open")}
-                                onClick={() => setAddConnOpen((open) => !open)}
-                                aria-label="New connection profile"
-                                aria-expanded={addConnOpen}
-                                title="New connection profile"
-                            >
-                                <span aria-hidden="true">+</span>
-                            </button>
-                            {addConnOpen && (
-                                <div
-                                    className="kronarchy-connection-pop"
-                                    role="dialog"
-                                    aria-label="New connection profile"
-                                >
-                                    <form onSubmit={(event) => void handleAddConnection(event)}>
-                                        <input
-                                            value={connValue}
-                                            onChange={(event) => setConnValue(event.target.value)}
-                                            onKeyDown={(event) => {
-                                                if (event.key === "Escape") {
-                                                    setAddConnOpen(false);
-                                                }
-                                            }}
-                                            placeholder="user@host"
-                                            aria-label="Connection host"
-                                            autoFocus
-                                            spellCheck={false}
-                                        />
-                                        <button type="submit" disabled={!connValue.trim() || addingConn}>
-                                            {addingConn ? "…" : "Add"}
-                                        </button>
-                                    </form>
-                                    <button
-                                        type="button"
-                                        className="kronarchy-connection-pop-secondary"
-                                        onClick={openConnectionsEditor}
-                                    >
-                                        Edit connections
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </header>
-            )}
+    if (!open) {
+        return null;
+    }
 
-            {open && (
-                <div
-                    className="kronarchy-launcher-backdrop"
-                    role="presentation"
-                    onMouseDown={(event) => {
-                        if (event.target === event.currentTarget) {
-                            setOpen(false);
-                        }
-                    }}
+    return (
+        <SystemUIProvider>
+            <div
+                className="kronarchy-launcher-backdrop"
+                data-workspace-presentation={layoutMode}
+                role="presentation"
+                onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) {
+                        setOpen(false);
+                    }
+                }}
+            >
+                <SystemPopover
+                    className="kronarchy-launcher"
+                    aria-modal="true"
+                    aria-label="KronTerm Command Center"
+                    onKeyDown={handleLauncherKeyDown}
                 >
-                    <section
-                        className="kronarchy-launcher"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Kronarchy"
-                        onKeyDown={handleLauncherKeyDown}
-                    >
-                        <header className="kronarchy-launcher-header">
-                            <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
-                            <input
-                                ref={searchRef}
-                                value={query}
-                                onChange={(event) => setQuery(event.target.value)}
-                                placeholder="Search apps, widgets, files, wallpapers…"
-                                aria-label="Search apps, widgets, files, wallpapers, settings, and layouts"
-                                aria-describedby="kronarchy-launcher-status"
-                            />
-                            <kbd aria-hidden="true">esc</kbd>
-                        </header>
-                        <div className="kronarchy-launcher-results">
-                            {visibleSections.length > 0 ? (
-                                visibleSections.map((section) => (
-                                    <div key={section.id} className="kronarchy-launcher-section">
-                                        <h2>{section.label}</h2>
-                                        {section.items.map((item) => {
-                                            const selectedLayout =
-                                                item.id === `layout-${layoutMode}` ||
-                                                (item.id === "layout-widgets" && layoutMode === "widgets");
-                                            return (
-                                                <button
-                                                    key={item.id}
-                                                    type="button"
-                                                    className={cn(
-                                                        normalizedQuery && "has-detail",
-                                                        selectedLayout && "is-selected",
-                                                        activeItemId === item.id && "is-active"
-                                                    )}
-                                                    onClick={() => void item.action()}
-                                                    onMouseEnter={() => setActiveItemId(item.id)}
-                                                >
-                                                    <i className={`fa-solid ${item.icon}`} aria-hidden="true" />
-                                                    <span className="kronarchy-item-copy">
-                                                        <strong>{item.label}</strong>
-                                                        {normalizedQuery && <small>{item.description}</small>}
-                                                    </span>
-                                                    {selectedLayout && (
-                                                        <i
-                                                            className="fa-solid fa-check kronarchy-item-check"
-                                                            aria-hidden="true"
-                                                        />
-                                                    )}
-                                                    {!selectedLayout && item.shortcut && (
-                                                        <kbd className="kronarchy-item-shortcut">{item.shortcut}</kbd>
-                                                    )}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="kronarchy-launcher-empty">
-                                    {systemSearching ? "Searching your computer…" : "No matching item"}
-                                </p>
-                            )}
-                        </div>
-                        <p id="kronarchy-launcher-status" className="kronarchy-launcher-status" aria-live="polite">
-                            {activeLauncherItem?.label ?? "No matching item"}
-                        </p>
-                    </section>
-                </div>
-            )}
-        </>
+                    <header className="kronarchy-launcher-header">
+                        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                        <input
+                            ref={searchRef}
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Search apps, spaces, files, settings, and actions"
+                            aria-label="Search applications, project spaces, files, settings, and actions"
+                            aria-describedby="kronarchy-launcher-status"
+                        />
+                        <kbd aria-hidden="true">esc</kbd>
+                    </header>
+                    <div className="kronarchy-launcher-results">
+                        {visibleSections.length > 0 ? (
+                            visibleSections.map((section) => (
+                                <div key={section.id} className="kronarchy-launcher-section">
+                                    <h2>{section.label}</h2>
+                                    {section.items.map((item) => {
+                                        const selectedLayout = item.id === `layout-${layoutMode}`;
+                                        return (
+                                            <SystemListRow
+                                                key={item.id}
+                                                className={cn(
+                                                    selectedLayout && "is-selected",
+                                                    activeItemId === item.id && "is-active"
+                                                )}
+                                                icon={<AppIcon icon={item.icon} />}
+                                                title={item.label}
+                                                detail={item.description}
+                                                trailing={
+                                                    selectedLayout ? (
+                                                        <i className="fa-solid fa-check" aria-hidden="true" />
+                                                    ) : item.shortcut ? (
+                                                        <kbd>{item.shortcut}</kbd>
+                                                    ) : undefined
+                                                }
+                                                onClick={() => void item.action()}
+                                                onMouseEnter={() => setActiveItemId(item.id)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            ))
+                        ) : (
+                            <p className="kronarchy-launcher-empty">
+                                {systemSearching
+                                    ? "Searching this Mac…"
+                                    : "No matching application, resource, or action"}
+                            </p>
+                        )}
+                    </div>
+                    <footer id="kronarchy-launcher-status" className="kronarchy-launcher-status" aria-live="polite">
+                        <span>{activeLauncherItem?.description ?? "Type to search across KronTerm"}</span>
+                        <span>↑↓ Navigate · ↩ Open</span>
+                    </footer>
+                </SystemPopover>
+            </div>
+        </SystemUIProvider>
     );
 };
 
+const KronarchyShell = SystemCommandCenterHost;
+
 export {
-    KronarchyEnabledChangedEvent,
+    CommandSpaceCompatibilityStorageKey,
     KronarchyEnabledStorageKey,
     KronarchyShell,
-    publishKronarchyEnabled,
+    migrateKronarchyPreference,
     readKronarchyEnabled,
     shouldOpenKronarchyLauncher,
+    SystemCommandCenterHost,
 };

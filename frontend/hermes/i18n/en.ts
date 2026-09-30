@@ -69,7 +69,7 @@ export const en: Translations = {
             loadingSettings: "Loading KronTerm settings",
             loadingSessions: "Loading recent sessions",
             startingDesktopConnection: "Starting desktop connection",
-            startingHermesDesktop: "Starting Kronos…",
+            startingHermesDesktop: "Starting KronTerm Agent…",
         },
         errors: {
             backgroundExited: "KronTerm background process exited.",
@@ -126,7 +126,7 @@ export const en: Translations = {
         backendOutOfDateMessage:
             "Your KronTerm backend is older than this desktop build and may not work correctly. Update to align them.",
         installMethodUnsupportedTitle: "Unsupported install method",
-        updateHermes: "Update Kronos",
+        updateHermes: "Update KronTerm Agent",
         updateReadyTitle: "Update ready",
         updateReadyMessage: (count) => `${count} new change${count === 1 ? "" : "s"} available.`,
         updateReadyMessageUnknown: "A new update is available.",
@@ -1392,7 +1392,7 @@ export const en: Translations = {
         hermesActiveSessions: (version, count) => `KronTerm ${version} · Active sessions ${count}`,
         restartGateway: "Restart gateway",
         gatewayRestartFailed: "Gateway restart failed.",
-        updateHermes: "Update Kronos",
+        updateHermes: "Update KronTerm Agent",
         actionRunning: "running",
         actionDone: "done",
         actionFailed: "failed",

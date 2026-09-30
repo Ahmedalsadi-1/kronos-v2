@@ -4,19 +4,17 @@
 import { useEffect, useState } from "react";
 
 import { blockViewToIcon, blockViewToName } from "@/app/block/blockutil";
+import { hasViewIcon, viewIconId } from "@/app/components/view-icons";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { getApi } from "@/store/global";
+import { OSSystemModel } from "./os-system";
+import type { SystemAppDescriptor } from "./os-system-types";
 
 // InstalledAppInfo is an ambient global type (frontend/types/gotypes.d.ts)
 
-export type AppKind = "view" | "installed";
-
 // icon is either a "data:..." URL (platform icon) or an icon-font class name (built-in views)
-export type AppDescriptor = {
-    id: string;
-    kind: AppKind;
-    name: string;
-    icon?: string;
+export type AppDescriptor = SystemAppDescriptor & {
     category?: string;
     aliases: string[];
     view?: string;
@@ -33,21 +31,54 @@ export type AppBlockRef = {
 
 const BuiltinViewApps: Array<{
     view: string;
+    kind?: SystemAppDescriptor["kind"];
+    launchPolicy?: SystemAppDescriptor["launchPolicy"];
+    capabilities?: string[];
     aliases?: string[];
     pinned?: boolean;
     category?: string;
 }> = [
-    { view: "term", aliases: ["terminal", "shell", "console", "pty"], pinned: true, category: "System" },
-    { view: "web", aliases: ["browser", "web browser", "webview", "internet"], pinned: true, category: "Applications" },
     {
-        view: "chathubv2",
-        aliases: ["kronoschamber", "hermes", "ai", "chat", "kronos", "agent"],
+        view: "term",
+        aliases: ["terminal", "shell", "console", "pty"],
+        pinned: true,
+        category: "System",
+        capabilities: ["terminal", "files"],
+        launchPolicy: "multi-window",
+    },
+    {
+        view: "web",
+        kind: "web",
+        aliases: ["browser", "web browser", "webview", "internet"],
+        pinned: true,
+        category: "Applications",
+        capabilities: ["network", "clipboard", "files"],
+        launchPolicy: "multi-window",
+    },
+    {
+        view: "hermes",
+        aliases: ["kronoschamber", "hermes", "ai", "chat", "kronos", "agent", "kronterm agent"],
         pinned: true,
         category: "Agents",
+        capabilities: ["files", "terminal", "network", "screen-capture", "accessibility", "clipboard"],
     },
-    { view: "preview", aliases: ["files", "file", "editor", "notes", "markdown", "pdf"], pinned: true, category: "Productivity" },
+    {
+        view: "preview",
+        aliases: ["files", "file", "editor", "notes", "markdown", "pdf"],
+        pinned: true,
+        category: "Productivity",
+        capabilities: ["files", "clipboard"],
+        launchPolicy: "multi-window",
+    },
     { view: "sysinfo", aliases: ["system", "cpu", "memory", "monitor"], category: "System" },
-    { view: "sandbox", aliases: ["linux", "vm", "isolated"], category: "System" },
+    {
+        view: "sandbox",
+        kind: "sandbox",
+        aliases: ["linux", "vm", "isolated"],
+        category: "System",
+        capabilities: ["terminal", "network", "files"],
+        launchPolicy: "multi-window",
+    },
     { view: "kronoscanvas", aliases: ["canvas", "draw", "diagram"], category: "Productivity" },
     { view: "appstream", aliases: ["app stream", "native app", "stream", "remote app"], category: "Applications" },
     { view: "installedapps", aliases: ["apps", "applications", "launcher"], category: "Applications" },
@@ -59,32 +90,42 @@ export function makeViewAppDescriptor(view: string, runningBlockIds: string[]): 
     const builtin = BuiltinViewApps.find((app) => app.view === view);
     return {
         id: `view:${view}`,
-        kind: "view",
+        kind: builtin?.kind ?? "builtin",
         name: blockViewToName(view),
-        icon: blockViewToIcon(view),
+        icon: hasViewIcon(view) ? viewIconId(view) : blockViewToIcon(view),
         category: builtin?.category,
         aliases: builtin?.aliases ?? [],
         view,
         runningBlockIds,
         pinned: builtin?.pinned ?? false,
+        launchPolicy: builtin?.launchPolicy ?? "singleton",
+        capabilities: builtin?.capabilities ?? [],
     };
 }
 
-export function makeInstalledAppDescriptor(app: InstalledAppInfo): AppDescriptor {
+export function makeInstalledAppDescriptor(app: InstalledAppInfo, resolvedIcon?: string): AppDescriptor {
     return {
         id: `app:${app.appid || app.path}`,
-        kind: "installed",
+        kind: "native",
         name: app.name,
-        icon: app.icon,
+        icon:
+            resolvedIcon ??
+            (typeof app.icon === "string" && app.icon.startsWith("data:image/png") ? app.icon : undefined),
         category: app.category,
         aliases: [app.name.toLowerCase(), app.bundleid ?? "", app.description ?? ""].filter(Boolean),
         runningBlockIds: [],
         pinned: false,
         installedAppId: app.bundleid || app.appid,
+        launchPolicy: "multi-window",
+        capabilities: ["screen-capture", "accessibility", "clipboard", "files"],
     };
 }
 
-export function mergeAppDescriptors(builtins: AppDescriptor[], installed: AppDescriptor[], blocks: AppBlockRef[]): AppDescriptor[] {
+export function mergeAppDescriptors(
+    builtins: AppDescriptor[],
+    installed: AppDescriptor[],
+    blocks: AppBlockRef[]
+): AppDescriptor[] {
     const runningByView = new Map<string, string[]>();
     for (const block of blocks) {
         const existing = runningByView.get(block.view) ?? [];
@@ -92,11 +133,45 @@ export function mergeAppDescriptors(builtins: AppDescriptor[], installed: AppDes
         runningByView.set(block.view, existing);
     }
     const mergedBuiltins = builtins.map((descriptor) =>
-        descriptor.kind === "view" && descriptor.view != null
+        descriptor.view != null
             ? { ...descriptor, runningBlockIds: runningByView.get(descriptor.view) ?? [] }
             : descriptor
     );
     return [...mergedBuiltins, ...installed];
+}
+
+// Everyday productivity apps surface before the alphabetical tail of /Applications.
+const PreferredInstalledBundleIds = [
+    "com.google.Chrome",
+    "com.apple.Safari",
+    "company.thebrowser.Browser",
+    "com.microsoft.VSCode",
+    "com.todesktop.230313mzl4w4u92",
+    "com.figma.Desktop",
+    "notion.id",
+    "com.tinyspeck.slackmacgap",
+    "com.hnc.Discord",
+    "com.apple.mail",
+    "com.apple.iCal",
+    "com.apple.Notes",
+    "com.spotify.client",
+    "us.zoom.xos",
+    "com.apple.Terminal",
+    "com.googlecode.iterm2",
+];
+
+export function rankInstalledApps(descriptors: AppDescriptor[]): AppDescriptor[] {
+    const preferredRank = (descriptor: AppDescriptor) => {
+        const index = PreferredInstalledBundleIds.indexOf(descriptor.installedAppId ?? "");
+        return index === -1 ? PreferredInstalledBundleIds.length : index;
+    };
+    return [...descriptors].sort((a, b) => {
+        const runningDelta = Number(b.runningBlockIds.length > 0) - Number(a.runningBlockIds.length > 0);
+        if (runningDelta !== 0) return runningDelta;
+        const rankDelta = preferredRank(a) - preferredRank(b);
+        if (rankDelta !== 0) return rankDelta;
+        return a.name.localeCompare(b.name);
+    });
 }
 
 export function searchApps(descriptors: AppDescriptor[], query: string): AppDescriptor[] {
@@ -113,21 +188,64 @@ export type AppLaunchDecision =
     | { action: "create"; view: string }
     | { action: "create-appstream"; appid: string; appname: string };
 
-export function focusOrCreateDecision(descriptor: AppDescriptor): AppLaunchDecision {
-    if (descriptor.runningBlockIds.length > 0) {
+export type SystemAppLaunchHandlers = {
+    focusBlock: (blockId: string) => void | Promise<void>;
+    createView: (view: string) => void | Promise<void>;
+    createAppStream: (appId: string, appName: string) => void | Promise<void>;
+};
+
+export function focusOrCreateDecision(
+    descriptor: AppDescriptor,
+    options: { newWindow?: boolean } = {}
+): AppLaunchDecision {
+    if (descriptor.runningBlockIds.length > 0 && !options.newWindow) {
         return { action: "focus", blockId: descriptor.runningBlockIds[0] };
     }
-    if (descriptor.kind === "view" && descriptor.view != null) {
+    if (descriptor.view != null) {
         return { action: "create", view: descriptor.view };
     }
     return { action: "create-appstream", appid: descriptor.installedAppId ?? descriptor.id, appname: descriptor.name };
+}
+
+export async function launchSystemApp(
+    descriptor: AppDescriptor,
+    handlers: SystemAppLaunchHandlers,
+    options: { newWindow?: boolean } = {}
+): Promise<AppLaunchDecision> {
+    const decision = focusOrCreateDecision(descriptor, options);
+    if (decision.action === "focus") {
+        await handlers.focusBlock(decision.blockId);
+    } else if (decision.action === "create") {
+        await handlers.createView(decision.view);
+    } else {
+        await handlers.createAppStream(decision.appid, decision.appname);
+    }
+    const focusedBlockId = decision.action === "focus" ? decision.blockId : undefined;
+    void OSSystemModel.getInstance()
+        .recordAppTransition(descriptor.name, focusedBlockId ? "focused" : "launched", focusedBlockId)
+        .catch(() => undefined);
+    return decision;
+}
+
+export function systemAppIdForBlock(block: Pick<AppBlockRef, "view"> & { appStreamAppId?: string }): string {
+    if (block.view === "appstream" && block.appStreamAppId) {
+        return `app:${block.appStreamAppId}`;
+    }
+    return `view:${block.view}`;
 }
 
 let installedAppsCache: Promise<InstalledAppInfo[]> | null = null;
 
 export function fetchInstalledApps(force = false): Promise<InstalledAppInfo[]> {
     if (force || installedAppsCache == null) {
-        installedAppsCache = RpcApi.ListInstalledAppsCommand(TabRpcClient).catch(() => [] as InstalledAppInfo[]);
+        installedAppsCache = RpcApi.ListInstalledAppsCommand(TabRpcClient)
+            .then(async (apps) => {
+                const iconMap = await getApi()
+                    .getNativeAppIcons(apps.map((app) => app.path))
+                    .catch(() => ({}) as Record<string, string>);
+                return apps.map((app) => ({ ...app, icon: iconMap[app.path] ?? app.icon }));
+            })
+            .catch(() => [] as InstalledAppInfo[]);
     }
     return installedAppsCache;
 }
@@ -147,7 +265,7 @@ export function useInstalledAppDescriptors(): AppDescriptor[] {
         let cancelled = false;
         fetchInstalledApps().then((list) => {
             if (cancelled) return;
-            setApps(list.map(makeInstalledAppDescriptor));
+            setApps(list.map((app) => makeInstalledAppDescriptor(app)));
         });
         return () => {
             cancelled = true;

@@ -1,154 +1,277 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
+import { configureHermesDesktopShim, installHermesDesktopShim } from "@/app/view/hermes/hermes-desktop-shim";
 import { getApi } from "@/store/global";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { markKronTermWebHost, markKronTermWidgetHost } from "@hermes/lib/kronterm-host";
+import { lazy, memo, type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import "./web-mode.scss";
 
-// The krondesign (open-design) daemon surface. Re-point this constant to turn
-// web mode into a full-screen surface for any other local web app.
-const WebModeFallbackUrl = "http://127.0.0.1:7456";
-const StartPollMs = 1000;
-const StartTimeoutMs = 20000;
+const LazyHermesApp = lazy(async () => ({ default: (await import("@/app/view/hermes/hermes-app")).HermesApp }));
+const LazySandboxDesktopPane = lazy(async () => ({
+    default: (await import("@/app/view/sandbox/sandbox")).SandboxDesktopPane,
+}));
 
-type WebModeDaemonState = "checking" | "online" | "starting" | "offline";
+type WebCapabilityPreset = "web-agent" | "developer" | "research" | "custom";
+type StoredWebCapabilities = HermesWebCapabilities & { preset: WebCapabilityPreset };
 
-async function probeDaemon(): Promise<{ running: boolean; url: string }> {
-    try {
-        const api = getApi();
-        if (api?.krondesignStatus != null) {
-            const status = await api.krondesignStatus();
-            return { running: status.running, url: status.url || "" };
-        }
-        const resp = await fetch(`${WebModeFallbackUrl}/api/health`, { mode: "cors" });
-        return { running: resp.ok, url: "" };
-    } catch {
-        return { running: false, url: "" };
-    }
+const WebCapabilityPresets: Record<Exclude<WebCapabilityPreset, "custom">, HermesWebCapabilities> = {
+    "web-agent": { browser: true, terminal: true, files: true, sandbox: true, computerControl: false },
+    developer: { browser: true, terminal: true, files: true, sandbox: true, computerControl: false },
+    research: { browser: true, terminal: false, files: true, sandbox: false, computerControl: false },
+};
+
+const DefaultWebCapabilities: StoredWebCapabilities = {
+    preset: "web-agent",
+    browser: true,
+    terminal: true,
+    files: true,
+    sandbox: true,
+    computerControl: false,
+};
+
+function normalizeWebCapabilities(value?: Partial<StoredWebCapabilities>): StoredWebCapabilities {
+    const preset =
+        value?.preset && value.preset in WebCapabilityPresets
+            ? value.preset
+            : value?.preset === "custom"
+              ? "custom"
+              : "web-agent";
+    const base = preset === "custom" ? DefaultWebCapabilities : WebCapabilityPresets[preset];
+    return { ...base, ...value, preset };
 }
 
-const WebModeView = memo(() => {
-    const [daemonState, setDaemonState] = useState<WebModeDaemonState>("checking");
-    const [daemonUrl, setDaemonUrl] = useState("");
-    const [startError, setStartError] = useState<string | null>(null);
-    const startingRef = useRef(false);
+type WebModeRuntimeState =
+    | { status: "starting" }
+    | { status: "ready"; connection: HermesConnectionDescriptor }
+    | { status: "error"; message: string };
 
-    const checkDaemon = useCallback(async () => {
-        const { running, url } = await probeDaemon();
-        if (running) {
-            setDaemonUrl(url);
-            setDaemonState("online");
-            return;
-        }
-        setDaemonState("offline");
-    }, []);
+interface WebModeSurfaceProps {
+    children?: ReactNode;
+    onExit: () => void;
+    onRetry?: () => void;
+    runtime: Pick<WebModeRuntimeState, "status"> & { message?: string };
+}
 
-    const startDaemon = useCallback(async () => {
-        if (startingRef.current) {
-            return;
-        }
-        startingRef.current = true;
-        setDaemonState("starting");
-        setStartError(null);
-        try {
-            const api = getApi();
-            if (api?.krondesignStart != null) {
-                const result = await api.krondesignStart().catch((err: unknown) => ({
-                    success: false,
-                    error: err instanceof Error ? err.message : String(err),
-                }));
-                if (!result.success) {
-                    setStartError(result.error ?? "Failed to start the web engine");
-                }
-            }
-            const startedAt = Date.now();
-            while (Date.now() - startedAt < StartTimeoutMs) {
-                await new Promise((resolve) => setTimeout(resolve, StartPollMs));
-                const { running, url } = await probeDaemon();
-                if (running) {
-                    setDaemonUrl(url);
-                    setDaemonState("online");
-                    return;
-                }
-            }
-            setDaemonState("offline");
-        } finally {
-            startingRef.current = false;
-        }
-    }, [probeDaemon]);
+function prepareHermesWebModeHost(): void {
+    markKronTermWidgetHost();
+    markKronTermWebHost(true);
+    installHermesDesktopShim({ baseUrl: "http://127.0.0.1:9119" });
+}
 
-    useEffect(() => {
-        void (async () => {
-            const { running, url } = await probeDaemon();
-            if (running) {
-                setDaemonUrl(url);
-                setDaemonState("online");
-            } else {
-                await startDaemon();
-            }
-        })();
-    }, [startDaemon, probeDaemon]);
-
-    const exitWebMode = useCallback(() => {
-        window.localStorage.setItem("kronterm:layoutmode", "widgets");
-        window.dispatchEvent(new CustomEvent("kronterm:layoutmode-changed", { detail: { mode: "widgets" } }));
-        void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": "widgets" });
-    }, []);
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                exitWebMode();
-            }
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [exitWebMode]);
-
+function WebModeSurface({ children, onExit, onRetry, runtime }: WebModeSurfaceProps) {
     return (
-        <div className="web-mode" aria-label="Web mode">
-            {daemonState === "online" ? (
-                <iframe
-                    className="web-mode-frame"
-                    src={`${daemonUrl}/`}
-                    title="KronTerm Web"
-                    allow="clipboard-read; clipboard-write"
-                />
+        <section className="web-mode" aria-label="Kronos web mode" data-hermes-web-mode="">
+            {runtime.status === "ready" ? (
+                children
+            ) : runtime.status === "starting" ? (
+                <div className="web-mode-status" role="status">
+                    <div className="web-mode-spinner" />
+                    <span>Starting Kronos…</span>
+                </div>
             ) : (
-                <div className="web-mode-status">
-                    {daemonState === "checking" || daemonState === "starting" ? (
-                        <>
-                            <div className="web-mode-spinner" />
-                            <span>
-                                {daemonState === "checking" ? "Connecting to web engine…" : "Starting web engine…"}
-                            </span>
-                        </>
-                    ) : (
-                        <>
-                            <h3>Web engine not running</h3>
-                            {startError != null && <p className="web-mode-error">{startError}</p>}
-                            <button type="button" className="web-mode-retry" onClick={() => void startDaemon()}>
-                                Retry
-                            </button>
-                        </>
-                    )}
+                <div className="web-mode-status" role="alert">
+                    <h3>KronTerm Agent could not start</h3>
+                    <p className="web-mode-error">{runtime.message}</p>
+                    <button type="button" className="web-mode-retry" onClick={onRetry}>
+                        Retry
+                    </button>
                 </div>
             )}
             <button
                 type="button"
                 className="web-mode-exit"
-                onClick={exitWebMode}
+                onClick={onExit}
                 aria-label="Exit web mode"
                 title="Exit web mode (Esc)"
             >
                 <i className="fa-solid fa-arrow-left" aria-hidden="true" />
                 <span>Exit Web</span>
             </button>
-        </div>
+        </section>
     );
-});
+}
+
+const WebModeView = memo(
+    ({
+        tabId,
+        workspaceId,
+        initialCapabilities,
+    }: {
+        tabId: string;
+        workspaceId: string;
+        initialCapabilities?: Partial<StoredWebCapabilities>;
+    }) => {
+        const [runtime, setRuntime] = useState<WebModeRuntimeState>({ status: "starting" });
+        const [retryKey, setRetryKey] = useState(0);
+        const [sandboxOpen, setSandboxOpen] = useState(false);
+        const [capabilities, setCapabilities] = useState(() => normalizeWebCapabilities(initialCapabilities));
+        const sandboxSessionId = `hermes-web-${workspaceId}`;
+        prepareHermesWebModeHost();
+
+        useEffect(() => {
+            markKronTermWebHost(true);
+            return () => markKronTermWebHost(false);
+        }, []);
+
+        useEffect(() => {
+            let active = true;
+            const applyConnection = (connection: HermesConnectionDescriptor) => {
+                if (!active) {
+                    return;
+                }
+                configureHermesDesktopShim({ baseUrl: connection.baseUrl, token: connection.token });
+                setRuntime({ status: "ready", connection });
+            };
+            const unsubscribe = getApi().onHermesConnection(applyConnection);
+            setRuntime({ status: "starting" });
+            void getApi()
+                .hermesGetConnection({
+                    tabId,
+                    workspaceId,
+                    hostMode: "web-fullscreen",
+                    capabilities,
+                })
+                .then(applyConnection)
+                .catch((error) => {
+                    if (!active) {
+                        return;
+                    }
+                    setRuntime({ status: "error", message: error instanceof Error ? error.message : String(error) });
+                });
+            return () => {
+                active = false;
+                unsubscribe();
+            };
+        }, [capabilities, retryKey, tabId, workspaceId]);
+
+        const persistCapabilities = useCallback(
+            (next: StoredWebCapabilities) => {
+                setCapabilities(next);
+                void RpcApi.SetMetaCommand(TabRpcClient, {
+                    oref: WOS.makeORef("workspace", workspaceId),
+                    meta: { "hermes:webcapabilities": next } as unknown as MetaType,
+                });
+            },
+            [workspaceId]
+        );
+
+        const exitWebMode = useCallback(() => {
+            publishWorkspacePresentation("widgets");
+            void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": "widgets" });
+        }, []);
+
+        useEffect(() => {
+            const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.key === "Escape") {
+                    exitWebMode();
+                }
+            };
+            window.addEventListener("keydown", handleKeyDown);
+            return () => window.removeEventListener("keydown", handleKeyDown);
+        }, [exitWebMode]);
+
+        useEffect(() => {
+            const handleSandbox = (event: Event) => {
+                const open = (event as CustomEvent<{ open?: boolean }>).detail?.open;
+                setSandboxOpen(open !== false);
+            };
+            window.addEventListener("kronterm:hermes-web-sandbox", handleSandbox);
+            return () => window.removeEventListener("kronterm:hermes-web-sandbox", handleSandbox);
+        }, []);
+
+        return (
+            <WebModeSurface onExit={exitWebMode} onRetry={() => setRetryKey((value) => value + 1)} runtime={runtime}>
+                {runtime.status === "ready" && (
+                    <Suspense
+                        fallback={
+                            <div className="web-mode-status" role="status">
+                                Loading Kronos…
+                            </div>
+                        }
+                    >
+                        <LazyHermesApp key={runtime.connection.baseUrl} hostMode="web-fullscreen" webMode />
+                    </Suspense>
+                )}
+                {sandboxOpen && (
+                    <aside className="web-mode-sandbox" aria-label="Sandbox desktop">
+                        <header>
+                            <span>
+                                <i className="fa-solid fa-desktop" aria-hidden="true" /> Sandbox
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    void RpcApi.SandboxStopCommand(TabRpcClient, { sessionId: sandboxSessionId })
+                                }
+                                aria-label="Stop sandbox"
+                                title="Stop this workspace sandbox"
+                            >
+                                <i className="fa-solid fa-stop" aria-hidden="true" />
+                            </button>
+                            <button type="button" onClick={() => setSandboxOpen(false)} aria-label="Close sandbox">
+                                <i className="fa-solid fa-xmark" aria-hidden="true" />
+                            </button>
+                        </header>
+                        <div className="web-mode-sandbox-content">
+                            <Suspense fallback={<div className="web-mode-status">Loading sandbox…</div>}>
+                                <LazySandboxDesktopPane sessionId={sandboxSessionId} />
+                            </Suspense>
+                        </div>
+                    </aside>
+                )}
+                <details className="web-mode-tools">
+                    <summary>
+                        <i className="fa-solid fa-sliders" aria-hidden="true" /> Tools
+                    </summary>
+                    <div className="web-mode-tools-panel">
+                        <label>
+                            Preset
+                            <select
+                                value={capabilities.preset}
+                                onChange={(event) => {
+                                    const preset = event.target.value as WebCapabilityPreset;
+                                    persistCapabilities(
+                                        normalizeWebCapabilities({
+                                            ...(preset === "custom" ? capabilities : WebCapabilityPresets[preset]),
+                                            preset,
+                                        })
+                                    );
+                                }}
+                            >
+                                <option value="web-agent">Web agent</option>
+                                <option value="developer">Developer</option>
+                                <option value="research">Research</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </label>
+                        {(["browser", "terminal", "files", "sandbox", "computerControl"] as const).map((key) => (
+                            <label key={key}>
+                                <input
+                                    type="checkbox"
+                                    checked={capabilities[key]}
+                                    onChange={(event) =>
+                                        persistCapabilities({
+                                            ...capabilities,
+                                            preset: "custom",
+                                            [key]: event.target.checked,
+                                        })
+                                    }
+                                />
+                                {key === "computerControl" ? "Computer control" : key[0].toUpperCase() + key.slice(1)}
+                            </label>
+                        ))}
+                    </div>
+                </details>
+            </WebModeSurface>
+        );
+    }
+);
 WebModeView.displayName = "WebModeView";
 
-export { WebModeView };
+export { WebModeSurface, WebModeView };
+export type { WebModeRuntimeState };

@@ -602,7 +602,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                             className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-primary cursor-pointer"
                                         >
                                             <option value="custom">Custom</option>
-                                            <option value="kronos">Kronos</option>
+                                            <option value="kronos">KronTerm Agent</option>
                                             <option value="openai">OpenAI</option>
                                             <option value="google">Google Gemini</option>
                                             <option value="openrouter">OpenRouter</option>
@@ -935,7 +935,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                                 >
                                                     <option value="hybrid">Hybrid</option>
                                                     <option value="wave-only">Kronterm tools first</option>
-                                                    <option value="kronos-only">Kronos only</option>
+                                                    <option value="kronos-only">KronTerm Agent only</option>
                                                 </select>
                                             </div>
                                             <div className="md:col-span-2">

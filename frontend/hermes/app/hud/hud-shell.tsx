@@ -415,9 +415,9 @@ export function HudShell() {
                 </Button>
             </Tip>
 
-            <Tip label="Dock Kronos in the workspace">
+            <Tip label="Dock KronTerm Agent in the workspace">
                 <Button
-                    aria-label="Dock Kronos in the workspace"
+                    aria-label="Dock KronTerm Agent in the workspace"
                     className={`${titlebarButtonClass} absolute z-20`}
                     data-hud-dock=""
                     onClick={() => void window.hermesDesktop?.hud?.dock?.()}
@@ -430,9 +430,9 @@ export function HudShell() {
             </Tip>
 
             {embedded ? (
-                <Tip label="Dismiss Kronos HUD">
+                <Tip label="Dismiss KronTerm Agent HUD">
                     <Button
-                        aria-label="Dismiss Kronos HUD"
+                        aria-label="Dismiss KronTerm Agent HUD"
                         className={`${titlebarButtonClass} absolute z-20`}
                         data-hud-dismiss=""
                         onClick={() => void window.hermesDesktop?.hud?.dismiss?.()}

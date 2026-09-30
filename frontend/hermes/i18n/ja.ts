@@ -69,7 +69,7 @@ export const ja = defineLocale({
             loadingSettings: "KronTerm の設定を読み込み中",
             loadingSessions: "最近のセッションを読み込み中",
             startingDesktopConnection: "デスクトップ接続を開始中",
-            startingHermesDesktop: "Kronos を起動中…",
+            startingHermesDesktop: "KronTerm Agent を起動中…",
         },
         errors: {
             backgroundExited: "KronTerm バックグラウンドプロセスが終了しました。",
@@ -126,7 +126,7 @@ export const ja = defineLocale({
         backendOutOfDateMessage:
             "KronTerm バックエンドがこのデスクトップビルドより古く、正常に動作しない場合があります。更新して揃えてください。",
         installMethodUnsupportedTitle: "サポート対象外のインストール方法",
-        updateHermes: "Kronos を更新",
+        updateHermes: "KronTerm Agent を更新",
         updateReadyTitle: "更新の準備ができました",
         updateReadyMessage: (count) => `${count} 件の新しい変更が利用可能です。`,
         updateReadyMessageUnknown: "新しい更新が利用可能です。",
@@ -1280,7 +1280,7 @@ export const ja = defineLocale({
         hermesActiveSessions: (version, count) => `KronTerm ${version} · アクティブセッション ${count}`,
         restartGateway: "ゲートウェイを再起動",
         gatewayRestartFailed: "ゲートウェイの再起動に失敗しました。",
-        updateHermes: "Kronos を更新",
+        updateHermes: "KronTerm Agent を更新",
         actionRunning: "実行中",
         actionDone: "完了",
         actionFailed: "失敗",

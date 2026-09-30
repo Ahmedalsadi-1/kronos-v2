@@ -1025,7 +1025,7 @@ function OSControlCenter() {
                 <header>
                     <div>
                         <strong>Agent grants</strong>
-                        <span>Kronos access for this space</span>
+                        <span>KronTerm Agent access for this space</span>
                     </div>
                     <span>{activeGrants.length}</span>
                 </header>

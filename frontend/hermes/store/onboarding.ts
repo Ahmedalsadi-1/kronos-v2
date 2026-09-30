@@ -192,7 +192,7 @@ function shouldPreserveConfiguredOnFallback(runtime: RuntimeReadinessResult, sta
 }
 
 function notifyReady(provider: string) {
-    notify({ kind: "success", title: "Kronos is ready", message: `${provider} connected.` });
+    notify({ kind: "success", title: "KronTerm Agent is ready", message: `${provider} connected.` });
 }
 
 // Human-friendly labels for tools auto-routed through the Nous Tool Gateway,
@@ -561,7 +561,7 @@ export async function refreshOnboarding(ctx: OnboardingContext) {
             kind: "error",
             title: "Runtime not ready",
             message:
-                "Kronos could not verify its backend on startup. Some features may be unavailable until the gateway is reachable.",
+                "KronTerm Agent could not verify its backend on startup. Some features may be unavailable until the gateway is reachable.",
         });
 
         return false;

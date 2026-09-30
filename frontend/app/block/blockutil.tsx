@@ -18,6 +18,7 @@ const ViewIconMap: Record<string, string> = {
     chathubv2: "sparkles",
     cpuplot: "chart-line",
     help: "circle-question",
+    hermes: "robot",
     installedapps: "desktop",
     kronoscanvas: "diagram-project",
     kronoschamber: "sliders",
@@ -64,6 +65,9 @@ export function blockViewToName(view: string): string {
     if (view == "help") {
         return "Help";
     }
+    if (view == "hermes") {
+        return "KronTerm Agent";
+    }
     if (view == "tips") {
         return "Tips";
     }
@@ -78,6 +82,9 @@ export function blockViewToName(view: string): string {
     }
     if (view == "kronoscanvas") {
         return "Canvas";
+    }
+    if (view == "os") {
+        return "OS Mode";
     }
     return view;
 }

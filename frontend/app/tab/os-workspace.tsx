@@ -3,8 +3,19 @@
 
 import KronTermOSWallpaper from "@/app/asset/kronterm-os-wallpaper.png";
 import { Block as BlockView } from "@/app/block/block";
+import { BlockChromeProvider } from "@/app/block/block-chrome-context";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
 import { AppIcon } from "@/app/components/app-icon";
+import {
+    SystemButton,
+    SystemDock,
+    SystemMaterial,
+    SystemPopover,
+    SystemSegmentedControl,
+    SystemToolbar,
+    SystemUIProvider,
+    SystemWindowFrame,
+} from "@/app/components/system-ui";
 import { hasViewIcon, KronPetIcon, viewIconId } from "@/app/components/view-icons";
 import {
     fitSpatialViewportToBounds,
@@ -20,6 +31,7 @@ import {
     useInstalledAppDescriptors,
     type AppDescriptor,
 } from "@/app/store/app-registry";
+import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
 import {
     attachOSResourceToKronos,
@@ -31,9 +43,18 @@ import { OSSystemModel } from "@/app/store/os-system";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
+import { AgentControlIndicator, useAgentPresences } from "@/app/view/agent-control-indicator";
 import { AppStreamFrameSizeEvent, type AppStreamFrameSize } from "@/app/view/appstream/appstream-events";
+import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
-import { OSSessionFocusEvent, toggleCommandCenter } from "@/app/workspace/command-center-events";
+import { requestAgentTakeover } from "@/app/view/hermes/hermes-tool-activity";
+import {
+    OSSessionFocusEvent,
+    SystemCenterOpenEvent,
+    toggleCommandCenter,
+    type SystemCenterTarget,
+} from "@/app/workspace/command-center-events";
+import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
 import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
 import type { NodeModel } from "@/layout/lib/types";
 import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
@@ -43,6 +64,9 @@ import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
 import { atom, useAtomValue } from "jotai";
 import {
+    Battery,
+    BatteryCharging,
+    BatteryLow,
     Bell,
     ChevronDown,
     FileText,
@@ -50,23 +74,32 @@ import {
     FolderOpen,
     GitBranch,
     Grid2X2,
+    Hand,
     Image,
     LayoutGrid,
     Link2,
     List,
     Maximize2,
     Minimize2,
+    MousePointer2,
     PackageOpen,
+    PanelBottom,
     PanelLeft,
     PanelRight,
     Plus,
     Search,
     Settings2,
+    Circle as ShapeCircle,
+    Diamond as ShapeDiamond,
+    Square as ShapeSquare,
+    StickyNote,
     Trash2,
     Unlink,
+    Wifi,
+    WifiOff,
     X,
 } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import {
     memo,
     useCallback,
@@ -78,22 +111,32 @@ import {
     type PointerEvent as ReactPointerEvent,
     type WheelEvent as ReactWheelEvent,
 } from "react";
-import {
-    isAgentActivityActive,
-    subscribeAgentActivityStream,
-    type LiveAgentSurfaceActivity,
-} from "../../types/agent-activity";
+import { subscribeAgentActivityStream } from "../../types/agent-activity";
+import { assignAgentPresencesToWindows, describeAgentPresence, type OSAgentPresence } from "./os-agent-presence";
 import { OSAppDragMimeType, readOSAppDragPayload, type OSAppDragPayload } from "./os-app-stream";
+import { osDesktopInsetsForWidth, OSDesktopLayer } from "./os-desktop";
+import { OSDesktopWidgetsStorageKey, readOSDockPins, writeOSDockPins, type OSDockPin } from "./os-desktop-model";
 import { OSSystemCenterPanel, type OSSystemCenter } from "./os-system-centers";
-import { OSWebNavBar } from "./os-web-navbar";
 import { OSWidgetsFileView } from "./os-widgets-file";
+import {
+    computeOSArrangement,
+    computeOSPlacementBounds,
+    computeOSWorkArea,
+    isOSWindowArrangement,
+    isOSWindowPlacement,
+    screenRectToWorld,
+    type OSWindowArrangement,
+    type OSWindowPlacement,
+} from "./os-window-arrange";
 import {
     computeOSWindowLayout,
     findOSDockHitTarget,
     fitOSWindowToContentAspect,
     makeInitialOSModeState,
     reconcileOSModeState,
+    recoverOSWindowBounds,
     reduceOSModeState,
+    resolveOSControlAction,
     type KronTermOSView,
     type OSCanvasColor,
     type OSCanvasObject,
@@ -129,7 +172,24 @@ function resizeBoundsFromEdge(bounds: DragBounds, edge: OSResizeEdge, dx: number
 
 const OSSaveDelayMs = 180;
 const OSDockInstalledAppLimit = 6;
-const OSActivityHistoryLimit = 8;
+// The connected shell plus its breathing room; arranged windows start below it.
+const OSShellReservedHeight = 64;
+
+function readDesktopWidgetsEnabled(): boolean {
+    try {
+        return window.localStorage.getItem(OSDesktopWidgetsStorageKey) !== "false";
+    } catch {
+        return true;
+    }
+}
+
+function writeDesktopWidgetsEnabled(enabled: boolean): void {
+    try {
+        window.localStorage.setItem(OSDesktopWidgetsStorageKey, String(enabled));
+    } catch {
+        // Preference just won't persist.
+    }
+}
 const OSCanvasColors: OSCanvasColor[] = ["amber", "blue", "green", "rose", "slate"];
 
 type OSCanvasTool = "select" | "hand" | "note" | "rectangle" | "ellipse" | "diamond" | "connector";
@@ -191,17 +251,6 @@ function toScreenWindowLayout(state: OSModeState, layout: OSWindowLayout): OSWin
         },
     };
 }
-
-const osAgentActivitiesAtom = atom<LiveAgentSurfaceActivity[]>([]);
-
-const AgentSurfaceToView: Record<LiveAgentSurfaceActivity["surface"], string> = {
-    browser: "web",
-    desktop: "appstream",
-    file: "preview",
-    panel: "hermes",
-    sandbox: "sandbox",
-    terminal: "term",
-};
 
 function makeOSNodeModel(blockId: string, onFocus: () => void, onClose: () => void): NodeModel {
     return {
@@ -314,8 +363,9 @@ const OSBlockWindow = memo(
         layout,
         selected,
         docked,
-        agentWorking,
+        agentPresence,
         reducedMotion,
+        interacting,
         onFocus,
         onTitlePointerDown,
         onResizePointerDown,
@@ -324,13 +374,15 @@ const OSBlockWindow = memo(
         onToggleFocus,
         onDock,
         onDetach,
+        onTitleContextMenu,
     }: {
         descriptor: BlockDescriptor;
         layout: OSWindowLayout;
         selected: boolean;
         docked: boolean;
-        agentWorking: boolean;
+        agentPresence?: OSAgentPresence;
         reducedMotion: boolean;
+        interacting: boolean;
         onFocus: (blockId: string) => void;
         onTitlePointerDown: (event: ReactPointerEvent, blockId: string, layout: OSWindowLayout) => void;
         onResizePointerDown: (
@@ -344,12 +396,14 @@ const OSBlockWindow = memo(
         onToggleFocus: (blockId: string) => void;
         onDock: (blockId: string, side: "left" | "right") => void;
         onDetach: (blockId: string) => void;
+        onTitleContextMenu?: (event: React.MouseEvent, blockId: string) => void;
     }) => {
         const blockAtom = useMemo(
             () => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", descriptor.blockId)),
             [descriptor.blockId]
         );
         useAtomValue(blockAtom);
+        const [toolbarHost, setToolbarHost] = useState<HTMLDivElement>(null);
         const nodeModel = useMemo(
             () =>
                 makeOSNodeModel(
@@ -365,34 +419,33 @@ const OSBlockWindow = memo(
         }, [nodeModel, selected]);
 
         const { bounds } = layout;
+        const agentWorking = agentPresence != null;
+        const transitionDuration = reducedMotion ? "0ms" : "220ms";
         return (
-            <motion.section
-                layout
+            <section
                 className={cn(
                     "os-window",
+                    "kt-system-material",
+                    "is-window",
                     `is-${layout.presentation}`,
                     selected && "is-selected",
                     docked && "is-docked",
-                    agentWorking && "is-agent-working"
+                    agentWorking && "is-agent-working",
+                    kronTermHudController.isIsland(descriptor.blockId) && "is-hud-island",
+                    interacting && "is-interacting"
                 )}
                 data-block-id={descriptor.blockId}
                 data-view={descriptor.view}
                 data-presentation={layout.presentation}
-                initial={false}
-                animate={{
+                aria-label={descriptor.title}
+                style={{
                     left: bounds.x,
                     top: bounds.y,
                     width: bounds.width,
                     height: bounds.height,
-                    rotateY: layout.rotateY,
-                    scale: layout.scale,
                     opacity: layout.opacity,
-                }}
-                transition={
-                    reducedMotion ? { duration: 0.08 } : { type: "spring", stiffness: 260, damping: 32, mass: 0.9 }
-                }
-                style={{
                     zIndex: layout.zIndex,
+                    transition: `left ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), top ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), width ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), height ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), opacity ${transitionDuration} ease`,
                     transformOrigin: layout.presentation === "edge-left" ? "left" : "right",
                 }}
                 onPointerDown={(event) => {
@@ -400,88 +453,110 @@ const OSBlockWindow = memo(
                     onFocus(descriptor.blockId);
                 }}
             >
-                <header
-                    className="os-window-titlebar"
-                    onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
-                    onDoubleClick={() => onToggleFocus(descriptor.blockId)}
-                >
-                    <div className="os-window-lights">
-                        <button
-                            type="button"
-                            className="is-close"
-                            onClick={() => onClose(descriptor.blockId)}
-                            aria-label="Close"
+                <SystemWindowFrame
+                    titlebar={
+                        <header
+                            className="os-window-titlebar"
+                            onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
+                            onDoubleClick={() => onToggleFocus(descriptor.blockId)}
+                            onContextMenu={(event) => {
+                                if (!onTitleContextMenu) return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onFocus(descriptor.blockId);
+                                onTitleContextMenu(event, descriptor.blockId);
+                            }}
                         >
-                            <X />
-                        </button>
-                        <button
-                            type="button"
-                            className="is-minimize"
-                            onClick={() => onCollapse(descriptor.blockId)}
-                            aria-label="Minimize"
-                        >
-                            <Minimize2 />
-                        </button>
-                        <button
-                            type="button"
-                            className="is-zoom"
-                            onClick={() => onToggleFocus(descriptor.blockId)}
-                            aria-label="Toggle focus"
-                        >
-                            <Maximize2 />
-                        </button>
-                    </div>
-                    <div className="os-window-title">
-                        <AppIcon icon={descriptor.icon} />
-                        <span>{descriptor.title}</span>
-                    </div>
-                    {agentWorking && (
-                        <span className="os-window-agent-badge">
-                            <KronPetIcon />
-                            Kronos
-                        </span>
-                    )}
-                    <div className="os-window-controls">
-                        {docked ? (
-                            <button
-                                type="button"
-                                onClick={() => onDetach(descriptor.blockId)}
-                                aria-label="Detach window"
-                            >
-                                <Unlink />
-                            </button>
-                        ) : (
-                            <>
+                            <div className={cn("os-window-lights", !isMacOS() && "is-platform-controls")}>
                                 <button
                                     type="button"
-                                    onClick={() => onDock(descriptor.blockId, "left")}
-                                    aria-label="Dock left"
+                                    className="is-close"
+                                    onClick={() => onClose(descriptor.blockId)}
+                                    aria-label="Close"
                                 >
-                                    <PanelLeft />
+                                    <X />
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => onDock(descriptor.blockId, "right")}
-                                    aria-label="Dock right"
+                                    className="is-minimize"
+                                    onClick={() => onCollapse(descriptor.blockId)}
+                                    aria-label="Minimize"
                                 >
-                                    <PanelRight />
+                                    <Minimize2 />
                                 </button>
-                            </>
-                        )}
-                    </div>
-                </header>
-                <div
-                    className="os-window-content"
-                    onPointerDown={(event) => {
-                        event.stopPropagation();
-                        onFocus(descriptor.blockId);
-                    }}
+                                <button
+                                    type="button"
+                                    className="is-zoom"
+                                    onClick={() => onToggleFocus(descriptor.blockId)}
+                                    aria-label={
+                                        layout.presentation === "focused" ? "Restore window" : "Maximize window"
+                                    }
+                                >
+                                    <Maximize2 />
+                                </button>
+                            </div>
+                            <div className="os-window-title">
+                                <AppIcon icon={descriptor.icon} />
+                                <span>{descriptor.title}</span>
+                            </div>
+                            <div
+                                ref={setToolbarHost}
+                                className="os-window-context"
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onDoubleClick={(event) => event.stopPropagation()}
+                            />
+                            {agentWorking && (
+                                <span className="os-window-agent-badge" title={describeAgentPresence(agentPresence)}>
+                                    <KronPetIcon />
+                                    {agentPresence.agent}
+                                </span>
+                            )}
+                            <div className="os-window-controls">
+                                {docked ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onDetach(descriptor.blockId)}
+                                        aria-label="Detach window"
+                                    >
+                                        <Unlink />
+                                    </button>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => onDock(descriptor.blockId, "left")}
+                                            aria-label="Dock left"
+                                        >
+                                            <PanelLeft />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => onDock(descriptor.blockId, "right")}
+                                            aria-label="Dock right"
+                                        >
+                                            <PanelRight />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </header>
+                    }
                 >
-                    {descriptor.view === "web" && <OSWebNavBar blockId={descriptor.blockId} />}
-                    <div className="os-window-surface">
-                        <BlockView nodeModel={nodeModel} preview={false} />
+                    <div
+                        className="os-window-content"
+                        onPointerDown={(event) => {
+                            event.stopPropagation();
+                            onFocus(descriptor.blockId);
+                        }}
+                    >
+                        <div className="os-window-surface relative">
+                            <BlockChromeProvider mode="integrated" toolbarHost={toolbarHost}>
+                                <BlockView nodeModel={nodeModel} preview={false} />
+                            </BlockChromeProvider>
+                            <AgentControlIndicator presence={agentPresence} />
+                        </div>
                     </div>
-                </div>
+                </SystemWindowFrame>
                 {layout.presentation === "freeform" &&
                     OSResizeEdges.map((edge) => (
                         <span
@@ -491,7 +566,7 @@ const OSBlockWindow = memo(
                             onPointerDown={(event) => onResizePointerDown(event, descriptor.blockId, layout, edge)}
                         />
                     ))}
-            </motion.section>
+            </section>
         );
     }
 );
@@ -635,6 +710,97 @@ const OSCanvasEntity = memo(
 );
 OSCanvasEntity.displayName = "OSCanvasEntity";
 
+type OSBatteryState = { level: number; charging: boolean };
+type BatteryManagerLike = OSBatteryState & EventTarget;
+
+function useOSBatteryState(): OSBatteryState | undefined {
+    const [battery, setBattery] = useState<OSBatteryState>();
+    useEffect(() => {
+        const getBattery = (navigator as Navigator & { getBattery?: () => Promise<BatteryManagerLike> }).getBattery;
+        if (getBattery == null) return;
+        let manager: BatteryManagerLike | undefined;
+        let cancelled = false;
+        const update = () => manager && setBattery({ level: manager.level, charging: manager.charging });
+        void getBattery
+            .call(navigator)
+            .then((result: BatteryManagerLike) => {
+                if (cancelled) return;
+                manager = result;
+                update();
+                manager.addEventListener("levelchange", update);
+                manager.addEventListener("chargingchange", update);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+            manager?.removeEventListener("levelchange", update);
+            manager?.removeEventListener("chargingchange", update);
+        };
+    }, []);
+    return battery;
+}
+
+function subscribeOnline(notify: () => void): () => void {
+    window.addEventListener("online", notify);
+    window.addEventListener("offline", notify);
+    return () => {
+        window.removeEventListener("online", notify);
+        window.removeEventListener("offline", notify);
+    };
+}
+
+const OSShellStatus = memo(() => {
+    const online = useSyncExternalStore(
+        subscribeOnline,
+        () => navigator.onLine,
+        () => true
+    );
+    const battery = useOSBatteryState();
+    const percent = battery ? Math.round(battery.level * 100) : undefined;
+    const BatteryIcon = battery?.charging ? BatteryCharging : percent != null && percent <= 20 ? BatteryLow : Battery;
+    return (
+        <div className="os-shell-status" role="group" aria-label="System status">
+            <span title={online ? "Online" : "Offline"} aria-label={online ? "Online" : "Offline"}>
+                {online ? <Wifi /> : <WifiOff />}
+            </span>
+            {percent != null && (
+                <span title={`Battery ${percent}%${battery.charging ? ", charging" : ""}`}>
+                    <BatteryIcon />
+                    <span className="os-shell-status-value">{percent}%</span>
+                </span>
+            )}
+        </div>
+    );
+});
+OSShellStatus.displayName = "OSShellStatus";
+
+/** The shell's live "agent is working" indicator; hidden whenever no agent is acting. */
+const OSShellAgentPill = memo(({ onOpen }: { onOpen: () => void }) => {
+    const presences = useAgentPresences();
+    const latest = presences[presences.length - 1];
+    if (latest == null) return null;
+    const waiting = presences.find((presence) => presence.awaitingApproval);
+    const label = describeAgentPresence(waiting ?? latest);
+    return (
+        <div className={cn("os-agent-pill", waiting && "is-waiting")} role="status" aria-live="polite">
+            <button type="button" className="os-agent-pill-main" onClick={onOpen} title={label}>
+                <span className="os-agent-pill-dot" aria-hidden="true" />
+                <span className="os-agent-pill-label">{label}</span>
+                {presences.length > 1 && <span className="os-agent-pill-count">+{presences.length - 1}</span>}
+            </button>
+            <button
+                type="button"
+                className="os-agent-pill-takeover"
+                onClick={requestAgentTakeover}
+                aria-label="Take over from the agent"
+            >
+                Take over
+            </button>
+        </div>
+    );
+});
+OSShellAgentPill.displayName = "OSShellAgentPill";
+
 function OSModeShell({
     workspaces,
     currentWorkspaceId,
@@ -681,11 +847,17 @@ function OSModeShell({
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
     const systemModel = OSSystemModel.getInstance();
     const systemEvents = useAtomValue(systemModel.eventsAtom);
+    const systemLoadState = useAtomValue(systemModel.loadStateAtom);
     const unreadActivityCount = systemEvents.filter((event) => event.readAt == null).length;
     const hermesSurface = useSyncExternalStore(
         hermesSurfaceController.subscribe,
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
+    );
+    const hudMode = useSyncExternalStore(
+        kronTermHudController.subscribe,
+        kronTermHudController.getSnapshot,
+        kronTermHudController.getSnapshot
     );
     const [clock, setClock] = useState(() => new Date());
     const wallpaper = useAtomValue(getSettingsKeyAtom("window:wallpaper" as never));
@@ -715,16 +887,35 @@ function OSModeShell({
         );
         return [...pinned, ...runningExtras, ...installedApps.slice(0, OSDockInstalledAppLimit)];
     }, [blocks, installedApps]);
-    const toggleHermesHud = useCallback(() => {
-        if (hermesSurface.presentation === "hud") {
+    const toggleHermesChat = useCallback(() => {
+        if (hermesSurface.presentation === "panel") {
             hermesSurfaceController.dismiss();
             return;
         }
-        hermesSurfaceController.requestOpenHud();
+        hermesSurfaceController.requestOpenPanel();
     }, [hermesSurface.presentation]);
+    const toggleHudMode = useCallback(() => {
+        const active = kronTermHudController.toggle();
+        if (active) {
+            hermesSurfaceController.requestOpenHud();
+        } else {
+            hermesSurfaceController.dismiss();
+        }
+    }, []);
     const toggleSystemCenter = useCallback((center: OSSystemCenter) => {
         setSystemMenuOpen(false);
         setActiveSystemCenter((current) => (current === center ? undefined : center));
+    }, []);
+    useEffect(() => {
+        const handleSystemCenterOpen = (event: Event) => {
+            const center = (event as CustomEvent<{ center?: SystemCenterTarget }>).detail?.center;
+            if (center !== "activity" && center !== "control") return;
+            setSystemMenuOpen(false);
+            setViewMenuOpen(false);
+            setActiveSystemCenter(center);
+        };
+        window.addEventListener(SystemCenterOpenEvent, handleSystemCenterOpen);
+        return () => window.removeEventListener(SystemCenterOpenEvent, handleSystemCenterOpen);
     }, []);
 
     const launchApp = useCallback(
@@ -739,7 +930,7 @@ function OSModeShell({
     );
 
     return (
-        <div className={cn("os-shell", isMacOS() && "is-macos")}>
+        <SystemMaterial material="bar" className={cn("os-shell", isMacOS() && "is-macos")}>
             <div className="os-shell-left">
                 <button
                     type="button"
@@ -769,13 +960,15 @@ function OSModeShell({
             </div>
             <div className="os-dock-bay">
                 <OSDockWingSvg />
-                <div className="os-app-dock" role="toolbar" aria-label="Applications">
+                <SystemDock className="os-app-dock" aria-label="Applications">
                     {appDescriptors.map((descriptor) => {
                         const running = descriptor.runningBlockIds.length > 0;
                         const active = running && descriptor.runningBlockIds.includes(activeBlockId ?? "");
                         return (
-                            <button
+                            <SystemButton
                                 type="button"
+                                size="large"
+                                selected={active}
                                 key={descriptor.id}
                                 className={cn(
                                     "os-dock-app",
@@ -788,23 +981,25 @@ function OSModeShell({
                                 title={descriptor.name}
                             >
                                 <AppIcon icon={descriptor.icon} />
-                            </button>
+                            </SystemButton>
                         );
                     })}
-                    <button
+                    <SystemButton
                         type="button"
+                        size="large"
                         className="os-dock-app is-add"
                         onClick={toggleCommandCenter}
                         aria-label="More applications"
                     >
                         <Plus />
-                    </button>
-                </div>
+                    </SystemButton>
+                </SystemDock>
                 <OSDockWingSvg mirrored />
             </div>
-            <div className="os-shell-right">
-                <button
+            <SystemToolbar className="os-shell-right" aria-label="System controls">
+                <SystemButton
                     type="button"
+                    size="small"
                     className="os-system-entry"
                     onClick={() => {
                         setActiveSystemCenter(undefined);
@@ -814,20 +1009,28 @@ function OSModeShell({
                     title="Command Center"
                 >
                     <Search />
-                </button>
-                <button
+                </SystemButton>
+                <SystemButton
                     type="button"
+                    size="small"
+                    selected={activeSystemCenter === "activity"}
                     className={cn("os-system-entry", activeSystemCenter === "activity" && "is-active")}
                     onClick={() => toggleSystemCenter("activity")}
-                    aria-label={`Open Activity Center${unreadActivityCount > 0 ? `, ${unreadActivityCount} unread` : ""}`}
+                    aria-label={`Open Activity Center${systemLoadState === "degraded" ? ", restoration needs attention" : unreadActivityCount > 0 ? `, ${unreadActivityCount} unread` : ""}`}
                     aria-pressed={activeSystemCenter === "activity"}
                     title="Activity Center"
                 >
                     <Bell />
-                    {unreadActivityCount > 0 && <span className="os-system-entry-badge">{unreadActivityCount}</span>}
-                </button>
-                <button
+                    {(unreadActivityCount > 0 || systemLoadState === "degraded") && (
+                        <span className="os-system-entry-badge">
+                            {systemLoadState === "degraded" ? "!" : unreadActivityCount}
+                        </span>
+                    )}
+                </SystemButton>
+                <SystemButton
                     type="button"
+                    size="small"
+                    selected={activeSystemCenter === "control"}
                     className={cn("os-system-entry", activeSystemCenter === "control" && "is-active")}
                     onClick={() => toggleSystemCenter("control")}
                     aria-label="Open Control Center"
@@ -835,18 +1038,37 @@ function OSModeShell({
                     title="Control Center"
                 >
                     <Settings2 />
-                </button>
-                <button
+                </SystemButton>
+                <OSShellAgentPill
+                    onOpen={() => {
+                        if (hermesSurface.presentation !== "panel") toggleHermesChat();
+                    }}
+                />
+                <SystemButton
                     type="button"
-                    className={cn("os-hermes-button", hermesSurface.presentation === "hud" && "is-active")}
-                    onClick={toggleHermesHud}
-                    aria-label={hermesSurface.presentation === "hud" ? "Hide Kronos" : "Show Kronos"}
-                    aria-pressed={hermesSurface.presentation === "hud"}
-                    title="Kronos"
+                    size="small"
+                    selected={hermesSurface.presentation === "panel"}
+                    className={cn("os-hermes-button", hermesSurface.presentation === "panel" && "is-active")}
+                    onClick={toggleHermesChat}
+                    aria-label={hermesSurface.presentation === "panel" ? "Hide Hermes chat" : "Open Hermes chat"}
+                    aria-pressed={hermesSurface.presentation === "panel"}
+                    title="KronTerm Agent chat"
                 >
                     <KronPetIcon />
-                </button>
-                <div className="os-view-selector">
+                </SystemButton>
+                <SystemButton
+                    type="button"
+                    size="small"
+                    selected={hudMode.active}
+                    className={cn("os-hud-mode-button", hudMode.active && "is-active")}
+                    onClick={toggleHudMode}
+                    aria-label={hudMode.active ? "Exit KronTerm HUD mode" : "Enter KronTerm HUD mode"}
+                    aria-pressed={hudMode.active}
+                    title="KronTerm HUD mode"
+                >
+                    <PanelBottom />
+                </SystemButton>
+                <SystemSegmentedControl className="os-view-selector" aria-label="Workspace view">
                     <button
                         type="button"
                         onClick={() => setViewMenuOpen((open) => !open)}
@@ -879,7 +1101,7 @@ function OSModeShell({
                         aria-haspopup="menu"
                         aria-label={`KronTerm OS view: ${osView}`}
                     >
-                        {osView === "file" ? <List /> : <Grid2X2 />}
+                        {osView === "file" ? <FolderOpen /> : <Grid2X2 />}
                         <span className="os-view-selector-label">{osView === "file" ? "File" : "Canvas"}</span>
                         <ChevronDown />
                     </button>
@@ -921,13 +1143,26 @@ function OSModeShell({
                                     setViewMenuOpen(false);
                                 }}
                             >
-                                <List />
+                                <FolderOpen />
                                 <span>File</span>
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={false}
+                                onClick={() => {
+                                    onPresentation("widgets");
+                                    setViewMenuOpen(false);
+                                }}
+                            >
+                                <List />
+                                <span>Tiles</span>
                             </button>
                         </div>
                     )}
-                </div>
+                </SystemSegmentedControl>
                 <time>{clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+                <OSShellStatus />
                 <button
                     type="button"
                     onClick={sceneKind === "freeform" ? onOverview : onFreeform}
@@ -947,9 +1182,9 @@ function OSModeShell({
                 >
                     <LayoutGrid />
                 </button>
-            </div>
+            </SystemToolbar>
             {systemMenuOpen && (
-                <section className="os-system-menu" role="dialog" aria-label="Wallpaper and layout controls">
+                <SystemPopover className="os-system-menu" aria-label="Wallpaper and layout controls">
                     <header>
                         <span>
                             <Image aria-hidden="true" />
@@ -1032,12 +1267,13 @@ function OSModeShell({
                             </span>
                         </button>
                     </div>
-                </section>
+                </SystemPopover>
             )}
             {activeSystemCenter != null && (
                 <OSSystemCenterPanel
                     center={activeSystemCenter}
                     onClose={() => setActiveSystemCenter(undefined)}
+                    onPinResource={onPinResource}
                     onFocusBlock={(blockId) => {
                         onSetOSView("canvas");
                         onFocusApp(blockId);
@@ -1064,7 +1300,7 @@ function OSModeShell({
                     })}
                 </div>
             )}
-        </div>
+        </SystemMaterial>
     );
 }
 
@@ -1080,7 +1316,7 @@ function OSGroupDivider({
     const outerWidth = Math.min(1540, viewport.width * 0.92);
     const outerHeight = Math.min(860, viewport.height * 0.78);
     const outerX = (viewport.width - outerWidth) / 2;
-    const outerY = 96 + (viewport.height - 96 - outerHeight) / 2;
+    const outerY = 72 + (viewport.height - 72 - outerHeight) / 2;
     const dividerX =
         group.side === "left"
             ? outerX + outerWidth * group.dividerRatio
@@ -1122,7 +1358,15 @@ function OSGroupDivider({
 }
 
 function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
-    const blockIds = tabData.blockids ?? [];
+    const hudMode = useSyncExternalStore(
+        kronTermHudController.subscribe,
+        kronTermHudController.getSnapshot,
+        kronTermHudController.getSnapshot
+    );
+    const allBlockIds = tabData.blockids ?? [];
+    const blockIds = hudMode.active
+        ? allBlockIds.filter((blockId) => !kronTermHudController.isIsland(blockId))
+        : allBlockIds;
     const blockIdsKey = blockIds.join(":");
     const [state, setState] = useState<OSModeState>(() =>
         makeInitialOSModeState(tabData, blockIds, resolvedViewsByBlockId(blockIds.map(readBlockDescriptor)))
@@ -1157,6 +1401,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const currentWorkspace = useAtomValue(atoms.workspace);
     const systemModel = OSSystemModel.getInstance();
     const systemLoadState = useAtomValue(systemModel.loadStateAtom);
+    const systemLayerEnabled = useAtomValue(getSettingsKeyAtom("feature:systemlayer" as never)) ?? true;
     stateRef.current = state;
 
     const descriptors = useBlockDescriptors(blockIds, blockIdsKey);
@@ -1217,9 +1462,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     useEffect(
         () =>
             subscribeAgentActivityStream((activity) => {
-                globalStore.set(osAgentActivitiesAtom, (current) =>
-                    [...current, activity].slice(-OSActivityHistoryLimit)
-                );
                 if (currentWorkspace?.oid) {
                     void systemModel.recordAgentActivity(currentWorkspace.oid, activity);
                 }
@@ -1294,6 +1536,23 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         },
         [setAndPersist]
     );
+
+    useEffect(() => {
+        const rect = rootRef.current?.getBoundingClientRect();
+        if (rect == null || rect.width < 1 || rect.height < 1) return;
+        setAndPersist((current) => {
+            const windows = Object.fromEntries(
+                Object.entries(current.windows).map(([blockId, window]) => [
+                    blockId,
+                    {
+                        ...window,
+                        bounds: recoverOSWindowBounds(window.bounds, { width: rect.width, height: rect.height }),
+                    },
+                ])
+            );
+            return { ...current, windows };
+        });
+    }, [setAndPersist, viewport.height, viewport.width]);
 
     const addObject = useCallback(
         (kind: OSCanvasObjectKind, text?: string) => {
@@ -1522,6 +1781,193 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         },
         [dispatch, tabId]
     );
+
+    const [desktopWidgetsEnabled, setDesktopWidgetsEnabled] = useState(() => readDesktopWidgetsEnabled());
+    const [dockPins, setDockPins] = useState<OSDockPin[]>(() => readOSDockPins(window.localStorage));
+    const updateDockPins = useCallback((pins: OSDockPin[]) => {
+        setDockPins(pins);
+        writeOSDockPins(window.localStorage, pins);
+    }, []);
+    const toggleDesktopWidgets = useCallback(() => {
+        setDesktopWidgetsEnabled((enabled) => {
+            writeDesktopWidgetsEnabled(!enabled);
+            return !enabled;
+        });
+    }, []);
+
+    const osWorkArea = useCallback(() => {
+        const insets = osDesktopInsetsForWidth(viewport.width, desktopWidgetsEnabled);
+        return computeOSWorkArea(viewport, { top: OSShellReservedHeight, bottom: 0, ...insets });
+    }, [desktopWidgetsEnabled, viewport]);
+
+    const placeWindow = useCallback(
+        (blockId: string, placement: OSWindowPlacement) => {
+            const current = stateRef.current;
+            const window = current.windows[blockId];
+            if (!window) return false;
+            const cameraScale = current.camera.zoom || 1;
+            const currentScreen = {
+                x: window.bounds.x * cameraScale + current.camera.x,
+                y: window.bounds.y * cameraScale + current.camera.y,
+                width: window.bounds.width * cameraScale,
+                height: window.bounds.height * cameraScale,
+            };
+            const screen = computeOSPlacementBounds(placement, osWorkArea(), currentScreen);
+            dispatch({ type: "os.view.set", view: "canvas" });
+            dispatch({ type: "os.window.setBounds", blockId, bounds: screenRectToWorld(screen, current.camera) });
+            return true;
+        },
+        [dispatch, osWorkArea]
+    );
+
+    const arrangeWindows = useCallback(
+        (arrangement: OSWindowArrangement) => {
+            const current = stateRef.current;
+            const visible = current.zOrder.filter((id) => current.windows[id] && !current.windows[id].collapsed);
+            if (visible.length === 0) return 0;
+            const rects = computeOSArrangement(arrangement, visible.length, osWorkArea());
+            dispatch({ type: "os.view.set", view: "canvas" });
+            dispatch({
+                type: "os.window.arrangeBounds",
+                bounds: Object.fromEntries(
+                    visible.map((id, index) => [id, screenRectToWorld(rects[index], current.camera)])
+                ),
+            });
+            return visible.length;
+        },
+        [dispatch, osWorkArea]
+    );
+
+    const launchDockPin = useCallback(
+        (pin: OSDockPin) => {
+            if (pin.kind === "app") {
+                const running = descriptors.find((block) => block.appStreamAppId === pin.appId);
+                if (running) {
+                    dispatch({ type: "os.view.set", view: "canvas" });
+                    dispatch({ type: "spatial.restore", blockId: running.blockId });
+                    dispatch({ type: "spatial.focus", blockId: running.blockId });
+                    return;
+                }
+                handleCreateAppStream(pin.appId, pin.name);
+                return;
+            }
+            const running = descriptors.find((block) => {
+                if (block.view !== "web") return false;
+                const url = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", block.blockId)))?.meta
+                    ?.url;
+                return typeof url === "string" && url.startsWith(pin.url);
+            });
+            dispatch({ type: "os.view.set", view: "canvas" });
+            if (running) {
+                dispatch({ type: "spatial.restore", blockId: running.blockId });
+                dispatch({ type: "spatial.focus", blockId: running.blockId });
+                return;
+            }
+            void RpcApi.CreateBlockCommand(TabRpcClient, {
+                tabid: tabId,
+                blockdef: { meta: { view: "web", url: pin.url, "frame:title": pin.name } as MetaType },
+            });
+        },
+        [descriptors, dispatch, handleCreateAppStream, tabId]
+    );
+
+    const askKronos = useCallback((text: string) => {
+        hermesSurfaceController.requestOpenPanel();
+        submitToHermes(text, "new");
+    }, []);
+
+    const showDesktopContextMenu = useCallback(
+        (event: React.MouseEvent) => {
+            const current = stateRef.current;
+            const openCount = current.zOrder.filter((id) => !current.windows[id]?.collapsed).length;
+            ContextMenuModel.getInstance().showContextMenu(
+                [
+                    {
+                        label: "New Window",
+                        submenu: [
+                            { label: "Terminal", click: () => handleCreateBlock("term") },
+                            { label: "Browser", click: () => handleCreateBlock("web") },
+                            { label: "Files", click: () => handleCreateBlock("preview") },
+                            { label: "KronTerm Agent", click: () => hermesSurfaceController.requestOpenPanel() },
+                        ],
+                    },
+                    { type: "separator" },
+                    { label: "Tile Windows", enabled: openCount > 0, click: () => arrangeWindows("tile") },
+                    { label: "Cascade Windows", enabled: openCount > 0, click: () => arrangeWindows("cascade") },
+                    {
+                        label: "Show All Windows",
+                        enabled: openCount > 0,
+                        click: () => dispatch({ type: "spatial.showOverview" }),
+                    },
+                    { type: "separator" },
+                    {
+                        label: "Show Desktop Widgets",
+                        type: "checkbox",
+                        checked: desktopWidgetsEnabled,
+                        click: toggleDesktopWidgets,
+                    },
+                    { label: "Search…", click: () => toggleCommandCenter() },
+                ],
+                event
+            );
+        },
+        [arrangeWindows, desktopWidgetsEnabled, dispatch, handleCreateBlock, toggleDesktopWidgets]
+    );
+
+    const showWindowContextMenu = useCallback(
+        (event: React.MouseEvent, blockId: string) => {
+            ContextMenuModel.getInstance().showContextMenu(
+                [
+                    {
+                        label: "Move & Resize",
+                        submenu: [
+                            { label: "Left Half", sublabel: "⌃⌥←", click: () => placeWindow(blockId, "left") },
+                            { label: "Right Half", sublabel: "⌃⌥→", click: () => placeWindow(blockId, "right") },
+                            { label: "Top Half", click: () => placeWindow(blockId, "top") },
+                            { label: "Bottom Half", click: () => placeWindow(blockId, "bottom") },
+                            { type: "separator" },
+                            { label: "Fill", sublabel: "⌃⌥↑", click: () => placeWindow(blockId, "fill") },
+                            { label: "Center", sublabel: "⌃⌥C", click: () => placeWindow(blockId, "center") },
+                        ],
+                    },
+                    { label: "Tile All Windows", click: () => arrangeWindows("tile") },
+                    { type: "separator" },
+                    { label: "Minimize", click: () => dispatch({ type: "spatial.collapse", blockId }) },
+                    { label: "Close Window", click: () => handleClose(blockId) },
+                ],
+                event
+            );
+        },
+        [arrangeWindows, dispatch, handleClose, placeWindow]
+    );
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            // ⌃⌥ + arrow is the common desktop tiling chord and rarely bound by terminals or pages.
+            if (!event.ctrlKey || !event.altKey || event.metaKey || event.shiftKey) return;
+            const current = stateRef.current;
+            const target = current.selectedEntityId;
+            if (!target || !current.windows[target]) return;
+            const placement: OSWindowPlacement | undefined =
+                event.key === "ArrowLeft"
+                    ? "left"
+                    : event.key === "ArrowRight"
+                      ? "right"
+                      : event.key === "ArrowUp" || event.key === "Enter"
+                        ? "fill"
+                        : event.key === "ArrowDown"
+                          ? "center"
+                          : event.code === "KeyC"
+                            ? "center"
+                            : undefined;
+            if (placement == null) return;
+            event.preventDefault();
+            event.stopPropagation();
+            placeWindow(target, placement);
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [placeWindow]);
 
     const handleDropApp = useCallback(
         (payload: OSAppDragPayload, worldX: number, worldY: number) => {
@@ -1814,7 +2260,41 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         ])
                     ),
                 }),
-                control: (input) => {
+                control: (rawInput) => {
+                    const input = resolveOSControlAction(rawInput);
+                    if (input.action === "os.window.maximize") {
+                        if (!input.blockid || !stateRef.current.windows[input.blockid])
+                            return { success: false, message: "OS window not found." };
+                        dispatch({ type: "os.view.set", view: "canvas" });
+                        dispatch({ type: "os.window.maximize", blockId: input.blockid });
+                        return { success: true, message: "Maximized OS window." };
+                    }
+                    if (input.action === "os.window.place") {
+                        if (!input.blockid || !stateRef.current.windows[input.blockid])
+                            return { success: false, message: "OS window not found." };
+                        if (!isOSWindowPlacement(input.position))
+                            return {
+                                success: false,
+                                message: "Position must be left, right, top, bottom, fill, or center.",
+                            };
+                        placeWindow(input.blockid, input.position);
+                        return { success: true, message: `Placed window ${input.position}.` };
+                    }
+                    if (input.action === "os.window.arrange") {
+                        const arrangement = input.position ?? "tile";
+                        if (!isOSWindowArrangement(arrangement))
+                            return { success: false, message: "Position must be tile or cascade." };
+                        const count = arrangeWindows(arrangement);
+                        return count > 0
+                            ? { success: true, message: `Arranged ${count} windows (${arrangement}).` }
+                            : { success: false, message: "No open windows to arrange." };
+                    }
+                    if (input.action === "os.window.close") {
+                        if (!input.blockid || !stateRef.current.windows[input.blockid])
+                            return { success: false, message: "OS window not found." };
+                        handleClose(input.blockid);
+                        return { success: true, message: "Closed OS window." };
+                    }
                     if (input.action === "spatial.open") {
                         if (!input.view) return { success: false, message: "View is required." };
                         handleCreateBlock(input.view);
@@ -1930,10 +2410,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             }),
         [
             addObject,
+            arrangeWindows,
             deleteObject,
             descriptors,
             dispatch,
             fitAll,
+            handleClose,
+            placeWindow,
             handleCreateAppStream,
             handleCreateBlock,
             tabId,
@@ -1943,17 +2426,39 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
 
     const activeGroup = state.scene.kind === "grouped" ? state.groups[state.scene.groupId] : undefined;
-    const liveAgentActivities = useAtomValue(osAgentActivitiesAtom);
-    const agentWorkingViews = useMemo(() => {
-        const views = new Set<string>();
-        for (const activity of liveAgentActivities) {
-            if (isAgentActivityActive(activity.phase)) {
-                const view = AgentSurfaceToView[activity.surface];
-                if (view != null) views.add(view);
-            }
-        }
-        return views;
-    }, [liveAgentActivities]);
+    const agentPresences = useAgentPresences();
+    const desktopInstalledApps = useMemo(
+        () =>
+            installedAppDescriptors
+                .filter((descriptor) => descriptor.installedAppId)
+                .map((descriptor) => ({ id: descriptor.installedAppId, name: descriptor.name, icon: descriptor.icon })),
+        [installedAppDescriptors]
+    );
+    const agentPresenceByBlock = useMemo(
+        () =>
+            assignAgentPresencesToWindows(
+                agentPresences,
+                descriptors.map((descriptor) => ({ blockId: descriptor.blockId, view: descriptor.view }))
+            ),
+        [agentPresences, descriptors]
+    );
+    const desktopActiveBlockId = state.scene.kind === "focused" ? state.scene.blockId : state.selectedEntityId;
+    const desktopWindows = useMemo(
+        () =>
+            descriptors.map((descriptor) => {
+                const presence = agentPresenceByBlock.get(descriptor.blockId);
+                return {
+                    blockId: descriptor.blockId,
+                    title: descriptor.title,
+                    subtitle: descriptor.subtitle,
+                    icon: descriptor.icon,
+                    active: desktopActiveBlockId === descriptor.blockId,
+                    minimized: !!state.windows[descriptor.blockId]?.collapsed,
+                    agentLabel: presence ? describeAgentPresence(presence) : undefined,
+                };
+            }),
+        [agentPresenceByBlock, descriptors, desktopActiveBlockId, state.windows]
+    );
     const worldTransform =
         state.scene.kind === "freeform"
             ? `translate3d(${state.camera.x}px, ${state.camera.y}px, 0) scale(${state.camera.zoom})`
@@ -1962,254 +2467,362 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const activeBlockId = state.scene.kind === "focused" ? state.scene.blockId : state.selectedEntityId;
 
     return (
-        <div
-            ref={rootRef}
-            className={cn(
-                "os-mode-root",
-                `scene-${state.scene.kind}`,
-                `view-${state.view}`,
-                reducedMotion && "reduced-motion"
-            )}
-            tabIndex={-1}
-            onPointerMove={handleRootPointerMove}
-            onPointerUp={handleRootPointerUp}
-            onPointerCancel={handleRootPointerUp}
-            onWheel={handleWheel}
-        >
-            <WorkspaceWallpaper />
-            <img className="os-wallpaper-fallback" src={KronTermOSWallpaper} alt="" aria-hidden="true" />
-            {systemLoadState === "restoring" && (
-                <div className="os-restore-status" role="status">
-                    <span className="os-restore-status-spinner" aria-hidden="true" />
-                    Restoring space
-                </div>
-            )}
-            <OSModeShell
-                workspaces={workspaces}
-                currentWorkspaceId={currentWorkspace?.oid ?? ""}
-                blocks={descriptors}
-                installedApps={installedDescriptorsWithRunning}
-                collapsedIds={blockIds.filter((id) => state.windows[id]?.collapsed)}
-                sceneKind={state.scene.kind}
-                onWorkspace={(workspaceId) => getApi().switchWorkspace(workspaceId)}
-                onCreateWorkspace={() => getApi().createWorkspace()}
-                onCreateBlock={handleCreateBlock}
-                onRestore={(blockId) => dispatch({ type: "spatial.restore", blockId })}
-                onPinResource={pinResource}
-                onOverview={() => dispatch({ type: "spatial.showOverview" })}
-                onFreeform={() => dispatch({ type: "spatial.freeform" })}
-                onPresentation={handlePresentation}
-                activeBlockId={activeBlockId}
-                osView={state.view}
-                onSetOSView={(view) => dispatch({ type: "os.view.set", view })}
-                onFocusApp={(blockId) => {
-                    dispatch({ type: "os.view.set", view: "canvas" });
-                    dispatch({ type: "spatial.focus", blockId });
-                }}
-                onCreateAppStream={handleCreateAppStream}
-            />
-            {state.view === "file" && (
-                <OSWidgetsFileView
-                    blocks={descriptors.map((descriptor) => ({
-                        ...descriptor,
-                        collapsed: state.windows[descriptor.blockId]?.collapsed,
-                    }))}
+        <SystemUIProvider enabled={systemLayerEnabled}>
+            <div
+                ref={rootRef}
+                className={cn(
+                    "os-mode-root",
+                    `scene-${state.scene.kind}`,
+                    `view-${state.view}`,
+                    reducedMotion && "reduced-motion"
+                )}
+                tabIndex={-1}
+                onPointerMove={handleRootPointerMove}
+                onPointerUp={handleRootPointerUp}
+                onPointerCancel={handleRootPointerUp}
+                onWheel={handleWheel}
+            >
+                <WorkspaceWallpaper />
+                <img className="os-wallpaper-fallback" src={KronTermOSWallpaper} alt="" aria-hidden="true" />
+                {systemLoadState === "restoring" && (
+                    <div className="os-restore-status" role="status">
+                        <span className="os-restore-status-spinner" aria-hidden="true" />
+                        Restoring space
+                    </div>
+                )}
+                <OSModeShell
+                    workspaces={workspaces}
+                    currentWorkspaceId={currentWorkspace?.oid ?? ""}
+                    blocks={descriptors}
+                    installedApps={installedDescriptorsWithRunning}
+                    collapsedIds={blockIds.filter((id) => state.windows[id]?.collapsed)}
+                    sceneKind={state.scene.kind}
+                    onWorkspace={(workspaceId) => getApi().switchWorkspace(workspaceId)}
+                    onCreateWorkspace={() => getApi().createWorkspace()}
+                    onCreateBlock={handleCreateBlock}
+                    onRestore={(blockId) => dispatch({ type: "spatial.restore", blockId })}
+                    onPinResource={pinResource}
+                    onOverview={() => dispatch({ type: "spatial.showOverview" })}
+                    onFreeform={() => dispatch({ type: "spatial.freeform" })}
+                    onPresentation={handlePresentation}
                     activeBlockId={activeBlockId}
-                    workspaceName={
-                        workspaces.find((workspace) => workspace.id === currentWorkspace?.oid)?.name ??
-                        "Current workspace"
-                    }
-                    onOpenBlock={(blockId) => {
+                    osView={state.view}
+                    onSetOSView={(view) => dispatch({ type: "os.view.set", view })}
+                    onFocusApp={(blockId) => {
                         dispatch({ type: "os.view.set", view: "canvas" });
                         dispatch({ type: "spatial.focus", blockId });
                     }}
-                    onToggleFiled={(blockId, filed) =>
-                        dispatch({ type: filed ? "spatial.collapse" : "spatial.restore", blockId })
-                    }
-                    onOpenResource={openResource}
-                    onPinResource={pinResource}
-                    onAttachResource={attachOSResourceToKronos}
+                    onCreateAppStream={handleCreateAppStream}
                 />
-            )}
-            <div
-                className="os-mode-viewport"
-                onDragOver={(event) => {
-                    if (
-                        event.dataTransfer.types.includes(OSAppDragMimeType) ||
-                        event.dataTransfer.types.includes(OSResourceDragMimeType)
-                    ) {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = "copy";
-                    }
-                }}
-                onDrop={(event) => {
-                    const resource = readOSResourceDragPayload(event.dataTransfer);
-                    if (resource != null) {
-                        event.preventDefault();
-                        const camera = stateRef.current.camera;
-                        pinResource(resource, {
-                            x: Math.max(16, (event.clientX - camera.x) / camera.zoom - 130),
-                            y: Math.max(96, (event.clientY - camera.y) / camera.zoom - 30),
-                        });
-                        return;
-                    }
-                    const payload = readOSAppDragPayload(event.dataTransfer);
-                    if (payload == null) return;
-                    event.preventDefault();
-                    const camera = stateRef.current.camera;
-                    const worldX = Math.max(16, (event.clientX - camera.x) / camera.zoom - 260);
-                    const worldY = Math.max(96, (event.clientY - camera.y) / camera.zoom - 30);
-                    handleDropApp(payload, worldX, worldY);
-                }}
-                onPointerDown={(event) => {
-                    if (
-                        state.scene.kind !== "freeform" ||
-                        event.target !== event.currentTarget ||
-                        (tool !== "hand" && event.button !== 1)
-                    )
-                        return;
-                    panRef.current = {
-                        pointerId: event.pointerId,
-                        clientX: event.clientX,
-                        clientY: event.clientY,
-                        x: state.camera.x,
-                        y: state.camera.y,
-                    };
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-            >
-                <div className="os-mode-world" style={{ transform: worldTransform }}>
-                    {state.scene.kind === "freeform" && (
-                        <>
-                            <svg className="os-connectors" aria-hidden="true">
-                                {connectorObjects.map((connector) => {
-                                    const from = state.objects.find((object) => object.id === connector.fromObjectId);
-                                    const to = state.objects.find((object) => object.id === connector.toObjectId);
-                                    if (!from || !to) return null;
-                                    return (
-                                        <line
-                                            key={connector.id}
-                                            x1={from.x + from.width / 2}
-                                            y1={from.y + from.height / 2}
-                                            x2={to.x + to.width / 2}
-                                            y2={to.y + to.height / 2}
-                                        />
-                                    );
-                                })}
-                            </svg>
-                            {state.objects.map((object) => (
-                                <OSCanvasEntity
-                                    key={object.id}
-                                    object={object}
-                                    selected={state.selectedEntityId === object.id}
-                                    zoom={state.camera.zoom}
-                                    onSelect={(id) => {
-                                        if (tool === "connector") {
-                                            if (!connectorStartId) {
-                                                setConnectorStartId(id);
-                                                setAndPersist((current) => ({ ...current, selectedEntityId: id }));
-                                                return;
-                                            }
-                                            if (connectorStartId !== id) {
-                                                setAndPersist((current) => ({
-                                                    ...current,
-                                                    objects: [
-                                                        ...current.objects,
-                                                        {
-                                                            id: `connector-${crypto.randomUUID()}`,
-                                                            kind: "connector",
-                                                            x: 0,
-                                                            y: 0,
-                                                            width: 1,
-                                                            height: 1,
-                                                            fromObjectId: connectorStartId,
-                                                            toObjectId: id,
-                                                        },
-                                                    ],
-                                                    selectedEntityId: id,
-                                                }));
-                                            }
-                                            setConnectorStartId(undefined);
-                                            setTool("select");
-                                            return;
-                                        }
-                                        setAndPersist((current) => ({ ...current, selectedEntityId: id }));
-                                    }}
-                                    onMove={(id, x, y) => updateObject(id, { x, y })}
-                                    onResize={(id, width, height) => updateObject(id, { width, height })}
-                                    onDelete={deleteObject}
-                                    onOpenResource={openResource}
-                                />
-                            ))}
-                        </>
-                    )}
-                    {descriptors.map((descriptor) => {
-                        const layout = windowLayouts[descriptor.blockId];
-                        const docked = Object.values(state.groups).some(
-                            (group) => group.sideBlockId === descriptor.blockId
-                        );
-                        return (
-                            <OSBlockWindow
-                                key={descriptor.blockId}
-                                descriptor={descriptor}
-                                layout={layout}
-                                selected={
-                                    state.selectedEntityId === descriptor.blockId ||
-                                    (state.scene.kind === "overview" &&
-                                        state.scene.selectedBlockId === descriptor.blockId)
-                                }
-                                docked={docked}
-                                agentWorking={agentWorkingViews.has(descriptor.view)}
-                                reducedMotion={reducedMotion}
-                                onFocus={focusBlock}
-                                onTitlePointerDown={(event, blockId, nextLayout) =>
-                                    beginWindowInteraction(event, blockId, nextLayout, "move")
-                                }
-                                onResizePointerDown={(event, blockId, nextLayout, edge) =>
-                                    beginWindowInteraction(event, blockId, nextLayout, "resize", edge)
-                                }
-                                onClose={handleClose}
-                                onCollapse={(blockId) => dispatch({ type: "spatial.collapse", blockId })}
-                                onToggleFocus={(blockId) =>
-                                    state.scene.kind === "focused" && state.scene.blockId === blockId
-                                        ? dispatch({ type: "spatial.freeform" })
-                                        : dispatch({ type: "spatial.focus", blockId })
-                                }
-                                onDock={dockBlock}
-                                onDetach={(blockId) => dispatch({ type: "spatial.detach", blockId })}
-                            />
-                        );
-                    })}
-                </div>
-                {dockPreview && (
-                    <div
-                        className={cn("os-dock-preview", `is-${dockPreview.side}`)}
-                        style={{
-                            top: dockPreview.targetBounds.y,
-                            left:
-                                dockPreview.side === "left"
-                                    ? dockPreview.targetBounds.x
-                                    : dockPreview.targetBounds.x + dockPreview.targetBounds.width / 2,
-                            width: dockPreview.targetBounds.width / 2,
-                            height: dockPreview.targetBounds.height,
-                        }}
-                    >
-                        <span>
-                            Dock {dockPreview.side} of {dockPreview.targetTitle}
-                        </span>
-                    </div>
+                {systemLayerEnabled && state.view === "canvas" && state.scene.kind === "freeform" && (
+                    <SystemToolbar className="os-canvas-toolbar" aria-label="Canvas tools">
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            selected={tool === "select"}
+                            onClick={() => setTool("select")}
+                            aria-label="Select"
+                            title="Select"
+                        >
+                            <MousePointer2 />
+                        </SystemButton>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            selected={tool === "hand"}
+                            onClick={() => setTool("hand")}
+                            aria-label="Pan Canvas"
+                            title="Pan Canvas"
+                        >
+                            <Hand />
+                        </SystemButton>
+                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            onClick={() => addObject("note")}
+                            aria-label="Add note"
+                            title="Add note"
+                        >
+                            <StickyNote />
+                        </SystemButton>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            onClick={() => addObject("rectangle")}
+                            aria-label="Add rectangle"
+                            title="Add rectangle"
+                        >
+                            <ShapeSquare />
+                        </SystemButton>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            onClick={() => addObject("ellipse")}
+                            aria-label="Add ellipse"
+                            title="Add ellipse"
+                        >
+                            <ShapeCircle />
+                        </SystemButton>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            onClick={() => addObject("diamond")}
+                            aria-label="Add decision"
+                            title="Add decision"
+                        >
+                            <ShapeDiamond />
+                        </SystemButton>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            selected={tool === "connector"}
+                            onClick={() => setTool("connector")}
+                            aria-label="Connect objects"
+                            title="Connect objects"
+                        >
+                            <Link2 />
+                        </SystemButton>
+                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
+                        <SystemButton type="button" size="small" onClick={fitAll} aria-label="Fit all" title="Fit all">
+                            <Focus />
+                        </SystemButton>
+                    </SystemToolbar>
                 )}
-                {activeGroup && (
-                    <OSGroupDivider
-                        group={activeGroup}
-                        viewport={viewport}
-                        onRatio={(dividerRatio) =>
-                            dispatch({ type: "spatial.setDivider", groupId: activeGroup.id, dividerRatio })
+                {state.view === "file" && (
+                    <OSWidgetsFileView
+                        blocks={descriptors.map((descriptor) => ({
+                            ...descriptor,
+                            collapsed: state.windows[descriptor.blockId]?.collapsed,
+                        }))}
+                        activeBlockId={activeBlockId}
+                        workspaceName={
+                            workspaces.find((workspace) => workspace.id === currentWorkspace?.oid)?.name ??
+                            "Current workspace"
                         }
+                        onOpenBlock={(blockId) => {
+                            dispatch({ type: "os.view.set", view: "canvas" });
+                            dispatch({ type: "spatial.focus", blockId });
+                        }}
+                        onToggleFiled={(blockId, filed) =>
+                            dispatch({ type: filed ? "spatial.collapse" : "spatial.restore", blockId })
+                        }
+                        onOpenResource={openResource}
+                        onPinResource={pinResource}
+                        onSaveResource={(resource) => void systemModel.pinArtifact(resource)}
+                        onAttachResource={attachOSResourceToKronos}
                     />
                 )}
+                <div
+                    className="os-mode-viewport"
+                    onDragOver={(event) => {
+                        if (
+                            event.dataTransfer.types.includes(OSAppDragMimeType) ||
+                            event.dataTransfer.types.includes(OSResourceDragMimeType)
+                        ) {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "copy";
+                        }
+                    }}
+                    onDrop={(event) => {
+                        const resource = readOSResourceDragPayload(event.dataTransfer);
+                        if (resource != null) {
+                            event.preventDefault();
+                            const camera = stateRef.current.camera;
+                            pinResource(resource, {
+                                x: Math.max(16, (event.clientX - camera.x) / camera.zoom - 130),
+                                y: Math.max(96, (event.clientY - camera.y) / camera.zoom - 30),
+                            });
+                            return;
+                        }
+                        const payload = readOSAppDragPayload(event.dataTransfer);
+                        if (payload == null) return;
+                        event.preventDefault();
+                        const camera = stateRef.current.camera;
+                        const worldX = Math.max(16, (event.clientX - camera.x) / camera.zoom - 260);
+                        const worldY = Math.max(96, (event.clientY - camera.y) / camera.zoom - 30);
+                        handleDropApp(payload, worldX, worldY);
+                    }}
+                    onPointerDown={(event) => {
+                        if (
+                            state.scene.kind !== "freeform" ||
+                            event.target !== event.currentTarget ||
+                            (tool !== "hand" && event.button !== 1)
+                        )
+                            return;
+                        panRef.current = {
+                            pointerId: event.pointerId,
+                            clientX: event.clientX,
+                            clientY: event.clientY,
+                            x: state.camera.x,
+                            y: state.camera.y,
+                        };
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onContextMenu={(event) => {
+                        const target = event.target as HTMLElement;
+                        const onDesktop =
+                            target === event.currentTarget ||
+                            target.classList.contains("os-mode-world") ||
+                            target.classList.contains("os-desktop-layer") ||
+                            target.classList.contains("os-desktop-column");
+                        if (!onDesktop || state.scene.kind !== "freeform") return;
+                        event.preventDefault();
+                        showDesktopContextMenu(event);
+                    }}
+                >
+                    {desktopWidgetsEnabled && state.view === "canvas" && state.scene.kind === "freeform" && (
+                        <OSDesktopLayer
+                            windows={desktopWindows}
+                            pins={dockPins}
+                            installedApps={desktopInstalledApps}
+                            onFocusWindow={(blockId) => {
+                                dispatch({ type: "spatial.restore", blockId });
+                                dispatch({ type: "spatial.focus", blockId });
+                            }}
+                            onAskKronos={askKronos}
+                            onOpenKronos={() => hermesSurfaceController.requestOpenPanel()}
+                            onLaunchPin={launchDockPin}
+                            onPinsChange={updateDockPins}
+                        />
+                    )}
+                    <div className="os-mode-world" style={{ transform: worldTransform }}>
+                        {state.scene.kind === "freeform" && (
+                            <>
+                                <svg className="os-connectors" aria-hidden="true">
+                                    {connectorObjects.map((connector) => {
+                                        const from = state.objects.find(
+                                            (object) => object.id === connector.fromObjectId
+                                        );
+                                        const to = state.objects.find((object) => object.id === connector.toObjectId);
+                                        if (!from || !to) return null;
+                                        return (
+                                            <line
+                                                key={connector.id}
+                                                x1={from.x + from.width / 2}
+                                                y1={from.y + from.height / 2}
+                                                x2={to.x + to.width / 2}
+                                                y2={to.y + to.height / 2}
+                                            />
+                                        );
+                                    })}
+                                </svg>
+                                {state.objects.map((object) => (
+                                    <OSCanvasEntity
+                                        key={object.id}
+                                        object={object}
+                                        selected={state.selectedEntityId === object.id}
+                                        zoom={state.camera.zoom}
+                                        onSelect={(id) => {
+                                            if (tool === "connector") {
+                                                if (!connectorStartId) {
+                                                    setConnectorStartId(id);
+                                                    setAndPersist((current) => ({ ...current, selectedEntityId: id }));
+                                                    return;
+                                                }
+                                                if (connectorStartId !== id) {
+                                                    setAndPersist((current) => ({
+                                                        ...current,
+                                                        objects: [
+                                                            ...current.objects,
+                                                            {
+                                                                id: `connector-${crypto.randomUUID()}`,
+                                                                kind: "connector",
+                                                                x: 0,
+                                                                y: 0,
+                                                                width: 1,
+                                                                height: 1,
+                                                                fromObjectId: connectorStartId,
+                                                                toObjectId: id,
+                                                            },
+                                                        ],
+                                                        selectedEntityId: id,
+                                                    }));
+                                                }
+                                                setConnectorStartId(undefined);
+                                                setTool("select");
+                                                return;
+                                            }
+                                            setAndPersist((current) => ({ ...current, selectedEntityId: id }));
+                                        }}
+                                        onMove={(id, x, y) => updateObject(id, { x, y })}
+                                        onResize={(id, width, height) => updateObject(id, { width, height })}
+                                        onDelete={deleteObject}
+                                        onOpenResource={openResource}
+                                    />
+                                ))}
+                            </>
+                        )}
+                        {descriptors.map((descriptor) => {
+                            const layout = windowLayouts[descriptor.blockId];
+                            const docked = Object.values(state.groups).some(
+                                (group) => group.sideBlockId === descriptor.blockId
+                            );
+                            return (
+                                <OSBlockWindow
+                                    key={descriptor.blockId}
+                                    descriptor={descriptor}
+                                    layout={layout}
+                                    selected={
+                                        state.selectedEntityId === descriptor.blockId ||
+                                        (state.scene.kind === "overview" &&
+                                            state.scene.selectedBlockId === descriptor.blockId)
+                                    }
+                                    docked={docked}
+                                    agentPresence={agentPresenceByBlock.get(descriptor.blockId)}
+                                    reducedMotion={reducedMotion}
+                                    interacting={!!dragBounds[descriptor.blockId]}
+                                    onFocus={focusBlock}
+                                    onTitlePointerDown={(event, blockId, nextLayout) =>
+                                        beginWindowInteraction(event, blockId, nextLayout, "move")
+                                    }
+                                    onResizePointerDown={(event, blockId, nextLayout, edge) =>
+                                        beginWindowInteraction(event, blockId, nextLayout, "resize", edge)
+                                    }
+                                    onClose={handleClose}
+                                    onCollapse={(blockId) => dispatch({ type: "spatial.collapse", blockId })}
+                                    onToggleFocus={(blockId) =>
+                                        state.scene.kind === "focused" && state.scene.blockId === blockId
+                                            ? dispatch({ type: "spatial.freeform" })
+                                            : dispatch({ type: "spatial.focus", blockId })
+                                    }
+                                    onDock={dockBlock}
+                                    onDetach={(blockId) => dispatch({ type: "spatial.detach", blockId })}
+                                    onTitleContextMenu={showWindowContextMenu}
+                                />
+                            );
+                        })}
+                    </div>
+                    {dockPreview && (
+                        <div
+                            className={cn("os-dock-preview", `is-${dockPreview.side}`)}
+                            style={{
+                                top: dockPreview.targetBounds.y,
+                                left:
+                                    dockPreview.side === "left"
+                                        ? dockPreview.targetBounds.x
+                                        : dockPreview.targetBounds.x + dockPreview.targetBounds.width / 2,
+                                width: dockPreview.targetBounds.width / 2,
+                                height: dockPreview.targetBounds.height,
+                            }}
+                        >
+                            <span>
+                                Dock {dockPreview.side} of {dockPreview.targetTitle}
+                            </span>
+                        </div>
+                    )}
+                    {activeGroup && (
+                        <OSGroupDivider
+                            group={activeGroup}
+                            viewport={viewport}
+                            onRatio={(dividerRatio) =>
+                                dispatch({ type: "spatial.setDivider", groupId: activeGroup.id, dividerRatio })
+                            }
+                        />
+                    )}
+                </div>
             </div>
-        </div>
+        </SystemUIProvider>
     );
 }
 

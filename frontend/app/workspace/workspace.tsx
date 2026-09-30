@@ -16,14 +16,18 @@ import {
     publishWorkspaceCanvasComposerSubmit,
     workspaceCanvasComposerContextAtom,
 } from "@/app/tab/workspace-canvas-context";
-import { isWorkspacePresentation, type WorkspacePresentation } from "@/app/tab/workspace-presentation";
+import { readWorkspacePresentation, subscribeWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import { ComputerUseStreamManager } from "@/app/view/appstream/computer-use-stream-manager";
 import { HermesHudHost, HermesPanelHost } from "@/app/view/hermes/hermes-hud-host";
 import { consumeHermesHudAutoOpen } from "@/app/view/hermes/hermes-startup";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
-import { KronarchyShell } from "@/app/workspace/kronarchy-shell";
+import { SystemCommandCenterHost } from "@/app/workspace/kronarchy-shell";
+import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
+import { KronTermHudControls } from "@/app/workspace/kronterm-hud-controls";
+import { launchKronTermHudIsland } from "@/app/workspace/kronterm-hud-islands";
 import { Widgets } from "@/app/workspace/widgets";
 import { clampHermesPanelWidth, getHermesPanelWidthBounds } from "@/app/workspace/workspace-hermes-panel";
+import { shouldRenderHermesAuxiliarySurfaces } from "@/app/workspace/workspace-hermes-surfaces";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 
 import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
@@ -32,94 +36,6 @@ import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-
-const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
-const LayoutModeStorageKey = "kronterm:layoutmode";
-
-function readWorkspacePresentation(): WorkspacePresentation {
-    const live = (window as any).__krontermLayoutMode;
-    if (isWorkspacePresentation(live)) {
-        return live;
-    }
-    try {
-        const stored = window.localStorage.getItem(LayoutModeStorageKey);
-        return isWorkspacePresentation(stored) ? stored : "widgets";
-    } catch {
-        return "widgets";
-    }
-}
-
-const BottomQuickComposer = memo(({ onOpenDock }: { onOpenDock: () => void }) => {
-    const model = WaveAIModel.getInstance();
-    const isStreaming = useAtomValue(model.isAIStreaming);
-    const currentMode = useAtomValue(model.currentAIMode);
-    const [value, setValue] = useState("");
-    const [submitting, setSubmitting] = useState(false);
-    const disabled = submitting || isStreaming;
-
-    const submit = async () => {
-        const text = value.trim();
-        if (!text || disabled) {
-            return;
-        }
-        setSubmitting(true);
-        try {
-            onOpenDock();
-            setValue("");
-            await model.sendMessage(text);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <div className="pointer-events-none fixed bottom-14 left-1/2 z-[110] w-[min(760px,calc(100vw-360px))] min-w-[420px] -translate-x-1/2">
-            <div className="pointer-events-auto rounded-2xl border border-white/15 bg-[#0b0f16e8] p-2 shadow-2xl shadow-black/45 backdrop-blur-2xl">
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={onOpenDock}
-                        className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white/75 hover:bg-white/[0.08] hover:text-white cursor-pointer"
-                    >
-                        <i className="fa-solid fa-comments text-accent" />
-                        KronosCode
-                    </button>
-                    <textarea
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                void submit();
-                            }
-                        }}
-                        rows={1}
-                        placeholder="Ask KronosCode to edit, inspect, run, or explain..."
-                        className="max-h-28 min-h-9 flex-1 resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-accent/50"
-                    />
-                    <div className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-white/45 md:flex">
-                        <span>{currentMode || "default"}</span>
-                    </div>
-                    <button
-                        type="button"
-                        disabled={!value.trim() || disabled}
-                        onClick={() => void submit()}
-                        className={cn(
-                            "flex h-9 w-10 items-center justify-center rounded-xl border cursor-pointer",
-                            !value.trim() || disabled
-                                ? "border-white/10 bg-white/[0.035] text-white/25 opacity-60"
-                                : "border-accent/40 bg-accent/20 text-accent hover:bg-accent/30"
-                        )}
-                        title={isStreaming ? "KronosCode is running" : "Send"}
-                    >
-                        <i className={cn("fa-solid", submitting ? "fa-spinner fa-spin" : "fa-arrow-up")} />
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-});
-BottomQuickComposer.displayName = "BottomQuickComposer";
 
 export const KronosChamberCanvasComposer = memo(
     ({ onOpenKronosChamber }: { onOpenKronosChamber: () => Promise<void> }) => {
@@ -168,7 +84,7 @@ export const KronosChamberCanvasComposer = memo(
             try {
                 await model.sendMessage(prompt);
             } catch (e) {
-                console.error("failed to send Kronos canvas prompt", e);
+                console.error("failed to send KronTerm Agent canvas prompt", e);
                 setValue(rawPrompt);
             } finally {
                 setSubmitting(false);
@@ -321,9 +237,9 @@ export const KronosChamberCanvasComposer = memo(
                                     }
                                 }}
                                 rows={2}
-                                placeholder="Ask Kronos or continue this task…"
+                                placeholder="Ask KronTerm Agent or continue this task…"
                                 className="max-h-28 min-h-12 w-full resize-none bg-transparent text-xs leading-5 text-white/85 outline-none placeholder:text-white/30"
-                                aria-label="Ask Kronos about the selected canvas context"
+                                aria-label="Ask KronTerm Agent about the selected canvas context"
                             />
                             <div className="mt-1 flex items-center gap-1.5 border-t border-white/[0.06] pt-2">
                                 <button
@@ -343,7 +259,7 @@ export const KronosChamberCanvasComposer = memo(
                                     <i className="fa-solid fa-globe" aria-hidden="true" />
                                 </button>
                                 <span className="ml-auto max-w-40 truncate rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-white/45">
-                                    {currentMode || "Kronos"}
+                                    {currentMode || "KronTerm Agent"}
                                 </span>
                                 <button
                                     type="submit"
@@ -354,8 +270,8 @@ export const KronosChamberCanvasComposer = memo(
                                             ? "border-white/10 bg-white/[0.035] text-white/25 opacity-60"
                                             : "border-accent/40 bg-accent/20 text-accent hover:bg-accent/30"
                                     )}
-                                    title={isStreaming ? "Kronos is working" : "Send to Kronos"}
-                                    aria-label={isStreaming ? "Kronos is working" : "Send to Kronos"}
+                                    title={isStreaming ? "KronTerm Agent is working" : "Send to KronTerm Agent"}
+                                    aria-label={isStreaming ? "KronTerm Agent is working" : "Send to KronTerm Agent"}
                                 >
                                     <i
                                         className={cn(
@@ -386,8 +302,17 @@ const WorkspaceElem = memo(() => {
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
+    const hudMode = useSyncExternalStore(
+        kronTermHudController.subscribe,
+        kronTermHudController.getSnapshot,
+        kronTermHudController.getSnapshot
+    );
     const [autoOpenHud] = useState(consumeHermesHudAutoOpen);
-    const [presentation, setPresentation] = useState(readWorkspacePresentation);
+    const presentation = useSyncExternalStore(
+        subscribeWorkspacePresentation,
+        readWorkspacePresentation,
+        readWorkspacePresentation
+    );
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const panelBounds = useMemo(
         () => getHermesPanelWidthBounds(presentation, viewportWidth),
@@ -404,19 +329,12 @@ const WorkspaceElem = memo(() => {
     });
     const panelWidthRef = useRef(panelWidth);
     panelWidthRef.current = panelWidth;
+    const renderHermesAuxiliarySurfaces = shouldRenderHermesAuxiliarySurfaces(presentation);
 
     useEffect(() => {
-        const handleLayoutModeChanged = (event: Event) => {
-            const mode = (event as CustomEvent<{ mode?: string }>).detail?.mode;
-            if (isWorkspacePresentation(mode)) {
-                setPresentation(mode);
-            }
-        };
         const handleResize = () => setViewportWidth(window.innerWidth);
-        window.addEventListener(LayoutModeChangedEvent, handleLayoutModeChanged);
         window.addEventListener("resize", handleResize);
         return () => {
-            window.removeEventListener(LayoutModeChangedEvent, handleLayoutModeChanged);
             window.removeEventListener("resize", handleResize);
         };
     }, []);
@@ -425,9 +343,39 @@ const WorkspaceElem = memo(() => {
         setPanelWidth((width) => clampHermesPanelWidth(width, panelBounds));
     }, [panelBounds]);
 
+    useEffect(() => {
+        document.documentElement.toggleAttribute("data-kronterm-hud-mode", hudMode.active);
+        getApi().setHudWindowMode(hudMode.active);
+        return () => {
+            document.documentElement.removeAttribute("data-kronterm-hud-mode");
+            if (hudMode.active) getApi().setHudWindowMode(false);
+        };
+    }, [hudMode.active]);
+
+    useEffect(() => {
+        const launchNativeHudApp = async (app: "web" | "files" | "terminal" | "widget") => {
+            try {
+                await launchKronTermHudIsland(app);
+            } catch (error) {
+                console.error(`[native-hud] could not launch ${app} island`, error);
+            }
+        };
+        const unsubscribeLaunch = getApi().onNativeHudLaunch((app) => {
+            void launchNativeHudApp(app);
+        });
+        const unsubscribeExit = getApi().onNativeHudExit(() => {
+            kronTermHudController.setActive(false);
+            hermesSurfaceController.dismiss();
+        });
+        return () => {
+            unsubscribeLaunch();
+            unsubscribeExit();
+        };
+    }, []);
+
     const expandHermes = useCallback(async () => {
         if (!tabId) {
-            throw new Error("A workspace tab is required to expand Kronos.");
+            throw new Error("A workspace tab is required to expand KronTerm Agent.");
         }
         const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
         const existingBlockId = tab?.blockids?.find((blockId) => {
@@ -458,58 +406,18 @@ const WorkspaceElem = memo(() => {
 
     return (
         <div className="flex flex-col w-full flex-grow overflow-hidden">
-            <KronarchyShell workspace={ws} activeTabId={tabId} />
-            {!isMacOS() && <TabBar key={ws.oid} workspace={ws} noTabs />}
+            <SystemCommandCenterHost workspace={ws} activeTabId={tabId} />
+            {!isMacOS() && presentation !== "os" && <TabBar key={ws.oid} workspace={ws} noTabs />}
             <div
-                className="workspace-surface-row workspace-reference-shell flex flex-row flex-grow overflow-hidden"
+                className={cn(
+                    "workspace-surface-row workspace-reference-shell flex flex-row flex-grow overflow-hidden",
+                    hudMode.active && "is-kronterm-hud-mode"
+                )}
                 data-workspace-presentation={presentation}
             >
                 <WorkspaceWallpaper />
                 <ComputerUseStreamManager />
-                {surface.presentation === "panel" && (
-                    <div className="workspace-hermes-dock" style={{ width: panelWidth }}>
-                        <HermesPanelHost tabId={tabId} />
-                        <div
-                            className="workspace-hermes-dock-resizer"
-                            role="separator"
-                            aria-label="Resize Kronos side panel"
-                            aria-orientation="vertical"
-                            aria-valuemin={panelBounds.min}
-                            aria-valuemax={panelBounds.max}
-                            aria-valuenow={panelWidth}
-                            tabIndex={0}
-                            onKeyDown={(event) => {
-                                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-                                    return;
-                                }
-                                event.preventDefault();
-                                setPanelWidth((width) =>
-                                    clampHermesPanelWidth(width + (event.key === "ArrowRight" ? 12 : -12), panelBounds)
-                                );
-                            }}
-                            onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
-                            onPointerMove={(event) => {
-                                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                    return;
-                                }
-                                const dock = event.currentTarget.parentElement?.getBoundingClientRect();
-                                if (dock) {
-                                    setPanelWidth(clampHermesPanelWidth(event.clientX - dock.left, panelBounds));
-                                }
-                            }}
-                            onPointerUp={(event) => {
-                                event.currentTarget.releasePointerCapture(event.pointerId);
-                                void RpcApi.SetMetaCommand(TabRpcClient, {
-                                    oref: WOS.makeORef("workspace", ws.oid),
-                                    meta: {
-                                        "layout:hermespanelwidth": panelWidthRef.current,
-                                    } as unknown as MetaType,
-                                });
-                            }}
-                        />
-                    </div>
-                )}
-                <main className="workspace-reference-content">
+                <main className="workspace-reference-content min-h-0 min-w-0 flex-1">
                     <ErrorBoundary key={tabId}>
                         <div className="workspace-widget-surface">
                             <div className="workspace-widget-surface-content">
@@ -525,6 +433,55 @@ const WorkspaceElem = memo(() => {
                         <ModalsRenderer />
                     </ErrorBoundary>
                 </main>
+                {renderHermesAuxiliarySurfaces && surface.presentation === "panel" && (
+                    <aside
+                        className="workspace-hermes-dock order-last flex min-w-0 overflow-hidden border-l border-border"
+                        style={{ width: panelWidth }}
+                        aria-label="KronTerm Agent inspector"
+                    >
+                        <div
+                            className="workspace-hermes-dock-resizer w-1 shrink-0 cursor-col-resize"
+                            role="separator"
+                            aria-label="Resize KronTerm Agent inspector"
+                            aria-orientation="vertical"
+                            aria-valuemin={panelBounds.min}
+                            aria-valuemax={panelBounds.max}
+                            aria-valuenow={panelWidth}
+                            tabIndex={0}
+                            onKeyDown={(event) => {
+                                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+                                    return;
+                                }
+                                event.preventDefault();
+                                setPanelWidth((width) =>
+                                    clampHermesPanelWidth(width + (event.key === "ArrowLeft" ? 12 : -12), panelBounds)
+                                );
+                            }}
+                            onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+                            onPointerMove={(event) => {
+                                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                    return;
+                                }
+                                const dock = event.currentTarget.parentElement?.getBoundingClientRect();
+                                if (dock) {
+                                    setPanelWidth(clampHermesPanelWidth(dock.right - event.clientX, panelBounds));
+                                }
+                            }}
+                            onPointerUp={(event) => {
+                                event.currentTarget.releasePointerCapture(event.pointerId);
+                                void RpcApi.SetMetaCommand(TabRpcClient, {
+                                    oref: WOS.makeORef("workspace", ws.oid),
+                                    meta: {
+                                        "layout:hermespanelwidth": panelWidthRef.current,
+                                    } as unknown as MetaType,
+                                });
+                            }}
+                        />
+                        <div className="min-w-0 flex-1">
+                            <HermesPanelHost tabId={tabId} />
+                        </div>
+                    </aside>
+                )}
                 {widgetsPanelVisible && (
                     <div className="workspace-reference-widget-catalog">
                         <Widgets
@@ -535,12 +492,17 @@ const WorkspaceElem = memo(() => {
                     </div>
                 )}
             </div>
-            <HermesHudHost
-                autoOpen={autoOpenHud || canvasComposerContext.active}
-                canvasContext={canvasComposerContext}
-                onExpand={expandHermes}
-                tabId={tabId}
-            />
+            {renderHermesAuxiliarySurfaces && (
+                <HermesHudHost
+                    autoOpen={autoOpenHud || canvasComposerContext.active}
+                    canvasContext={canvasComposerContext}
+                    onExpand={expandHermes}
+                    tabId={tabId}
+                />
+            )}
+            {hudMode.active && (
+                <KronTermHudControls onOpenWidgetCatalog={() => workspaceLayoutModel.setWidgetsPanelVisible(true)} />
+            )}
         </div>
     );
 });

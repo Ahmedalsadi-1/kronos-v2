@@ -155,7 +155,7 @@ function getWidgetLabel(widget: WidgetConfigType): string {
 
 function getWidgetDescription(widget: WidgetConfigType): string {
     if (isChatHubWidget(widget)) {
-        return "Open the canonical Kronos workspace";
+        return "Open the canonical KronTerm Agent workspace";
     }
     return widget.description || widget.label;
 }
@@ -259,6 +259,8 @@ const AppsFloatingWindow = memo(
         const [apps, setApps] = useState<LauncherAppInfo[]>([]);
         const [desktopApps, setDesktopApps] = useState<InstalledAppInfo[]>([]);
         const [loading, setLoading] = useState(true);
+        const [loadError, setLoadError] = useState<string | null>(null);
+        const [loadAttempt, setLoadAttempt] = useState(0);
         const [query, setQuery] = useState("");
         const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentApps());
         const env = useWaveEnv<WidgetsEnv>();
@@ -294,6 +296,7 @@ const AppsFloatingWindow = memo(
 
             const fetchApps = async () => {
                 setLoading(true);
+                setLoadError(null);
                 try {
                     const rpc = env.rpc as WidgetsEnv["rpc"] & {
                         ListAllAppsCommand?: (client: typeof TabRpcClient) => Promise<LauncherAppInfo[]>;
@@ -314,6 +317,11 @@ const AppsFloatingWindow = memo(
                         });
                     setApps(localApps);
                     setDesktopApps(installedApps.sort((a, b) => a.name.localeCompare(b.name)));
+                    if (waveAppsResult.status === "rejected" && desktopAppsResult.status === "rejected") {
+                        setLoadError("KronTerm could not load apps.");
+                    } else if (waveAppsResult.status === "rejected" || desktopAppsResult.status === "rejected") {
+                        setLoadError("Some apps could not be loaded.");
+                    }
                     if (waveAppsResult.status === "rejected") {
                         console.error("Failed to fetch WaveApps:", waveAppsResult.reason);
                     }
@@ -324,13 +332,14 @@ const AppsFloatingWindow = memo(
                     console.error("Failed to fetch apps:", error);
                     setApps([]);
                     setDesktopApps([]);
+                    setLoadError("KronTerm could not load apps.");
                 } finally {
                     setLoading(false);
                 }
             };
 
             fetchApps();
-        }, [isOpen]);
+        }, [env, isOpen, loadAttempt]);
 
         if (!isOpen) return null;
 
@@ -443,12 +452,43 @@ const AppsFloatingWindow = memo(
                                 <i className="fa fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
                                 <span>Loading apps</span>
                             </div>
+                        ) : loadError && apps.length === 0 && desktopApps.length === 0 ? (
+                            <div className="widget-app-launcher-state is-error" role="alert">
+                                <i className="fa-solid fa-circle-exclamation" aria-hidden="true" />
+                                <strong>Apps unavailable</strong>
+                                <span>{loadError}</span>
+                                <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+                                    Retry
+                                </button>
+                            </div>
                         ) : apps.length === 0 && desktopApps.length === 0 ? (
-                            <div className="widget-app-launcher-empty">No desktop apps found</div>
+                            <div className="widget-app-launcher-state">
+                                <i className="fa-solid fa-puzzle-piece" aria-hidden="true" />
+                                <strong>No apps installed</strong>
+                                <span>Create a KronTerm app or install a desktop app to see it here.</span>
+                                <button type="button" onClick={handleOpenBuilder}>
+                                    Open app builder
+                                </button>
+                            </div>
                         ) : filteredApps.length === 0 && filteredDesktopApps.length === 0 ? (
-                            <div className="widget-app-launcher-empty">No apps match “{query}”</div>
+                            <div className="widget-app-launcher-state">
+                                <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                                <strong>No matches</strong>
+                                <span>No apps match “{query}”.</span>
+                                <button type="button" onClick={() => setQuery("")}>
+                                    Clear search
+                                </button>
+                            </div>
                         ) : (
                             <div className="widget-app-launcher-scroll">
+                                {loadError ? (
+                                    <div className="widget-app-launcher-warning" role="status">
+                                        <span>{loadError}</span>
+                                        <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+                                            Retry
+                                        </button>
+                                    </div>
+                                ) : null}
                                 {!normalizedQuery && recentLaunchables.length > 0 ? (
                                     <>
                                         <div className="widget-app-launcher-heading">Recent</div>
@@ -477,13 +517,13 @@ const AppsFloatingWindow = memo(
                                                         <div className="widget-app-launcher-icon">
                                                             {renderIcon(
                                                                 app.icon || app.manifest?.appmeta?.icon,
-                                                                "cube",
+                                                                item.kind === "desktop"
+                                                                    ? "window-maximize"
+                                                                    : "puzzle-piece",
                                                                 app.manifest?.appmeta?.iconcolor
                                                             )}
                                                         </div>
-                                                        <div className="widget-app-launcher-label">
-                                                            {item.label}
-                                                        </div>
+                                                        <div className="widget-app-launcher-label">{item.label}</div>
                                                     </button>
                                                 );
                                             })}
@@ -509,11 +549,9 @@ const AppsFloatingWindow = memo(
                                                     onClick={() => launchDesktopApp(app)}
                                                 >
                                                     <div className="widget-app-launcher-icon">
-                                                        {renderIcon(app.icon, "cube")}
+                                                        {renderIcon(app.icon, "window-maximize")}
                                                     </div>
-                                                    <div className="widget-app-launcher-label">
-                                                        {app.name}
-                                                    </div>
+                                                    <div className="widget-app-launcher-label">{app.name}</div>
                                                 </button>
                                             ))}
                                         </div>
@@ -532,8 +570,8 @@ const AppsFloatingWindow = memo(
                                             {filteredApps.map((app) => {
                                                 const appMeta = app.manifest?.appmeta;
                                                 const displayName = app.appid.replace(/^local\//, "");
-                                                const icon = appMeta?.icon || "cube";
-                                                const iconColor = appMeta?.iconcolor || "white";
+                                                const icon = appMeta?.icon || "puzzle-piece";
+                                                const iconColor = appMeta?.iconcolor;
 
                                                 return (
                                                     <button
@@ -542,12 +580,13 @@ const AppsFloatingWindow = memo(
                                                         className="widget-app-launcher-item"
                                                         onClick={() => launchWaveApp(app)}
                                                     >
-                                                        <div style={{ color: iconColor }} className="widget-app-launcher-icon">
-                                                            {renderIcon(icon, "cube", iconColor)}
+                                                        <div
+                                                            style={{ color: iconColor }}
+                                                            className="widget-app-launcher-icon"
+                                                        >
+                                                            {renderIcon(icon, "puzzle-piece", iconColor)}
                                                         </div>
-                                                        <div className="widget-app-launcher-label">
-                                                            {displayName}
-                                                        </div>
+                                                        <div className="widget-app-launcher-label">{displayName}</div>
                                                     </button>
                                                 );
                                             })}
@@ -557,11 +596,7 @@ const AppsFloatingWindow = memo(
                             </div>
                         )}
                     </div>
-                    <button
-                        type="button"
-                        className="widget-app-launcher-footer"
-                        onClick={handleOpenBuilder}
-                    >
+                    <button type="button" className="widget-app-launcher-footer" onClick={handleOpenBuilder}>
                         <i className="fa fa-solid fa-hammer" aria-hidden="true"></i>
                         Build/Edit Apps
                     </button>
@@ -712,20 +747,29 @@ const WidgetGroupHeader = memo(
 
         if (mode === "supercompact") {
             return (
-                <div className="flex items-center justify-center w-full py-0.5 cursor-pointer" onClick={onToggleFold}>
+                <button
+                    type="button"
+                    className="widget-group-toggle flex items-center justify-center w-full py-0.5"
+                    onClick={onToggleFold}
+                    aria-expanded={!isFolded}
+                    aria-label={`${isFolded ? "Expand" : "Collapse"} ${groupInfo.label}`}
+                >
                     <div
                         className="w-3 h-1 rounded-full opacity-60"
                         style={{ backgroundColor: color }}
                         title={`${groupInfo.label}${isFolded ? ` (${count})` : ""}`}
                     />
-                </div>
+                </button>
             );
         }
 
         return (
-            <div
-                className="flex items-center w-full px-1 py-0.5 cursor-pointer group hover:bg-hoverbg/30 rounded-sm transition-colors"
+            <button
+                type="button"
+                className="widget-group-toggle flex items-center w-full px-1 py-0.5 group hover:bg-hoverbg/30 rounded-sm transition-colors"
                 onClick={onToggleFold}
+                aria-expanded={!isFolded}
+                aria-label={`${isFolded ? "Expand" : "Collapse"} ${groupInfo.label}`}
             >
                 <div className="flex items-center gap-1 min-w-0 flex-1">
                     <ChevronRight
@@ -734,7 +778,7 @@ const WidgetGroupHeader = memo(
                     />
                     {mode === "normal" && (
                         <span
-                            className="text-[9px] uppercase tracking-wider font-semibold whitespace-nowrap overflow-hidden text-ellipsis"
+                            className="text-[10px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis"
                             style={{ color: `${color}cc` }}
                         >
                             {groupInfo.label}
@@ -742,7 +786,7 @@ const WidgetGroupHeader = memo(
                     )}
                     {isFolded && <span className="text-[9px] text-muted ml-0.5">{count}</span>}
                 </div>
-            </div>
+            </button>
         );
     }
 );
@@ -1110,7 +1154,15 @@ const Widgets = memo((props: WidgetsProps) => {
                     )}
                 </div>
                 <div className="widget-catalog-scroll">
-                    {sortedGroupKeys.length === 0 && <p className="widget-catalog-empty">No matching widget</p>}
+                    {sortedGroupKeys.length === 0 && (
+                        <div className="widget-catalog-empty">
+                            <strong>No matching widgets</strong>
+                            <span>Try a shorter name or browse the full catalog.</span>
+                            <button type="button" onClick={() => setCatalogQuery("")}>
+                                Clear search
+                            </button>
+                        </div>
+                    )}
                     {sortedGroupKeys.map((groupKey) => {
                         const groupWidgetsList = groupedWidgets.get(groupKey) ?? [];
                         const group = DefaultWidgetGroups[groupKey] ?? { label: groupKey, order: 99 };
@@ -1499,7 +1551,7 @@ const Widgets = memo((props: WidgetsProps) => {
                 {env.isDev() ? (
                     <div className="flex flex-col justify-center items-center w-full py-1.5 pr-0.5 text-lg">
                         <div>
-                            <i className={makeIconClass("cube", true)}></i>
+                            <i className={makeIconClass("puzzle-piece", true)}></i>
                         </div>
                         <div className="text-xxs mt-0.5 w-full px-0.5 text-center">apps</div>
                     </div>

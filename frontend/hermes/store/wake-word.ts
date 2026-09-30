@@ -142,7 +142,7 @@ const gatewayRequester: WakeRequester = async <T>(method: string, params: Record
     const gateway = $gateway.get();
 
     if (!gateway) {
-        throw new Error("Kronos gateway unavailable");
+        throw new Error("KronTerm Agent gateway unavailable");
     }
 
     return method === "wake.start"

@@ -147,6 +147,7 @@ export function getKronosCodeBinaryCandidates(override?: string): string[] {
         override,
         resourcesPath ? path.join(resourcesPath, "agents", "kronoscode", "bin", "kronoscode") : undefined,
         path.join(process.cwd(), "agents", "kronoscode", "bin", "kronoscode"),
+        path.resolve(import.meta.dirname, "..", "..", "agents", "kronoscode", "bin", "kronoscode"),
         path.join(process.cwd(), "kronoscoder", "packages", "kronoscode", "bin", "kronoscode"),
         path.resolve(import.meta.dirname, "..", "..", "kronoscoder", "packages", "kronoscode", "bin", "kronoscode"),
         path.join(os.homedir(), ".kronoscode", "bin", "kronoscode"),

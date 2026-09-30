@@ -40,7 +40,7 @@ import { discoverRuntimePlugins } from "@hermes/contrib/runtime-loader";
 import { NEW_SESSION_TITLE, sessionTitle as storedSessionTitle } from "@hermes/lib/chat-runtime";
 import { Download, FileText, LayoutDashboard, PanelBottom, Terminal, Upload, Zap } from "@hermes/lib/icons";
 import { type KeybindContribution, KEYBINDS_AREA } from "@hermes/lib/keybinds/actions";
-import { isKronTermWidgetHost, useHermesShellMode } from "@hermes/lib/kronterm-host";
+import { isKronTermWebHost, isKronTermWidgetHost, useHermesShellMode } from "@hermes/lib/kronterm-host";
 import { setYoloEnabled } from "@hermes/lib/yolo-session";
 import { pruneComposerPopoutZones } from "@hermes/store/composer-popout";
 import {
@@ -84,11 +84,11 @@ import { $terminalTakeover, setTerminalTakeover } from "../right-sidebar/store";
 import { $workspaceIsPage } from "../routes";
 import { ShellContextMenu } from "../shell/shell-context-menu";
 
-import { FilesPane, LogsPane, ReviewPaneContent, setTitlebarToolGroup } from "./panes";
-import { ContribWiring, WiredPane } from "./wiring";
 import { TitlebarIcon } from "../shell/titlebar-icon";
-import type { TitlebarTool } from "../shell/titlebar-controls";
+import { FilesPane, LogsPane, ReviewPaneContent, setTitlebarToolGroup } from "./panes";
+import { routeKronTermLauncherAction } from "./web-pane-launcher";
 import { WidgetPickerDropdown } from "./widget-picker-dropdown";
+import { ContribWiring, WiredPane } from "./wiring";
 
 /**
  * Stripped-down app root (bb/contrib-areas) on the layout TREE model, mounting
@@ -186,7 +186,7 @@ registry.registerMany([
         id: "terminal",
         area: "panes",
         title: "terminal",
-        enabled: !isKronTermWidgetHost(),
+        enabled: true,
         // revealOnPreset: choosing a layout that places the terminal (e.g.
         // "Terminal deck") turns takeover on so the zone actually shows, instead of
         // staying collapsed behind the ⌃` toggle. height sizes the fixed track (a
@@ -441,9 +441,7 @@ discoverBundledPlugins();
 
 if (isKronTermWidgetHost()) {
     const krontermCreateWidget = (view: string) => {
-        window.dispatchEvent(
-            new CustomEvent("kronterm:create-widget", { detail: { view } })
-        );
+        routeKronTermLauncherAction(view, isKronTermWebHost());
     };
 
     setTitlebarToolGroup(
@@ -469,6 +467,13 @@ if (isKronTermWidgetHost()) {
                 icon: <TitlebarIcon name="folder" />,
                 onSelect: () => krontermCreateWidget("preview"),
                 title: "New file explorer",
+            },
+            {
+                id: "kronterm-sandbox",
+                label: "Sandbox",
+                icon: <TitlebarIcon name="desktop" />,
+                onSelect: () => krontermCreateWidget("sandbox"),
+                title: "Open sandbox desktop",
             },
             {
                 id: "kronterm-chat",
@@ -766,10 +771,12 @@ interface TitlebarSlotProps {
     area: "titleBar.center" | "titleBar.left" | "titleBar.right";
     className: string;
     style?: CSSProperties;
+    webMode?: boolean;
 }
 
-function TitlebarSlot({ area, className, style }: TitlebarSlotProps) {
-    const items = useContributions(area);
+function TitlebarSlot({ area, className, style, webMode = false }: TitlebarSlotProps) {
+    const contributions = useContributions(area);
+    const items = webMode ? contributions.filter((item) => item.id !== "kronterm-chat") : contributions;
 
     if (items.length === 0) {
         return null;
@@ -786,13 +793,13 @@ export function ContribController() {
     const sidebarOpen = useStore($sidebarOpen);
     const statusbarVisible = useStore($statusbarVisible);
     const widgetHost = isKronTermWidgetHost();
-    const { hudMode, panelMode } = useHermesShellMode();
+    const { hudMode, panelMode, webMode } = useHermesShellMode();
 
     if (panelMode) {
         return (
             <ContribWiring>
                 <section
-                    aria-label="Kronos workspace conversation"
+                    aria-label="KronTerm Agent workspace conversation"
                     className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-(--ui-bg) text-(--ui-text-primary)"
                     data-kronterm-panel-shell=""
                 >
@@ -806,7 +813,7 @@ export function ContribController() {
     // sessions, streams, submit) mounts identically, and only the shell around
     // the chat surface differs. Branching here rather than at the window entry
     // is what keeps the HUD's composer the real composer.
-    if (hudMode || isHudWindow()) {
+    if (hudMode || (!webMode && isHudWindow())) {
         return (
             <ContribWiring>
                 <HudShell />
@@ -859,10 +866,12 @@ export function ContribController() {
                                 style={{
                                     left: "max(calc(var(--workspace-left, 0px) + 0.5rem), calc(var(--titlebar-controls-left, 14px) + 2 * var(--titlebar-control-size, 24px) + 1rem))",
                                 }}
+                                webMode={webMode}
                             />
                             <TitlebarSlot
                                 area="titleBar.center"
                                 className="pointer-events-auto absolute left-1/2 top-1/2 z-10 flex w-max -translate-x-1/2 -translate-y-1/2 items-center gap-2 [-webkit-app-region:no-drag]"
+                                webMode={webMode}
                             />
                             <TitlebarSlot
                                 area="titleBar.right"
@@ -874,6 +883,7 @@ export function ContribController() {
                                         // Keep in sync with wiring.tsx's SYSTEM_TOOL_COUNT.
                                         "max(calc(var(--workspace-right, 0px) + 0.5rem), calc(var(--titlebar-tools-right, 0.75rem) + 5 * var(--titlebar-control-size, 24px) + 0.5rem))",
                                 }}
+                                webMode={webMode}
                             />
                             {isKronTermWidgetHost() && (
                                 <div

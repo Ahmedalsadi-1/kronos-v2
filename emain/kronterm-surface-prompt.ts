@@ -73,7 +73,7 @@ Operating protocol:
 4. Treat @widget:<block-id> as an explicit widget reference and inspect that block before acting.
 5. Re-snapshot after navigation or DOM changes because element refs become stale.
 6. Verify consequential actions with a fresh snapshot or content read; a tool acknowledgement is not proof.
-7. If a surface is unavailable, report it instead of guessing.
+7. If a surface is unavailable, report it instead of guessing. App, gateway, or dev-reload restarts drop tools for only seconds: before repeating an unavailable claim in any later turn, re-probe with surface_status (then workspace_snapshot) and treat a successful response as reconnected — never restate a stale disconnection from conversation history.
 8. Keep multi-step agent work legible as a top-to-bottom chain. Use sticky notes for durable summaries and connectors for explicit relationships; never intentionally overlap canvas items.
 9. For browser tasks, follow this order: reuse and control the focused open browser widget; otherwise reuse another open browser widget; open an in-widget browser tab if the existing page must be preserved; create a new browser widget only as the final fallback.
 

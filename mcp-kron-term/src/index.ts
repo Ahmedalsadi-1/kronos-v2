@@ -709,7 +709,7 @@ You have KronTerm workspace tools available through this MCP connection. Hermes 
 - Batch independent read-only calls (for example surface_status, workspace_snapshot, and a scoped widget_snapshot) in a single message instead of sequential round trips.
 - Never use sandbox_* tools to control the host, and never use kron_computer_* tools to control KronTerm blocks. Each pointer family targets exactly one surface.
 - For browser tasks, reuse the focused open browser widget first, then another open browser widget. Each widget holds one page: browser_open_tab is a navigation alias and replaces that page. To preserve it when another page is required, create a separate browser widget with browser_open(newSurface=true).
-- For assigned native background work, use only the kron_computer_background_workspace_* lifecycle, observation and action tools with the retained sessionId. New windows require human approval. These assignments override the general native app routing below; never fall back to global computer input, native tiling or a shell workaround when a group refuses an action.
+- When the user requests quiet/background native macOS work, start with the kron_computer_background_workspace_* lifecycle, observation and action tools. Retain sessionId, or list and reuse an existing assigned task. New windows require human approval. These assignments override the general native app routing below; never fall back to global computer input, native tiling or a shell workaround when a group refuses an action.
 
 ## Surface decision table
 

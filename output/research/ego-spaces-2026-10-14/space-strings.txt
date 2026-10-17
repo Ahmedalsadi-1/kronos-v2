@@ -1,0 +1,10 @@
+session_storage_namespace_id
+clone_from_session_storage_namespace_id
+../../ego/browser/ui/views/mainland/space_cleanup_menu.cc
+../../ego/browser/ui/views/animation/widget_bounds_animator.cc
+../../ego/browser/ui/mainland/space_restore_service.cc
+blink::WebViewImpl::WebViewImpl(WebViewClient *, mojom::blink::PageVisibilityState, blink::mojom::PrerenderParamPtr, std::optional<blink::FencedFrame::DeprecatedFencedFrameMode>, bool, bool, WebViewImpl *, mojo::PendingAssociatedReceiver<mojom::blink::PageBroadcast>, blink::scheduler::WebAgentGroupScheduler &, const SessionStorageNamespaceId &, std::optional<SkColor>, const base::UnguessableToken &, const ColorProviderColorMaps *, int32_t, int32_t)
+kEgoSpaceCleanupMenuItemElementId
+kEgoSpaceCountButtonElementId
+kEgoSpacesOverviewElementId
+Missing required argument: spaceId

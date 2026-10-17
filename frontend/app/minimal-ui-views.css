@@ -1,0 +1,52 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* Minimal UI — webview chrome + annotation tray quieting */
+
+.minimal-ui .webview-navigation {
+    border-bottom: 0;
+    background: var(--main-bg-color);
+}
+
+.minimal-ui .webview-omnibox {
+    border-color: rgb(from var(--text-primary-color) r g b / 0.08);
+    background: rgb(from var(--surface-raised-color) r g b / 0.4);
+
+    &:focus-within {
+        border-color: rgb(from var(--accent-color) r g b / 0.4);
+        box-shadow: none;
+    }
+}
+
+.minimal-ui .browser-annotation-tray {
+    border-color: rgb(from var(--text-primary-color) r g b / 0.08);
+    background: rgb(from var(--surface-raised-color) r g b / 0.96);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.minimal-ui .browser-annotation-tray-header {
+    border-bottom: 0;
+}
+
+.minimal-ui .browser-annotation-tray-row {
+    input,
+    select {
+        border-color: rgb(from var(--text-primary-color) r g b / 0.08);
+
+        &:focus-visible {
+            outline: 1px solid rgb(from var(--accent-color) r g b / 0.5);
+            outline-offset: -1px;
+        }
+    }
+}
+
+.minimal-ui .webview-error-inline {
+    border-color: rgb(from var(--error-color) r g b / 0.25);
+    background: rgb(from var(--surface-raised-color) r g b / 0.98);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
+}
+
+.minimal-ui .webview-error-inline-actions button {
+    border-color: rgb(from var(--text-primary-color) r g b / 0.1);
+    background: var(--surface-hover-color);
+}

@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Hermes cursor demonstration</title>
+<style>body{margin:0;background:#f5f4f0;color:#292a2e;font:17px system-ui;padding:48px}main{max-width:740px;margin:auto}h1{font-size:28px}label{display:block;margin:24px 0}input[type=text]{display:block;margin-top:8px;padding:12px;font:inherit;border:1px solid #aaa;border-radius:8px;width:80%}button{background:#313131;color:white;border:0;border-radius:8px;padding:12px 20px;font:inherit;cursor:pointer}output{display:block;min-height:60px;padding:20px;background:white;border:1px solid #ddd;border-radius:12px;margin-top:24px}li{padding:6px}</style>
+<main><h1>Hermes live browser demonstration</h1><p>Hermes will use the browser tools to fill this local form. Nothing is sent anywhere.</p>
+<form id="demo"><label>Name<input id="name" type="text" autocomplete="off"></label><label><input id="motion" type="checkbox"> Show agent cursor</label><button type="submit">Generate preview</button></form>
+<output id="result" aria-live="polite">Waiting for Hermes</output><ol id="events" aria-label="Completed actions"></ol></main>
+<script>
+const log = text => { const item=document.createElement('li');item.textContent=text;document.querySelector('#events').appendChild(item); };
+document.querySelector('#name').addEventListener('change',()=>log('Name entered'));
+document.querySelector('#motion').addEventListener('change',event=>log(event.target.checked?'Agent cursor enabled':'Agent cursor disabled'));
+document.querySelector('#demo').addEventListener('submit',event=>{event.preventDefault();document.querySelector('#result').textContent='Hello '+document.querySelector('#name').value+' — Hermes completed the live browser demo.';log('Preview generated');});
+</script></html>

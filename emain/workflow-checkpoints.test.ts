@@ -1,0 +1,72 @@
+import { execFile } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { createWorktreeCheckpoint, restoreWorktreeCheckpoint } from "./workflow-checkpoints";
+
+const exec = promisify(execFile);
+let directory: string;
+let root: string;
+let snapshot: string;
+const git = (...args: string[]) => exec("git", ["-C", root, ...args]);
+beforeEach(async () => {
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), "kronterm-checkpoint-"));
+    root = path.join(directory, "repo");
+    snapshot = path.join(directory, "checkpoint");
+    fs.mkdirSync(root);
+    await git("init");
+    fs.writeFileSync(path.join(root, "app.txt"), "initial");
+    await git("add", ".");
+    await git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture");
+});
+afterEach(() => fs.rmSync(directory, { recursive: true, force: true }));
+test("restores edits, new files and deletions in an isolated checkout", async () => {
+    fs.writeFileSync(path.join(root, "app.txt"), "before step");
+    fs.writeFileSync(path.join(root, "new.txt"), "before new");
+    await createWorktreeCheckpoint(root, snapshot);
+    fs.unlinkSync(path.join(root, "app.txt"));
+    fs.writeFileSync(path.join(root, "new.txt"), "after new");
+    fs.writeFileSync(path.join(root, "later.txt"), "later");
+    await restoreWorktreeCheckpoint(root, snapshot);
+    expect(fs.readFileSync(path.join(root, "app.txt"), "utf8")).toBe("before step");
+    expect(fs.readFileSync(path.join(root, "new.txt"), "utf8")).toBe("before new");
+    expect(fs.existsSync(path.join(root, "later.txt"))).toBe(false);
+});
+test("refuses restoration across a changed commit", async () => {
+    await createWorktreeCheckpoint(root, snapshot);
+    fs.writeFileSync(path.join(root, "app.txt"), "committed");
+    await git("add", ".");
+    await git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "changed");
+    await expect(restoreWorktreeCheckpoint(root, snapshot)).rejects.toThrow("HEAD changed");
+    expect(fs.readFileSync(path.join(root, "app.txt"), "utf8")).toBe("committed");
+});
+test("preserves staged modifications, additions and deletions", async () => {
+    fs.writeFileSync(path.join(root, "app.txt"), "staged edit");
+    fs.writeFileSync(path.join(root, "staged.txt"), "staged addition");
+    await git("add", ".");
+    await createWorktreeCheckpoint(root, snapshot);
+    fs.writeFileSync(path.join(root, "app.txt"), "later edit");
+    await git("rm", "--force", "staged.txt");
+    await restoreWorktreeCheckpoint(root, snapshot);
+    expect(fs.readFileSync(path.join(root, "app.txt"), "utf8")).toBe("staged edit");
+    expect(fs.readFileSync(path.join(root, "staged.txt"), "utf8")).toBe("staged addition");
+    await git("rm", "--force", "app.txt");
+    await createWorktreeCheckpoint(root, path.join(directory, "deleted"));
+    await git("restore", "--source=HEAD", "--staged", "--worktree", "--", "app.txt");
+    await restoreWorktreeCheckpoint(root, path.join(directory, "deleted"));
+    expect(fs.existsSync(path.join(root, "app.txt"))).toBe(false);
+});
+test("rejects a checkpoint path through a symlink before restoring", async () => {
+    await createWorktreeCheckpoint(root, snapshot);
+    const outside = path.join(directory, "outside");
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, "secret.txt"), "untouched");
+    fs.symlinkSync(outside, path.join(root, "link"));
+    const manifest = JSON.parse(fs.readFileSync(path.join(snapshot, "manifest.json"), "utf8"));
+    manifest.files.push({ file: "link/secret.txt", exists: false });
+    fs.writeFileSync(path.join(snapshot, "manifest.json"), JSON.stringify(manifest));
+    await expect(restoreWorktreeCheckpoint(root, snapshot)).rejects.toThrow("symbolic link");
+    expect(fs.readFileSync(path.join(outside, "secret.txt"), "utf8")).toBe("untouched");
+});

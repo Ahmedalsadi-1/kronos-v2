@@ -1,0 +1,265 @@
+{
+  "before": {
+    "frontmostBundleId": "com.openai.codex",
+    "accessibilityTrusted": true,
+    "screenCaptureGranted": true
+  },
+  "launch": {
+    "exitCode": 0,
+    "result": {
+      "bundleId": "com.apple.TextEdit",
+      "isActive": false,
+      "launchTime": 1792038711.8890638,
+      "name": "TextEdit",
+      "pid": 19368
+    }
+  },
+  "observation": {
+    "exitCode": 0,
+    "result": {
+      "captureUnavailable": "No shareable window for this task-owned app. Off-Space or minimized windows may be unavailable.",
+      "elements": [],
+      "isActive": false,
+      "pid": 19368,
+      "treeFingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "truncated": false,
+      "windows": []
+    }
+  },
+  "existingAppRefusal": {
+    "exitCode": 1,
+    "result": {
+      "error": "This application is already running. Background workspaces refuse existing user apps; use an app that is not running."
+    }
+  },
+  "wrongProcessRefusal": {
+    "exitCode": 1,
+    "result": {
+      "error": "Workspace app exited or changed identity. Start a new task-owned app; existing apps are never adopted."
+    }
+  },
+  "after": {
+    "frontmostBundleId": "com.openai.codex",
+    "accessibilityTrusted": true,
+    "screenCaptureGranted": true
+  },
+  "frontmostPreserved": true,
+  "cleanup": "Workspace apps preserved; no quit or close was performed.",
+  "ownedFileOpen": {
+    "exitCode": 0,
+    "result": {
+      "isActive": false,
+      "opened": true,
+      "pid": 19368
+    }
+  },
+  "ownedWindowObservation": {
+    "exitCode": 0,
+    "result": {
+      "elements": [
+        {
+          "actions": [
+            "AXRaise"
+          ],
+          "AXDescription": "",
+          "AXIdentifier": "_NS:34",
+          "AXRole": "AXWindow",
+          "AXSubrole": "AXStandardWindow",
+          "AXTitle": "kronterm-background-workspace-smoke.txt",
+          "elementId": "0",
+          "valueSettable": false
+        },
+        {
+          "actions": [
+            "AXScrollLeftByPage",
+            "AXScrollRightByPage",
+            "AXScrollUpByPage",
+            "AXScrollDownByPage"
+          ],
+          "AXDescription": "",
+          "AXIdentifier": "_NS:8",
+          "AXRole": "AXScrollArea",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.0",
+          "valueSettable": false
+        },
+        {
+          "actions": [
+            "AXShowMenu"
+          ],
+          "AXDescription": "",
+          "AXIdentifier": "First Text View",
+          "AXRole": "AXTextArea",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.0.0",
+          "value": "KronTerm background workspace smoke test.\n",
+          "valueSettable": true
+        },
+        {
+          "actions": [],
+          "AXDescription": "",
+          "AXIdentifier": "_NS:24",
+          "AXRole": "AXScrollBar",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.0.1",
+          "valueSettable": true
+        },
+        {
+          "actions": [],
+          "AXDescription": "",
+          "AXIdentifier": "_NS:27",
+          "AXRole": "AXScrollBar",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.0.2",
+          "valueSettable": true
+        },
+        {
+          "actions": [
+            "AXPress"
+          ],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXButton",
+          "AXSubrole": "AXCloseButton",
+          "AXTitle": "",
+          "elementId": "0.1",
+          "valueSettable": false
+        },
+        {
+          "actions": [
+            "AXPress",
+            "AXZoomWindow",
+            "AXShowMenu"
+          ],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXButton",
+          "AXSubrole": "AXFullScreenButton",
+          "AXTitle": "",
+          "elementId": "0.2",
+          "valueSettable": false
+        },
+        {
+          "actions": [],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXGroup",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.2.0",
+          "valueSettable": false
+        },
+        {
+          "actions": [],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXGroup",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.2.0.0",
+          "valueSettable": false
+        },
+        {
+          "actions": [
+            "AXPress"
+          ],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXButton",
+          "AXSubrole": "AXMinimizeButton",
+          "AXTitle": "",
+          "elementId": "0.3",
+          "valueSettable": false
+        },
+        {
+          "actions": [
+            "AXPress",
+            "AXShowMenu"
+          ],
+          "AXDescription": "document actions",
+          "AXIdentifier": "",
+          "AXRole": "AXMenuButton",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.4",
+          "valueSettable": false
+        },
+        {
+          "actions": [],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXImage",
+          "AXSubrole": "",
+          "AXTitle": "kronterm-background-workspace-smoke.txt",
+          "elementId": "0.5",
+          "valueSettable": false
+        },
+        {
+          "actions": [],
+          "AXDescription": "",
+          "AXIdentifier": "",
+          "AXRole": "AXStaticText",
+          "AXSubrole": "",
+          "AXTitle": "",
+          "elementId": "0.6",
+          "value": "kronterm-background-workspace-smoke.txt",
+          "valueSettable": false
+        }
+      ],
+      "isActive": false,
+      "pid": 19368,
+      "treeFingerprint": "827f6690a748b95f08c9fd1790d4703b9de25cb4314ed2c3456331acaf978ea3",
+      "truncated": false,
+      "windows": [
+        {
+          "onScreen": true,
+          "title": "kronterm-background-workspace-smoke.txt",
+          "windowId": 4746
+        },
+        {
+          "onScreen": false,
+          "title": "",
+          "windowId": 4745
+        }
+      ]
+    }
+  },
+  "afterFileOpen": {
+    "frontmostBundleId": "com.openai.codex",
+    "accessibilityTrusted": true,
+    "screenCaptureGranted": true
+  },
+  "frontmostPreservedAfterFileOpen": true,
+  "windowScreenshotPath": "output/research/ego-spaces-2026-10-14/native-window.png",
+  "sameValueAXAssignment": {
+    "exitCode": 1,
+    "result": {
+      "error": "Background accessibility action failed (-25204). No global pointer or keyboard fallback is used."
+    }
+  },
+  "staleTreeRefusal": {
+    "exitCode": 1,
+    "result": {
+      "error": "Window hierarchy, labels or bounds changed. Observe again before acting."
+    }
+  },
+  "afterAction": {
+    "frontmostBundleId": "com.openai.codex",
+    "accessibilityTrusted": true,
+    "screenCaptureGranted": true
+  },
+  "frontmostPreservedAfterAction": true,
+  "documentContentUnchanged": true,
+  "testProcessCleanup": {
+    "signal": "SIGTERM",
+    "pid": 19368,
+    "identityVerifiedBeforeCleanup": true,
+    "taskFileUnchanged": true,
+    "textEditStillRunning": false,
+    "frontmostAfterCleanup": "com.openai.codex"
+  }
+}

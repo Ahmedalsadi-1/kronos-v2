@@ -1,0 +1,72 @@
+// Copyright 2026, Command Line Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+.workspace-tab-state {
+    display: flex;
+    max-width: 360px;
+    align-items: center;
+    flex-direction: column;
+    gap: 8px;
+    padding: 28px;
+    color: var(--text-muted-color);
+    font-size: 12px;
+    text-align: center;
+
+    > i {
+        color: var(--accent-color);
+        font-size: 20px;
+    }
+
+    > strong {
+        color: var(--text-primary-color);
+        font-size: 14px;
+    }
+
+    > button {
+        cursor: pointer;
+        margin-top: 4px;
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary-color);
+        background: var(--surface-raised-color);
+        font: inherit;
+
+        &:hover,
+        &:focus-visible {
+            border-color: var(--focus-ring-color);
+            outline: none;
+        }
+    }
+
+    &.is-error > i {
+        color: var(--error-color);
+    }
+}
+
+.workspace-tab-empty {
+    display: grid;
+    width: min(720px, calc(100% - 32px));
+    max-height: calc(100% - 32px);
+    min-height: 360px;
+    grid-template-columns: minmax(180px, 0.7fr) minmax(320px, 1.3fr);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--surface-base-color);
+
+    > .workspace-tab-state {
+        justify-content: center;
+        border-right: 1px solid var(--border-color);
+    }
+}
+
+@media (max-width: 720px) {
+    .workspace-tab-empty {
+        grid-template-columns: 1fr;
+
+        > .workspace-tab-state {
+            display: none;
+        }
+    }
+}

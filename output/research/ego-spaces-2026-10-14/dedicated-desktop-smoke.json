@@ -1,0 +1,103 @@
+{
+  "frontmostBefore": 1631,
+  "desktop": {
+    "bounds": {
+      "y": 0,
+      "x": -1280,
+      "width": 1280,
+      "height": 800
+    },
+    "spaceIds": [
+      "294"
+    ],
+    "wallpaperUnavailableReason": "The owned display has no published AppKit screen.",
+    "success": true,
+    "wallpaperApplied": false,
+    "hueApplied": false,
+    "displayId": 8
+  },
+  "launch": {
+    "isActive": false,
+    "pid": 77493
+  },
+  "openFirst": {
+    "exitCode": 0,
+    "result": {
+      "isActive": false,
+      "opened": true,
+      "pid": 77493
+    }
+  },
+  "membership": [
+    {
+      "bounds": {
+        "height": 700,
+        "width": 1000,
+        "x": -1240,
+        "y": 48
+      },
+      "displayIds": [
+        8
+      ],
+      "spaceIds": [
+        "294"
+      ],
+      "title": "group-document-one.txt",
+      "windowId": 6743
+    }
+  ],
+  "observation": {
+    "elements": 12,
+    "windowIds": [
+      6743
+    ],
+    "screenshot": true,
+    "isActive": false
+  },
+  "wrongDesktop": {
+    "exitCode": 1,
+    "result": {
+      "error": "A group window moved to another macOS desktop or display. Human review is required."
+    }
+  },
+  "wrongDisplay": {
+    "exitCode": 1,
+    "result": {
+      "error": "A group window moved to another macOS desktop or display. Human review is required."
+    }
+  },
+  "openSecond": {
+    "exitCode": 0,
+    "result": {
+      "isActive": false,
+      "opened": true,
+      "pid": 77493
+    }
+  },
+  "unapprovedWindow": {
+    "pendingIds": [
+      6745
+    ],
+    "observedIds": [
+      6743
+    ],
+    "elementWindowIds": [
+      6743
+    ]
+  },
+  "unapprovedMutation": {
+    "exitCode": 1,
+    "result": {
+      "error": "An unapproved native window appeared. Human review is required before further actions."
+    }
+  },
+  "frontmostAfter": 1631,
+  "foregroundUnchanged": true,
+  "passed": true,
+  "testProcessCleanup": {
+    "pid": 77493,
+    "identityVerified": true,
+    "contentUnchanged": true
+  },
+  "displayHostStopped": true
+}

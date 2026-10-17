@@ -1,0 +1,103 @@
+{
+  "frontmostBefore": 1631,
+  "launch": {
+    "isActive": false,
+    "pid": 5435
+  },
+  "openFirst": {
+    "exitCode": 0,
+    "result": {
+      "isActive": false,
+      "opened": true,
+      "pid": 5435
+    }
+  },
+  "membership": [
+    {
+      "bounds": {
+        "height": 422,
+        "width": 656,
+        "x": 472,
+        "y": 184
+      },
+      "displayIds": [
+        1
+      ],
+      "spaceIds": [
+        "3"
+      ],
+      "title": "group-document-one.txt",
+      "windowId": 6067
+    },
+    {
+      "bounds": {
+        "height": 422,
+        "width": 656,
+        "x": 443,
+        "y": 155
+      },
+      "displayIds": [
+        1
+      ],
+      "spaceIds": [
+        "3"
+      ],
+      "title": "kronterm-background-workspace-smoke.txt",
+      "windowId": 6066
+    }
+  ],
+  "observation": {
+    "elements": 24,
+    "windowIds": [
+      6067,
+      6066
+    ],
+    "screenshot": true
+  },
+  "wrongDesktop": {
+    "exitCode": 1,
+    "result": {
+      "error": "A group window moved to another macOS desktop or display. Human review is required."
+    }
+  },
+  "wrongDisplay": {
+    "exitCode": 1,
+    "result": {
+      "error": "A group window moved to another macOS desktop or display. Human review is required."
+    }
+  },
+  "openSecond": {
+    "exitCode": 0,
+    "result": {
+      "isActive": false,
+      "opened": true,
+      "pid": 5435
+    }
+  },
+  "unapprovedWindow": {
+    "pendingIds": [
+      6074
+    ],
+    "observedIds": [
+      6067,
+      6066
+    ],
+    "elementWindowIds": [
+      6066,
+      6067
+    ]
+  },
+  "unapprovedMutation": {
+    "exitCode": 1,
+    "result": {
+      "error": "An unapproved native window appeared. Human review is required before further actions."
+    }
+  },
+  "frontmostAfter": 1631,
+  "passed": true,
+  "testProcessCleanup": {
+    "pid": 5435,
+    "identityVerified": true,
+    "contentUnchanged": true
+  }
+}

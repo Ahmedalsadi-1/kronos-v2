@@ -1,0 +1,42 @@
+.safari-browser.phone-browser {
+    display: flex;
+    flex-direction: column;
+    min-height: 65dvh;
+    padding: 0;
+    overflow: hidden;
+    background: #f8f9fb;
+    color: #18212b;
+    border-radius: 18px;
+}
+.safari-browser .safari-content { flex: 1; min-height: 42dvh; position: relative; }
+.safari-browser .safari-content[hidden] { display: none; }
+.safari-browser .safari-content iframe { width: 100%; min-height: 48dvh; height: 100%; border: 0; border-radius: 0; display: block; background: white; }
+.safari-browser .safari-content iframe[hidden] { display: none; }
+.safari-start { display: grid; justify-items: center; align-content: center; min-height: 48dvh; color: #697381; gap: 12px; }
+.safari-start > svg { width: 36px; height: 36px; }
+.safari-start h2, .safari-start p { margin: 0; }
+.safari-start h2 { font-size: 22px; color: #273343; }
+.safari-browser .safari-toolbar { padding: 10px 12px 6px; background: #edf0f5; border-top: 1px solid #dce1e9; }
+.safari-browser .safari-toolbar form { display: flex; align-items: center; gap: 8px; padding: 3px 8px 3px 12px; background: white; border-radius: 15px; box-shadow: 0 2px 8px #2333440b; }
+.safari-browser .safari-toolbar form > svg { width: 14px; height: 16px; flex: 0 0 auto; color: #727c88; }
+.safari-browser .safari-toolbar input { flex: 1; min-width: 0; width: auto; color: #18212b; background: transparent; border: 0; border-radius: 0; padding: 10px 0; font-size: 16px; text-align: center; box-shadow: none; }
+.safari-browser .safari-toolbar input:focus { text-align: left; outline: none; }
+.safari-browser button { cursor: pointer; color: #1762cb; background: transparent; border: 0; border-radius: 10px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 8px; }
+.safari-browser button:disabled { opacity: .35; }
+.safari-browser button:focus-visible { outline: 2px solid #1762cb; outline-offset: -2px; }
+.safari-browser .safari-toolbar nav { display: flex; justify-content: space-between; margin-top: 2px; }
+.safari-browser .safari-toolbar nav button { position: relative; }
+.safari-tab-count { position: absolute; bottom: 1px; right: 3px; font-size: 10px; background: #edf0f5; padding: 1px 3px; border-radius: 5px; }
+.safari-toolbar small { display: block; text-align: center; font-size: 10px; color: #6b7480; }
+.safari-browser .safari-message { padding: 8px 14px; margin: 0; font-size: 13px; background: #fff5de; color: #654714; }
+.safari-overview { min-height: 48dvh; padding: 16px; }
+.safari-overview header { display: flex; align-items: center; justify-content: space-between; }
+.safari-overview h2 { margin: 0; font-size: 20px; }
+.safari-tab-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.safari-tab-grid article { position: relative; background: white; border-radius: 14px; border: 2px solid transparent; overflow: hidden; }
+.safari-tab-grid article.is-selected { border-color: #1762cb; }
+.safari-browser .safari-tab-select { width: 100%; min-height: 150px; color: #273343; display: flex; flex-direction: column; gap: 12px; padding: 25px 12px; }
+.safari-tab-select strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.safari-tab-select span { font-size: 11px; max-width: 100%; color: #697381; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.safari-browser .safari-tab-close { position: absolute; right: 0; top: 0; color: #6b7480; }
+.safari-browser .safari-add-tab { gap: 8px; }

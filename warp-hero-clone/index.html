@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warp — Open Infrastructure for Cloud Software Factories</title>
+  <meta name="description" content="Warp — Open Infrastructure for Cloud Software Factories. Build on Warp: factories as code, any model or harness, with evals, benchmarks, and self-improvement built in.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0b0d;
+      --bg-elevated: #111317;
+      --fg: #f0f1f3;
+      --fg-muted: #8b8e96;
+      --fg-subtle: #5a5d66;
+      --accent: #00d4aa;
+      --accent-hover: #00e8bb;
+      --accent-dim: rgba(0, 212, 170, 0.12);
+      --border: #23262d;
+      --border-hover: #2d3139;
+      --card: #14161a;
+      --card-hover: #1a1d23;
+      --font-sans: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+      --transition-fast: 120ms ease;
+      --transition-base: 200ms ease;
+      --transition-slow: 350ms ease;
+      --container-max: 1200px;
+      --container-pad: 24px;
+      --nav-height: 64px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #fafafa;
+        --bg-elevated: #ffffff;
+        --fg: #14161a;
+        --fg-muted: #6a6d76;
+        --fg-subtle: #9a9dab;
+        --accent: #00a885;
+        --accent-hover: #009676;
+        --accent-dim: rgba(0, 168, 133, 0.1);
+        --border: #e4e6eb;
+        --border-hover: #d8dce3;
+        --card: #ffffff;
+        --card-hover: #f8f9fb;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      font-size: 16px;
+      font-weight: 400;
+      min-height: 100vh;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: inherit;
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Container */
+    .container {
+      width: 100%;
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: 0 var(--container-pad);
+    }
+
+    /* Navigation */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      height: var(--nav-height);
+      background: rgba(var(--bg-rgb, 10, 11, 13), 0.85);
+      backdrop-filter: saturate(180%) blur(16px);
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition-base), border-color var(--transition-base);
+    }
+
+    @supports not (backdrop-filter: blur(16px)) {
+      .nav {
+        background: var(--bg);
+      }
+    }
+
+    .nav__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+    }
+
+    .nav__brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+    }
+
+    .nav__logo {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+    }
+
+    .nav__logo svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .nav__name {
+      font-weight: 600;
+      font-size: 1.125rem;
+      letter-spacing: -0.02em;
+      color: var(--fg);
+    }
+
+    .nav__actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav__link {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--fg-muted);
+      padding: 8px 12px;
+      border-radius: var(--radius-md);
+      transition: color var(--transition-fast), background var(--transition-fast);
+    }
+
+    .nav__link:hover {
+      color: var(--fg);
+      background: var(--bg-elevated);
+    }
+
+    .nav__cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 40px;
+      padding: 0 20px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--bg);
+      background: var(--accent);
+      border-radius: var(--radius-full);
+      transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+      white-space: nowrap;
+    }
+
+    .nav__cta:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .nav__cta:active {
+      transform: translateY(0);
+    }
+
+    .nav__cta:focus-visible,
+    .nav__link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .nav__menu-btn {
+      display: none;
+      width: 40px;
+      height: 40px;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      color: var(--fg-muted);
+      transition: color var(--transition-fast), background var(--transition-fast);
+    }
+
+    .nav__menu-btn:hover {
+      color: var(--fg);
+      background: var(--bg-elevated);
+    }
+
+    .nav__menu-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      padding: calc(var(--nav-height) + 80px) 0 100px;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 170, 0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 212, 170, 0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero__grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 60px;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (min-width: 960px) {
+      .hero__grid {
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 80px;
+      }
+    }
+
+    /* Hero Content */
+    .hero__content {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    @media (min-width: 960px) {
+      .hero__content {
+        text-align: left;
+        margin: 0;
+      }
+    }
+
+    .hero__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid rgba(0, 212, 170, 0.2);
+      border-radius: var(--radius-full);
+      margin-bottom: 28px;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .hero__badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    .hero__title {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      color: var(--fg);
+      margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    .hero__title-emphasis {
+      color: var(--accent);
+    }
+
+    .hero__subtitle {
+      font-size: clamp(1.125rem, 2vw, 1.375rem);
+      font-weight: 400;
+      line-height: 1.7;
+      color: var(--fg-muted);
+      max-width: 560px;
+      margin: 0 auto 36px;
+      animation: fadeInUp 0.6s ease-out 0.2s both;
+    }
+
+    @media (min-width: 960px) {
+      .hero__subtitle {
+        margin-left: 0;
+        margin-right: auto;
+      }
+    }
+
+    .hero__ctas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: center;
+      animation: fadeInUp 0.6s ease-out 0.3s both;
+    }
+
+    @media (min-width: 960px) {
+      .hero__ctas {
+        justify-content: flex-start;
+      }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      height: 48px;
+      padding: 0 28px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      transition: all var(--transition-base);
+      white-space: nowrap;
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .btn--primary {
+      color: var(--bg);
+      background: var(--accent);
+    }
+
+    .btn--primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn--primary:active {
+      transform: translateY(0);
+    }
+
+    .btn--secondary {
+      color: var(--fg);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+
+    .btn--secondary:hover {
+      background: var(--card-hover);
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn--secondary:active {
+      transform: translateY(0);
+    }
+
+    .btn__icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      transition: transform var(--transition-fast);
+    }
+
+    .btn:hover .btn__icon {
+      transform: translateX(2px);
+    }
+
+    /* Hero Visual */
+    .hero__visual {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      animation: fadeInUp 0.8s ease-out 0.2s both;
+    }
+
+    .hero__visual-inner {
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      aspect-ratio: 1 / 0.72;
+    }
+
+    .hero__diagram {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hero__diagram-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Animated grid pattern */
+    .hero__grid-pattern {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 212, 170, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 170, 0.06) 1px, transparent 1px);
+      background-size: 40px 40px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 0%, transparent 70%);
+      -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 0%, transparent 70%);
+      animation: gridShift 20s linear infinite;
+    }
+
+    @keyframes gridShift {
+      0% { background-position: 0 0; }
+      100% { background-position: 40px 40px; }
+    }
+
+    /* Factory flow visualization */
+    .factory-flow {
+      position: absolute;
+      inset: 10%;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .factory-flow__row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .factory-flow__node {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      border-radius: var(--radius-lg);
+      background: var(--card);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      transition: all var(--transition-base);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .factory-flow__node:hover {
+      border-color: var(--accent);
+      box-shadow: 0 8px 24px rgba(0, 212, 170, 0.15), var(--shadow-md);
+      transform: translateY(-4px);
+    }
+
+    .factory-flow__node--active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      box-shadow: 0 0 0 1px var(--accent), var(--shadow-md);
+    }
+
+    .factory-flow__node--active::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: calc(var(--radius-lg) + 2px);
+      border: 1px solid var(--accent);
+      opacity: 0.3;
+      animation: ringPulse 2s ease-out infinite;
+    }
+
+    @keyframes ringPulse {
+      0% { transform: scale(1); opacity: 0.3; }
+      100% { transform: scale(1.15); opacity: 0; }
+    }
+
+    .factory-flow__icon {
+      width: 32px;
+      height: 32px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .factory-flow__label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--fg);
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .factory-flow__node--active .factory-flow__label {
+      color: var(--accent);
+    }
+
+    .factory-flow__connector {
+      position: absolute;
+      width: 2px;
+      background: linear-gradient(180deg, var(--border) 0%, var(--accent) 50%, var(--border) 100%);
+      opacity: 0.4;
+    }
+
+    .factory-flow__connector--vertical {
+      height: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .factory-flow__connector--horizontal {
+      width: 100%;
+      height: 2px;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
+      background: linear-gradient(90deg, var(--border) 0%, var(--accent) 50%, var(--border) 100%);
+    }
+
+    /* Metrics bar */
+    .hero__metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      animation: fadeInUp 0.6s ease-out 0.4s both;
+    }
+
+    @media (min-width: 960px) {
+      .hero__metrics {
+        justify-content: flex-start;
+      }
+    }
+
+    .metric {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 16px 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      transition: all var(--transition-base);
+    }
+
+    .metric:hover {
+      border-color: var(--border-hover);
+      background: var(--card-hover);
+    }
+
+    .metric__value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--fg);
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
+    }
+
+    .metric__label {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+    }
+
+    /* Trust bar */
+    .hero__trust {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      animation: fadeInUp 0.6s ease-out 0.5s both;
+    }
+
+    .trust__label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-subtle);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    @media (min-width: 960px) {
+      .trust__label {
+        text-align: left;
+      }
+    }
+
+    .trust__logos {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      opacity: 0.5;
+      transition: opacity var(--transition-base);
+    }
+
+    .trust__logos:hover {
+      opacity: 0.8;
+    }
+
+    @media (min-width: 960px) {
+      .trust__logos {
+        justify-content: flex-start;
+      }
+    }
+
+    .trust__logo {
+      height: 24px;
+      width: auto;
+      filter: grayscale(1) brightness(0) invert(1);
+      transition: filter var(--transition-base), transform var(--transition-base);
+    }
+
+    @media (prefers-color-scheme: light) {
+      .trust__logo {
+        filter: grayscale(1) brightness(0);
+      }
+    }
+
+    .trust__logo:hover {
+      filter: none;
+      transform: scale(1.1);
+    }
+
+    /* Navigation pills */
+    .hero__nav-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      animation: fadeInUp 0.6s ease-out 0.45s both;
+    }
+
+    @media (min-width: 960px) {
+      .hero__nav-pills {
+        justify-content: flex-start;
+      }
+    }
+
+    .nav-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      transition: all var(--transition-fast);
+      white-space: nowrap;
+    }
+
+    .nav-pill:hover {
+      color: var(--fg);
+      border-color: var(--border-hover);
+      background: var(--card-hover);
+    }
+
+    .nav-pill:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .nav-pill__key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      font-size: 0.625rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-radius: var(--radius-sm);
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Focus visible polyfill */
+    :focus:not(:focus-visible) {
+      outline: none;
+    }
+
+    /* Selection */
+    ::selection {
+      background: var(--accent-dim);
+      color: var(--fg);
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <div class="container nav__inner">
+      <a href="/" class="nav__brand" aria-label="Warp home">
+        <span class="nav__logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="currentColor"/>
+            <path d="M8 12h16M8 16h12M8 20h8" stroke="var(--bg)" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav__name">Warp</span>
+      </a>
+
+      <div class="nav__actions">
+        <a href="/docs" class="nav__link">Docs</a>
+        <a href="/blog" class="nav__link">Blog</a>
+        <a href="/community" class="nav__link">Community</a>
+        <a href="/pricing" class="nav__link">Pricing</a>
+        <a href="/enterprise" class="nav__link">Enterprise</a>
+        <a href="/get-started" class="nav__cta">Get Started</a>
+        <button class="nav__menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="container">
+      <div class="hero__grid">
+        <!-- Hero Content -->
+        <div class="hero__content">
+          <div class="hero__badge" aria-label="New release">
+            <span class="hero__badge-dot" aria-hidden="true"></span>
+            <span>Factories GA — Now available to all teams</span>
+          </div>
+
+          <h1 id="hero-title" class="hero__title">
+            Open infrastructure for<br>
+            <span class="hero__title-emphasis">cloud software factories</span>
+          </h1>
+
+          <p class="hero__subtitle">
+            Build on Warp: factories as code, any model or harness, with evals, benchmarks, and self-improvement built in.
+          </p>
+
+          <div class="hero__ctas">
+            <a href="/get-started" class="btn btn--primary">
+              Get Started
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </a>
+            <a href="/download" class="btn btn--secondary">
+              Download Warp Terminal
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- Metrics -->
+          <div class="hero__metrics" role="list" aria-label="Key metrics">
+            <div class="metric" role="listitem">
+              <span class="metric__value">800k+</span>
+              <span class="metric__label">Developers</span>
+            </div>
+            <div class="metric" role="listitem">
+              <span class="metric__value">1.4M+</span>
+              <span class="metric__label">PRs Shipped</span>
+            </div>
+            <div class="metric" role="listitem">
+              <span class="metric__value">224k</span>
+              <span class="metric__label">Tasks Queued</span>
+            </div>
+            <div class="metric" role="listitem">
+              <span class="metric__value">4</span>
+              <span class="metric__label">Active Agents</span>
+            </div>
+          </div>
+
+          <!-- Trust logos -->
+          <div class="hero__trust" aria-label="Trusted by">
+            <p class="trust__label">Trusted by 800k+ devs at</p>
+            <div class="trust__logos" role="img" aria-label="GitHub, Amazon, Asana, Nvidia, Retool, VMware, Ramp, DoorDash">
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="GitHub"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">GitHub</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="Amazon"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">Amazon</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="Asana"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">Asana</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="Nvidia"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">Nvidia</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="Retool"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">Retool</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="VMware"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">VMware</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="Ramp"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">Ramp</text></svg>
+              <svg class="trust__logo" viewBox="0 0 100 30" aria-label="DoorDash"><text x="50" y="20" font-size="18" font-weight="bold" text-anchor="middle" fill="currentColor">DoorDash</text></svg>
+            </div>
+          </div>
+
+          <!-- Navigation pills -->
+          <div class="hero__nav-pills" role="navigation" aria-label="Factory sections">
+            <button class="nav-pill" type="button" aria-label="Configuration">
+              <span class="nav-pill__key">C</span> Configuration
+            </button>
+            <button class="nav-pill" type="button" aria-label="SDLC">
+              <span class="nav-pill__key">S</span> SDLC
+            </button>
+            <button class="nav-pill" type="button" aria-label="Quality loop">
+              <span class="nav-pill__key">Q</span> Quality loop
+            </button>
+            <button class="nav-pill" type="button" aria-label="Enterprise">
+              <span class="nav-pill__key">E</span> Enterprise
+            </button>
+            <button class="nav-pill" type="button" aria-label="Layers">
+              <span class="nav-pill__key">L</span> Layers
+            </button>
+            <button class="nav-pill" type="button" aria-label="Governance">
+              <span class="nav-pill__key">G</span> Governance
+            </button>
+            <button class="nav-pill" type="button" aria-label="FAQ">
+              <span class="nav-pill__key">F</span> FAQ
+            </button>
+          </div>
+        </div>
+
+        <!-- Hero Visual -->
+        <div class="hero__visual" aria-hidden="true">
+          <div class="hero__visual-inner">
+            <!-- Animated grid background -->
+            <div class="hero__grid-pattern"></div>
+
+            <!-- Factory flow diagram -->
+            <div class="factory-flow" role="img" aria-label="Factory workflow: Definition → Agents → Automations → Runners → Skills → Webhooks → Scorers → Benchmarks">
+              <!-- Row 1: Definition -->
+              <div class="factory-flow__row">
+                <div class="factory-flow__node factory-flow__node--active">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                  <span class="factory-flow__label">factory.yaml</span>
+                </div>
+              </div>
+
+              <div class="factory-flow__connector factory-flow__connector--vertical"></div>
+
+              <!-- Row 2: Core components -->
+              <div class="factory-flow__row">
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                    <path d="M8 21h8M12 17v4"/>
+                  </svg>
+                  <span class="factory-flow__label">Agents</span>
+                </div>
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  <span class="factory-flow__label">Automations</span>
+                </div>
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                    <path d="M8 21h8M12 17v4"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                  </svg>
+                  <span class="factory-flow__label">Runners</span>
+                </div>
+              </div>
+
+              <div class="factory-flow__connector factory-flow__connector--vertical"></div>
+
+              <!-- Row 3: Extended components -->
+              <div class="factory-flow__row">
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                  </svg>
+                  <span class="factory-flow__label">Skills</span>
+                </div>
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                  </svg>
+                  <span class="factory-flow__label">Webhooks</span>
+                </div>
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 20V10M12 20V4M6 20v-6"/>
+                  </svg>
+                  <span class="factory-flow__label">Scorers</span>
+                </div>
+                <div class="factory-flow__node">
+                  <svg class="factory-flow__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                  </svg>
+                  <span class="factory-flow__label">Benchmarks</span>
+                </div>
+              </div>
+
+              <!-- Connector lines between nodes in rows -->
+              <div class="factory-flow__connector factory-flow__connector--horizontal" style="top: 104px; left: 176px; width: 112px;"></div>
+              <div class="factory-flow__connector factory-flow__connector--horizontal" style="top: 104px; left: 304px; width: 112px;"></div>
+              <div class="factory-flow__connector factory-flow__connector--horizontal" style="top: 228px; left: 112px; width: 112px;"></div>
+              <div class="factory-flow__connector factory-flow__connector--horizontal" style="top: 228px; left: 240px; width: 112px;"></div>
+              <div class="factory-flow__connector factory-flow__connector--horizontal" style="top: 228px; left: 368px; width: 112px;"></div>
+            </div>
+
+            <!-- Decorative accent ring -->
+            <svg class="hero__diagram-svg" viewBox="0 0 520 374" aria-hidden="true">
+              <defs>
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+                  <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+              <!-- Subtle orbit paths -->
+              <ellipse cx="260" cy="187" rx="180" ry="100" fill="none" stroke="var(--accent)" stroke-width="0.5" opacity="0.08" style="animation: rotate 60s linear infinite; transform-origin: 260px 187px;"/>
+              <ellipse cx="260" cy="187" rx="140" ry="75" fill="none" stroke="var(--accent)" stroke-width="0.5" opacity="0.05" style="animation: rotate 40s linear infinite reverse; transform-origin: 260px 187px;"/>
+            </svg>
+
+            <style>
+              @keyframes rotate {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+              }
+            </style>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Mobile menu toggle
+    const menuBtn = document.querySelector('.nav__menu-btn');
+    if (menuBtn) {
+      menuBtn.addEventListener('click', () => {
+        const expanded = menuBtn.getAttribute('aria-expanded') === 'true';
+        menuBtn.setAttribute('aria-expanded', !expanded);
+      });
+    }
+
+    // IntersectionObserver for scroll animations (progressive enhancement)
+    if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.style.animationPlayState = 'running';
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+      document.querySelectorAll('[style*="animation"]').forEach(el => {
+        el.style.animationPlayState = 'paused';
+        observer.observe(el);
+      });
+    }
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

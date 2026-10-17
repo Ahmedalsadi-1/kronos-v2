@@ -1,0 +1,78 @@
+{
+  "before": {
+    "frontmostBundleId": "com.openai.codex",
+    "accessibilityTrusted": true,
+    "screenCaptureGranted": true
+  },
+  "launch": {
+    "exitCode": 0,
+    "result": {
+      "bundleId": "com.apple.TextEdit",
+      "isActive": false,
+      "launchTime": 1792038711.8890638,
+      "name": "TextEdit",
+      "pid": 19368
+    }
+  },
+  "existingAppRefusal": {
+    "exitCode": 1,
+    "result": {
+      "error": "This application is already running. Background workspaces refuse existing user apps; use an app that is not running."
+    }
+  },
+  "wrongProcessRefusal": {
+    "exitCode": 1,
+    "result": {
+      "error": "Workspace app exited or changed identity. Start a new task-owned app; existing apps are never adopted."
+    }
+  },
+  "ownedFileOpen": {
+    "exitCode": 0,
+    "result": {
+      "isActive": false,
+      "opened": true,
+      "pid": 19368
+    }
+  },
+  "sameValueAXAssignment": {
+    "exitCode": 1,
+    "result": {
+      "error": "Background accessibility action failed (-25204). No global pointer or keyboard fallback is used."
+    }
+  },
+  "staleTreeRefusal": {
+    "exitCode": 1,
+    "result": {
+      "error": "Window hierarchy, labels or bounds changed. Observe again before acting."
+    }
+  },
+  "afterAction": {
+    "frontmostBundleId": "com.openai.codex",
+    "accessibilityTrusted": true,
+    "screenCaptureGranted": true
+  },
+  "frontmostPreservedAfterAction": true,
+  "documentContentUnchanged": true,
+  "testProcessCleanup": {
+    "signal": "SIGTERM",
+    "pid": 19368,
+    "identityVerifiedBeforeCleanup": true,
+    "taskFileUnchanged": true,
+    "textEditStillRunning": false,
+    "frontmostAfterCleanup": "com.openai.codex"
+  },
+  "windowObservation": {
+    "windowCount": 2,
+    "elementCount": 13,
+    "screenshotCaptured": true,
+    "imagePath": "output/research/ego-spaces-2026-10-14/native-window.png",
+    "captureUnavailable": null
+  },
+  "build": {
+    "swiftBuildExitCode": 0,
+    "codesignExitCode": 0,
+    "mcpBuildExitCode": 0,
+    "targetedMCPTestsPassed": 15,
+    "nativeBridgeTestsPassed": 23
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "KronTerm Mobile Quality"
+  short_description: "Polish the Capacitor iPhone Labs client"
+  default_prompt: "Use $kronterm-mobile-quality to improve and verify a bounded KronTerm iPhone Labs workflow."

@@ -1,1 +1,2 @@
 * text=auto eol=lf
+assets/assets-for-editing/*.mov filter=lfs diff=lfs merge=lfs -text

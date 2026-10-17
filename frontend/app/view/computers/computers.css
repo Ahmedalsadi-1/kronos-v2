@@ -1,0 +1,306 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.kt-computers-host {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    container-type: inline-size;
+}
+.kt-computers {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    font:
+        400 13px/1.4 -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    color: var(--kt-label, var(--main-text-color));
+    background: var(--kt-content, var(--main-bg-color));
+}
+.kt-computers-toolbar {
+    gap: 8px;
+    padding: 8px 12px;
+    flex-shrink: 0;
+}
+.kt-computers-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+.kt-computers-picker select {
+    min-width: 0;
+    width: 100%;
+    max-width: 340px;
+    padding: 6px 4px;
+    color: inherit;
+    background: var(--kt-content);
+    border: 0;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    text-overflow: ellipsis;
+}
+.kt-computers-status {
+    color: var(--kt-label-secondary, var(--secondary-text-color));
+    font-size: 11px;
+    white-space: nowrap;
+}
+.kt-computers button {
+    cursor: pointer;
+}
+.kt-computers-toolbar button,
+.kt-computers-controls button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.kt-computers-owner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--kt-label-secondary);
+    flex-shrink: 0;
+}
+.kt-computers-screen {
+    flex: 1;
+    min-height: 120px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 18px 18px 30px;
+    overflow: hidden;
+    background: var(--kt-fill);
+}
+.kt-computers-screen > img,
+.kt-computers-tap img {
+    max-height: 100%;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 18px;
+}
+.kt-computers-tap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 100%;
+    max-height: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+}
+.kt-computers-capture-label {
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    right: 12px;
+    text-align: center;
+    color: var(--kt-label-secondary);
+    font-size: 10px;
+    pointer-events: none;
+}
+.kt-computers-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 12px;
+    max-width: 280px;
+}
+.kt-computers-empty h1 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+.kt-computers p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--kt-label-secondary, var(--secondary-text-color));
+}
+.kt-computers-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    flex-shrink: 0;
+}
+.kt-computers-keyboard {
+    display: flex;
+    gap: 8px;
+    padding: 0 12px 8px;
+    flex-shrink: 0;
+}
+.kt-computers-keyboard input {
+    flex: 1;
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 10px;
+    color: var(--kt-label);
+    background: var(--kt-content);
+    border: 1px solid var(--kt-separator);
+    border-radius: 8px;
+}
+.kt-computers-error {
+    padding: 8px 12px;
+    color: var(--kt-danger, #b00020);
+    font-size: 12px;
+    max-height: 96px;
+    overflow: auto;
+    flex-shrink: 0;
+}
+.kt-computers-setup {
+    border-top: 1px solid var(--kt-separator);
+    padding: 8px 12px;
+    font-size: 11px;
+    flex-shrink: 0;
+    max-height: 140px;
+    overflow: auto;
+}
+.kt-computers-setup summary {
+    color: var(--kt-label-secondary);
+}
+.kt-computers-setup summary span {
+    float: right;
+    font-size: 10px;
+}
+.kt-computers-setup p {
+    margin-top: 8px;
+    line-height: 1.5;
+}
+.kt-computers :is(select, input, summary, .kt-computers-tap):focus-visible {
+    outline: 2px solid var(--kt-focus-ring);
+    outline-offset: 2px;
+}
+@container (max-width: 440px) {
+    .kt-computers-status {
+        display: none;
+    }
+    .kt-computers-toolbar {
+        padding-inline: 8px;
+        gap: 4px;
+    }
+    .kt-computers-picker {
+        gap: 4px;
+    }
+    .kt-computers-screen {
+        padding: 12px 12px 28px;
+    }
+}
+
+.kt-computers-compact .kt-computers-screen {
+    padding: 12px;
+}
+
+.kt-computers-compact {
+    width: 100%;
+    max-width: 390px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin-inline: auto;
+    background: #141416;
+    color: #f5f6f8;
+    --kt-label: #f5f6f8;
+    --kt-label-secondary: #8e939c;
+    --kt-content: #141416;
+    --kt-fill: #141416;
+}
+.kt-computers-compact .kt-computers-empty {
+    gap: 10px;
+    padding-inline: 20px;
+}
+.kt-computers-compact .kt-computers-controls {
+    gap: 4px;
+    padding: 6px;
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.kt-computers-screen:has(.kt-device-selection) {
+    display: block;
+    overflow: auto;
+    padding: 12px;
+}
+.kt-device-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+}
+.kt-device-selection-settings,
+.kt-device-selection-review {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+.kt-device-selection label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+.kt-device-selection :is(input, select) {
+    min-width: 0;
+    min-height: 32px;
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--kt-separator);
+    border-radius: 8px;
+    background: var(--kt-content);
+    color: var(--kt-label);
+    font: inherit;
+}
+.kt-device-selection-frame {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+    line-height: 0;
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+}
+.kt-device-selection-frame img {
+    display: block;
+    max-width: 100%;
+    max-height: 300px;
+    width: auto;
+    height: auto;
+    pointer-events: none;
+}
+.kt-device-selection-region {
+    position: absolute;
+    border: 2px solid var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+    pointer-events: none;
+}
+.kt-device-selection-preview {
+    align-self: flex-start;
+    max-width: 100%;
+    max-height: 100px;
+    object-fit: contain;
+}
+.kt-device-selection-actions {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.kt-device-selection-frame:focus-visible {
+    outline: 2px solid var(--kt-focus-ring);
+    outline-offset: 2px;
+}

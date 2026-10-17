@@ -1,0 +1,54 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.native-island-shell {
+    color: var(--kt-label);
+    background: var(--kt-content);
+    border-color: var(--kt-separator);
+    border-radius: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.native-island-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: 44px;
+    flex-shrink: 0;
+    padding-left: 14px;
+    background: var(--kt-bar);
+    border-bottom: 1px solid var(--kt-separator);
+}
+.native-island-titlebar strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 500;
+}
+.native-island-controls {
+    color: var(--kt-label);
+    background: var(--kt-bar);
+    border-radius: 8px;
+}
+.native-island-control {
+    border: 0;
+    color: inherit;
+    background: transparent;
+}
+.native-island-control:hover {
+    background: var(--kt-fill-hover);
+}
+.native-island-control:focus-visible {
+    outline: 2px solid var(--kt-focus-ring);
+    outline-offset: 1px;
+}
+.native-island-error {
+    color: var(--kt-label);
+    background: var(--kt-popover);
+    border: 1px solid var(--kt-separator);
+}
+.native-island-shell[data-island-presentation="docked"] {
+    border-radius: 0;
+}

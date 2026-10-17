@@ -286,3 +286,12 @@ def test_lost_mutation_receipt_stays_uncertain_when_response_is_malformed(monkey
         result = json.loads(plugin._handler("widget_type")({"text": "once"}))
         assert result["failure"]["uncertain"] is True
         assert result["failure"]["retryable"] is False
+
+
+def test_non_object_arguments_fail_before_transport(monkeypatch):
+    plugin = _load_plugin()
+    calls = []
+    monkeypatch.setattr(plugin, "_bridge_request", lambda payload: calls.append(payload))
+    for value in [None, [], "bad", 3]:
+        assert "must be an object" in json.loads(plugin._handler("tool_search")(value))["error"]
+    assert calls == []

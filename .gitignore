@@ -71,3 +71,9 @@ website/.next/
 
 # Personal Coucou build (restricted upstream character and sound assets).
 /.local/coucou-hud/
+
+# Machine-local browser profiles, reference checkouts, and tool session history.
+/.local/
+/.hyperframes/
+/.playwright-cli/
+/orca/

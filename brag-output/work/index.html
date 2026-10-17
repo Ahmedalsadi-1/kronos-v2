@@ -1,0 +1,483 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: Inter; src: url(inter-variable.woff2) format("woff2"); font-weight: 100 900; }
+@font-face { font-family: JB; src: url(jetbrains-mono-v13-latin-regular.woff2) format("woff2"); font-weight: 400; }
+@font-face { font-family: JB; src: url(jetbrains-mono-v13-latin-700.woff2) format("woff2"); font-weight: 700; }
+:root { --g: #58C142; --g2: #418D31; --g3: #1F4D22; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #060706; }
+body { font-family: Inter, sans-serif; color: #eef2ee; -webkit-font-smoothing: antialiased; }
+#root { position: absolute; inset: 0; overflow: hidden; }
+.abs { position: absolute; }
+.bg-grid { position: absolute; inset: -80px; background-image: radial-gradient(rgba(255,255,255,0.075) 1.3px, transparent 1.4px); background-size: 34px 34px; }
+.glow { position: absolute; border-radius: 50%; filter: blur(90px); }
+.scene { position: absolute; inset: 0; will-change: opacity, transform; }
+.h1 { font-weight: 720; letter-spacing: -0.035em; line-height: 1.02; }
+.mono { font-family: JB, monospace; }
+.g { color: var(--g); }
+.dim { color: #8a948b; }
+
+/* windows */
+.win { position: absolute; background: #0f1110; border: 1px solid #262b27; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.4); transform-origin: 50% 50%; }
+.win.active { border-color: rgba(88,193,66,0.75); box-shadow: 0 30px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(88,193,66,0.25), 0 0 40px rgba(88,193,66,0.12); }
+.whead { height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #1f2320;
+  font-size: 15px; font-weight: 600; color: #c9d1ca; background: #121513; white-space: nowrap; }
+.wbody { position: absolute; top: 38px; left: 0; width: 900px; height: 800px; padding: 16px 18px; }
+.ico { width: 18px; height: 18px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #071; flex: none; }
+.term-line { font-family: JB; font-size: 17px; line-height: 1.75; white-space: nowrap; color: #cfd6d0; }
+.url { height: 34px; border-radius: 9px; background: #1a1e1b; display: flex; align-items: center; padding: 0 14px; font-family: JB; font-size: 15px; color: #a9b3aa; width: 520px; }
+.frow { font-size: 16px; line-height: 2.05; color: #c5cdc6; display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+.fdir { width: 16px; height: 12px; border-radius: 3px; background: #3d7fd6; }
+.ffile { width: 12px; height: 15px; border-radius: 2px; background: #d9dfd9; }
+.bubble { background: #1b201c; border: 1px solid #2a302b; border-radius: 12px; padding: 12px 14px; font-size: 16px; line-height: 1.45; color: #dde4de; }
+
+/* pill */
+.pill { position: absolute; height: 60px; border-radius: 30px; background: #111412; border: 1px solid #262b27; display: flex; padding: 6px; }
+.pseg { position: relative; width: 170px; text-align: center; line-height: 48px; font-family: JB; font-size: 21px; color: #7f8a80; z-index: 2; }
+.phl { position: absolute; top: 6px; height: 48px; width: 170px; border-radius: 24px; background: var(--g); z-index: 1; box-shadow: 0 0 30px rgba(88,193,66,0.35); }
+
+/* cards */
+.card { position: absolute; width: 780px; height: 132px; background: #0f1210; border: 1px solid #262b27; border-radius: 16px; padding: 22px 26px;
+  display: flex; align-items: center; gap: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.45); }
+.cbadge { width: 58px; height: 58px; border-radius: 14px; flex: none; display: flex; align-items: center; justify-content: center; font-family: JB; font-weight: 700; font-size: 22px; }
+.clabel { font-size: 14px; letter-spacing: 0.16em; font-weight: 700; color: #7d887e; margin-bottom: 8px; }
+.cmain { font-family: JB; font-size: 23px; color: #e8eee8; white-space: nowrap; }
+.cstat { margin-left: auto; font-family: JB; font-size: 19px; white-space: nowrap; }
+.btn { display: inline-block; padding: 10px 20px; border-radius: 10px; font-size: 18px; font-weight: 650; margin-left: 10px; }
+.chip { position: absolute; padding: 12px 22px; border-radius: 26px; background: #111512; border: 1px solid #2b322c; font-size: 22px; font-weight: 560; color: #dfe6df; white-space: nowrap; }
+.chip b { color: var(--g); font-weight: 700; margin-right: 8px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="bg-grid" id="grid"></div>
+  <div class="glow" id="glowA" style="width:900px;height:900px;background:rgba(65,141,49,0.22)"></div>
+  <div class="glow" id="glowB" style="width:700px;height:700px;background:rgba(31,77,34,0.35)"></div>
+
+  <!-- Scene 1 headline -->
+  <div class="scene" id="s1">
+    <div class="abs h1" id="s1title" style="left:0;width:1920px;top:430px;text-align:center;font-size:104px;"></div>
+  </div>
+
+  <!-- Scene 2 -->
+  <div class="scene" id="s2">
+    <div class="abs" id="s2brand" style="left:0;width:1920px;top:78px;display:flex;justify-content:center;align-items:center;gap:22px;">
+      <img src="icon.svg" style="width:64px;height:64px;border-radius:16px;border:1px solid #2a312b">
+      <div class="h1" style="font-size:54px;">KronTerm</div>
+    </div>
+    <div class="abs" id="s2tag" style="left:0;width:1920px;top:168px;text-align:center;font-size:44px;font-weight:560;letter-spacing:-0.02em;color:#d6ddd7">
+      A living workspace for <span class="g">human + agent</span> development.
+    </div>
+    <div class="abs" id="s2shotwrap" style="left:360px;top:272px;width:1200px;height:724px;border-radius:18px;overflow:hidden;border:1px solid #2a312b;box-shadow:0 40px 120px rgba(0,0,0,0.7),0 0 80px rgba(88,193,66,0.10)">
+      <img id="s2shot" src="home.jpg" style="position:absolute;left:-36px;top:-21px;width:1271px;height:790px;transform-origin:30% 40%">
+    </div>
+  </div>
+
+  <!-- Scene 3 -->
+  <div class="scene" id="s3">
+    <div class="abs h1" id="s3title" style="left:0;width:1920px;top:92px;text-align:center;font-size:74px;">One workspace. <span class="g">Four ways to work.</span></div>
+    <div class="pill" id="pill" style="left:606px;top:196px;">
+      <div class="phl" id="phl"></div>
+      <div class="pseg">widgets</div><div class="pseg">tabs</div><div class="pseg">canvas</div><div class="pseg">os</div>
+    </div>
+    <div class="abs" id="osdesk" style="left:240px;top:300px;width:1440px;height:720px;border-radius:20px;overflow:hidden;border:1px solid #2a312b;background:radial-gradient(120% 90% at 30% 20%, #1f4d22 0%, #0d1a0f 45%, #070a07 100%)">
+      <div style="position:absolute;left:0;right:0;top:0;height:30px;background:rgba(0,0,0,0.35);display:flex;align-items:center;padding:0 16px;gap:22px;font-size:14px;color:#cfd8cf;font-weight:600">
+        <span>KronTerm OS</span><span class="dim" style="font-weight:500">Overview</span><span class="dim" style="font-weight:500">Spaces</span><span style="margin-left:auto" class="dim mono">⌘⇧Space</span>
+      </div>
+    </div>
+    <div class="abs" id="cvdots" style="left:240px;top:300px;width:1440px;height:720px;border-radius:20px;border:1px dashed #2a312b;background-image:radial-gradient(rgba(255,255,255,0.12) 1.3px, transparent 1.4px);background-size:26px 26px;"></div>
+    <svg class="abs" id="cvlines" style="left:0;top:0;" width="1920" height="1080"></svg>
+    <div class="abs" id="note" style="left:1350px;top:720px;width:280px;height:170px;background:#e8c35a;color:#2b2208;border-radius:10px;padding:18px;font-size:22px;font-weight:650;line-height:1.3;box-shadow:0 20px 40px rgba(0,0,0,0.4);transform:rotate(2deg)">Ship the canvas demo<div style="font-size:16px;font-weight:500;margin-top:10px;opacity:.75">→ ask KronosCode</div></div>
+    <div class="abs" id="tabstrip" style="left:240px;top:300px;width:1440px;height:44px;display:flex;gap:8px;"></div>
+    <div class="abs" id="dock" style="left:710px;top:930px;height:74px;padding:9px 12px;border-radius:22px;background:rgba(20,24,21,0.7);border:1px solid rgba(255,255,255,0.12);display:flex;gap:12px;backdrop-filter:blur(10px)"></div>
+  </div>
+
+  <!-- shared panels (scenes 1 & 3) -->
+  <div id="panels"></div>
+
+  <!-- Scene 4 -->
+  <div class="scene" id="s4">
+    <div class="abs h1" id="s4title" style="left:0;width:1920px;top:84px;text-align:center;font-size:70px;">Every command, approval, and result <span class="g">stays in view.</span></div>
+    <div class="win active" id="chat" style="left:170px;top:236px;width:660px;height:642px;">
+      <div class="whead"><span class="ico" style="background:var(--g)">K</span>KronosCode <span class="dim" style="font-weight:500">· KronosChamber</span></div>
+      <div style="position:absolute;top:38px;left:0;right:0;bottom:0;padding:24px;">
+        <div class="bubble" id="ubub" style="margin-left:110px;background:#1e3a1f;border-color:#2f5a2f;font-size:20px;"></div>
+        <div id="aw" style="margin-top:22px;font-size:19px;color:#aab4ab;display:flex;align-items:center;gap:12px"><span id="spin" style="width:18px;height:18px;border-radius:50%;border:3px solid #2a3a2b;border-top-color:var(--g);display:inline-block"></span><span id="awtext">Working…</span></div>
+        <div id="steps" style="margin-top:14px;font-family:JB;font-size:16px;line-height:2;color:#8f9a90"></div>
+        <div style="position:absolute;left:24px;right:24px;bottom:24px;height:120px;border-radius:14px;border:1px solid #2c332d;background:#131714;padding:16px 18px;">
+          <div id="inp" style="font-size:20px;color:#e6ece6;"></div>
+          <div style="position:absolute;left:18px;bottom:14px;display:flex;gap:10px;align-items:center;font-size:15px;">
+            <span style="padding:5px 12px;border-radius:8px;background:#233423;color:#bfe3b6">Sisyphus</span><span class="dim">Google/Gemini 3 Pro</span>
+          </div>
+          <div id="send" style="position:absolute;right:14px;bottom:12px;width:40px;height:40px;border-radius:50%;background:#2b322c;display:flex;align-items:center;justify-content:center;font-weight:800;color:#0b140b">↑</div>
+        </div>
+      </div>
+    </div>
+    <svg class="abs" style="left:0;top:0" width="1920" height="1080"><path id="rail" d="M 950 300 L 950 880" stroke="#58C142" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+    <div id="cards"></div>
+  </div>
+
+  <!-- Scene 5 -->
+  <div class="scene" id="s5">
+    <div class="abs" id="s5label" style="left:150px;top:300px;font-size:20px;letter-spacing:0.2em;font-weight:750;color:var(--g)">KRON SANDBOX</div>
+    <div class="abs h1" id="s5title" style="left:150px;top:344px;width:720px;font-size:84px;">Give the agent its own <span class="g">Linux desktop.</span></div>
+    <div id="chips"></div>
+    <div class="abs" id="s5wrap" style="left:900px;top:160px;width:900px;height:758px;border-radius:18px;overflow:hidden;border:1px solid #2a312b;box-shadow:0 40px 120px rgba(0,0,0,0.7)">
+      <img id="s5shot" src="sandbox.jpg" style="position:absolute;left:-388px;top:-30px;width:1351px;height:839px;transform-origin:437px 120px">
+      <div id="ripple" class="abs" style="width:90px;height:90px;border-radius:50%;border:3px solid var(--g);"></div>
+    </div>
+    <div class="abs" id="acur" style="left:0;top:0;">
+      <svg width="34" height="40" viewBox="0 0 34 40"><path d="M3 2 L3 32 L11 25 L17 38 L23 35 L17 23 L28 23 Z" fill="#58C142" stroke="#061006" stroke-width="2.2" stroke-linejoin="round"/></svg>
+      <div style="position:absolute;left:26px;top:30px;padding:5px 11px;border-radius:9px;background:var(--g);color:#061006;font-size:16px;font-weight:750;white-space:nowrap">KronosCode</div>
+    </div>
+  </div>
+
+  <!-- Scene 6 -->
+  <div class="scene" id="s6">
+    <div class="abs" id="ring" style="left:960px;top:360px;width:220px;height:220px;border-radius:50%;border:2px solid var(--g);"></div>
+    <img class="abs" id="s6icon" src="icon.svg" style="left:860px;top:260px;width:200px;height:200px;border-radius:46px;border:1px solid #2a312b;box-shadow:0 0 90px rgba(88,193,66,0.35)">
+    <div class="abs h1" id="s6word" style="left:0;width:1920px;top:500px;text-align:center;font-size:128px;">KronTerm</div>
+    <div class="abs" id="s6tag" style="left:0;width:1920px;top:664px;text-align:center;font-size:46px;font-weight:540;color:#cfd7d0;letter-spacing:-0.015em">Keep the whole builder loop in view.</div>
+    <div class="abs" id="s6cta" style="left:0;width:1920px;top:774px;display:flex;justify-content:center;">
+      <div style="padding:16px 34px;border-radius:40px;background:var(--g);color:#061006;font-size:28px;font-weight:720;box-shadow:0 0 50px rgba(88,193,66,0.35)">macOS private beta · kronterm.dev</div>
+    </div>
+  </div>
+
+  <!-- shared cursor for scene 4 -->
+  <div class="abs" id="cur" style="left:0;top:0;">
+    <svg width="30" height="36" viewBox="0 0 34 40"><path d="M3 2 L3 32 L11 25 L17 38 L23 35 L17 23 L28 23 Z" fill="#fff" stroke="#000" stroke-width="2.2" stroke-linejoin="round"/></svg>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const P = (t, a, b) => clamp((t - a) / (b - a));
+const eOut = (x) => 1 - Math.pow(1 - x, 3);
+const eOutE = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+const eIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const eBack = (x) => { const c = 1.4; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const noise = (t, s) => Math.sin(t * 1.3 + s) * 0.6 + Math.sin(t * 2.1 + s * 1.7) * 0.4;
+
+// Scene windows (seconds)
+const S = [[0, 3.01], [3.01, 6.82], [6.82, 10.93], [10.93, 15.28], [15.28, 18.55], [18.55, 22.0]];
+function sceneVis(t, i, fin = 0.28, fout = 0.24) {
+    const [a, b] = S[i];
+    if (t < a - 0.001 || t > b + 0.001) return 0;
+    const inn = i === 0 ? 1 : eOut(P(t, a, a + fin));
+    const out = i === S.length - 1 ? 1 : 1 - P(t, b - fout, b);
+    return Math.min(inn, out);
+}
+
+// ---------- panels ----------
+const PANELS = {
+    term: { title: "zsh — ~/kronterm", ico: ["$", "#58C142"], body: () => `
+      <div class="term-line"><span class="g">❯</span> task dev</div>
+      <div class="term-line dim">  wavesrv ready · electron started</div>
+      <div class="term-line"><span class="g">❯</span> npm test -- --run</div>
+      <div class="term-line"><span class="g">  ✓</span> frontend tests passed</div>
+      <div class="term-line"><span class="g">❯</span> go test ./pkg/...</div>
+      <div class="term-line"><span class="g">  ok</span>  pkg/wshrpc</div>
+      <div class="term-line"><span class="g">  ok</span>  pkg/wconfig</div>
+      <div class="term-line"><span class="g">❯</span> <span style="background:#58C142;color:#000">&nbsp;</span></div>` },
+    browser: { title: "localhost:3000", ico: ["◎", "#6aa9ff"], body: () => `
+      <div class="url">https://localhost:3000</div>
+      <div style="margin-top:26px;font-size:15px;color:#7e887f;letter-spacing:.1em">KRONTERM</div>
+      <div style="margin-top:10px;font-family:Georgia,serif;font-size:50px;line-height:1.02;letter-spacing:-0.02em;color:#f2f3f0;width:520px">Build and validate in the same field of view.</div>
+      <div style="margin-top:22px;display:flex;gap:12px"><div style="padding:10px 18px;border-radius:9px;background:#e9ece8;color:#111;font-size:15px;font-weight:650">Read the chapter</div><div style="padding:10px 18px;border-radius:9px;border:1px solid #333;font-size:15px;color:#bbb">All chapters</div></div>` },
+    files: { title: "files · ~/kronterm", ico: ["▤", "#e2b84a"], body: () =>
+      ["agents", "emain", "frontend", "mcp-kron-term", "pkg", "tsunami"].map(n => `<div class="frow"><span class="fdir"></span>${n}/</div>`).join("") +
+      ["Taskfile.yml", "README.md"].map(n => `<div class="frow"><span class="ffile"></span>${n}</div>`).join("") },
+    agent: { title: "KronosCode", ico: ["K", "#58C142"], body: () => `
+      <div class="bubble" style="background:#1e3a1f;border-color:#2f5a2f;margin-left:60px">Make the canvas demo editable</div>
+      <div style="margin-top:14px;font-size:15px;color:#8f9a90" class="mono">✓ read canvas-demo.html<br>✓ edit · 1 file changed <span class="g">+7</span></div>
+      <div style="margin-top:16px;border:1px solid #2c332d;border-radius:10px;padding:10px 12px;font-size:14px;color:#7a857b;width:340px">@ for files/agents; / for commands and skills</div>` },
+    sys: { title: "Mem", ico: ["▲", "#9b8cff"], body: () => {
+        let pts = []; for (let i = 0; i <= 40; i++) { pts.push(`${i * 10},${70 - 18 * Math.sin(i * 0.35) - 8 * Math.sin(i * 1.1) - i * 0.4}`); }
+        return `<svg width="400" height="200" viewBox="0 0 400 140" preserveAspectRatio="none"><polygon points="0,140 ${pts.join(" ")} 400,140" fill="rgba(88,140,220,0.45)"/><polyline points="${pts.join(" ")}" fill="none" stroke="#6aa9ff" stroke-width="2"/></svg>
+        <div class="mono dim" style="font-size:13px;margin-top:8px">cpu · mem · net</div>`; } },
+};
+const PID = ["term", "browser", "sys", "files", "agent"];
+const pEls = {};
+for (const id of PID) {
+    const p = PANELS[id];
+    const el = document.createElement("div");
+    el.className = "win";
+    el.innerHTML = `<div class="whead"><span class="ico" style="background:${p.ico[1]}">${p.ico[0]}</span>${p.title}</div><div class="wbody">${p.body()}</div>`;
+    $("panels").appendChild(el);
+    pEls[id] = el;
+}
+// tab strip + dock
+PID.forEach((id, i) => {
+    const c = document.createElement("div");
+    c.style.cssText = `width:220px;height:44px;border-radius:10px 10px 0 0;background:${id === "browser" ? "#1a2a1a" : "#121513"};border:1px solid ${id === "browser" ? "rgba(88,193,66,.7)" : "#262b27"};display:flex;align-items:center;gap:10px;padding:0 14px;font-size:15px;font-weight:600;color:#c9d1ca;white-space:nowrap;overflow:hidden`;
+    c.innerHTML = `<span class="ico" style="background:${PANELS[id].ico[1]}">${PANELS[id].ico[0]}</span>${PANELS[id].title}`;
+    $("tabstrip").appendChild(c);
+});
+[["$", "#58C142"], ["◎", "#6aa9ff"], ["▤", "#e2b84a"], ["K", "#58C142"], ["▲", "#9b8cff"], ["▣", "#e36b5a"], ["⚙", "#9aa39b"]].forEach(([g, c]) => {
+    const d = document.createElement("div");
+    d.style.cssText = `width:56px;height:56px;border-radius:14px;background:linear-gradient(160deg,${c},${c}99);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#061006`;
+    d.textContent = g;
+    $("dock").appendChild(d);
+});
+
+const R = (x, y, w, h, o = {}) => ({ x, y, w, h, rot: 0, op: 1, ...o });
+// scene 1: scattered
+const L_scatter = {
+    term: R(150, 50, 560, 330, { rot: -5 }),
+    browser: R(1190, 40, 620, 360, { rot: 4 }),
+    files: R(220, 690, 440, 340, { rot: 3 }),
+    agent: R(1240, 700, 520, 330, { rot: -3 }),
+    sys: R(810, 820, 300, 200, { op: 0 }),
+};
+const S1_IN = { term: 0.18, browser: 0.72, files: 1.27, agent: 1.8 };
+const L_widgets = {
+    term: R(240, 300, 460, 720), browser: R(712, 300, 560, 420), sys: R(1284, 300, 396, 420),
+    files: R(712, 732, 560, 288), agent: R(1284, 732, 396, 288),
+};
+const L_tabs = {
+    term: R(240, 300, 220, 44, { op: 0 }), browser: R(240, 348, 1440, 672), sys: R(696, 300, 220, 44, { op: 0 }),
+    files: R(924, 300, 220, 44, { op: 0 }), agent: R(1152, 300, 220, 44, { op: 0 }),
+};
+L_tabs.browser.x = 240;
+const L_canvas = {
+    term: R(300, 380, 400, 270), browser: R(790, 330, 480, 330), sys: R(1360, 400, 290, 210),
+    files: R(400, 720, 330, 260), agent: R(880, 730, 420, 260),
+};
+const L_os = {
+    term: R(1010, 430, 560, 390), browser: R(430, 350, 720, 470), agent: R(300, 590, 440, 320),
+    files: R(868, 940, 60, 50, { op: 0 }), sys: R(1060, 940, 60, 50, { op: 0 }),
+};
+const mixR = (a, b, k) => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), w: lerp(a.w, b.w, k), h: lerp(a.h, b.h, k), rot: lerp(a.rot, b.rot, k), op: lerp(a.op, b.op, k) });
+const MODES = [[6.82, L_widgets], [8.02, L_tabs], [8.94, L_canvas], [9.86, L_os]];
+const MT = 0.48;
+
+function panelRect(t, id, i) {
+    if (t < 3.05) {
+        const base = L_scatter[id];
+        if (id === "sys") return { ...base, op: 0 };
+        const k = eBack(P(t, S1_IN[id], S1_IN[id] + 0.42));
+        const a = P(t, S1_IN[id], S1_IN[id] + 0.18);
+        let r = { ...base, rot: base.rot + noise(t, i) * 1.2, x: base.x + noise(t * 0.7, i * 3) * 8, y: base.y + noise(t * 0.8, i * 5) * 8 };
+        r = { ...r, sc: lerp(0.7, 1, k), op: a };
+        // converge
+        const c = eIO(P(t, 2.55, 3.02));
+        if (c > 0) {
+            const tgt = R(960 - 60, 640 - 40, 120, 80, { rot: 0, op: 0 });
+            r = { ...mixR(r, tgt, c), sc: r.sc, op: r.op * (1 - P(t, 2.8, 3.02)) };
+        }
+        return r;
+    }
+    if (t < 6.82 || t > 10.95) return { x: 0, y: 0, w: 10, h: 10, op: 0, rot: 0 };
+    // entry into widgets
+    let cur = L_widgets[id];
+    for (let m = 1; m < MODES.length; m++) {
+        const [mt, lay] = MODES[m];
+        const k = eIO(P(t, mt, mt + MT));
+        if (k > 0) cur = mixR(cur, lay[id], k);
+    }
+    const ein = eOut(P(t, 6.95 + i * 0.05, 7.4 + i * 0.05));
+    cur = { ...cur, y: cur.y + (1 - ein) * 60, op: cur.op * ein };
+    const ex = P(t, 10.62, 10.9);
+    cur = { ...cur, op: cur.op * (1 - ex), sc: 1 - 0.04 * ex };
+    return cur;
+}
+
+// ---------- scene 4 cards ----------
+const CARDS = [
+    { t: 12.35, done: 12.9, label: "TERMINAL", main: "npm test -- --run", badge: ["$", "#58C142"], ok: "✓ passed" },
+    { t: 12.95, done: 13.45, label: "BROWSER", main: "localhost:3000 · screenshot", badge: ["◎", "#6aa9ff"], ok: "✓ renders" },
+    { t: 13.55, label: "APPROVAL", main: "Edit canvas-demo.html?", badge: ["!", "#e2b84a"], approve: true },
+    { t: 14.4, label: "RESULT", main: '1 file changed <span class="g">+7</span>', badge: ["✓", "#58C142"], review: true },
+];
+const cardEls = CARDS.map((c, i) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.style.left = "990px"; el.style.top = 236 + i * 170 + "px";
+    el.innerHTML = `<div class="cbadge" style="background:${c.badge[1]}22;color:${c.badge[1]};border:1px solid ${c.badge[1]}55">${c.badge[0]}</div>
+      <div><div class="clabel">${c.label}</div><div class="cmain">${c.main}</div></div>
+      <div class="cstat">${c.approve ? '<span class="btn" style="border:1px solid #333;color:#aaa">Deny</span><span class="btn appr" style="background:#58C142;color:#061006">Approve</span>' :
+        c.review ? '<span class="btn" style="border:1px solid #2f5a2f;color:#bfe3b6">Review</span>' : '<span class="st"></span>'}</div>`;
+    $("cards").appendChild(el);
+    return el;
+});
+const PROMPT = "Run the tests, then check localhost:3000";
+const TYPE_A = 11.2, TYPE_B = 12.05;
+
+// ---------- scene 5 chips ----------
+const CHIPS = ["Terminal", "Browser", "Files", "Sandbox", "macOS desktop", "App Stream", "MCP"];
+const chipEls = []; {
+    let x = 150, y = 640; const gap = 12;
+    const ctx = document.createElement("canvas").getContext("2d"); ctx.font = "560 22px Inter";
+    CHIPS.forEach((c, i) => {
+        const w = ctx.measureText(c).width + 44 + 20;
+        if (x + w > 850) { x = 150; y += 66; }
+        const el = document.createElement("div");
+        el.className = "chip"; el.innerHTML = `<b>●</b>${c}`; el.style.left = x + "px"; el.style.top = y + "px";
+        $("chips").appendChild(el); chipEls.push(el);
+        x += w + gap;
+    });
+}
+
+// scene1 title words
+const S1_WORDS = ["Stop", "rebuilding", "context", "in", "separate", "apps."];
+$("s1title").innerHTML = `<div>${S1_WORDS.slice(0, 3).map((w, i) => `<span class="w1" style="display:inline-block;margin:0 .13em">${w}</span>`).join("")}</div><div>${S1_WORDS.slice(3).map((w, i) => `<span class="w1" style="display:inline-block;margin:0 .13em;${i === 2 ? "color:#58C142" : ""}">${w}</span>`).join("")}</div>`;
+const w1 = [...document.querySelectorAll(".w1")];
+
+function setT(el, x, y, s = 1, r = 0) { el.style.transform = `translate(${x}px,${y}px) scale(${s}) rotate(${r}deg)`; }
+
+function render(t) {
+    // background
+    $("grid").style.transform = `translate(${(t * 6) % 34}px,${(t * 3) % 34}px)`;
+    setT($("glowA"), 300 + Math.sin(t * 0.4) * 200, -200 + Math.cos(t * 0.3) * 120);
+    setT($("glowB"), 1100 + Math.cos(t * 0.35) * 180, 500 + Math.sin(t * 0.5) * 100);
+    $("grid").style.opacity = t > 18.55 ? 0.5 : 1;
+
+    const vis = S.map((_, i) => sceneVis(t, i));
+    ["s1", "s2", "s3", "s4", "s5", "s6"].forEach((id, i) => { $(id).style.opacity = vis[i]; $(id).style.display = vis[i] > 0 ? "block" : "none"; });
+
+    // S1
+    w1.forEach((el, i) => {
+        const a = 0.85 + i * 0.07;
+        const k = eOutE(P(t, a, a + 0.35));
+        el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 40}px)`; el.style.filter = `blur(${(1 - k) * 10}px)`;
+    });
+    const s1o = 1 - P(t, 2.5, 2.78);
+    $("s1title").style.opacity = s1o; $("s1title").style.transform = `scale(${1 + 0.06 * P(t, 2.6, 3)})`;
+
+    // panels
+    PID.forEach((id, i) => {
+        const r = panelRect(t, id, i); const el = pEls[id];
+        el.style.display = r.op > 0.002 ? "block" : "none";
+        el.style.left = r.x + "px"; el.style.top = r.y + "px"; el.style.width = r.w + "px"; el.style.height = r.h + "px";
+        el.style.opacity = r.op; el.style.transform = `rotate(${r.rot || 0}deg) scale(${r.sc || 1})`;
+        const isActive = (t < 3.05) ? false : (t > 9.86 ? id === "browser" : (t > 8.94 ? id === "agent" : id === "browser"));
+        el.classList.toggle("active", isActive);
+    });
+
+    // S2
+    if (vis[1] > 0) {
+        const k = eOutE(P(t, 3.0, 3.75));
+        $("s2shotwrap").style.transform = `translateY(${(1 - k) * 90}px) scale(${lerp(0.72, 1, k)})`;
+        $("s2shotwrap").style.opacity = P(t, 3.0, 3.25);
+        $("s2shotwrap").style.filter = `blur(${(1 - P(t, 3.0, 3.5)) * 14}px)`;
+        $("s2shot").style.transform = `scale(${1 + 0.1 * eIO(P(t, 3.6, 6.8))})`;
+        const kb = eOutE(P(t, 3.45, 3.95)); $("s2brand").style.opacity = kb; $("s2brand").style.transform = `translateY(${(1 - kb) * -24}px)`;
+        const kt = eOutE(P(t, 3.7, 4.2)); $("s2tag").style.opacity = kt; $("s2tag").style.transform = `translateY(${(1 - kt) * 24}px)`;
+    }
+
+    // S3
+    if (vis[2] > 0) {
+        const kt = eOutE(P(t, 6.9, 7.35)); $("s3title").style.opacity = kt; $("s3title").style.transform = `translateY(${(1 - kt) * 30}px)`;
+        const kp = eOutE(P(t, 7.05, 7.5)); $("pill").style.opacity = kp; $("pill").style.transform = `scale(${lerp(0.9, 1, kp)})`;
+        let idx = 0; for (let m = 1; m < MODES.length; m++) idx += eIO(P(t, MODES[m][0], MODES[m][0] + MT * 0.8));
+        $("phl").style.left = 6 + idx * 170 + "px";
+        [...$("pill").querySelectorAll(".pseg")].forEach((s, i) => { const on = Math.max(0, 1 - Math.abs(idx - i)); s.style.color = on > 0.5 ? "#061006" : "#7f8a80"; s.style.fontWeight = on > 0.5 ? 700 : 400; });
+        const tabsK = eIO(P(t, 8.02, 8.4)) * (1 - eIO(P(t, 8.94, 9.2)));
+        $("tabstrip").style.opacity = tabsK;
+        const cvK = eIO(P(t, 8.94, 9.35)) * (1 - eIO(P(t, 9.86, 10.15)));
+        $("cvdots").style.opacity = cvK; $("note").style.opacity = cvK; $("note").style.transform = `rotate(2deg) scale(${lerp(0.8, 1, eBack(P(t, 9.1, 9.5)))})`;
+        // connectors
+        const cr = (id) => panelRect(t, id, PID.indexOf(id));
+        const c = (r) => [r.x + r.w / 2, r.y + r.h / 2];
+        const lines = [["term", "browser"], ["browser", "agent"], ["files", "agent"]];
+        const draw = eOut(P(t, 9.25, 9.7));
+        $("cvlines").innerHTML = cvK > 0.01 ? lines.map(([a, b]) => { const A = c(cr(a)), B = c(cr(b)); const mx = (A[0] + B[0]) / 2;
+            const d = `M${A[0]},${A[1]} C${mx},${A[1]} ${mx},${B[1]} ${B[0]},${B[1]}`;
+            return `<path d="${d}" pathLength="1" stroke="#58C142" stroke-opacity="${0.75 * cvK}" stroke-width="3" fill="none" stroke-dasharray="1" stroke-dashoffset="${1 - draw}"/>`; }).join("") : "";
+        const osK = eIO(P(t, 9.86, 10.25));
+        $("osdesk").style.opacity = osK; $("dock").style.opacity = osK; $("dock").style.transform = `translateY(${(1 - eBack(P(t, 9.95, 10.4))) * 80}px)`;
+        $("osdesk").style.zIndex = 0; $("cvdots").style.zIndex = 0;
+    }
+    // panels on top of desk/dots but below the pill; ensure panel container between
+    $("panels").style.position = "absolute"; $("panels").style.inset = "0";
+
+    // S4
+    if (vis[3] > 0) {
+        const kt = eOutE(P(t, 11.0, 11.45)); $("s4title").style.opacity = kt; $("s4title").style.transform = `translateY(${(1 - kt) * 30}px)`;
+        const kc = eOutE(P(t, 10.95, 11.4)); $("chat").style.opacity = kc; $("chat").style.transform = `translateX(${(1 - kc) * -80}px)`;
+        const n = Math.floor(PROMPT.length * P(t, TYPE_A, TYPE_B));
+        const sent = t >= 12.18;
+        $("inp").innerHTML = sent ? '<span style="color:#6f7a70">Ask anything</span>' : PROMPT.slice(0, n) + (t > TYPE_A - 0.2 ? `<span style="display:inline-block;width:2px;height:22px;background:#58C142;vertical-align:-3px;opacity:${Math.floor(t * 4) % 2 ? 1 : 0.2}"></span>` : "");
+        $("send").style.background = n > 3 && !sent ? "#58C142" : "#2b322c";
+        const kb = eBack(P(t, 12.18, 12.5));
+        $("ubub").textContent = PROMPT; $("ubub").style.opacity = P(t, 12.18, 12.3); $("ubub").style.transform = `translateY(${(1 - kb) * 30}px) scale(${lerp(0.94, 1, kb)})`;
+        const done = t > 14.55;
+        $("aw").style.opacity = P(t, 12.3, 12.5);
+        $("spin").style.transform = `rotate(${t * 540}deg)`; $("spin").style.display = done ? "none" : "inline-block";
+        $("awtext").innerHTML = done ? '<span class="g">✓</span> Done. Tests pass and the page renders.' : "Working…";
+        const st = [[12.45, "→ terminal · npm test -- --run"], [13.0, "→ browser · localhost:3000"], [13.6, "→ approval requested"], [14.3, "→ edit · canvas-demo.html"]];
+        $("steps").innerHTML = st.filter(s => t > s[0]).map(s => `<div>${s[1]}</div>`).join("");
+        CARDS.forEach((c, i) => {
+            const el = cardEls[i]; const k = eBack(P(t, c.t, c.t + 0.4));
+            el.style.opacity = P(t, c.t, c.t + 0.15); el.style.transform = `translateX(${(1 - k) * 90}px) scale(${lerp(0.94, 1, k)})`;
+            const s = el.querySelector(".st");
+            if (s) s.innerHTML = t > c.done ? `<span class="g">${c.ok}</span>` : `<span class="dim">running…</span>`;
+            if (c.approve) {
+                const b = el.querySelector(".appr"); const pressed = t > 14.12 && t < 14.26;
+                b.style.transform = `scale(${pressed ? 0.92 : 1})`; b.style.boxShadow = t > 14.12 ? `0 0 ${30 * (1 - P(t, 14.12, 14.7))}px rgba(88,193,66,0.9)` : "none";
+                if (t > 14.26) b.textContent = "Approved ✓";
+            }
+            const on = (i === 0 && t < 12.9) || (i === 1 && t > 12.95 && t < 13.45) || (i === 2 && t > 13.55 && t < 14.26) || (i === 3 && t > 14.4);
+            el.style.borderColor = on ? "rgba(88,193,66,.8)" : "#262b27";
+        });
+        const rp = eOut(P(t, 12.35, 14.7));
+        $("rail").setAttribute("stroke-dasharray", "600"); $("rail").setAttribute("stroke-dashoffset", 600 * (1 - rp));
+        $("rail").setAttribute("d", "M 960 302 L 960 812");
+    }
+    // cursor (scene 4)
+    {
+        const cu = $("cur");
+        if (t > 13.55 && t < 15.2) {
+            const k = eIO(P(t, 13.6, 14.08));
+            const br = cardEls[2].querySelector(".appr").getBoundingClientRect();
+            const bx = br.left + br.width * 0.45, by = br.top + br.height * 0.55;
+            const x = lerp(1520, bx, k), y = lerp(900, by, k);
+            cu.style.display = "block"; cu.style.opacity = P(t, 13.55, 13.7) * (1 - P(t, 14.9, 15.15)) * vis[3];
+            setT(cu, x, y, t > 14.12 && t < 14.26 ? 0.85 : 1);
+        } else cu.style.display = "none";
+    }
+
+    // S5
+    if (vis[4] > 0) {
+        const kl = eOutE(P(t, 15.35, 15.8)); $("s5label").style.opacity = kl;
+        const kt = eOutE(P(t, 15.4, 15.9)); $("s5title").style.opacity = kt; $("s5title").style.transform = `translateY(${(1 - kt) * 34}px)`; $("s5title").style.filter = `blur(${(1 - kt) * 8}px)`;
+        const kw = eOutE(P(t, 15.3, 16.0)); $("s5wrap").style.opacity = P(t, 15.3, 15.55); $("s5wrap").style.transform = `translateX(${(1 - kw) * 120}px) scale(${lerp(0.9, 1, kw)}) perspective(1600px) rotateY(${(1 - kw) * -14}deg)`;
+        $("s5shot").style.transform = `scale(${1 + 0.12 * eIO(P(t, 15.8, 18.5))})`;
+        chipEls.forEach((el, i) => { const a = 16.25 + i * 0.11; const k = eBack(P(t, a, a + 0.35)); el.style.opacity = P(t, a, a + 0.12); el.style.transform = `translateY(${(1 - k) * 26}px) scale(${lerp(0.85, 1, k)})`; });
+        // agent cursor → Firefox icon
+        const tx = 49, ty = 92;
+        const k = eIO(P(t, 16.0, 16.85));
+        const sx = 520, sy = 470;
+        const cx = lerp(sx, tx, k) + Math.sin(k * Math.PI) * -40, cy = lerp(sy, ty, k) + Math.sin(k * Math.PI) * 60;
+        const ac = $("acur"); ac.style.opacity = P(t, 15.9, 16.1) * vis[4];
+        setT(ac, 900 + cx - 3, 160 + cy - 2, t > 16.9 && t < 17.02 ? 0.86 : 1);
+        const rpk = P(t, 16.92, 17.5);
+        const rp = $("ripple"); rp.style.left = tx - 45 + "px"; rp.style.top = ty - 45 + "px";
+        rp.style.opacity = rpk > 0 && rpk < 1 ? 1 - rpk : 0; rp.style.transform = `scale(${0.3 + rpk * 1.2})`;
+    } else $("acur").style.opacity = 0;
+
+    // S6
+    if (vis[5] > 0) {
+        const ki = eBack(P(t, 18.62, 19.1)); $("s6icon").style.opacity = P(t, 18.6, 18.8); $("s6icon").style.transform = `scale(${lerp(0.5, 1, ki)}) rotate(${(1 - ki) * -12}deg)`;
+        const rk = P(t, 18.85, 19.9); $("ring").style.opacity = (1 - rk) * (rk > 0 ? 0.9 : 0); $("ring").style.transform = `translate(-50%,-50%) scale(${0.9 + rk * 2.6})`;
+        const kw = eOutE(P(t, 18.95, 19.45)); $("s6word").style.opacity = kw; $("s6word").style.transform = `translateY(${(1 - kw) * 30}px)`; $("s6word").style.letterSpacing = `${lerp(0.04, -0.035, kw)}em`;
+        const kg = eOutE(P(t, 19.3, 19.75)); $("s6tag").style.opacity = kg; $("s6tag").style.transform = `translateY(${(1 - kg) * 22}px)`;
+        const kc = eBack(P(t, 19.7, 20.15)); $("s6cta").style.opacity = P(t, 19.7, 19.85); $("s6cta").style.transform = `scale(${lerp(0.85, 1, kc)})`;
+        $("s6icon").style.boxShadow = `0 0 ${70 + 30 * Math.sin(t * 3)}px rgba(88,193,66,0.35)`;
+    }
+}
+window.render = render;
+document.body.style.zIndex = 0;
+// stacking: s3 below panels, pill/title above
+$("panels").style.zIndex = 5; $("s3").style.zIndex = 1;
+for (const id of ["s3title", "pill", "tabstrip"]) { }
+render(0);
+</script>
+</body>
+</html>

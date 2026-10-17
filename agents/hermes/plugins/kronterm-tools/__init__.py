@@ -195,6 +195,8 @@ def _normalize_result(response: Dict[str, Any]) -> str | Dict[str, Any]:
 def _handler(original_name: str):
     def call(args: Dict[str, Any], **_: Any) -> str | Dict[str, Any]:
         global _allowed_cache
+        if not isinstance(args, dict):
+            return json.dumps({"error": "KronTerm tool arguments must be an object matching the tool schema"})
         if original_name == "tool_search" and isinstance(args.get("query"), str):
             args = {**args, "query": _rewrite_tool_names(args["query"], {value: key for key, value in _ALIASES.items()})}
         response = _bridge_request({"method": "call", "name": original_name, "arguments": args})

@@ -1,0 +1,40 @@
+.kronterm-launchers {
+    display: flex;
+    gap: 4px;
+    max-width: 420px;
+    overflow-x: auto;
+}
+.kronterm-launchers[hidden],
+.kronterm-widget-tabs[hidden] {
+    display: none;
+}
+.kronterm-button {
+    cursor: pointer;
+    white-space: nowrap;
+    width: auto;
+    padding: 0 6px;
+    font-size: 11px;
+}
+.kronterm-widget-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+.kronterm-progress {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 12px;
+}
+.kronterm-button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+.kronterm-surface { position: absolute; inset: 0; display: flex; gap: 12px; padding: 14px; }
+.kronterm-surface[hidden], .kronterm-surface > [hidden] { display: none; }
+.kronterm-chat-space { flex: 1; min-width: 0; }
+.kronterm-surface.split .kronterm-chat-space { flex: 0 0 220px; }
+.kronterm-preview-space { flex: 1; min-width: 0; }
+.kronterm-surface-active > .view.on { visibility: hidden; }

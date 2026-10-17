@@ -1,0 +1,68 @@
+// Copyright 2026, KronTerm.
+// SPDX-License-Identifier: Apache-2.0
+
+.project-environment-launcher {
+    --wt-border: rgb(from var(--text-primary-color) r g b / 0.1);
+    --wt-foreground: var(--text-primary-color);
+    --wt-muted-foreground: var(--text-muted-color);
+    --wt-tab-active: var(--surface-raised-color);
+    --wt-hover: var(--surface-hover-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--wt-border);
+    font-size: 12px;
+    strong {
+        font-weight: 600;
+    }
+    p {
+        margin: 0;
+        color: var(--wt-muted-foreground);
+        font-size: 11px;
+        line-height: 1.5;
+    }
+    label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--wt-muted-foreground);
+        font-size: 11px;
+    }
+    input,
+    select {
+        width: 100%;
+        min-width: 0;
+        padding: 6px;
+        border: 1px solid var(--wt-border);
+        border-radius: 4px;
+        background: var(--main-bg-color);
+        color: var(--wt-foreground);
+        font: inherit;
+    }
+    button {
+        height: 30px;
+        cursor: pointer;
+        border: 1px solid var(--wt-border);
+        border-radius: 4px;
+        background: var(--wt-tab-active);
+        color: var(--wt-foreground);
+        font: inherit;
+    }
+    button:hover:not(:disabled) {
+        background: var(--wt-hover);
+    }
+    button:disabled {
+        opacity: 0.5;
+    }
+    input:focus-visible,
+    select:focus-visible,
+    button:focus-visible {
+        outline: 1px solid var(--focus-ring-color);
+        outline-offset: 1px;
+    }
+    [role="alert"] {
+        color: var(--text-primary-color);
+    }
+}

@@ -1,0 +1,57 @@
+[
+    {
+        "name": "coucou",
+        "label": "Coucou",
+        "accent": "#967AFF"
+    },
+    {
+        "name": "coucou-white",
+        "label": "Coucou White",
+        "accent": "#F5F6F8"
+    },
+    {
+        "name": "coucou-red",
+        "label": "Coucou Red",
+        "accent": "#F4505E"
+    },
+    {
+        "name": "coucou-orange",
+        "label": "Coucou Orange",
+        "accent": "#F29B38"
+    },
+    {
+        "name": "coucou-yellow",
+        "label": "Coucou Yellow",
+        "accent": "#FACC15"
+    },
+    {
+        "name": "coucou-green",
+        "label": "Coucou Green",
+        "accent": "#4ADE80"
+    },
+    {
+        "name": "coucou-teal",
+        "label": "Coucou Teal",
+        "accent": "#2DD4BF"
+    },
+    {
+        "name": "coucou-sky",
+        "label": "Coucou Sky",
+        "accent": "#38BDF8"
+    },
+    {
+        "name": "coucou-indigo",
+        "label": "Coucou Indigo",
+        "accent": "#818CF8"
+    },
+    {
+        "name": "coucou-purple",
+        "label": "Coucou Purple",
+        "accent": "#C084FC"
+    },
+    {
+        "name": "coucou-pink",
+        "label": "Coucou Pink",
+        "accent": "#E879F9"
+    }
+]

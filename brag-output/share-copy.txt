@@ -1,0 +1,1 @@
+Your terminal, browser, files and coding agent in one workspace, where every command, approval and result stays in view. KronTerm is in macOS private beta: kronterm.dev

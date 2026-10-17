@@ -1,0 +1,111 @@
+.host-sheet.host-pairing-sheet .host-sheet-body {
+    display: grid;
+    gap: 20px;
+}
+.host-pairing-sheet .host-local-device {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    text-align: left;
+    color: #17171b;
+    background: #f5f5f7;
+    border-radius: 16px;
+    cursor: pointer;
+}
+.host-pairing-sheet .host-local-device > span:first-of-type {
+    display: grid;
+    gap: 4px;
+    flex: 1;
+}
+.host-pairing-sheet .host-local-device small,
+.host-pairing-sheet .host-pairing-guide p {
+    color: #60616d;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.host-pairing-sheet .host-local-action {
+    font-size: 13px;
+}
+.host-pairing-sheet .host-pairing-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.host-pairing-sheet h2 {
+    margin: 0;
+    font-size: 17px;
+}
+.host-pairing-sheet .host-pairing-heading > span {
+    margin-left: auto;
+    font-size: 12px;
+    color: #60616d;
+}
+.host-pairing-sheet .host-pairing-guide ol {
+    display: grid;
+    gap: 10px;
+    padding-left: 22px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.host-pairing-sheet .host-pairing-guide label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.host-pairing-sheet .host-pairing-link-row {
+    display: flex;
+    gap: 8px;
+}
+.host-pairing-sheet .host-pairing-link-row input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 12px;
+    color: #17171b;
+    background: #f5f5f7;
+    border: 1px solid #eeeef2;
+    border-radius: 12px;
+    font-size: 16px;
+}
+.host-pairing-sheet .host-pairing-link-row button,
+.host-pairing-sheet .host-row > button:not(.host-remove) {
+    min-height: 44px;
+    padding: 10px 12px;
+    color: #fff;
+    background: #17171b;
+    border-radius: 12px;
+    cursor: pointer;
+}
+.host-pairing-sheet .host-form > fieldset {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+.host-pairing-sheet .host-form fieldset > label {
+    display: grid;
+    gap: 8px;
+    font-size: 13px;
+}
+.host-pairing-sheet .host-row {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+}
+.host-pairing-sheet .host-row > button:not(.host-remove) {
+    grid-column: 2;
+    justify-self: start;
+}
+.host-pairing-sheet .host-row .host-remove {
+    grid-column: 3;
+    grid-row: 2;
+}
+.host-pairing-sheet button:disabled {
+    opacity: 0.55;
+}
+.host-pairing-sheet button:focus-visible,
+.host-pairing-sheet input:focus-visible {
+    outline: 2px solid #7143e8;
+    outline-offset: 3px;
+}

@@ -1,0 +1,11 @@
+import { build } from 'esbuild';
+import { compile } from 'sass';
+import { writeFileSync, copyFileSync } from 'node:fs';
+import path from 'node:path';
+const root=process.cwd();
+const out=path.resolve('output/implementation/os-overview-standalone');
+await build({stdin:{contents:`import React from 'react'; import {createRoot} from 'react-dom/client'; import {OSOverviewPreview} from './frontend/preview/previews/os-overview.preview'; createRoot(document.getElementById('root')).render(<OSOverviewPreview/>);`,resolveDir:root,loader:'tsx'},bundle:true,outfile:path.join(out,'app.js'),format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'standalone',setup(b){b.onResolve({filter:/^@\/util\/util$/},()=>({path:'cn',namespace:'standalone'}));b.onLoad({filter:/.*/,namespace:'standalone'},()=>({contents:`export const cn=(...args)=>args.flat().filter(Boolean).join(' ');`}));b.onLoad({filter:/\.(css|scss)$/},()=>({contents:'',loader:'js'}));}}],alias:{'@':path.join(root,'frontend')}});
+writeFileSync(path.join(out,'os.css'),compile('frontend/app/tab/os-workspace.scss').css);
+copyFileSync('frontend/app/components/system-ui/system-ui.css',path.join(out,'system.css'));
+writeFileSync(path.join(out,'index.html'),`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="system.css"><link rel="stylesheet" href="os.css"><style>html,body,#root{margin:0;width:100%;height:100%;font-family:system-ui}*{box-sizing:border-box}button,select{font:inherit}button{cursor:pointer}.os-mode-root{top:0!important}</style></head><body><div id="root"></div><script type="module" src="app.js"></script></body></html>`);
+console.log(out);

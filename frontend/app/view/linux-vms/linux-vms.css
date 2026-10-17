@@ -1,0 +1,178 @@
+/* Copyright 2026, Command Line Inc. SPDX-License-Identifier: Apache-2.0 */
+.kt-linux-vms {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--kt-label);
+    background: var(--kt-content);
+}
+.kt-linux-sidebar {
+    width: 216px;
+    flex-shrink: 0;
+    padding: 20px 12px;
+    border-right: 1px solid var(--kt-separator);
+    background: var(--kt-sidebar);
+}
+.kt-linux-sidebar h1 {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0 8px 4px;
+    letter-spacing: -0.4px;
+}
+.kt-linux-subtitle {
+    font-size: 12px;
+    color: var(--kt-label-secondary);
+    margin: 0 8px 22px;
+}
+.kt-linux-machine {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    text-align: left;
+    padding: 11px 12px;
+    border-radius: 9px;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    color: inherit;
+}
+.kt-linux-machine[aria-pressed="true"] {
+    background: var(--kt-fill-strong);
+}
+.kt-linux-machine small {
+    color: var(--kt-label-secondary);
+    font-size: 11px;
+}
+.kt-linux-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.kt-linux-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--kt-separator);
+    flex-wrap: wrap;
+}
+.kt-linux-title {
+    flex: 1;
+    min-width: 120px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.kt-linux-screen {
+    flex: 1;
+    min-height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 20px;
+    background: var(--kt-content);
+}
+.kt-linux-screen img {
+    display: block;
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 6px 28px #0002;
+    cursor: pointer;
+}
+.kt-linux-empty {
+    text-align: center;
+    max-width: 380px;
+    padding: 24px;
+    color: var(--kt-label-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+}
+.kt-linux-empty strong {
+    display: block;
+    font-size: 18px;
+    color: var(--kt-label);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+.kt-linux-bottom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--kt-separator);
+    flex-wrap: wrap;
+}
+.kt-linux-bottom input {
+    flex: 1;
+    min-width: 130px;
+    padding: 8px 10px;
+    border: 1px solid var(--kt-separator);
+    border-radius: 7px;
+    background: var(--kt-content);
+    color: inherit;
+    font-size: 13px;
+}
+.kt-linux-agents {
+    padding: 12px 18px;
+    border-top: 1px solid var(--kt-separator);
+    font-size: 12px;
+    color: var(--kt-label-secondary);
+}
+.kt-linux-agents summary {
+    color: var(--kt-label);
+    cursor: pointer;
+    font-weight: 500;
+}
+.kt-linux-agents p {
+    margin: 10px 0;
+    line-height: 1.6;
+}
+.kt-linux-status {
+    font-size: 11px;
+    color: var(--kt-label-secondary);
+}
+.kt-linux-error {
+    margin: 8px 18px;
+    color: var(--kt-red, #b42318);
+    font-size: 12px;
+}
+.kt-linux-vms button:focus-visible,
+.kt-linux-vms img:focus-visible,
+.kt-linux-vms input:focus-visible {
+    outline: 2px solid var(--kt-focus-ring);
+    outline-offset: 2px;
+}
+@media (max-width: 650px) {
+    .kt-linux-vms {
+        flex-direction: column;
+    }
+    .kt-linux-sidebar {
+        width: auto;
+        padding: 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--kt-separator);
+    }
+    .kt-linux-sidebar h1 {
+        font-size: 17px;
+    }
+    .kt-linux-subtitle {
+        margin-bottom: 8px;
+    }
+    .kt-linux-machine {
+        display: inline-flex;
+        width: auto;
+        padding: 8px 12px;
+    }
+    .kt-linux-toolbar,
+    .kt-linux-bottom {
+        padding: 10px 12px;
+    }
+    .kt-linux-screen {
+        padding: 10px;
+    }
+}

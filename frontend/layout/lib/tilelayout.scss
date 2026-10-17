@@ -1,4 +1,4 @@
-// Copyright 2024, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 .tile-layout {
@@ -7,7 +7,7 @@
     width: 100%;
     overflow: hidden;
 
-    --gap-size-px: 5px;
+    --gap-size-px: 2px;
 
     .overlay-container,
     .display-container,
@@ -50,14 +50,14 @@
             .line {
                 height: 100%;
                 width: calc(50% + 1px);
-                border-right: 2px solid var(--accent-color);
+                border-right: 1px solid var(--accent-color);
             }
         }
         &.flex-column {
             cursor: ns-resize;
             .line {
                 height: calc(50% + 1px);
-                border-bottom: 2px solid var(--accent-color);
+                border-bottom: 1px solid var(--accent-color);
             }
         }
         &:hover .line {
@@ -102,7 +102,7 @@
         }
 
         &:not(:only-child) .tile-leaf {
-            padding: calc(var(--gap-size-px) / 2);
+            padding: calc(min(var(--gap-size-px), 2px) / 2);
         }
     }
 

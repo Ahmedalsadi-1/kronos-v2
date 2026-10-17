@@ -11,7 +11,7 @@ import {
   HUD_NOTE_VARIANT,
   HUD_POSITION,
   HUD_SURFACE,
-  HUD_TEXT
+  HUD_TEXT,
 } from '@hermes/app/floating-hud'
 import { codiconIcon } from '@hermes/components/ui/codicon'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@hermes/components/ui/command'
@@ -54,7 +54,7 @@ import {
   Sun,
   Users,
   Wrench,
-  Zap
+  Zap,
 } from '@hermes/lib/icons'
 import { normalize } from '@hermes/lib/text'
 import { cn } from '@hermes/lib/utils'
@@ -64,7 +64,7 @@ import {
   $commandPaletteOpen,
   $commandPalettePage,
   closeCommandPalette,
-  setCommandPaletteOpen
+  setCommandPaletteOpen,
 } from '@hermes/store/command-palette'
 import { $bindings, bindingsFor } from '@hermes/store/keybinds'
 import { $dismissedAutoProjectIds, filterVisibleProjects } from '@hermes/store/layout'
@@ -78,7 +78,7 @@ import {
   $desktopVersion,
   $updateApply,
   $updateStatus,
-  requestActiveUpdate
+  requestActiveUpdate,
 } from '@hermes/store/updates'
 import { canOpenNewWindow, openNewWindow } from '@hermes/store/windows'
 import { luminance } from '@hermes/themes/color'
@@ -97,11 +97,12 @@ import {
   PROFILES_ROUTE,
   SETTINGS_ROUTE,
   SKILLS_ROUTE,
-  STARMAP_ROUTE
+  STARMAP_ROUTE,
 } from '../routes'
 import { FIELD_LABELS, SECTIONS } from '../settings/constants'
 import { fieldCopyForSchemaKey } from '../settings/field-copy'
 import { prettyName } from '../settings/helpers'
+import { makeKronTermSettingsViewId, useKronTermSettingsHost } from '../settings/kronterm-settings-host'
 
 import { usePaletteContributions } from './contrib'
 import { MarketplaceThemePage } from './marketplace-theme-page'
@@ -183,7 +184,7 @@ const scoreItem = (item: PaletteItem, needle: string): number => {
   const keys = (item.keywords ?? []).join(' ').toLowerCase()
   const terms = needle.split(/\s+/).filter(Boolean)
 
-  if (terms.some(term => !label.includes(term) && !keys.includes(term))) {
+  if (terms.some((term) => !label.includes(term) && !keys.includes(term))) {
     return 0
   }
 
@@ -201,7 +202,7 @@ const scoreItem = (item: PaletteItem, needle: string): number => {
     return 0.85
   }
 
-  if (words.some(word => word.startsWith(needle))) {
+  if (words.some((word) => word.startsWith(needle))) {
     return 0.8
   }
 
@@ -209,7 +210,7 @@ const scoreItem = (item: PaletteItem, needle: string): number => {
     return 0.7
   }
 
-  if (terms.every(term => label.includes(term))) {
+  if (terms.every((term) => label.includes(term))) {
     return 0.6
   }
 
@@ -228,17 +229,17 @@ const rankGroups = (groups: PaletteGroup[], search: string): PaletteGroup[] => {
   }
 
   return groups
-    .map(group => {
+    .map((group) => {
       const scored = group.items
-        .map(item => ({ item, score: scoreItem(item, needle) }))
-        .filter(entry => entry.score > 0)
+        .map((item) => ({ item, score: scoreItem(item, needle) }))
+        .filter((entry) => entry.score > 0)
         .sort((a, b) => b.score - a.score)
 
-      return { group: { ...group, items: scored.map(entry => entry.item) }, max: scored[0]?.score ?? 0 }
+      return { group: { ...group, items: scored.map((entry) => entry.item) }, max: scored[0]?.score ?? 0 }
     })
-    .filter(entry => entry.max > 0)
+    .filter((entry) => entry.max > 0)
     .sort((a, b) => b.max - a.max)
-    .map(entry => entry.group)
+    .map((entry) => entry.group)
 }
 
 // cmdk selection values must be unique; labels alone can repeat (the same
@@ -268,7 +269,7 @@ const PaletteGroups = memo(function PaletteGroups({
   noResultsLabel,
   onSelectItem,
   onSelectMods,
-  search
+  search,
 }: {
   bindings: Record<string, string[]>
   groups: PaletteGroup[]
@@ -292,7 +293,7 @@ const PaletteGroups = memo(function PaletteGroups({
       )}
       {deferred.map((group, index) => (
         <CommandGroup className={HUD_HEADING} heading={group.heading} key={group.heading ?? `palette-group-${index}`}>
-          {group.items.map(item => (
+          {group.items.map((item) => (
             <PaletteRow
               bindings={bindings}
               item={item}
@@ -315,7 +316,7 @@ const PaletteRow = memo(function PaletteRow({
   modHeld,
   onSelectMods,
   onSelectItem,
-  search
+  search,
 }: {
   bindings: Record<string, string[]>
   item: PaletteItem
@@ -380,7 +381,7 @@ const toSessionEntry = (session: SessionRow): SessionEntry => ({
   git_branch: session.git_branch ?? null,
   id: session.id,
   preview: session.preview ?? undefined,
-  title: sessionTitle(session)
+  title: sessionTitle(session),
 })
 
 type NonConfigSettingsLabel =
@@ -405,47 +406,47 @@ const NON_CONFIG_SETTINGS: ReadonlyArray<{
     icon: Zap,
     keywords: ['accounts', 'sign in', 'oauth', 'login', 'subscription', 'models', 'anthropic', 'openai'],
     labelKey: 'providerAccounts',
-    tab: 'providers&pview=accounts'
+    tab: 'providers&pview=accounts',
   },
   {
     icon: KeyRound,
     keywords: ['providers', 'api key', 'keys', 'secrets', 'tokens', 'egress', 'iron proxy', 'sandbox proxy'],
     labelKey: 'providerApiKeys',
-    tab: 'providers&pview=keys'
+    tab: 'providers&pview=keys',
   },
   { icon: Globe, keywords: ['connection', 'messaging'], labelKey: 'gateway', tab: 'gateway' },
   {
     icon: Network,
     keywords: ['connections', 'gateway', 'remote', 'multi', 'instances', 'ssh', 'cloud', 'add gateway', 'registry'],
     labelKey: 'connections',
-    tab: 'connections'
+    tab: 'connections',
   },
   {
     icon: KeyRound,
     keywords: ['api', 'secrets', 'tokens', 'credentials', 'browser', 'search'],
     labelKey: 'keysTools',
-    tab: 'keys&kview=tools'
+    tab: 'keys&kview=tools',
   },
   {
     icon: Settings2,
     keywords: ['gateway', 'proxy', 'server', 'webhook', 'env', 'egress proxy', 'iron proxy'],
     labelKey: 'keysSettings',
-    tab: 'keys&kview=settings'
+    tab: 'keys&kview=settings',
   },
   {
     icon: Package,
     keywords: ['plugins', 'extensions', 'desktop plugins', 'addon', 'add-on'],
     labelKey: 'plugins',
-    tab: 'plugins'
+    tab: 'plugins',
   },
   { icon: Archive, keywords: ['history', 'archived'], labelKey: 'archivedChats', tab: 'sessions' },
-  { icon: Info, keywords: ['version', 'about'], labelKey: 'about', tab: 'about' }
+  { icon: Info, keywords: ['version', 'about'], labelKey: 'about', tab: 'about' },
 ]
 
 const THEME_MODES: ReadonlyArray<{ icon: IconComponent; mode: ThemeMode }> = [
   { icon: Sun, mode: 'light' },
   { icon: Moon, mode: 'dark' },
-  { icon: Monitor, mode: 'system' }
+  { icon: Monitor, mode: 'system' },
 ]
 
 // Which Light/Dark groups a theme belongs in. Built-ins render in both modes
@@ -508,7 +509,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (open) {
-      setOpenCount(count => count + 1)
+      setOpenCount((count) => count + 1)
       setMounted(true)
 
       return
@@ -537,6 +538,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   const projectTree = useStore($projectTree)
   const dismissedAutoProjects = useStore($dismissedAutoProjectIds)
   const navigate = useNavigate()
+  const kronTermSettingsHost = useKronTermSettingsHost()
   const { availableThemes, mode, resolvedMode, setMode, setTheme, themeName } = useTheme()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState<string | null>(null)
@@ -566,7 +568,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
       sha: status?.currentSha?.slice(0, 7) ?? null,
       target: backend ? 'backend' : 'client',
       updateAvailable: status?.updateAvailable,
-      version: backend ? status?.currentVersion : desktopVersion?.appVersion
+      version: backend ? status?.currentVersion : desktopVersion?.appVersion,
     }).label
   }, [backendApply, backendStatus, clientApply, clientStatus, connection?.mode, desktopVersion?.appVersion, t])
 
@@ -575,14 +577,14 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   const lastSelectMods = useRef<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }>({
     ctrlKey: false,
     metaKey: false,
-    shiftKey: false
+    shiftKey: false,
   })
 
   const noteSelectMods = (event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
     lastSelectMods.current = {
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,
-      shiftKey: event.shiftKey
+      shiftKey: event.shiftKey,
     }
   }
 
@@ -611,19 +613,39 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   // exists while the palette is open, so the queries are inherently lazy — no
   // `enabled` gate needed. react-query handles caching/dedup/staleness, so a
   // reopen paints from cache and revalidates in the background.
+  const workspaceApps = useQuery({
+    queryKey: ['kronterm-launcher-apps'],
+    queryFn: async () => (await window.hermesDesktop?.krontermSurfaces?.apps?.()) ?? [],
+    enabled: true,
+    staleTime: 60000,
+  })
+  const workspaceSpaces = useQuery({
+    queryKey: ['kronterm-launcher-spaces'],
+    queryFn: async () => (await window.hermesDesktop?.krontermSurfaces?.spaces?.()) ?? [],
+  })
+  const [resourceSearch, setResourceSearch] = useState('')
+  useEffect(() => {
+    const timer = window.setTimeout(() => setResourceSearch(search.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [search])
+  const workspaceResources = useQuery({
+    queryKey: ['kronterm-launcher-resources', resourceSearch],
+    queryFn: async () => (await window.hermesDesktop?.krontermSurfaces?.searchResources?.(resourceSearch)) ?? [],
+    enabled: resourceSearch.length > 1,
+  })
   const configQuery = useQuery({
     queryKey: ['command-palette', 'config'],
-    queryFn: () => getHermesConfigRecord()
+    queryFn: () => getHermesConfigRecord(),
   })
 
   const sessionsQuery = useQuery({
     queryKey: ['command-palette', 'sessions'],
-    queryFn: () => listAllProfileSessions(200, 1, 'exclude')
+    queryFn: () => listAllProfileSessions(200, 1, 'exclude'),
   })
 
   const archivedQuery = useQuery({
     queryKey: ['command-palette', 'archived'],
-    queryFn: () => listAllProfileSessions(200, 0, 'only')
+    queryFn: () => listAllProfileSessions(200, 0, 'only'),
   })
 
   const mcpServers = useMemo(() => {
@@ -665,7 +687,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   // the parent page doesn't reopen mid-search.
   const goBack = useCallback(() => {
     setSearch('')
-    setPage(prev => (prev ? (PAGE_PARENTS[prev] ?? null) : null))
+    setPage((prev) => (prev ? (PAGE_PARENTS[prev] ?? null) : null))
   }, [])
 
   const settingsSectionLabel = useCallback(
@@ -698,7 +720,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
         ? [
             {
               heading: t.commandCenter.branches,
-              items: worktrees.map(wt => {
+              items: worktrees.map((wt) => {
                 const name = wt.branch?.trim() || wt.path.split('/').pop() || wt.path
 
                 return {
@@ -706,10 +728,10 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
                   id: `worktree-${wt.path}`,
                   keywords: ['branch', 'worktree', 'switch', name, wt.path],
                   label: t.commandCenter.startInBranch(name),
-                  run: () => requestStartWorkSession(wt.path)
+                  run: () => requestStartWorkSession(wt.path),
                 }
-              })
-            }
+              }),
+            },
           ]
         : [],
     [t, worktrees]
@@ -734,9 +756,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           id: 'project-open-folder',
           keywords: ['open', 'folder', 'directory', 'project', 'add', 'import', 'workspace'],
           label: cc.openFolder,
-          run: () => void openFolderAsProject()
+          run: () => void openFolderAsProject(),
         },
-        ...filterVisibleProjects(projectTree, dismissedAutoProjects).map(project => ({
+        ...filterVisibleProjects(projectTree, dismissedAutoProjects).map((project) => ({
           comboHint: 'mod+enter',
           icon: codiconIcon(project.icon || (project.isNoProject ? 'home' : 'folder-library')),
           id: `project-${project.id}`,
@@ -744,9 +766,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           label: project.label,
           modLabel: cc.newSessionInProject(project.label),
           runWithEvent: (event?: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) =>
-            goToProject(project.id, { newSession: Boolean(event?.metaKey || event?.ctrlKey) })
-        }))
-      ]
+            goToProject(project.id, { newSession: Boolean(event?.metaKey || event?.ctrlKey) }),
+        })),
+      ],
     }
 
     // Group order is the tiebreaker rankGroups falls back on (stable sort), and
@@ -757,13 +779,107 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
       {
         heading: cc.goTo,
         items: [
+          ...(window.hermesDesktop?.krontermSurfaces
+            ? [
+                {
+                  id: 'kronterm-review',
+                  icon: Monitor,
+                  label: 'Review',
+                  keywords: ['git', 'diff', 'changes', 'widget'],
+                  run: () =>
+                    window.dispatchEvent(new CustomEvent('kronterm:open-review', { detail: { scopeCwd: null } })),
+                },
+              ]
+            : []),
+          ...(window.hermesDesktop?.krontermSurfaces?.openMachines
+            ? (['desktop', 'android', 'iphone'] as const).flatMap((kind) => {
+                const label = kind === 'desktop' ? 'Sandbox' : kind === 'android' ? 'Android' : 'iPhone'
+                return [
+                  {
+                    id: `machine-${kind}`,
+                    icon: Monitor,
+                    label,
+                    keywords: ['vm', 'mobile', 'simulator', 'emulator', 'widget', 'launch'],
+                    run: () => {
+                      void window.hermesDesktop.krontermSurfaces.openMachines(kind).then((result) => {
+                        if (!result.ok) console.error(result.error)
+                      })
+                    },
+                  },
+                  {
+                    id: `machine-${kind}-settings`,
+                    icon: Settings2,
+                    label: `${label} settings`,
+                    keywords: ['vm', 'mobile', 'device', 'runtime', 'settings'],
+                    run: () => {
+                      void window.hermesDesktop.krontermSurfaces.openMachines(kind, true).then((result) => {
+                        if (!result.ok) console.error(result.error)
+                      })
+                    },
+                  },
+                ]
+              })
+            : []),
+          ...(window.hermesDesktop?.krontermSurfaces?.launchWorkspace
+            ? (
+                [
+                  ['terminal', 'Terminal'],
+                  ['browser', 'Browser'],
+                  ['files', 'Files'],
+                  ['connections', 'Connections'],
+                  ['scratchpad', 'Scratchpad'],
+                  ['activity', 'Activity Center'],
+                  ['control', 'Control Center'],
+                  ['widgets', 'Tiled Widgets'],
+                  ['tabs', 'Widget Tabs'],
+                  ['canvas', 'Canvas'],
+                  ['os', 'KronTerm OS'],
+                ] as const
+              ).map(([action, label]) => ({
+                id: `workspace-${action}`,
+                icon: Monitor,
+                label,
+                keywords: ['kronterm', 'workspace', 'launcher', action],
+                run: () => {
+                  void window.hermesDesktop.krontermSurfaces.launchWorkspace(action)
+                },
+              }))
+            : []),
+          ...(workspaceSpaces.data ?? []).map((space) => ({
+            id: `workspace-space-${space.id}`,
+            icon: Layers3,
+            label: space.name,
+            keywords: ['project', 'space', 'workspace'],
+            run: () => {
+              void window.hermesDesktop?.krontermSurfaces?.openSpace?.(space.id)
+            },
+          })),
+          ...(workspaceResources.data ?? []).map((resource) => ({
+            id: `workspace-resource-${resource.path}`,
+            icon: Package,
+            label: resource.name,
+            detail: resource.detail,
+            keywords: [resource.path, resource.kind],
+            run: () => {
+              void window.hermesDesktop?.krontermSurfaces?.openResource?.(resource.path)
+            },
+          })),
+          ...(workspaceApps.data ?? []).map((app) => ({
+            id: `native-app-${app.id}`,
+            icon: AppWindow,
+            label: app.name,
+            keywords: ['application', 'mac', 'native'],
+            run: () => {
+              void window.hermesDesktop?.krontermSurfaces?.launchApp?.(app.id)
+            },
+          })),
           {
             action: 'session.new',
             icon: Plus,
             id: 'nav-new',
             keywords: ['chat', 'create'],
             label: cc.nav.newChat.title,
-            run: go(NEW_CHAT_ROUTE)
+            run: go(NEW_CHAT_ROUTE),
           },
           ...(canOpenNewWindow()
             ? [
@@ -773,8 +889,8 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
                   id: 'nav-new-window',
                   keywords: ['window', 'instance', 'open', 'new'],
                   label: t.keybinds.actions['session.newWindow'],
-                  run: () => void openNewWindow()
-                }
+                  run: () => void openNewWindow(),
+                },
               ]
             : []),
           {
@@ -782,7 +898,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             icon: Settings,
             id: 'nav-settings',
             label: cc.nav.settings.title,
-            run: go(SETTINGS_ROUTE)
+            run: go(SETTINGS_ROUTE),
           },
           {
             action: 'nav.skills',
@@ -790,21 +906,21 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: 'nav-skills',
             keywords: ['skills', 'tools', 'toolsets', 'mcp', 'capabilities'],
             label: cc.nav.skills.title,
-            run: go(SKILLS_ROUTE)
+            run: go(SKILLS_ROUTE),
           },
           {
             action: 'nav.messaging',
             icon: MessageCircle,
             id: 'nav-messaging',
             label: cc.nav.messaging.title,
-            run: go(MESSAGING_ROUTE)
+            run: go(MESSAGING_ROUTE),
           },
           {
             action: 'nav.artifacts',
             icon: Package,
             id: 'nav-artifacts',
             label: cc.nav.artifacts.title,
-            run: go(ARTIFACTS_ROUTE)
+            run: go(ARTIFACTS_ROUTE),
           },
           {
             action: 'nav.cron',
@@ -812,18 +928,24 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: 'nav-cron',
             keywords: ['schedule', 'jobs'],
             label: t.shell.statusbar.cron,
-            run: go(CRON_ROUTE)
+            run: go(CRON_ROUTE),
           },
-          { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
+          {
+            action: 'nav.profiles',
+            icon: Users,
+            id: 'nav-profiles',
+            label: t.profiles.title,
+            run: go(PROFILES_ROUTE),
+          },
           { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) },
           {
             icon: Starmap,
             id: 'nav-starmap',
             keywords: ['star map', 'memory', 'memories', 'skills', 'graph', 'learning', 'constellation'],
             label: t.starmap.title,
-            run: go(STARMAP_ROUTE)
-          }
-        ]
+            run: go(STARMAP_ROUTE),
+          },
+        ],
       },
       projectGroup,
       // Registry-contributed rows (core features + plugins) — one group,
@@ -832,7 +954,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
         ? [
             {
               heading: cc.commands,
-              items: contributedItems.map(item => ({
+              items: contributedItems.map((item) => ({
                 action: item.action,
                 // Read on mount and after every select (the deps below), so a
                 // row that reports state can't show the state it just left.
@@ -843,9 +965,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
                 keepOpen: item.keepOpen,
                 keywords: item.keywords,
                 label: item.label,
-                run: item.run
-              }))
-            }
+                run: item.run,
+              })),
+            },
           ]
         : []),
       {
@@ -856,28 +978,28 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: 'cc-sessions',
             keywords: ['command center', 'sessions', 'pin'],
             label: cc.sections.sessions,
-            run: go(`${COMMAND_CENTER_ROUTE}?section=sessions`)
+            run: go(`${COMMAND_CENTER_ROUTE}?section=sessions`),
           },
           {
             icon: Activity,
             id: 'cc-system',
             keywords: ['command center', 'system', 'status', 'logs'],
             label: cc.sections.system,
-            run: go(`${COMMAND_CENTER_ROUTE}?section=system`)
+            run: go(`${COMMAND_CENTER_ROUTE}?section=system`),
           },
           {
             icon: BarChart3,
             id: 'cc-usage',
             keywords: ['command center', 'usage', 'tokens', 'cost'],
             label: cc.sections.usage,
-            run: go(`${COMMAND_CENTER_ROUTE}?section=usage`)
+            run: go(`${COMMAND_CENTER_ROUTE}?section=usage`),
           },
           {
             icon: RefreshCw,
             id: 'cc-restart-gateway',
             keywords: ['gateway', 'restart', 'messaging', 'reconnect', 'system'],
             label: cc.restartGateway,
-            run: () => void runGatewayRestart()
+            run: () => void runGatewayRestart(),
           },
           {
             detail: updateVersionLabel,
@@ -885,9 +1007,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: 'cc-update-hermes',
             keywords: ['update', 'upgrade', 'hermes', 'version', 'system', 'restart'],
             label: cc.updateHermes,
-            run: () => requestActiveUpdate()
-          }
-        ]
+            run: () => requestActiveUpdate(),
+          },
+        ],
       },
       {
         // Declared before Settings: cmdk keeps group order, so this keeps the
@@ -900,50 +1022,65 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: 'appearance-theme',
             keywords: ['theme', 'appearance', 'color', 'palette', 'skin', 'dark', 'light', 'look'],
             label: cc.changeTheme,
-            to: 'theme'
+            to: 'theme',
           },
           {
             icon: Sun,
             id: 'appearance-mode',
             keywords: ['appearance', 'color mode', 'brightness', 'dark', 'light', 'system'],
             label: cc.changeColorMode,
-            to: 'color-mode'
+            to: 'color-mode',
           },
           {
             icon: PawPrint,
             id: 'appearance-pets',
             keywords: ['pet', 'petdex', 'mascot', 'pets', '/pet', 'paw'],
             label: cc.pets.title,
-            to: 'pets'
+            to: 'pets',
           },
           {
             icon: Egg,
             id: 'appearance-generate-pet',
             keywords: ['pet', 'generate', 'create', 'make', 'new pet', 'mascot', 'hatch', 'ai'],
             label: cc.generatePet.title,
-            run: () => openPetGenerate()
-          }
-        ]
+            run: () => openPetGenerate(),
+          },
+        ],
       },
       {
         heading: cc.settings,
         items: [
-          ...SECTIONS.map(section => ({
+          ...SECTIONS.map((section) => ({
             icon: section.icon,
             id: `set-config-${section.id}`,
             keywords: ['settings', section.label, settingsSectionLabel(section)],
             label: settingsSectionLabel(section),
-            run: go(settingsTab(`config:${section.id}`))
+            run: go(settingsTab(`config:${section.id}`)),
           })),
-          ...NON_CONFIG_SETTINGS.map(entry => ({
+          ...NON_CONFIG_SETTINGS.map((entry) => ({
             icon: entry.icon,
             id: `set-${entry.tab}`,
             keywords: ['settings', ...(entry.keywords ?? [])],
             label: t.settings.nav[entry.labelKey],
-            run: go(settingsTab(entry.tab))
-          }))
-        ]
-      }
+            run: go(settingsTab(entry.tab)),
+          })),
+        ],
+      },
+      // KronTerm host sections on Cmd+P; omitted when Hermes runs standalone.
+      ...(kronTermSettingsHost && kronTermSettingsHost.sections.length > 0
+        ? [
+            {
+              heading: `KronTerm ${cc.settings}`,
+              items: kronTermSettingsHost.sections.map((section) => ({
+                icon: Monitor,
+                id: `set-${makeKronTermSettingsViewId(section.id)}`,
+                keywords: ['kronterm', 'settings', 'command center', section.label, section.id],
+                label: `KronTerm: ${section.label}`,
+                run: go(settingsTab(makeKronTermSettingsViewId(section.id))),
+              })),
+            },
+          ]
+        : []),
     ]
     // `selectTick` is a deliberate re-read trigger, not a value: rows report
     // live state through `detail()`, so the groups must rebuild after a select
@@ -951,13 +1088,17 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     contributedItems,
+    workspaceApps.data,
+    workspaceSpaces.data,
+    workspaceResources.data,
     dismissedAutoProjects,
     go,
+    kronTermSettingsHost,
     projectTree,
     selectTick,
     settingsSectionLabel,
     t,
-    updateVersionLabel
+    updateVersionLabel,
   ])
 
   // The long, granular lists (settings fields, API keys, MCP servers, archived
@@ -982,9 +1123,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: `goto-${directId}`,
             keywords: ['session', 'id', 'go to', directId],
             label: `${t.commandCenter.goToSession} ${directId}`,
-            runWithEvent: goSession(directId)
-          }
-        ]
+            runWithEvent: goSession(directId),
+          },
+        ],
       })
     }
 
@@ -999,9 +1140,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: `open-folder-${directId}`,
             keywords: ['open', 'folder', 'project', directId],
             label: t.commandCenter.openFolderAt(directId),
-            run: () => void openFolderAsProject(directId)
-          }
-        ]
+            run: () => void openFolderAsProject(directId),
+          },
+        ],
       })
     }
 
@@ -1018,23 +1159,23 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           id: 'cap-skills',
           keywords: ['skills', 'capabilities'],
           label: `${capLabel}: ${t.skills.tabSkills}`,
-          run: go(`${SKILLS_ROUTE}?tab=skills`)
+          run: go(`${SKILLS_ROUTE}?tab=skills`),
         },
         {
           icon: SlidersHorizontal,
           id: 'cap-toolsets',
           keywords: ['tools', 'toolsets', 'capabilities'],
           label: `${capLabel}: ${t.skills.tabToolsets}`,
-          run: go(`${SKILLS_ROUTE}?tab=toolsets`)
+          run: go(`${SKILLS_ROUTE}?tab=toolsets`),
         },
         {
           icon: Layers3,
           id: 'cap-mcp',
           keywords: ['mcp', 'servers', 'tools', 'capabilities', 'model context protocol'],
           label: `${capLabel}: ${t.skills.tabMcp}`,
-          run: go(`${SKILLS_ROUTE}?tab=mcp`)
-        }
-      ]
+          run: go(`${SKILLS_ROUTE}?tab=mcp`),
+        },
+      ],
     })
 
     // Apply a theme directly from the root search (e.g. "nous" → Nous). Live
@@ -1042,7 +1183,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
     // can't render the current light/dark mode, flip to the one it supports.
     result.push({
       heading: t.settings.appearance.themeTitle,
-      items: availableThemes.map(theme => ({
+      items: availableThemes.map((theme) => ({
         active: themeName === theme.name,
         icon: Palette,
         id: `search-theme-${theme.name}`,
@@ -1055,50 +1196,50 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           if (!themeSupportsMode(theme.name, resolvedMode)) {
             setMode(resolvedMode === 'dark' ? 'light' : 'dark')
           }
-        }
-      }))
+        },
+      })),
     })
 
     // Switch light/dark/system directly (typing "dark" shouldn't require the
     // nested color-mode page).
     result.push({
       heading: t.settings.appearance.colorMode,
-      items: THEME_MODES.map(entry => ({
+      items: THEME_MODES.map((entry) => ({
         active: mode === entry.mode,
         icon: entry.icon,
         id: `search-mode-${entry.mode}`,
         keepOpen: true,
         keywords: ['appearance', 'color mode', 'brightness', entry.mode, t.settings.modeOptions[entry.mode].label],
         label: t.settings.modeOptions[entry.mode].label,
-        run: () => setMode(entry.mode)
-      }))
+        run: () => setMode(entry.mode),
+      })),
     })
 
     if (sessions.length > 0) {
       result.push({
         heading: t.commandCenter.sections.sessions,
-        items: sessions.map(session => ({
+        items: sessions.map((session) => ({
           icon: MessageCircle,
           id: `session-${session.id}`,
           keywords: [
             'chat',
             'session',
             ...(session.preview ? [session.preview] : []),
-            ...(session.git_branch ? [session.git_branch] : [])
+            ...(session.git_branch ? [session.git_branch] : []),
           ],
           label: session.title,
-          runWithEvent: goSession(session.id)
-        }))
+          runWithEvent: goSession(session.id),
+        })),
       })
     }
 
-    const fieldItems = SECTIONS.flatMap(section =>
-      section.keys.map(key => ({
+    const fieldItems = SECTIONS.flatMap((section) =>
+      section.keys.map((key) => ({
         icon: section.icon,
         id: `field-${key}`,
         keywords: ['settings', key, section.label, settingsSectionLabel(section)],
         label: `${settingsSectionLabel(section)}: ${configFieldLabel(key)}`,
-        run: go(`${SETTINGS_ROUTE}?tab=config:${section.id}&field=${encodeURIComponent(key)}`)
+        run: go(`${SETTINGS_ROUTE}?tab=config:${section.id}&field=${encodeURIComponent(key)}`),
       }))
     )
 
@@ -1107,20 +1248,20 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
     if (mcpServers.length > 0) {
       result.push({
         heading: t.commandCenter.mcpServers,
-        items: mcpServers.map(name => ({
+        items: mcpServers.map((name) => ({
           icon: Wrench,
           id: `mcp-${name}`,
           keywords: ['mcp', 'server', 'tool'],
           label: name,
-          run: go(`${SKILLS_ROUTE}?tab=mcp&server=${encodeURIComponent(name)}`)
-        }))
+          run: go(`${SKILLS_ROUTE}?tab=mcp&server=${encodeURIComponent(name)}`),
+        })),
       })
     }
 
     if (archivedSessions.length > 0) {
       result.push({
         heading: t.commandCenter.archivedChats,
-        items: archivedSessions.map(session => ({
+        items: archivedSessions.map((session) => ({
           icon: Archive,
           id: `archived-${session.id}`,
           keywords: [
@@ -1128,11 +1269,11 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             'chat',
             'session',
             ...(session.preview ? [session.preview] : []),
-            ...(session.git_branch ? [session.git_branch] : [])
+            ...(session.git_branch ? [session.git_branch] : []),
           ],
           label: session.title,
-          run: go(`${SETTINGS_ROUTE}?tab=sessions&session=${encodeURIComponent(session.id)}`)
-        }))
+          run: go(`${SETTINGS_ROUTE}?tab=sessions&session=${encodeURIComponent(session.id)}`),
+        })),
       })
     }
 
@@ -1152,7 +1293,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
     setTheme,
     settingsSectionLabel,
     t,
-    themeName
+    themeName,
   ])
 
   // Branch rows rank below BOTH the fixed groups and the typed-only lists: they
@@ -1180,18 +1321,18 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
                 id: 'theme-install',
                 keywords: ['install', 'marketplace', 'vscode', 'vs code', 'download', 'new', 'color'],
                 label: t.commandCenter.installTheme.title,
-                to: 'install-theme'
-              }
-            ]
+                to: 'install-theme',
+              },
+            ],
           },
           // Built-ins and imported families list under the mode(s) they support;
           // picking sets skin + mode at once. A multi-variant import (GitHub,
           // Solarized) appears in both groups and switches variants with the mode.
-          ...(['light', 'dark'] as const).map(groupMode => ({
+          ...(['light', 'dark'] as const).map((groupMode) => ({
             heading: groupMode === 'light' ? t.settings.modeOptions.light.label : t.settings.modeOptions.dark.label,
             items: availableThemes
-              .filter(theme => themeSupportsMode(theme.name, groupMode))
-              .map(theme => ({
+              .filter((theme) => themeSupportsMode(theme.name, groupMode))
+              .map((theme) => ({
                 active: themeName === theme.name && resolvedMode === groupMode,
                 icon: groupMode === 'light' ? Sun : Moon,
                 id: `theme-${theme.name}-${groupMode}`,
@@ -1201,10 +1342,10 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
                 run: () => {
                   setTheme(theme.name)
                   setMode(groupMode)
-                }
-              }))
-          }))
-        ]
+                },
+              })),
+          })),
+        ],
       },
       'color-mode': {
         title: t.settings.appearance.colorMode,
@@ -1212,31 +1353,31 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
         groups: [
           {
             heading: t.settings.appearance.colorMode,
-            items: THEME_MODES.map(entry => ({
+            items: THEME_MODES.map((entry) => ({
               active: mode === entry.mode,
               icon: entry.icon,
               id: `mode-${entry.mode}`,
               keepOpen: true,
               keywords: ['appearance', 'brightness', t.settings.modeOptions[entry.mode].label],
               label: t.settings.modeOptions[entry.mode].label,
-              run: () => setMode(entry.mode)
-            }))
-          }
-        ]
+              run: () => setMode(entry.mode),
+            })),
+          },
+        ],
       },
       // Server-driven page: browse petdex gallery, adopt/switch, toggle off.
       pets: {
         title: t.commandCenter.pets.title,
         placeholder: t.commandCenter.pets.placeholder,
-        groups: []
+        groups: [],
       },
       // Server-driven page: items come from the Marketplace, rendered by
       // <MarketplaceThemePage> (loader + live search + per-row install).
       'install-theme': {
         title: t.commandCenter.installTheme.pageTitle,
         placeholder: t.commandCenter.installTheme.placeholder,
-        groups: []
-      }
+        groups: [],
+      },
     }),
     [availableThemes, mode, resolvedMode, setMode, setTheme, t, themeName]
   )
@@ -1271,7 +1412,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
 
     // Staying open means the rows are still on screen — re-read anything they
     // report (a toggle's on/off) so the note isn't showing the previous state.
-    setSelectTick(tick => tick + 1)
+    setSelectTick((tick) => tick + 1)
   }
 
   return (
@@ -1280,16 +1421,18 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
       <DialogPrimitive.Overlay className="fixed inset-0 z-(--z-over-modal)" />
       <DialogPrimitive.Content
         aria-describedby={undefined}
+        data-hermes-command-palette=""
         className={cn(
           HUD_POSITION,
           HUD_SURFACE,
+          'hermes-glass-menu',
           'z-(--z-over-modal-content) w-[min(34rem,calc(100vw-2rem))] overflow-hidden duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95'
         )}
         // The close animation finishing is what retires this whole subtree —
         // the CSS owns the duration, not a hardcoded timer. Guarded on the
         // content itself (descendants animate too) and on the closed state, so
         // an OPEN animation never unmounts the palette we just opened.
-        onAnimationEnd={event => {
+        onAnimationEnd={(event) => {
           if (event.target === event.currentTarget && event.currentTarget.dataset.state === 'closed') {
             onExited()
           }
@@ -1311,7 +1454,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           )}
           <CommandInput
             className={HUD_TEXT}
-            onKeyDown={event => {
+            onKeyDown={(event) => {
               // Capture modifiers before cmdk's Enter fires onSelect (which
               // swipes the inviting MouseEvent and hands us nothing).
               noteSelectMods(event)
@@ -1335,7 +1478,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             right={page === 'pets' ? <PetInlineToggle /> : undefined}
             value={search}
           />
-          <CommandList className="dt-portal-scrollbar max-h-[min(20rem,56vh)]">
+          <CommandList className="dt-portal-scrollbar max-h-[min(26rem,60vh)]">
             {/* Server-driven pages render their own list; the rest show groups. */}
             {page === 'pets' ? (
               <PetPalettePage

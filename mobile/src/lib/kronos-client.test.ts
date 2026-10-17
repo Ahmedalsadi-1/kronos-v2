@@ -1,4 +1,4 @@
-import { makeDirectMobileUiUrl, messageText, normalizeHostUrl } from "./kronos-client";
+import { messageText, normalizeHostUrl } from "./kronos-client";
 
 describe("normalizeHostUrl", () => {
     it("adds HTTPS and removes an API suffix", () => {
@@ -11,23 +11,6 @@ describe("normalizeHostUrl", () => {
 
     it("rejects unsupported protocols", () => {
         expect(() => normalizeHostUrl("ftp://kron.example")).toThrow("HTTPS or HTTP");
-    });
-});
-
-describe("makeDirectMobileUiUrl", () => {
-    it("opens the shipped KronosChamber mobile shell against the selected host", () => {
-        const url = new URL(
-            makeDirectMobileUiUrl("http://127.0.0.1:3107", {
-                sessionId: "session-1",
-                surfaceId: "surface-1",
-            })
-        );
-
-        expect(url.origin).toBe("http://127.0.0.1:3107");
-        expect(url.searchParams.get("apiBaseUrl")).toBe("http://127.0.0.1:3107/api");
-        expect(url.searchParams.get("embeddedHost")).toBe("kronterm");
-        expect(url.searchParams.get("mobileShell")).toBe("iphone");
-        expect(url.searchParams.get("currentSessionId")).toBe("session-1");
     });
 });
 

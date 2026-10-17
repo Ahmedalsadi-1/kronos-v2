@@ -3,8 +3,14 @@
 
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import {
+    normalizeWorkspacePresentation,
+    publishWorkspacePresentation,
+    readWorkspacePresentation,
+    subscribeWorkspacePresentation,
+} from "@/app/tab/workspace-presentation";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useSyncExternalStore } from "react";
 import { useSettingField, useToggleField } from "./kronsettings-hooks";
 import type { KronSettingsViewModel } from "./kronsettings-model";
 import {
@@ -20,25 +26,6 @@ interface KronSettingsChatContentProps {
     model: KronSettingsViewModel;
 }
 
-const LayoutModeStorageKey = "kronterm:layoutmode";
-const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
-
-function publishLayoutMode(mode: string) {
-    try {
-        window.localStorage.setItem(LayoutModeStorageKey, mode);
-        window.dispatchEvent(new CustomEvent(LayoutModeChangedEvent, { detail: { mode } }));
-    } catch {}
-}
-
-function getStoredLayoutMode() {
-    try {
-        const mode = window.localStorage.getItem(LayoutModeStorageKey);
-        return mode === "canvas" || mode === "tabs" || mode === "web" || mode === "os" ? mode : "widgets";
-    } catch {
-        return "widgets";
-    }
-}
-
 const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) => {
     const fullConfig = useAtomValue(model.env.atoms.fullConfigAtom);
     const settings = fullConfig?.settings ?? {};
@@ -48,15 +35,12 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
     const [aiModel, setAiModel] = useSettingField("ai:model");
     const [maxTokens, setMaxTokens] = useSettingField("ai:maxtokens");
     const [autoNameChats, setAutoNameChats] = useToggleField("waveai:autoname" as keyof SettingsType);
-    const quickComposer = settings["app:quickcomposer"] ?? false;
-    const settingsLayoutMode =
-        settings["app:layoutmode"] === "canvas" ||
-        settings["app:layoutmode"] === "tabs" ||
-        settings["app:layoutmode"] === "web" ||
-        settings["app:layoutmode"] === "os"
-            ? settings["app:layoutmode"]
-            : "widgets";
-    const [layoutMode, setLayoutMode] = useState(() => getStoredLayoutMode());
+    const settingsLayoutMode = normalizeWorkspacePresentation(settings["app:layoutmode"]) ?? "os";
+    const layoutMode = useSyncExternalStore(
+        subscribeWorkspacePresentation,
+        () => readWorkspacePresentation(settingsLayoutMode),
+        () => settingsLayoutMode
+    );
 
     const setValues = useCallback((values: Record<string, any>) => {
         void RpcApi.SetConfigCommand(TabRpcClient, values).catch((error) => {
@@ -69,11 +53,9 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
             if (preset === "kronos") {
                 setValues({
                     "waveai:defaultmode": "waveai@kronos",
-                    "app:quickcomposer": false,
                     "app:layoutmode": "widgets",
                 });
-                publishLayoutMode("widgets");
-                setLayoutMode("widgets");
+                publishWorkspacePresentation("widgets");
                 return;
             }
             if (preset === "openai") {
@@ -94,10 +76,6 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
         [setValues]
     );
 
-    useEffect(() => {
-        setLayoutMode(settingsLayoutMode);
-    }, [settingsLayoutMode]);
-
     return (
         <div>
             <SettingsCard>
@@ -117,8 +95,7 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                             Recommended
                         </div>
                         <p className="text-xs leading-relaxed text-secondary">
-                            Use KronosCode defaults, keep the dock as the main chat, and leave the floating composer
-                            off.
+                            Use KronosCode defaults and keep the dock as the main chat surface.
                         </p>
                     </button>
                     <button
@@ -205,27 +182,21 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                 <SectionHeader
                     title="KronTerm Chat UI"
                     icon="wand-magic-sparkles"
-                    description="Control the side dock, floating composer, and workspace layout."
-                />
-                <ToggleSetting
-                    title="Floating Chat Composer"
-                    description="Show the bottom quick composer. Disable this if you only want the side dock."
-                    checked={quickComposer}
-                    onChange={(v) => setValues({ "app:quickcomposer": v })}
+                    description="Control the Kronos inspector and workspace layout."
                 />
                 <SelectSetting
                     title="Workspace Layout"
                     description="Choose tiled widgets, browser-style widget tabs, or canvas mode."
                     value={layoutMode}
                     onChange={(v) => {
-                        publishLayoutMode(v);
-                        setLayoutMode(v === "canvas" || v === "tabs" || v === "web" ? v : "widgets");
-                        setValues({ "app:layoutmode": v });
+                        const presentation = publishWorkspacePresentation(v);
+                        setValues({ "app:layoutmode": presentation });
                     }}
                     options={[
                         { value: "widgets", label: "Widgets" },
                         { value: "tabs", label: "Widget tabs" },
                         { value: "canvas", label: "Canvas" },
+                        { value: "os", label: "OS Mode" },
                         { value: "web", label: "Web" },
                     ]}
                 />

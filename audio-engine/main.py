@@ -64,6 +64,14 @@ class VoiceEngine:
 
     # ── Commands ─────────────────────────────────────────────────
 
+    def cmd_transcribe_file(self, params):
+        if not isinstance(params, dict):
+            raise ValueError("File transcription requires parameters")
+        language = params.get("language")
+        if language is not None and not isinstance(language, str):
+            raise ValueError("Transcription language must be a string")
+        return self.stt.transcribe_file_segments(params.get("path"), language)
+
     def cmd_ping(self, params):
         return "pong"
 

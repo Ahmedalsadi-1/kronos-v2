@@ -1,8 +1,12 @@
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { ToolFailure, ToolOperationContext, type ToolTarget } from "./tool-execution.js";
+
+const ExecFile = promisify(execFile);
 
 /**
  * Bridge to KronTerm's wsh CLI and daemon.
@@ -22,6 +26,7 @@ type RecentWebOpen = {
 };
 
 export type SurfaceCapability = {
+    nativeCallerId?: string;
     token: string;
     tabId: string;
     blockId?: string;
@@ -57,6 +62,7 @@ export function readSurfaceCapability(filePath: string): SurfaceCapability {
 }
 
 export type WorkspaceSurfaceControl = {
+    index?: number;
     action: string;
     presentation?: string;
     blockId?: string;
@@ -75,10 +81,33 @@ export type WorkspaceSurfaceControl = {
     color?: string;
     side?: string;
     view?: string;
+    appId?: string;
+    appName?: string;
+    file?: string;
     workspaceId?: string;
 };
 
+export function validateWorkspaceSurfaceControl(input: WorkspaceSurfaceControl): void {
+    for (const field of ["x", "y", "width", "height", "size"] as const) {
+        if (input[field] != null && !Number.isFinite(input[field])) {
+            throw new Error(`Workspace ${field} must be finite`);
+        }
+    }
+    for (const field of ["width", "height"] as const) {
+        if (input[field] != null && input[field] <= 0) {
+            throw new Error(`Workspace ${field} must be positive`);
+        }
+    }
+    if (input.action === "hud.mode" && !["hud", "alongside", "workspace"].includes(input.presentation ?? "")) {
+        throw new Error("HUD mode must be hud, alongside, or workspace");
+    }
+    if (["hud.open", "hud.background", "hud.restore"].includes(input.action) && !input.blockId?.trim()) {
+        throw new Error("A block ID is required for HUD widget control");
+    }
+}
+
 export function makeWorkspaceSurfaceControlArgs(input: WorkspaceSurfaceControl): string[] {
+    validateWorkspaceSurfaceControl(input);
     const blockId = (value: string) => (value.startsWith("block:") ? value.slice("block:".length) : value);
     const args = ["workspace-surface", "control", input.action];
     if (input.presentation) args.push("--presentation", input.presentation);
@@ -98,6 +127,9 @@ export function makeWorkspaceSurfaceControlArgs(input: WorkspaceSurfaceControl):
     if (input.color) args.push("--color", input.color);
     if (input.side) args.push("--side", input.side);
     if (input.view) args.push("--view", input.view);
+    if (input.appId) args.push("--app-id", input.appId);
+    if (input.appName) args.push("--app-name", input.appName);
+    if (input.file) args.push("--file", input.file);
     if (input.workspaceId) args.push("--workspace", input.workspaceId);
     return args;
 }
@@ -189,7 +221,29 @@ export function makeSandboxDragArgs(
     return args;
 }
 
+// A rebuilt dist binary must win over a stale repo-root copy left by an older build.
+export function pickNewestWshBinary(candidates: string[]): string | undefined {
+    return candidates
+        .filter((candidate) => candidate && existsSync(candidate))
+        .map((candidate) => ({ candidate, mtimeMs: statSync(candidate).mtimeMs }))
+        .sort((left, right) => right.mtimeMs - left.mtimeMs)[0]?.candidate;
+}
+
 export class WshBridge {
+    async withToolTarget<T>(target: ToolTarget, operation: () => Promise<T>): Promise<T> {
+        if (target.targetTabId || target.targetWorkspaceId) {
+            throw new ToolFailure(
+                "TARGET_UNSUPPORTED",
+                "Explicit workspace targeting requires the KronTerm native tool server"
+            );
+        }
+        return operation();
+    }
+
+    async workspaceInventory(): Promise<string> {
+        return this.getWorkspaceInfo();
+    }
+
     private wshPath: string;
     private recentWebOpens = new Map<string, RecentWebOpen>();
     private pendingWebOpen: Promise<string> | null = null;
@@ -211,32 +265,64 @@ export class WshBridge {
         const packagedBinDir = resourcesPath ? join(resourcesPath, "app.asar.unpacked", "dist", "bin") : null;
         const packagedWsh =
             packagedBinDir && existsSync(packagedBinDir)
-                ? readdirSync(packagedBinDir).find((filename) => filename === "wsh" || filename.startsWith("wsh-"))
+                ? (readdirSync(packagedBinDir).find(
+                      (filename) =>
+                          filename.startsWith("wsh-") &&
+                          filename.endsWith(
+                              `${process.platform}.${process.arch}${process.platform === "win32" ? ".exe" : ""}`
+                          )
+                  ) ??
+                  readdirSync(packagedBinDir).find(
+                      (filename) => filename === (process.platform === "win32" ? "wsh.exe" : "wsh")
+                  ))
                 : null;
-        const candidates = [
-            repoWsh,
+        const envCandidates = [
             process.env.KRONTERM_WSHBINDIR ? join(process.env.KRONTERM_WSHBINDIR, "wsh") : null,
             process.env.WAVETERM_WSH ? process.env.WAVETERM_WSH : null,
             packagedBinDir && packagedWsh ? join(packagedBinDir, packagedWsh) : null,
-            join(homedir(), "kronterm", "dist", "bin", "wsh"),
+        ];
+        for (const candidate of envCandidates) {
+            if (candidate && existsSync(candidate)) return candidate;
+        }
+        const distBinDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "dist", "bin");
+        const platformSuffix = `${process.platform}.${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
+        const distWsh = existsSync(distBinDir)
+            ? (readdirSync(distBinDir).find(
+                  (filename) => filename.startsWith("wsh-") && filename.endsWith(platformSuffix)
+              ) ?? readdirSync(distBinDir).find((filename) => filename === "wsh"))
+            : null;
+        const newest = pickNewestWshBinary(
+            [
+                repoWsh,
+                join(homedir(), "kronterm", "dist", "bin", "wsh"),
+                distWsh ? join(distBinDir, distWsh) : null,
+            ].filter((candidate): candidate is string => candidate != null)
+        );
+        if (newest) return newest;
+        const legacyCandidates = [
             "/Applications/Wave Terminal.app/Contents/Resources/bin/wsh",
             join(homedir(), "Applications/Wave Terminal.app/Contents/Resources/bin/wsh"),
             "/usr/local/bin/wsh",
             "/opt/homebrew/bin/wsh",
             join(homedir(), "bin/wsh"),
         ];
-        for (const p of candidates) {
-            if (p && existsSync(p)) return p;
-        }
-        return "wsh"; // fallback to PATH
+        return legacyCandidates.find((candidate) => existsSync(candidate)) ?? "wsh"; // fallback to PATH
+    }
+
+    public async getDiscoverySurfaceCapability(): Promise<SurfaceCapability | undefined> {
+        return this.getSurfaceCapability();
+    }
+
+    protected async getSurfaceCapability(): Promise<SurfaceCapability | undefined> {
+        const capabilityFile = process.env.KRONTERM_SURFACE_CAPABILITY_FILE;
+        return capabilityFile ? readSurfaceCapability(capabilityFile) : undefined;
     }
 
     private async run(args: string[]): Promise<string> {
         try {
             const env = { ...process.env };
-            const capabilityFile = process.env.KRONTERM_SURFACE_CAPABILITY_FILE;
-            if (capabilityFile) {
-                const capability = readSurfaceCapability(capabilityFile);
+            const capability = await this.getSurfaceCapability();
+            if (capability) {
                 env.KRONTERM_JWT = capability.token;
                 env.WAVETERM_JWT = capability.token;
                 env.KRONTERM_TABID = capability.tabId;
@@ -249,15 +335,29 @@ export class WshBridge {
                     delete env.WAVETERM_BLOCKID;
                 }
             }
-            const output = execFileSync(this.wshPath, args, {
+            const operation = ToolOperationContext.getStore();
+            if (operation?.signal.aborted) throw new ToolFailure("CANCELLED", "CLI tool was cancelled before dispatch");
+            if (operation) operation.transport = "wsh-cli";
+            const { stdout } = await ExecFile(this.wshPath, args, {
                 encoding: "utf-8",
-                timeout: 15000,
+                timeout: operation ? Math.max(1, operation.deadline - Date.now()) : 15000,
+                signal: operation?.signal,
                 env,
                 maxBuffer: 16 * 1024 * 1024,
             });
-            return output.trim();
+            return stdout.trim();
         } catch (err: any) {
             throw new Error(`wsh ${args[0] ?? ""} failed: ${err.stderr?.trim() || err.message}`);
+        }
+    }
+
+    private wshReadiness(): "ready" | "missing-or-not-executable" | "path-unresolved" {
+        if (this.wshPath === "wsh") return "path-unresolved";
+        try {
+            accessSync(this.wshPath, process.platform === "win32" ? constants.F_OK : constants.X_OK);
+            return "ready";
+        } catch {
+            return "missing-or-not-executable";
         }
     }
 
@@ -274,6 +374,7 @@ export class WshBridge {
         return JSON.stringify(
             {
                 wshPath: this.wshPath,
+                wshReadiness: this.wshReadiness(),
                 hasJwt: Boolean(process.env.KRONTERM_JWT || process.env.WAVETERM_JWT || fileCapability?.token),
                 hasTabId: Boolean(process.env.KRONTERM_TABID || process.env.WAVETERM_TABID || fileCapability?.tabId),
                 hasBlockId: Boolean(
@@ -387,6 +488,14 @@ export class WshBridge {
 
     // ── Workspace ──────────────────────────────────────────────────────
 
+    async organizeWorkspace(input: {
+        action: "create" | "rename";
+        workspaceId?: string;
+        name: string;
+    }): Promise<string> {
+        throw new ToolFailure("SURFACE_UNAVAILABLE", "Workspace organization requires the KronTerm native tool server");
+    }
+
     async getWorkspaceInfo(): Promise<string> {
         return this.run(["workspace", "list"]);
     }
@@ -401,6 +510,38 @@ export class WshBridge {
 
     async workspaceSurfaceControl(input: WorkspaceSurfaceControl): Promise<string> {
         return this.run(makeWorkspaceSurfaceControlArgs(input));
+    }
+
+    async hudListIslands(): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+    }
+
+    async hudOpenIsland(
+        _app: "browser" | "files" | "terminal" | "widget" | "editor" | "diff" | "sandbox",
+        _url?: string,
+        _options?: { file?: string; chatId?: string; toolCallId?: string }
+    ): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+    }
+
+    async hudFocusIsland(_blockId: string): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+    }
+
+    async hudMoveIsland(_blockId: string, _x: number, _y: number): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+    }
+
+    async hudResizeIsland(_blockId: string, _width: number, _height: number): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+    }
+
+    async hudArrangeIslands(_layout: "cascade" | "grid" | "horizontal" | "vertical"): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+    }
+
+    async hudCloseIsland(_blockId: string): Promise<string> {
+        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
     }
 
     async listBlocks(tabId?: string, json = false): Promise<string> {
@@ -661,7 +802,14 @@ export class WshBridge {
     }
 
     async widgetInspect(blockId: string, elementRef: string): Promise<string> {
-        return this.run(["-b", this.blockRef(blockId), "widget", "inspect", this.normalizeElementRef(elementRef), "--json"]);
+        return this.run([
+            "-b",
+            this.blockRef(blockId),
+            "widget",
+            "inspect",
+            this.normalizeElementRef(elementRef),
+            "--json",
+        ]);
     }
 
     async widgetElementAt(blockId: string, x: number, y: number): Promise<string> {
@@ -696,11 +844,22 @@ export class WshBridge {
         button?: string,
         clickType?: string
     ): Promise<string> {
-        return this.run(makeWidgetClickArgs(blockId, elementRef == null ? undefined : this.normalizeElementRef(elementRef), x, y, button, clickType));
+        return this.run(
+            makeWidgetClickArgs(
+                blockId,
+                elementRef == null ? undefined : this.normalizeElementRef(elementRef),
+                x,
+                y,
+                button,
+                clickType
+            )
+        );
     }
 
     async widgetHover(blockId: string, elementRef?: string, x?: number, y?: number): Promise<string> {
-        return this.run(makeWidgetHoverArgs(blockId, elementRef == null ? undefined : this.normalizeElementRef(elementRef), x, y));
+        return this.run(
+            makeWidgetHoverArgs(blockId, elementRef == null ? undefined : this.normalizeElementRef(elementRef), x, y)
+        );
     }
 
     async widgetMouseMove(blockId: string, elementRef?: string, x?: number, y?: number): Promise<string> {
@@ -792,7 +951,14 @@ export class WshBridge {
     }
 
     async widgetClear(blockId: string, elementRef: string): Promise<string> {
-        return this.run(["-b", this.blockRef(blockId), "widget", "clear", "--element-ref", this.normalizeElementRef(elementRef)]);
+        return this.run([
+            "-b",
+            this.blockRef(blockId),
+            "widget",
+            "clear",
+            "--element-ref",
+            this.normalizeElementRef(elementRef),
+        ]);
     }
 
     async widgetSelect(blockId: string, elementRef: string, option: string): Promise<string> {
@@ -809,7 +975,14 @@ export class WshBridge {
     }
 
     async widgetToggle(blockId: string, elementRef: string): Promise<string> {
-        return this.run(["-b", this.blockRef(blockId), "widget", "toggle", "--element-ref", this.normalizeElementRef(elementRef)]);
+        return this.run([
+            "-b",
+            this.blockRef(blockId),
+            "widget",
+            "toggle",
+            "--element-ref",
+            this.normalizeElementRef(elementRef),
+        ]);
     }
 
     async widgetWaitFor(blockId: string, condition: string, elementRef?: string, timeoutMs?: number): Promise<string> {
@@ -837,11 +1010,42 @@ export class WshBridge {
         return makeSandboxArgs(sessionId, command);
     }
 
-    async sandboxStart(sessionId = "default", mode?: string, browserUrl?: string): Promise<string> {
+    async sandboxStart(
+        sessionId = "default",
+        mode?: string,
+        browserUrl?: string,
+        runtime?: string,
+        image?: string
+    ): Promise<string> {
         const args = this.sandboxArgs(sessionId, "start");
         if (mode) args.push("--mode", mode);
         if (browserUrl) args.push("--browser-url", browserUrl);
+        if (runtime) args.push("--runtime", runtime);
+        if (image) args.push("--image", image);
         return this.run(args);
+    }
+
+    async workflowCommand(_command: unknown): Promise<string> {
+        throw new Error("Workflow execution requires the native KronTerm runtime");
+    }
+
+    async desktopWindowAction(_input: unknown): Promise<string> {
+        throw new Error("Native tiling tools require the running Coucou desktop HUD.");
+    }
+    async desktopAnnotation(_input: unknown): Promise<string> {
+        throw new Error("Desktop annotations require the native KronTerm runtime.");
+    }
+
+    async withWorkflowRun<T>(_name: string, _args: Record<string, unknown>, operation: () => Promise<T>): Promise<T> {
+        return operation();
+    }
+
+    async acpListAgents(): Promise<string> {
+        throw new Error("ACP specialist discovery requires the native KronTerm desktop runtime");
+    }
+
+    async acpRunAgent(_backend: string, _task: string, _timeoutSeconds?: number): Promise<string> {
+        throw new Error("ACP specialist execution requires the native KronTerm desktop runtime");
     }
 
     async sandboxStatus(sessionId = "default"): Promise<string> {
@@ -1052,7 +1256,7 @@ export class WshBridge {
     }
 
     async secretSet(name: string, value: string): Promise<string> {
-        return this.run(["secret", "set", name, value]);
+        return this.run(["secret", "set", `${name}=${value}`]);
     }
 
     async secretDelete(name: string): Promise<string> {

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://www.kronterm.dev">
-    <img alt="KronTerm" src="./website/public/assets/product/kronterm-logo.svg" width="260">
+    <img alt="KronTerm icon" src="./website/public/assets/product/kronterm-icon.svg" width="96">
   </a>
 </p>
 
@@ -26,32 +26,55 @@
   <img alt="KronTerm workspace with terminal, browser, files, and KronosCode" src="./assets/kronterm-section/kronterm-homepage.png" width="95%">
 </p>
 
-KronTerm turns the developer desktop into one persistent, agent-aware workspace. Shells, browsers, files, previews,
-remote sessions, isolated Linux desktops, and native applications remain visible together. KronosCode works from that
-shared evidence instead of relying on a pasted chat transcript.
+Keep your terminal, browser, files, and AI in one persistent workspace. KronTerm puts the tools you use to build and
+check your work beside each other, so you can follow a task without repeatedly rebuilding its context in separate apps.
 
-KronTerm is currently a macOS private beta (`feat/kronsettings-from-kronoschamber` + KronTerm OS spatial-mode line). Windows and Linux builds remain under evaluation.
+KronosCode is the agent execution layer. KronTerm Agent provides its chat and control surface, with tool activity,
+approvals, and results available for review as you work.
+
+**macOS private beta.** Windows and Linux builds remain under evaluation; the iPhone client is Labs work.
+
+**[Request private-beta access](https://www.kronterm.dev/download)** · [Build from source](./BUILD.md)
+
+### See the work together
+
+- **Choose your layout.** Switch between tiled widgets, focused tabs, a spatial canvas, and the KronTerm OS desktop shell.
+- **Give the agent context.** Use selected widgets and task cards as focus or evidence instead of copying everything into chat.
+- **Review, don't guess.** Stage or discard agent edits per file, spin up a parallel worktree for each agent, and schedule the prompts that should run on their own.
+- **Keep actions inspectable.** Follow commands, edits, approvals, and browser evidence alongside your project.
+
+### Product videos
+
+The repository includes product demos built from screen recordings and animated compositions. See the
+[video production guide](./video/README.md) for scene breakdowns and local render commands. These demos show development
+builds; feature availability follows the status notes below.
 
 ## What is new
 
 The current development line expands KronTerm from a tiled terminal workspace into a complete human-and-agent desktop.
 
-| Ability                         | What changed                                                                                                              | Status                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| **Three workspace modes + OS**  | Tiled splits, browser-style widget tabs, freeform spatial canvas, and the new KronTerm OS desktop shell (see below).     | Private-beta development build |
-| **Agent-aware canvas**          | Place live widgets, notes, shapes, connectors, and agent task cards on one zoomable surface.                              | Private-beta development build |
-| **Context from the canvas**     | Send a widget or agent card to KronosCode as the active focus or as quoted evidence.                                      | Private-beta development build |
-| **Visible task graph**          | Follow requests, decisions, actions, approvals, evidence, and outputs through connected cards.                            | Private-beta development build |
-| **Resilient KronosChamber**     | The local agent runtime reports startup and health state, reconnects, and exposes recovery guidance.                      | Private-beta development build |
-| **KronTerm OS (Spatial Mode)**  | Calm window composition, flat grid overview, connected shell dock, Cover Flow app switcher, and typed `os.*` surface actions for agent control. | Private-beta development build |
-| **Hermes agent surface**        | Embedded Hermes panel with file/terminal/preview slash commands, agent-working badges, and grouped browser file view with drag-to-canvas. | Private-beta development build |
-| **App Stream & native apps**    | Live app-stream rails, native app launches via shared `AppIcon` registry, and real app icons in the shell.               | Private-beta development build |
-| **Command Center**              | Grouped palette at `Cmd+Shift+Space` for apps, commands, and workspaces.                                                 | Private-beta development build |
-| **Code intelligence**           | Monaco-based editing now connects to local language servers for richer code navigation and diagnostics.                   | Private-beta development build |
-| **Voice interaction**           | A microphone control connects local audio capture and transcription to chat, with speech output support.                  | Experimental                   |
-| **KronTerm for iPhone**         | A native shell opens KronosChamber and can connect to managed sandboxes or explicitly paired computers.                   | Labs                           |
+| Ability                           | What changed                                                                                                                                                                             | Status                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| **Three workspace modes + OS**    | Tiled splits, browser-style widget tabs, freeform spatial canvas, and the new KronTerm OS desktop shell (see below).                                                                     | Private-beta development build |
+| **Agent-aware canvas**            | Place live widgets, notes, shapes, connectors, and agent task cards on one zoomable surface.                                                                                             | Private-beta development build |
+| **Context from the canvas**       | Send a widget or agent card to KronosCode as the active focus or as quoted evidence.                                                                                                     | Private-beta development build |
+| **Visible task graph**            | Follow requests, decisions, actions, approvals, evidence, and outputs through connected cards.                                                                                           | Private-beta development build |
+| **Resilient KronTerm Agent**      | The local agent runtime reports startup and health state, reconnects, and exposes recovery guidance.                                                                                     | Private-beta development build |
+| **KronTerm OS (Spatial Mode)**    | Calm window composition, flat grid overview, connected shell dock, Cover Flow app switcher, and typed `os.*` surface actions for agent control.                                          | Private-beta development build |
+| **Control Center workflow tools** | Worktrees, changes review, scheduled automations, and lifecycle scripts for the workspace, all inside the OS Control Center (see below).                                                 | Private-beta development build |
+| **KronTerm Agent surface**        | Embedded agent panel with file/terminal/preview slash commands, agent-working badges, activity anchored to the OS HUD, and grouped browser file view with drag-to-canvas.                | Private-beta development build |
+| **Global command palette**        | `Cmd+Shift+P` opens the agent command palette (including workspace mode switches) instead of a separate modal.                                                                           | Private-beta development build |
+| **App Stream & native apps**      | Live app-stream rails, native app launches via shared `AppIcon` registry, and real app icons in the shell.                                                                               | Private-beta development build |
+| **Command Center**                | Grouped palette at `Cmd+Shift+Space` for apps, commands, and workspaces.                                                                                                                 | Private-beta development build |
+| **Tabs and browser polish**       | Orca-style fixed-width tab strip with active indicator, hover close, and drag reordering; browser toolbar loading bar, Escape-to-restore omnibox edits, and press feedback.              | Private-beta development build |
+| **Plugin platform (Milestone A)** | Manifest v1 schema, capability model, and consent canonicalization for plugin contributions — widgets, apps, commands, settings, skills, agent tools, ACP agents, MCP servers, and more. | In development                 |
+| **Code intelligence**             | Monaco-based editing now connects to local language servers for richer code navigation and diagnostics.                                                                                  | Private-beta development build |
+| **Minimal UI**                    | A quiet-chrome appearance mode (`app:minimalui`) that trims chrome and lets the work take the foreground.                                                                                | Private-beta development build |
+| **Desktop pet & overlays**        | A companion desktop pet window and live agent activity overlays that surface what agents are doing without stealing focus.                                                               | Private-beta development build |
+| **Voice interaction**             | A microphone control connects local audio capture and transcription to chat, with speech output support.                                                                                 | Experimental                   |
+| **KronTerm for iPhone**           | A native shell opens KronTerm Agent and can connect to managed sandboxes or explicitly paired computers.                                                                                 | Labs                           |
 
-Experimental and Labs features may require additional local dependencies and can change before release.
+Experimental, Labs, and In development features may require additional local dependencies and can change before release.
 
 ## One workspace, multiple ways to work
 
@@ -64,8 +87,9 @@ layout, magnify one surface, or return to the saved composition.
 
 ### Focused tabs
 
-Keep one widget visible at a time in a browser-style tab strip. Drag tabs between split panes and create a split above,
-right, below, or left without rebuilding the workspace.
+Keep one widget visible at a time in a browser-style tab strip. Fixed-width tabs show an active indicator and a hover
+close control, reorder by drag, and scroll with a chevron when they overflow. Drag tabs between split panes and create a
+split above, right, below, or left without rebuilding the workspace.
 
 ### Spatial canvas
 
@@ -87,6 +111,36 @@ Set the presentation through KronSettings or with the `app:layoutmode` configura
 
 Valid values are `widgets`, `tabs`, `canvas`, and `os` (KronTerm OS).
 
+For a quieter, lower-chrome look, enable Minimal UI with the `app:minimalui` configuration key (also in KronSettings →
+Visual). It keeps every capability available while trimming visual noise.
+
+```json
+{
+  "app:minimalui": true
+}
+```
+
+### Control Center and Activity Center
+
+The OS strip keeps two system panels within reach of the desktop shell.
+
+**Control Center** manages the host and the workspace: SSH **connections**, host **permissions** (screen recording,
+accessibility, microphone) with grant state, **plugin capability grants** you can revoke, space restoration after a
+restart, and the workflow tools:
+
+- **Worktrees** — list, create, and remove parallel git worktrees for the project root. Each new worktree gets its own
+  `kronterm/<name>` branch, so separate agents can work side by side instead of fighting over one checkout.
+- **Changes** — uncommitted changes with per-file status, `+/-` counts, and a unified diff on click. **Accept** stages a
+  file, **Discard** reverts it, the right-click menu copies the diff, and a change row can be dragged straight into the
+  agent prompt as a file reference.
+- **Automations** — saved agent prompts on `@15m`, `@hourly`, `@daily`, or `@weekly` schedules with run-now,
+  pause/resume, and delete. Each run is recorded in the activity timeline with its prompt.
+- **Lifecycle scripts** — persist `setup`, `teardown`, and `run` commands per workspace and execute them with `sh` from
+  the project root; exit code and output come back in the panel.
+
+**Activity Center** carries jobs, approvals, and recovery state — what the agent is doing, what it is waiting for, and
+what needs attention.
+
 ## KronosCode
 
 KronosCode is KronTerm's local agent execution layer. It combines the request with current workspace context, chooses the
@@ -98,23 +152,23 @@ correct operating surface, runs tools within that boundary, and returns the resu
 
 ### What the agent can work with
 
-| Surface                | Available context and actions                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Terminal**           | Read scrollback and shell state, run commands, monitor processes, and preserve exit evidence (connected shell dock in OS mode). |
-| **Files and code**     | Browse local or remote files, edit with diff review, use LSP-backed code intelligence, and drive the grouped file browser with drag-to-canvas. |
-| **Browser**            | Inspect structured page state, navigate, click, type, scroll, capture screenshots, and validate flows.                       |
-| **Sandbox**            | Create and operate isolated Linux desktops with their own browser, editor, terminal, and filesystem.                         |
-| **macOS desktop**      | Inspect accessibility state and perform visible, permission-aware clicks, typing, key presses, scrolling, and dragging.      |
-| **Canvas + OS desktop**| Read selected widgets and task cards, follow task lineage, use chosen nodes as focus/quoted evidence, and drive the KronTerm OS desktop via typed `os.*` actions. |
-| **App Stream**         | Operate live native or remote app surfaces on dedicated rails (AppIcon registry, interaction state).                        |
-| **Research and tools** | Search documentation and the web, call MCP servers, and load task-specific skills.                                           |
+| Surface                 | Available context and actions                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Terminal**            | Read scrollback and shell state, run commands, monitor processes, and preserve exit evidence (connected shell dock in OS mode).                                   |
+| **Files and code**      | Browse local or remote files, edit with diff review, use LSP-backed code intelligence, and drive the grouped file browser with drag-to-canvas.                    |
+| **Browser**             | Inspect structured page state, navigate, click, type, scroll, capture screenshots, and validate flows.                                                            |
+| **Sandbox**             | Create and operate isolated Linux desktops with their own browser, editor, terminal, and filesystem.                                                              |
+| **macOS desktop**       | Inspect accessibility state and perform visible, permission-aware clicks, typing, key presses, scrolling, and dragging.                                           |
+| **Canvas + OS desktop** | Read selected widgets and task cards, follow task lineage, use chosen nodes as focus/quoted evidence, and drive the KronTerm OS desktop via typed `os.*` actions. |
+| **App Stream**          | Operate live native or remote app surfaces on dedicated rails (AppIcon registry, interaction state).                                                              |
+| **Research and tools**  | Search documentation and the web, call MCP servers, and load task-specific skills.                                                                                |
 
 KronosCode streams meaningful tool activity into the UI. Commands, edits, approvals, browser evidence, and recovery state
 remain inspectable while the agent works.
 
 ### Managed local runtime
 
-KronosChamber is the primary conversation and control surface for KronosCode. KronTerm starts and monitors the local
+KronTerm Agent is the primary conversation and control surface for KronosCode. KronTerm starts and monitors the local
 runtime, refreshes its short-lived connection credentials, reconnects the embedded client, and shows repair information
 when the runtime cannot become healthy. The mobile client uses the same gateway rather than running a second AI engine.
 
@@ -126,24 +180,41 @@ fallback when available. Voice remains opt-in and can be shut down from KronSett
 
 ## Built-in surfaces
 
-| Surface                    | Purpose                                                                                                          |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Terminal**               | Full PTY sessions, connected shell dock, shell integration, command history, and AI-readable scrollback.         |
-| **Browser**                | Embedded Chromium for documentation, dashboards, localhost, and agent-driven validation.                         |
-| **Preview and editor**     | Markdown, images, media, PDF, CSV, directories, Monaco-based editing, and grouped file browser with drag-to-canvas. |
-| **KronosChamber**          | Workspace-aware chat, tools, approvals, sessions, artifacts, and model controls.                                 |
-| **Hermes agent panel**     | Embedded Hermes AI surface with command center, file/terminal/preview slash commands, and agent-working badges.  |
-| **Kron Sandbox**           | Isolated Linux desktop execution with visible computer use (SandboxDesktopPane).                                 |
-| **App stream**             | Live native or remote application surfaces on dedicated rails with interaction state and cursor feedback.         |
-| **KronTerm OS shell**      | Desktop shell — dock, flat grid overview / Cover Flow switcher, native app launches, and `os.*` agent actions.  |
-| **Command Center**         | Grouped palette (`Cmd+Shift+Space`) for apps, commands, and workspaces.                                         |
-| **Launcher and settings**  | Workspace navigation plus visual controls for models, agents, skills, themes, voice, and keybindings.            |
-| **System information**     | CPU, memory, disk, and network monitoring inside the workspace.                                                  |
+| Surface                       | Purpose                                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Terminal**                  | Full PTY sessions, connected shell dock, shell integration, command history, and AI-readable scrollback.                                                     |
+| **Browser**                   | Embedded Chromium for documentation, dashboards, localhost, and agent-driven validation, with a toolbar loading bar and Escape-to-restore omnibox edits.     |
+| **Preview and editor**        | Markdown, images, media, PDF, CSV, directories, Monaco-based editing, and grouped file browser with drag-to-canvas.                                          |
+| **KronTerm Agent**            | Workspace-aware chat, tools, approvals, sessions, artifacts, and model controls.                                                                             |
+| **KronTerm Agent panel**      | Embedded agent surface with command center, file/terminal/preview slash commands, and agent-working badges.                                                  |
+| **Kron Sandbox**              | Isolated Linux desktop execution with visible computer use (SandboxDesktopPane).                                                                             |
+| **App stream**                | Live native or remote application surfaces on dedicated rails with interaction state and cursor feedback.                                                    |
+| **KronTerm OS shell**         | Desktop shell — dock, flat grid overview / Cover Flow switcher, native app launches, and `os.*` agent actions.                                               |
+| **Control / Activity Center** | Host permissions, connections, plugin grants, worktrees, changes, automations, lifecycle scripts, and space restoration; plus jobs, approvals, and recovery. |
+| **Command Center**            | Grouped palette (`Cmd+Shift+Space`) for apps, commands, and workspaces, plus the global command palette (`Cmd+Shift+P`) in the agent surface.                |
+| **Desktop pet & overlay**     | Companion pet window (`desktop-pet/`) and overlay surfaces for ambient agent activity.                                                                       |
+| **Launcher and settings**     | Workspace navigation plus visual controls for models, agents, skills, themes, voice, minimal UI, and keybindings.                                            |
+| **System information**        | CPU, memory, disk, and network monitoring inside the workspace.                                                                                              |
 
 ## Durable remote work
 
 KronTerm's SSH sessions survive network changes, sleep, and application restarts. Remote terminals, files, directories,
 and previews use the same workspace model as local work, so an agent can reason from the remote evidence you see.
+
+## Extend it
+
+- **MCP bridge.** `mcp-kron-term/` exposes the workspace and computer-use surfaces over MCP, so external agents and
+  editors can drive the same blocks, snapshots, and clicks you see in the app.
+- **wsh CLI and Widget Protocol.** The `wsh` command line and the Widget Protocol let scripts and agents create blocks,
+  control surfaces, and read workspace state (`wsh workspace-surface`, `wsh widget`, and friends).
+- **Skills and MCP servers.** KronosCode loads task-specific skills and connects to MCP servers for extra tools.
+- **Agent packages.** `agents/kronoscode/` and `agents/hermes/` are bundled agent boundaries with their own toolsets.
+- **Plugin platform (in development).** A v1 manifest declares what a plugin contributes — widgets, applications,
+  commands, typed settings, skills, agent tools, ACP agents, MCP servers, artifact renderers, worktree and source-control
+  providers, and attention sources — along with the capabilities it needs. Validation enforces declared capabilities,
+  allowlisted executables, and secret-free settings, and consent is canonicalized before a grant is recorded. The model
+  is adapted from Orca's MIT plugin manifest (see `THIRD_PARTY_NOTICES.md`); the spec lives at
+  `.claude/docs/ai/kronterm/plugin-platform-milestone-a.md`.
 
 ## Architecture
 
@@ -151,14 +222,19 @@ and previews use the same workspace model as local work, so an agent can reason 
 KronTerm desktop (Electron + React)
 ├── workspace presentations: widgets · tabs · canvas · os (KronTerm OS shell)
 │   ├── Kronarchy shell (kronarchy-shell.tsx) — dock, overview, Cover Flow, os.* actions
-│   └── command center (Cmd+Shift+Space) — grouped apps/commands/workspaces
+│   ├── command center (Cmd+Shift+Space) — grouped apps/commands/workspaces
+│   └── system centers — control center (permissions, connections, grants, worktrees,
+│       changes, automations, lifecycle scripts) · activity center (jobs, approvals)
 ├── interactive surfaces: terminal (connected dock) · browser · files (grouped + drag-to-canvas) · sandbox · app stream rails · native apps
-├── KronosChamber + Hermes: chat · sessions · approvals · artifacts · embedded Hermes panel
+├── KronTerm Agent: chat · sessions · approvals · artifacts · embedded agent panel (Cmd+Shift+P palette)
+├── plugin manifest v1 (frontend/app/plugins/manifest) — capabilities, validation, consent
+├── agent activity: live overlays · task/evidence graphs · desktop pet · overlay windows
 └── native bridges: audio · accessibility · secure storage · IPC · app icons (AppIcon)
 
 Go services
 ├── PTY and durable SSH (survives sleep / network changes)
 ├── wsh RPC and Widget Protocol
+├── workspace services: worktrees and diffs · automation scheduler · lifecycle scripts
 ├── configuration, secrets, events, and persistence
 └── preview, file, and sandbox services
 
@@ -167,12 +243,17 @@ KronosCode runtime
 ├── MCP servers and loadable skills
 ├── browser, terminal, desktop, sandbox, and canvas context
 └── local session and tool state
+
+mcp-kron-term (MCP bridge)
+├── workspace tools: blocks, snapshots, clicks, typing, layout
+└── computer-use tools: native app observation and control
 ```
 
 The repository also contains:
 
-- `mcp-kron-term/` for the workspace and computer-use MCP bridge.
+- `mcp-kron-term/` for the workspace and computer-use MCP bridge (see [Extend it](#extend-it)).
 - `audio-engine/` for the optional speech pipeline.
+- `desktop-pet/` for the standalone desktop pet window content.
 - `mobile/` for the KronTerm for iPhone Labs client.
 - `website/` for the product site (`npm --prefix website run build` to validate).
 - `docs/` for the Docusaurus documentation site (`npm --prefix docs run build`).
@@ -183,22 +264,24 @@ The repository also contains:
 
 Agent actions stay attached to an explicit surface.
 
-| Boundary                | Behavior                                                                                                         |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Host vs. sandbox**    | Host commands and isolated VM actions use separate routes.                                                       |
-| **Browser vs. desktop** | Structured browser interaction and native accessibility control are distinct capabilities.                       |
-| **Approvals**           | Sensitive file, command, and computer-use actions can pause for confirmation.                                    |
-| **Secrets**             | Credentials use the operating system's secure store where supported.                                             |
-| **Model choice**        | Connect OpenAI, Anthropic, Google, OpenAI-compatible services, Ollama, or LM Studio with your own configuration. |
-| **Local runtime**       | Tool orchestration and workspace state remain local; model requests go to the provider you select.               |
-| **Visible evidence**    | Tool calls, diffs, screenshots, terminal output, and task state remain available for review.                     |
+| Boundary                | Behavior                                                                                                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Host vs. sandbox**    | Host commands and isolated VM actions use separate routes.                                                                                                                                      |
+| **Browser vs. desktop** | Structured browser interaction and native accessibility control are distinct capabilities.                                                                                                      |
+| **Webview attachment**  | The Electron main process vets every `<webview>` attach: unapproved preloads are stripped and non-conforming guests are denied.                                                                 |
+| **Approvals**           | Sensitive file, command, and computer-use actions can pause for confirmation.                                                                                                                   |
+| **Plugin capabilities** | Plugins declare capabilities in a v1 manifest; contributions are limited to those capabilities, allowlisted executables, and secret-free settings, with consent recorded before a grant exists. |
+| **Secrets**             | Credentials use the operating system's secure store where supported.                                                                                                                            |
+| **Model choice**        | Connect OpenAI, Anthropic, Google, OpenAI-compatible services, Ollama, or LM Studio with your own configuration.                                                                                |
+| **Local runtime**       | Tool orchestration and workspace state remain local; model requests go to the provider you select.                                                                                              |
+| **Visible evidence**    | Tool calls, diffs, screenshots, terminal output, and task state remain available for review.                                                                                                    |
 
 Cloud model providers and managed sandbox providers receive only the data required for the capability you choose. Local
 models can keep model inference on the machine.
 
 ## KronTerm for iPhone, Labs
 
-The iPhone client opens directly into KronosChamber and exposes Browser, Workspace, Files, Code, Terminal, and Preview as
+The iPhone client opens directly into KronTerm Agent and exposes Browser, Workspace, Files, Code, Terminal, and Preview as
 secondary surfaces. It can use a managed KronTerm host or an explicitly paired personal computer. An optional developer
 bridge exposes approval-gated phone control for testing; general control of unrelated iOS apps is outside the normal App
 Store capability boundary.

@@ -10,7 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '@hermes/components/ui/dialog'
 import { DiffCount } from '@hermes/components/ui/diff-count'
 import { Tip } from '@hermes/components/ui/tooltip'
@@ -37,7 +37,7 @@ import {
   requestRevert,
   stageReviewFile,
   toggleReviewTreeMode,
-  unstageReviewFile
+  unstageReviewFile,
 } from '@hermes/store/review'
 
 import { SidebarPanelLabel } from '../../shell/sidebar-label'
@@ -50,7 +50,7 @@ import { ReviewShipBar } from './ship-bar'
 // the rest of the app's icon-action rows.
 const ACTION_BTN = 'size-5'
 
-export function ReviewPane() {
+export function ReviewPane({ standalone = false }: { standalone?: boolean } = {}) {
   const { t } = useI18n()
   const c = t.statusStack.coding
   const panesFlipped = useStore($panesFlipped)
@@ -63,7 +63,7 @@ export function ReviewPane() {
   const revertTarget = useStore($reviewRevertTarget)
   const treeMode = useStore($reviewTreeMode)
 
-  const selectedFile = files.find(file => file.path === selectedPath)
+  const selectedFile = files.find((file) => file.path === selectedPath)
   const hasFiles = files.length > 0
   // `{ path: null }` → revert all; `{ path: '…' }` → revert one file.
   const revertingAll = revertTarget?.path == null
@@ -76,7 +76,8 @@ export function ReviewPane() {
     <aside
       aria-label={c.review}
       className={cn(
-        'before:pointer-events-none relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background) pt-(--titlebar-height) text-(--ui-text-tertiary)',
+        'before:pointer-events-none relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background) text-(--ui-text-tertiary)',
+        !standalone && 'pt-(--titlebar-height)',
         panesFlipped
           ? 'border-r shadow-[inset_-0.0625rem_0_0_color-mix(in_srgb,white_18%,transparent)]'
           : 'border-l shadow-[inset_0.0625rem_0_0_color-mix(in_srgb,white_18%,transparent)]'
@@ -106,7 +107,7 @@ export function ReviewPane() {
               aria-label={c.stageAll}
               className={ACTION_BTN}
               disabled={!hasFiles}
-              onClick={() => void stageReviewFile(null).catch(err => notifyError(err, c.stageAll))}
+              onClick={() => void stageReviewFile(null).catch((err) => notifyError(err, c.stageAll))}
               size="icon-xs"
               variant="ghost"
             >
@@ -136,9 +137,11 @@ export function ReviewPane() {
               <Codicon name="refresh" size="0.8125rem" spinning={loading} />
             </Button>
           </Tip>
-          <Button aria-label={c.close} className={ACTION_BTN} onClick={closeReview} size="icon-xs" variant="ghost">
-            <Codicon name="close" size="0.8125rem" />
-          </Button>
+          {!standalone && (
+            <Button aria-label={c.close} className={ACTION_BTN} onClick={closeReview} size="icon-xs" variant="ghost">
+              <Codicon name="close" size="0.8125rem" />
+            </Button>
+          )}
         </RightSidebarSectionHeader>
       )}
 
@@ -175,7 +178,7 @@ export function ReviewPane() {
                 onClick={() =>
                   void (
                     selectedFile.staged ? unstageReviewFile(selectedFile.path) : stageReviewFile(selectedFile.path)
-                  ).catch(err => notifyError(err, c.stage))
+                  ).catch((err) => notifyError(err, c.stage))
                 }
                 size="icon-xs"
                 variant="ghost"
@@ -209,7 +212,7 @@ export function ReviewPane() {
 
       <ReviewShipBar />
 
-      <Dialog onOpenChange={open => !open && cancelRevert()} open={revertTarget !== undefined}>
+      <Dialog onOpenChange={(open) => !open && cancelRevert()} open={revertTarget !== undefined}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{revertingAll ? c.revertAll : c.revert}</DialogTitle>
@@ -229,7 +232,10 @@ export function ReviewPane() {
             <Button onClick={cancelRevert} variant="ghost">
               {t.common.cancel}
             </Button>
-            <Button onClick={() => void confirmRevert().catch(err => notifyError(err, c.revert))} variant="destructive">
+            <Button
+              onClick={() => void confirmRevert().catch((err) => notifyError(err, c.revert))}
+              variant="destructive"
+            >
               {revertingAll ? c.revertAll : c.revert}
             </Button>
           </DialogFooter>

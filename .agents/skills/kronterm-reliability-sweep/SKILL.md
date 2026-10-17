@@ -23,7 +23,7 @@ Convert broad quality requests into verified, reviewable slices. Never claim tha
 - Widget creation, focus, split, move, close, and presentation switching
 - Terminal PTY lifecycle and remote reconnect
 - Browser navigation, permission, download, and computer-use streaming
-- KronosChamber process startup, session resume, approval, cancellation, and evidence display
+- Hermes process startup, session resume, approval, cancellation, and evidence display
 - Sandbox isolation and host boundary handling
 - iPhone host pairing, reconnect, keyboard, background/foreground, and secure storage
 

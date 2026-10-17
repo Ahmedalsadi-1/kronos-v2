@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import "./styles.css";
 import "./z-kronterm-mobile.css";
+import "./minimal-mobile.css";
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>

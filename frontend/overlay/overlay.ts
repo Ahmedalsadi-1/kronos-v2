@@ -1,3 +1,5 @@
+import { mountAgentCursor } from "../util/agent-cursor-feedback";
+import "./annotations";
 import "./overlay.scss";
 
 type Point = { x: number; y: number };
@@ -185,7 +187,7 @@ function scrollSweep(x: number, y: number, direction: string): Animation {
             // Sweep bands
             const numBands = 3;
             for (let i = 0; i < numBands; i++) {
-                const bandProgress = ((sweepProgress + i / numBands) % 1);
+                const bandProgress = (sweepProgress + i / numBands) % 1;
                 const bandAlpha = Math.sin(bandProgress * Math.PI) * 0.5;
                 const offset = bandProgress * sweepLength;
 
@@ -211,9 +213,15 @@ function scrollSweep(x: number, y: number, direction: string): Animation {
                 const aSize = 5;
                 c.beginPath();
                 c.moveTo(x + dx * arrowLen, y + dy * arrowLen);
-                c.lineTo(x + dx * (arrowLen - aSize) + dy * aSize * 0.5, y + dy * (arrowLen - aSize) - dx * aSize * 0.5);
+                c.lineTo(
+                    x + dx * (arrowLen - aSize) + dy * aSize * 0.5,
+                    y + dy * (arrowLen - aSize) - dx * aSize * 0.5
+                );
                 c.moveTo(x + dx * arrowLen, y + dy * arrowLen);
-                c.lineTo(x + dx * (arrowLen - aSize) - dy * aSize * 0.5, y + dy * (arrowLen - aSize) + dx * aSize * 0.5);
+                c.lineTo(
+                    x + dx * (arrowLen - aSize) - dy * aSize * 0.5,
+                    y + dy * (arrowLen - aSize) + dx * aSize * 0.5
+                );
                 c.stroke();
             }
 
@@ -480,44 +488,32 @@ function hideAllAnimations() {
 
 // ─── Command Handler ─────────────────────────────────────────────
 
+const agentCursor = mountAgentCursor(document.body);
+
 function handleAnimationCommand(cmd: OverlayAnimationCommand) {
-    switch (cmd.type) {
-        case "hide":
-            hideAllAnimations();
-            break;
-        case "click":
-            animations.push(flashReticle(cmd.x, cmd.y));
-            break;
-        case "type":
-            animations.push(typeGlow(cmd.x, cmd.y));
-            break;
-        case "scroll":
-            animations.push(scrollSweep(cmd.x, cmd.y, cmd.direction ?? "down"));
-            break;
-        case "drag":
-            if (cmd.path.length > 0) {
-                animations.push(dragTrail(cmd.path));
-            }
-            break;
-        case "hover":
-            animations.push(hoverDot(cmd.x, cmd.y));
-            break;
-        case "trace":
-            if (cmd.path.length > 0) {
-                animations.push(tracePath(cmd.path));
-            }
-            break;
-        case "wait":
-            animations.push(waitIndicator(cmd.x ?? displayWidth / 2, cmd.y ?? displayHeight / 2));
-            break;
-        case "cursor_position":
-            animations.push(cursorFlash(cmd.x, cmd.y));
-            break;
-        case "screenshot": {
-            break;
-        }
+    if (cmd.type === "hide" || cmd.type === "screenshot") {
+        agentCursor.clear();
+        hideAllAnimations();
+        return;
     }
-    startRenderLoop();
+    const point =
+        "path" in cmd
+            ? cmd.path.at(-1)
+            : "x" in cmd && typeof cmd.x === "number" && typeof cmd.y === "number"
+              ? { x: cmd.x, y: cmd.y }
+              : undefined;
+    if (!point) return;
+    const labels = {
+        click: "Click",
+        type: "Type",
+        scroll: "Scroll",
+        drag: "Drag",
+        wait: "Wait",
+        hover: "Move",
+        trace: "Move",
+        cursor_position: "",
+    };
+    agentCursor.update(point, labels[cmd.type], cmd.type === "click");
 }
 
 // ─── IPC Binding ─────────────────────────────────────────────────

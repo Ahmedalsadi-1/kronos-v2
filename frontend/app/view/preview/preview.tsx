@@ -4,11 +4,12 @@
 import { CenteredDiv } from "@/app/element/quickelems";
 import { globalStore } from "@/app/store/jotaiStore";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { BlockHeaderSuggestionControl } from "@/app/suggestion/suggestion";
+import { SuggestionControl } from "@/app/suggestion/suggestion";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
+import { NativeFileWorkbench } from "@/app/workspace/native-file-workbench";
 import { isBlank, makeConnRoute } from "@/util/util";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { memo, useEffect } from "react";
+import { memo, useEffect, useRef } from "react";
 import { CSVView } from "./csvview";
 import { DirectoryPreview } from "./preview-directory";
 import { CodeEditPreview } from "./preview-edit";
@@ -111,6 +112,8 @@ function PreviewView({
     const [errorMsg, setErrorMsg] = useAtom(model.errorMsgAtom);
     const connection = useAtomValue(model.connectionImmediate);
     const fileInfo = useAtomValue(model.statFile);
+    const openFileModal = useAtomValue(model.openFileModal);
+    const searchAnchorRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         console.log("fileInfo or connection changed", fileInfo, connection);
@@ -147,23 +150,33 @@ function PreviewView({
     };
 
     return (
-        <>
-            <div key="fullpreview" className="flex flex-col w-full overflow-hidden scrollbar-hide-until-hover">
+        <NativeFileWorkbench
+            blockId={model.blockId}
+            previewModel={model}
+            searchAnchorRef={searchAnchorRef}
+            overlay={
+                <SuggestionControl
+                    anchorRef={searchAnchorRef}
+                    isOpen={openFileModal}
+                    onClose={() => model.updateOpenFileModalAndError(false)}
+                    onSelect={handleSelect}
+                    onTab={handleTab}
+                    fetchSuggestions={fetchSuggestionsFn}
+                    placeholderText="Open File..."
+                    className="ade-suggestions"
+                />
+            }
+        >
+            <div
+                key="fullpreview"
+                className="flex min-h-0 flex-1 flex-col w-full overflow-hidden scrollbar-hide-until-hover"
+            >
                 {errorMsg && <ErrorOverlay errorMsg={errorMsg} resetOverlay={() => setErrorMsg(null)} />}
                 <div ref={contentRef} className="flex-grow overflow-hidden">
                     <SpecializedView parentRef={contentRef} model={model} />
                 </div>
             </div>
-            <BlockHeaderSuggestionControl
-                blockRef={blockRef}
-                openAtom={model.openFileModal}
-                onClose={() => model.updateOpenFileModalAndError(false)}
-                onSelect={handleSelect}
-                onTab={handleTab}
-                fetchSuggestions={fetchSuggestionsFn}
-                placeholderText="Open File..."
-            />
-        </>
+        </NativeFileWorkbench>
     );
 }
 

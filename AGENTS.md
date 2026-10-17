@@ -123,10 +123,9 @@ kronterm/
 Embedded sibling git repos (separate projects with their own docs — not part of core changes):
 `kronoscoder/`, `third_party/`, `UI-TARS-desktop/`, `vendor/`.
 
-`krondesign/` is a large self-documented design-systems work area (own AGENTS.md tree) — treat as separate from core changes.
 ```
 
-Nested `AGENTS.md` files exist in most working directories (`emain/`, `cmd/`, `pkg/*`, `frontend/app/{block,store,tab,view,element,onboarding}`, `frontend/app/view/chathubv2/`, `frontend/layout/`, `frontend/preview/`, `frontend/hermes/`, `mcp-kron-term/`, `mobile/`, `video/`, `tsunami/engine/`, `krondesign/**`). Read the nearest one before working there.
+Nested `AGENTS.md` files exist in most working directories (`emain/`, `cmd/`, `pkg/*`, `frontend/app/{block,store,tab,view,element,onboarding}`, `frontend/app/view/chathubv2/`, `frontend/layout/`, `frontend/preview/`, `frontend/hermes/`, `mcp-kron-term/`, `mobile/`, `video/`, `tsunami/engine/`). Read the nearest one before working there.
 
 ## Key Generated Files (DO NOT EDIT)
 

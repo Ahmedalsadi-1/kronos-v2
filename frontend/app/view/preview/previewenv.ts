@@ -19,6 +19,7 @@ export type PreviewEnv = WaveEnvSubset<{
         FetchSuggestionsCommand: WaveEnv["rpc"]["FetchSuggestionsCommand"];
         DisposeSuggestionsCommand: WaveEnv["rpc"]["DisposeSuggestionsCommand"];
         FileCopyCommand: WaveEnv["rpc"]["FileCopyCommand"];
+        FileAppendCommand: WaveEnv["rpc"]["FileAppendCommand"];
         FileCreateCommand: WaveEnv["rpc"]["FileCreateCommand"];
         FileMkdirCommand: WaveEnv["rpc"]["FileMkdirCommand"];
     };

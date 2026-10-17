@@ -12,10 +12,10 @@ interface BlockContextRibbonProps {
 }
 
 const STATUS_CONFIG: Record<ContextRibbonStatus, { label: string; color: string; icon: string }> = {
-    idle: { label: "Ready", color: "rgba(255,255,255,0.2)", icon: "fa-circle-dot" },
-    thinking: { label: "Thinking...", color: "var(--color-saturn, rgb(232, 196, 124))", icon: "fa-brain" },
-    active: { label: "Active", color: "var(--accent-color, rgb(88, 193, 66))", icon: "fa-circle-nodes" },
-    error: { label: "Error", color: "var(--color-error, rgb(229, 77, 46))", icon: "fa-triangle-exclamation" },
+    idle: { label: "Ready", color: "var(--text-muted-color)", icon: "fa-circle-dot" },
+    thinking: { label: "Thinking...", color: "var(--accent-color)", icon: "fa-brain" },
+    active: { label: "Active", color: "var(--accent-color)", icon: "fa-circle-nodes" },
+    error: { label: "Error", color: "var(--error-color)", icon: "fa-triangle-exclamation" },
 };
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
@@ -53,7 +53,6 @@ const BlockContextRibbon = memo(({ status = "idle", contextText, blockType }: Bl
                     fontSize: 9,
                     color: config.color,
                     opacity: status === "idle" ? 0.4 : 1,
-                    animation: status === "thinking" ? "kron-pulse 1.5s ease-in-out infinite" : "none",
                 }}
             />
             {typeLabel && (
@@ -74,9 +73,9 @@ const BlockContextRibbon = memo(({ status = "idle", contextText, blockType }: Bl
             )}
             {status === "thinking" && (
                 <span style={{ display: "flex", gap: 2, marginLeft: "auto" }}>
-                    <span className="kron-context-dot" style={{ animationDelay: "0ms" }} />
-                    <span className="kron-context-dot" style={{ animationDelay: "150ms" }} />
-                    <span className="kron-context-dot" style={{ animationDelay: "300ms" }} />
+                    <span className="kron-context-dot" />
+                    <span className="kron-context-dot" />
+                    <span className="kron-context-dot" />
                 </span>
             )}
             {status === "active" && (

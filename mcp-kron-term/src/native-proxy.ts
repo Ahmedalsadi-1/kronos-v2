@@ -3,7 +3,7 @@
 
 // stdio MCP proxy in front of KronTerm's in-process TypeScript tool runtime.
 //
-// Spawn sites (ACP agent manager, KronosChamber gateway) keep the stdio server
+// Spawn sites (ACP agent manager, KronTerm gateway) keep the stdio server
 // contract they already have, but every manifest/call is proxied to the
 // Electron-owned `/native` endpoint — so there is no wsh-CLI dependency, no
 // bridge-token pairing to go stale after app restarts, and exactly one tool
@@ -15,6 +15,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { toolTimeoutMs } from "./tool-execution.js";
+
+const ReadOnlyTools = new Set<string>();
 const URL_ENV = "KRONTERM_NATIVE_TOOL_URL";
 const TOKEN_ENV = "KRONTERM_NATIVE_TOOL_TOKEN";
 const MAX_OUTPUT_CHARS = 16 * 1024 * 1024;
@@ -30,7 +33,7 @@ function isNativeTool(value: unknown): value is NativeTool & { name: string } {
     return typeof value === "object" && value != null && typeof (value as NativeTool).name === "string";
 }
 
-async function bridgeRequest(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function bridgeRequest(payload: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const url = (process.env[URL_ENV] ?? "").trim();
     const token = (process.env[TOKEN_ENV] ?? "").trim();
     if (!url || !token) {
@@ -42,6 +45,7 @@ async function bridgeRequest(payload: Record<string, unknown>): Promise<Record<s
             method: "POST",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify(payload),
+            signal: AbortSignal.any([AbortSignal.timeout(payload.method === "call" ? toolTimeoutMs(String(payload.name), (payload.arguments ?? {}) as Record<string, unknown>, ReadOnlyTools.has(String(payload.name))) + 5000 : 15000), ...(signal ? [signal] : [])]),
         });
     } catch (error) {
         return {
@@ -57,7 +61,9 @@ async function bridgeRequest(payload: Record<string, unknown>): Promise<Record<s
     }
     try {
         const parsed: unknown = JSON.parse(text);
-        return typeof parsed === "object" && parsed != null ? (parsed as Record<string, unknown>) : { error: "KronTerm native tool bridge returned an invalid response" };
+        return typeof parsed === "object" && parsed != null
+            ? (parsed as Record<string, unknown>)
+            : { error: "KronTerm native tool bridge returned an invalid response" };
     } catch {
         return { error: "KronTerm native tool bridge returned invalid JSON" };
     }
@@ -72,22 +78,28 @@ export async function startKronTermNativeProxy(): Promise<void> {
         if (response.error) {
             console.error(`[kronterm-native-proxy] tool list unavailable: ${String(response.error)}`);
         }
+        ReadOnlyTools.clear();
+        for (const tool of tools) if ((tool.annotations as any)?.readOnlyHint === true) ReadOnlyTools.add(tool.name);
         return {
             tools: tools.map((tool) => ({
                 name: tool.name,
                 description: typeof tool.description === "string" ? tool.description : undefined,
-                inputSchema: typeof tool.inputSchema === "object" && tool.inputSchema != null ? tool.inputSchema : { type: "object" },
-                annotations: typeof tool.annotations === "object" && tool.annotations != null ? tool.annotations : undefined,
+                inputSchema:
+                    typeof tool.inputSchema === "object" && tool.inputSchema != null
+                        ? tool.inputSchema
+                        : { type: "object" },
+                annotations:
+                    typeof tool.annotations === "object" && tool.annotations != null ? tool.annotations : undefined,
             })),
         };
     });
 
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const response = await bridgeRequest({
             method: "call",
             name: request.params.name,
             arguments: (request.params.arguments ?? {}) as Record<string, unknown>,
-        });
+        }, extra.signal);
         if (response.error) {
             return {
                 content: [{ type: "text", text: String(response.error) }],

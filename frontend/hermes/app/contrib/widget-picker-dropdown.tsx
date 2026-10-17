@@ -4,11 +4,19 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@hermes/components/ui/dropdown-menu";
 import { Tip } from "@hermes/components/ui/tooltip";
-import { TitlebarIcon } from "../shell/titlebar-icon";
+import { useHermesShellMode } from "@hermes/lib/kronterm-host";
 import { titlebarButtonClass } from "../shell/titlebar";
+import { TitlebarIcon } from "../shell/titlebar-icon";
+import { AgentCliProviders, makeAgentTerminalMeta } from "./agent-provider-catalog";
+import { routeKronTermLauncherAction, WebModeLauncherWidgets } from "./web-pane-launcher";
 
 interface WidgetDef {
     id: string;
@@ -18,12 +26,6 @@ interface WidgetDef {
     description?: string;
 }
 
-const EXCLUDED_VIEWS = new Set([
-    "chathubv2",     // KronosChamber
-    "waveai",        // Chathubv2 AI
-    "open-design",   // OpenDesign
-]);
-
 const AVAILABLE_WIDGETS: WidgetDef[] = [
     { id: "terminal", label: "Terminal", icon: "terminal", view: "term", description: "New terminal" },
     { id: "browser", label: "Browser", icon: "globe", view: "web", description: "New browser" },
@@ -32,17 +34,19 @@ const AVAILABLE_WIDGETS: WidgetDef[] = [
     { id: "sandbox", label: "Sandbox", icon: "desktop", view: "sandbox", description: "Isolated Linux desktop" },
     { id: "sysinfo", label: "Sysinfo", icon: "chart-line", view: "sysinfo", description: "System information" },
     { id: "apps", label: "Apps", icon: "shapes", view: "installedapps", description: "Installed applications" },
-    { id: "warpagent", label: "Warp Agent", icon: "wand-magic-sparkles", view: "warpagent", description: "Warp-style agent" },
+    {
+        id: "warpagent",
+        label: "Warp Agent",
+        icon: "wand-magic-sparkles",
+        view: "warpagent",
+        description: "Warp-style agent",
+    },
 ];
-
-function krontermCreateWidget(view: string) {
-    window.dispatchEvent(
-        new CustomEvent("kronterm:create-widget", { detail: { view } })
-    );
-}
 
 export function WidgetPickerDropdown() {
     const [open, setOpen] = useState(false);
+    const { webMode } = useHermesShellMode();
+    const widgets = webMode ? WebModeLauncherWidgets : AVAILABLE_WIDGETS;
 
     return (
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -58,23 +62,54 @@ export function WidgetPickerDropdown() {
                 </DropdownMenuTrigger>
             </Tip>
             <DropdownMenuContent side="bottom" align="end" sideOffset={4}>
-                {AVAILABLE_WIDGETS.map((w) => (
+                <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+                {widgets.map((w) => (
                     <DropdownMenuItem
                         key={w.id}
                         onSelect={() => {
-                            krontermCreateWidget(w.view);
+                            routeKronTermLauncherAction(w.view, webMode);
                             setOpen(false);
                         }}
                     >
                         <TitlebarIcon name={w.icon} />
                         <span>{w.label}</span>
                         {w.description && (
-                            <span className="ml-auto text-[0.65rem] text-(--ui-text-tertiary)">
-                                {w.description}
-                            </span>
+                            <span className="ml-auto text-[0.65rem] text-(--ui-text-tertiary)">{w.description}</span>
                         )}
                     </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                        <TitlebarIcon name="hubot" />
+                        <span>Agent terminal</span>
+                        <span className="ml-auto mr-1 text-[0.65rem] text-(--ui-text-tertiary)">
+                            {AgentCliProviders.length}
+                        </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-56">
+                        <DropdownMenuLabel>Launch installed CLI</DropdownMenuLabel>
+                        {AgentCliProviders.map((provider) => (
+                            <DropdownMenuItem
+                                key={provider.id}
+                                onSelect={() => {
+                                    window.dispatchEvent(
+                                        new CustomEvent("kronterm:create-widget", {
+                                            detail: { meta: makeAgentTerminalMeta(provider) },
+                                        })
+                                    );
+                                    setOpen(false);
+                                }}
+                            >
+                                <TitlebarIcon name="terminal" />
+                                <span>{provider.label}</span>
+                                <span className="ml-auto font-mono text-[0.65rem] text-(--ui-text-tertiary)">
+                                    {provider.executable}
+                                </span>
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
             </DropdownMenuContent>
         </DropdownMenu>
     );

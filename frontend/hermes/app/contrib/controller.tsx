@@ -80,6 +80,7 @@ import {
     WorkspaceTabMenu,
 } from "../chat/session-tile";
 import { HudShell } from "../hud/hud-shell";
+import { HudNavigation } from "../hud/navigation";
 import { $terminalTakeover, setTerminalTakeover } from "../right-sidebar/store";
 import { $workspaceIsPage } from "../routes";
 import { ShellContextMenu } from "../shell/shell-context-menu";
@@ -221,22 +222,26 @@ registry.registerMany([
         },
         render: () => idle(<FilesPane />),
     },
-    {
-        id: "review",
-        area: "panes",
-        title: "review",
-        // The second right sidebar: hidden until ⌘G ($reviewOpen) — bound below
-        // like the other chrome toggles; its zone collapses while hidden.
-        data: {
-            placement: "right",
-            collapsible: true,
-            revealAliases: [REVIEW_PANE_ID],
-            width: isKronTermWidgetHost() ? "15rem" : FILE_BROWSER_DEFAULT_WIDTH,
-            minWidth: isKronTermWidgetHost() ? "12rem" : FILE_BROWSER_MIN_WIDTH,
-            maxWidth: isKronTermWidgetHost() ? "20rem" : FILE_BROWSER_MAX_WIDTH,
-        },
-        render: () => idle(<ReviewPaneContent />),
-    },
+    ...(isKronTermWidgetHost()
+        ? []
+        : [
+              {
+                  id: "review",
+                  area: "panes",
+                  title: "review",
+                  // The second right sidebar: hidden until ⌘G ($reviewOpen) — bound below
+                  // like the other chrome toggles; its zone collapses while hidden.
+                  data: {
+                      placement: "right",
+                      collapsible: true,
+                      revealAliases: [REVIEW_PANE_ID],
+                      width: isKronTermWidgetHost() ? "15rem" : FILE_BROWSER_DEFAULT_WIDTH,
+                      minWidth: isKronTermWidgetHost() ? "12rem" : FILE_BROWSER_MIN_WIDTH,
+                      maxWidth: isKronTermWidgetHost() ? "20rem" : FILE_BROWSER_MAX_WIDTH,
+                  },
+                  render: () => idle(<ReviewPaneContent />),
+              },
+          ]),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -637,12 +642,13 @@ bindPaneVisibility(
     () => setFileBrowserOpen(true)
 );
 // ⌘G — the review sidebar appears/disappears (and comes to the front).
-bindPaneVisibility(
-    "review",
-    computed([$reviewOpen, $hasWorkspace], (open, workspace) => open && workspace),
-    closeReview,
-    openReview
-);
+if (!isKronTermWidgetHost())
+    bindPaneVisibility(
+        "review",
+        computed([$reviewOpen, $hasWorkspace], (open, workspace) => open && workspace),
+        closeReview,
+        openReview
+    );
 // ⌃` / statusbar toggle — the terminal COLLAPSES to a rail (tab stays), not
 // hides; PTYs stay alive while collapsed (see PersistentTerminal).
 bindToolPaneCollapse(
@@ -800,7 +806,7 @@ export function ContribController() {
             <ContribWiring>
                 <section
                     aria-label="KronTerm Agent workspace conversation"
-                    className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-(--ui-bg) text-(--ui-text-primary)"
+                    className="@container relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-(--ui-bg) text-(--ui-text-primary)"
                     data-kronterm-panel-shell=""
                 >
                     <WiredPane part="chatRoutes" />
@@ -816,7 +822,12 @@ export function ContribController() {
     if (hudMode || (!webMode && isHudWindow())) {
         return (
             <ContribWiring>
-                <HudShell />
+                <div data-hud-app="" className="flex h-full min-h-0 w-full flex-col">
+                    <HudNavigation />
+                    <div className="relative min-h-0 flex-1">
+                        <HudShell />
+                    </div>
+                </div>
             </ContribWiring>
         );
     }

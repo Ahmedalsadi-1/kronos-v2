@@ -1,3 +1,5 @@
+import fallbackSprite from "../../website/public/assets/product/kronterm-pet-logo.png";
+import { agentActivityCaption } from "../types/agent-presentation";
 import "./pet.scss";
 
 type PetContext = "idle" | "terminal" | "browser" | "desktop" | "file" | "thinking";
@@ -45,6 +47,8 @@ type PetState = {
     surface?: PetSurface;
     action?: PetAction;
     appName?: string;
+    voiceStatus?: string;
+    voiceLevel?: number;
 };
 type PetOptions = {
     mode: PetMode;
@@ -73,8 +77,8 @@ declare global {
 function sortedFrames(images: Record<string, string>): string[] {
     return Object.entries(images)
         .sort(([a], [b]) => {
-            const first = Number(a.match(/-(\\d+)\\.png$/)?.[1] ?? 0);
-            const second = Number(b.match(/-(\\d+)\\.png$/)?.[1] ?? 0);
+            const first = Number(a.match(/-(\d+)\.png$/)?.[1] ?? 0);
+            const second = Number(b.match(/-(\d+)\.png$/)?.[1] ?? 0);
             return first - second;
         })
         .map(([, src]) => src);
@@ -305,9 +309,16 @@ function clearCursorFollow() {
     spriteShell.classList.remove("cursor-following");
 }
 
+let motionFrame: number;
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+
 function updateAnimationLoop() {
+    if (motionPreference.matches) {
+        spriteShell.style.transform = "";
+        return;
+    }
     if (!spriteShell || !root) {
-        requestAnimationFrame(updateAnimationLoop);
+        motionFrame = requestAnimationFrame(updateAnimationLoop);
         return;
     }
 
@@ -354,11 +365,11 @@ function updateAnimationLoop() {
         }
     }
 
-    requestAnimationFrame(updateAnimationLoop);
+    motionFrame = requestAnimationFrame(updateAnimationLoop);
 }
 
 // Start the physics loop
-requestAnimationFrame(updateAnimationLoop);
+motionFrame = requestAnimationFrame(updateAnimationLoop);
 
 function renderReasoningLog(log: string[] | undefined) {
     if (!reasoningFeedBody) {
@@ -408,13 +419,24 @@ function renderState(nextState: PetState) {
     root.classList.add(`lifecycle-${state.lifecycle}`);
     root.classList.toggle("is-active", state.active);
     context.textContent = state.lifecycle.replace("-", " ").toUpperCase();
-    detail.textContent = state.detail;
+    const caption = agentActivityCaption({ phase: state.lifecycle, action: state.action, surface: state.surface });
+    const voiceStatus = state.voiceStatus ?? "idle";
+    root.classList.toggle("voice-speaking", voiceStatus === "speaking");
+    root.classList.toggle("voice-listening", voiceStatus === "listening");
+    root.style.setProperty("--voice-level", String(state.voiceLevel ?? 0));
+    detail.textContent = voiceStatus !== "idle" ? voiceStatus : caption;
 
     if (!reasoningFeed?.hidden) {
         renderReasoningLog(state.reasoningLog);
     }
 
-    const showThought = options.mode === "expressive" && options.thoughts && state.thought && !state.cursorAction;
+    const showThought =
+        voiceStatus === "idle" &&
+        options.mode === "expressive" &&
+        options.thoughts &&
+        state.context === "thinking" &&
+        state.active &&
+        (!state.cursorAction || state.cursorAction === "idle");
     const isNewThought = state.thought && state.thought !== lastThoughtText;
     lastThoughtText = state.thought ?? "";
     if (isNewThought) {
@@ -422,17 +444,14 @@ function renderState(nextState: PetState) {
         void thought.offsetWidth;
         thought.classList.add("thought-burst");
     }
-    thought.textContent = state.thought ?? "";
-    thought.hidden = !showThought;
+    thought.textContent = caption;
+    const followingComputer = state.active && ["browser", "desktop", "sandbox"].includes(state.surface);
+    context.hidden = followingComputer;
+    detail.hidden = followingComputer || Boolean(showThought);
+    thought.hidden = followingComputer || !showThought;
 
-    const showAction =
-        options.mode === "expressive" &&
-        options.actions &&
-        state.active &&
-        state.context !== "thinking" &&
-        !state.cursorAction;
-    action.textContent = state.detail;
-    action.hidden = !showAction;
+    action.textContent = "";
+    action.hidden = true;
 
     renderCursor(state.cursorAction, state.cursorPoint);
     if (capturePreview && capturePreviewImage) {
@@ -469,8 +488,9 @@ function framesForState(): string[] {
 
 function animate() {
     const frames = framesForState();
+    if (frames.length === 0) sprite.src = fallbackSprite;
     if (frames.length > 0) {
-        sprite.src = frames[frame % frames.length];
+        sprite.src = frames[motionPreference.matches ? 0 : frame % frames.length];
         frame++;
     }
     if (state.cursorAction && state.cursorAction !== "idle" && petCursor) {
@@ -620,5 +640,20 @@ capturePreview?.addEventListener("click", () => {
 applyOptions();
 renderState(state);
 animate();
-window.setInterval(animate, 90);
+let spriteTimer: number;
+const applyMotionPreference = () => {
+    window.clearInterval(spriteTimer);
+    cancelAnimationFrame(motionFrame);
+    frame = 0;
+    animate();
+    if (!motionPreference.matches) {
+        spriteTimer = window.setInterval(animate, 90);
+        motionFrame = requestAnimationFrame(updateAnimationLoop);
+    } else {
+        spriteShell.style.transform = "";
+        petCursor?.classList.remove("cursor-pulse");
+    }
+};
+motionPreference.addEventListener("change", applyMotionPreference);
+applyMotionPreference();
 window.petApi?.onState(renderState);

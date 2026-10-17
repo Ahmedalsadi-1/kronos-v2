@@ -1,10 +1,13 @@
 import type { BlockNodeModel } from "@/app/block/blocktypes";
+import { getApi } from "@/app/store/global";
+import { globalStore } from "@/app/store/jotaiStore";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { globalStore } from "@/app/store/jotaiStore";
-import { Atom, atom } from "jotai";
 import type { WaveEnv } from "@/app/waveenv/waveenv";
+import { Atom, atom, PrimitiveAtom } from "jotai";
 import { AppStreamView } from "./appstream";
+
+export type AppStreamTransport = "legacy-snapshot" | "native-media";
 
 export class AppStreamViewModel implements ViewModel {
     viewType = "appstream";
@@ -17,6 +20,9 @@ export class AppStreamViewModel implements ViewModel {
     viewName: Atom<string>;
 
     streamUrlAtom = atom<string>("");
+    mediaStreamAtom = atom(null) as PrimitiveAtom<MediaStream>;
+    transportAtom = atom<AppStreamTransport>("legacy-snapshot");
+    captureFallbackReasonAtom = atom<string>("");
     appNameAtom: Atom<string>;
     appIdAtom: Atom<string>;
     statusAtom = atom<"idle" | "starting" | "streaming" | "error">("idle");
@@ -41,17 +47,24 @@ export class AppStreamViewModel implements ViewModel {
     }
 
     dispose() {
+        this.releaseNativeMediaStream();
         const streamUrl = globalStore.get(this.streamUrlAtom);
         if (streamUrl) {
             RpcApi.AppStreamStopCommand(TabRpcClient, { sessionId: this.blockId }).catch(() => {});
         }
     }
 
-    async startStream(): Promise<void> {
+    async startStream(useNativeSurfaceV2 = false): Promise<void> {
+        this.releaseNativeMediaStream();
         globalStore.set(this.statusAtom, "starting");
+        globalStore.set(this.errorAtom, "");
+        globalStore.set(this.captureFallbackReasonAtom, "");
         const appName = globalStore.get(this.appNameAtom) || "Unknown";
         const bundleId = globalStore.get(this.appIdAtom) || "";
         try {
+            if (getApi().isProductivityAppAllowed && !(await getApi().isProductivityAppAllowed({ name: appName, identifier: bundleId }))) {
+                throw new Error("This application is blocked during your focus session. Pause focus to open it.");
+            }
             const response = await RpcApi.AppStreamStartCommand(TabRpcClient, {
                 sessionId: this.blockId,
                 appName: appName,
@@ -63,6 +76,9 @@ export class AppStreamViewModel implements ViewModel {
                 return;
             }
             globalStore.set(this.streamUrlAtom, response.streamUrl);
+            if (useNativeSurfaceV2) {
+                await this.startNativeMediaCapture(appName, bundleId);
+            }
             globalStore.set(this.statusAtom, "streaming");
         } catch (e) {
             globalStore.set(this.statusAtom, "error");
@@ -71,11 +87,62 @@ export class AppStreamViewModel implements ViewModel {
     }
 
     async stopStream(): Promise<void> {
+        this.releaseNativeMediaStream();
         try {
             await RpcApi.AppStreamStopCommand(TabRpcClient, { sessionId: this.blockId });
         } catch {}
         globalStore.set(this.streamUrlAtom, "");
         globalStore.set(this.statusAtom, "idle");
+    }
+
+    private async startNativeMediaCapture(appName: string, appId: string): Promise<void> {
+        if (navigator.mediaDevices?.getDisplayMedia == null) {
+            globalStore.set(this.captureFallbackReasonAtom, "Live media capture is unavailable in this renderer");
+            return;
+        }
+        try {
+            await getApi().prepareNativeSurfaceCapture({ appId, appName });
+            const mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: { ideal: 60, min: 30 } },
+                audio: false,
+            });
+            const videoTrack = mediaStream.getVideoTracks()[0];
+            if (videoTrack == null) {
+                for (const track of mediaStream.getTracks()) {
+                    track.stop();
+                }
+                throw new Error("The selected application did not provide a video track");
+            }
+            videoTrack.addEventListener(
+                "ended",
+                () => {
+                    if (globalStore.get(this.mediaStreamAtom) !== mediaStream) return;
+                    globalStore.set(this.mediaStreamAtom, null);
+                    globalStore.set(this.transportAtom, "legacy-snapshot");
+                    globalStore.set(
+                        this.captureFallbackReasonAtom,
+                        "Live capture ended; KronTerm reconnected using compatibility capture"
+                    );
+                },
+                { once: true }
+            );
+            globalStore.set(this.mediaStreamAtom, mediaStream);
+            globalStore.set(this.transportAtom, "native-media");
+        } catch (e) {
+            globalStore.set(this.mediaStreamAtom, null);
+            globalStore.set(this.transportAtom, "legacy-snapshot");
+            globalStore.set(this.captureFallbackReasonAtom, e instanceof Error ? e.message : String(e));
+        }
+    }
+
+    private releaseNativeMediaStream(): void {
+        const mediaStream = globalStore.get(this.mediaStreamAtom);
+        globalStore.set(this.mediaStreamAtom, null);
+        globalStore.set(this.transportAtom, "legacy-snapshot");
+        if (mediaStream == null) return;
+        for (const track of mediaStream.getTracks()) {
+            track.stop();
+        }
     }
 
     async sendClick(x: number, y: number, button?: string): Promise<void> {

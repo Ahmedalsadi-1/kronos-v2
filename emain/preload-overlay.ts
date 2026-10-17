@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AnnotationCommand, AnnotationSnapshot } from "../frontend/types/desktop-annotations";
 
 export type OverlayAnimationCommand =
     | { type: "click"; x: number; y: number }
@@ -13,6 +14,13 @@ export type OverlayAnimationCommand =
     | { type: "hide" };
 
 contextBridge.exposeInMainWorld("overlayApi", {
+    annotationCommand: (input: AnnotationCommand) => ipcRenderer.invoke("overlay-annotation-command", input),
+    setInteractive: (interactive: boolean) => ipcRenderer.send("overlay-interactive", interactive),
+    onAnnotations: (callback: (state: AnnotationSnapshot) => void) => {
+        const listener = (_event: Electron.IpcRendererEvent, state: AnnotationSnapshot) => callback(state);
+        ipcRenderer.on("desktop-annotations", listener);
+        return () => ipcRenderer.removeListener("desktop-annotations", listener);
+    },
     onAnimation: (callback: (cmd: OverlayAnimationCommand) => void) => {
         const listener = (_event: Electron.IpcRendererEvent, cmd: OverlayAnimationCommand) => callback(cmd);
         ipcRenderer.on("overlay-animation", listener);

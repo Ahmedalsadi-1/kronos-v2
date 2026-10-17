@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Electron main process: window management, IPC bridge, managed agent runtimes (KronosCode via ACP, Hermes), ChathubV2 server stack, LSP, audio, pet/overlay windows.
+Electron main process: window management, IPC bridge, managed agent runtimes (KronosCode via ACP, Hermes), LSP, audio, pet/overlay windows.
 
 ## STRUCTURE
 
@@ -18,7 +18,6 @@ emain/
 ├── preload-overlay.ts     # Overlay window preload
 ├── preload-pet.ts         # Desktop pet preload
 ├── acp/                   # ACP transport/harness/agent-manager for KronosCode sessions
-├── chathubv2-*.ts         # Managed KronosChamber runtime: process, pty, health, context, state-push
 ├── kronoscode-runtime.ts  # KronosCode managed runtime lifecycle
 ├── hermes-runtime.ts      # Hermes agent backend lifecycle
 ├── emain-lsp.ts           # Language server management (frontend client in frontend/app/lsp/)
@@ -27,7 +26,7 @@ emain/
 ├── emain-overlay.ts       # Overlay window logic
 ├── emain-wavesrv.ts       # Wavesrv process management
 ├── emain-wsh.ts           # WSH binary management
-└── sandbox/               # Sandbox VM manager + MCP server bridge
+└── linux-desktop/         # Managed Linux VM runtime and provisioning
 ```
 
 ## KEY PATTERNS
@@ -38,7 +37,7 @@ emain/
 | Window events       | `emain-window.ts`                     | WaveBrowserWindow class               |
 | Menu items          | `emain-menu.ts`                       | Menu.buildFromTemplate                |
 | Own an OS process   | `emain-audio.ts`, `emain-wavesrv.ts`  | child lifecycle owned here            |
-| Runtime health      | `chathubv2-health.ts`                 | startup state + reconnect + repair    |
+| Runtime health      | `hermes-runtime.ts`                 | startup state + reconnect + repair    |
 | New Electron API    | `.kilocode/skills/electron-api/SKILL.md` | preload → IPC → renderer           |
 
 ## TESTS

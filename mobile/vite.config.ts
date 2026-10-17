@@ -1,10 +1,11 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const ProductionSourceMaps = process.env.KRONOSCHAMBER_MOBILE_SOURCEMAP === "true" ? ("hidden" as const) : false;
+const ProductionSourceMaps = process.env.KRONTERM_MOBILE_SOURCEMAP === "true" ? ("hidden" as const) : false;
 
 const config = defineConfig({
     plugins: [react()],
+    worker: { format: "es", rollupOptions: { output: { inlineDynamicImports: true } } },
     build: {
         target: "es2022",
         sourcemap: ProductionSourceMaps,
@@ -26,7 +27,7 @@ const config = defineConfig({
         port: 4174,
         proxy: {
             "/_kronhost": {
-                target: process.env.VITE_KRONTERM_LOCAL_URL?.trim() || "http://127.0.0.1:3107",
+                target: process.env.VITE_KRONTERM_LOCAL_URL?.trim() || "http://127.0.0.1:4119",
                 changeOrigin: true,
                 ws: true,
                 rewrite: (path) => path.replace(/^\/_kronhost/, ""),

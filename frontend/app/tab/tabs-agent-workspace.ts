@@ -1,17 +1,18 @@
+import { resolveBlockView } from "@/app/block/retired-chat-view";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 const TabsAgentCompanionRequestEvent = "kronterm:tabs-agent-companion";
 const TabsAgentCompanionPromoteEvent = "kronterm:tabs-agent-companion-promote";
 
-const AgentChatViews = new Set(["chathubv2", "hermes"]);
+const AgentChatViews = new Set(["hermes"]);
 
 type TabsAgentCompanionRequest = {
     blockId: string;
 };
 
 function isAgentChatView(view: string): boolean {
-    return AgentChatViews.has(view);
+    return AgentChatViews.has(resolveBlockView(view));
 }
 
 function requestTabsAgentCompanion(blockId: string): void {
@@ -37,10 +38,10 @@ function promoteTabsAgentCompanion(blockId: string): void {
 }
 
 export {
-    TabsAgentCompanionPromoteEvent,
-    TabsAgentCompanionRequestEvent,
     isAgentChatView,
     promoteTabsAgentCompanion,
     requestTabsAgentCompanion,
+    TabsAgentCompanionPromoteEvent,
+    TabsAgentCompanionRequestEvent,
     type TabsAgentCompanionRequest,
 };

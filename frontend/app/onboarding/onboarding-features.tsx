@@ -1,6 +1,8 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ProvidersPanel } from "@/app/aipanel/providers-panel";
+import { SettingsPanel } from "@/app/aipanel/settings-panel";
 import Logo from "@/app/asset/logo.svg";
 import { EmojiButton } from "@/app/element/emojibutton";
 import { MagnifyIcon } from "@/app/element/magnify";
@@ -10,7 +12,6 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { isMacOS } from "@/util/platformutil";
 import { useEffect, useState } from "react";
-import { FakeChat } from "./fakechat";
 import { AppsPage } from "./onboarding-apps";
 import { CanvasPage } from "./onboarding-canvas";
 import { EditBashrcCommand, ViewLogoCommand, ViewShortcutsCommand } from "./onboarding-command";
@@ -33,20 +34,7 @@ function getPageStep(page: FeaturePageName): number {
 export const WaveAIPage = ({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) => {
     const isMac = isMacOS();
     const shortcutKey = isMac ? "⌘-Shift-A" : "Alt-Shift-A";
-    const [fireClicked, setFireClicked] = useState(false);
-
-    const handleFireClick = () => {
-        setFireClicked(!fireClicked);
-        if (!fireClicked) {
-            RpcApi.RecordTEventCommand(TabRpcClient, {
-                event: "onboarding:fire",
-                props: {
-                    "onboarding:feature": "waveai",
-                    "onboarding:version": CurrentOnboardingVersion,
-                },
-            });
-        }
-    };
+    const [setupOpen, setSetupOpen] = useState(false);
 
     return (
         <div className="flex flex-col h-full">
@@ -60,42 +48,34 @@ export const WaveAIPage = ({ onNext, onSkip }: { onNext: () => void; onSkip: () 
                 title="KronosCode"
                 demo={
                     <div className="w-full h-[400px] bg-background rounded-xl border border-border/50 overflow-hidden">
-                        <FakeChat />
+                        <div className="h-full overflow-y-auto">
+                            {setupOpen ? <SettingsPanel /> : <ProvidersPanel />}
+                        </div>
                     </div>
                 }
             >
-                <FeatureBadge icon="fa fa-sparkles">
-                    <span className="font-mono">AI Assistant</span>
-                </FeatureBadge>
-
                 <div className="flex flex-col items-start gap-4 text-secondary">
                     <p>
-                        KronosCode is your terminal assistant with context. I can read your terminal output, analyze
-                        widgets, read/write files, and help you solve problems faster.
+                        Check the live connection status before starting your first task. Connection settings let you
+                        choose the AI mode, endpoint, credentials, and model.
+                    </p>
+                    <button
+                        type="button"
+                        aria-expanded={setupOpen}
+                        onClick={() => setSetupOpen((open) => !open)}
+                        className="bg-accent/80 text-primary rounded px-3 py-2 hover:bg-accent transition-colors cursor-pointer"
+                    >
+                        {setupOpen ? "Check connection status" : "Connection settings"}
+                    </button>
+                    <p className="text-sm">
+                        Connection status comes from your running KronosCode runtime. Configuring credentials does not
+                        guarantee a successful request; check the status before starting your first task.
                     </p>
                 </div>
-
-                <FeatureBullet icon="fa fa-sparkles">
-                    Toggle the KronosCode panel with the{" "}
-                    <span className="inline-flex h-[22px] px-1.5 items-center rounded-md box-border bg-surface-hover text-accent text-[11px] align-middle">
-                        <i className="fa fa-sparkles" />
-                        <span className="font-bold ml-1 font-mono">AI</span>
-                    </span>{" "}
-                    button in the header (top left)
-                </FeatureBullet>
-
                 <FeatureBullet icon="fa fa-keyboard">
-                    Or use{" "}
-                    <span className="font-mono font-semibold text-foreground whitespace-nowrap">{shortcutKey}</span> to
-                    quickly toggle
+                    After the tour, open KronosCode with {shortcutKey} and ask it to explain the output of your active
+                    terminal. Review its response before asking it to change files.
                 </FeatureBullet>
-
-                <FeatureBullet icon="fa fa-key">
-                    Bring your own API keys or run local models with Ollama, LM Studio, and other OpenAI-compatible
-                    providers
-                </FeatureBullet>
-
-                <EmojiButton emoji="🔥" isClicked={fireClicked} onClick={handleFireClick} />
             </FeaturePageLayout>
             <OnboardingFooter
                 currentStep={getPageStep("waveai")}

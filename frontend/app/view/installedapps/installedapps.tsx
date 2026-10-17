@@ -1,10 +1,12 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createBlockSplitHorizontally } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { createBlockSplitHorizontally } from "@/app/store/global";
 import { WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
+import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
+import { launchKronTermHudIsland } from "@/app/workspace/kronterm-hud-islands";
 import { makeIconClass } from "@/util/util";
 import clsx from "clsx";
 import type { PrimitiveAtom } from "jotai";
@@ -127,6 +129,18 @@ function InstalledAppsView({ model }: ViewComponentProps<InstalledAppsViewModel>
         async (app: InstalledAppInfo) => {
             setLaunchState({ execpath: app.execpath, name: app.name, status: "launching" });
             try {
+                if (
+                    kronTermHudController.getSnapshot().active ||
+                    new URLSearchParams(window.location.search).get("nativeSurface") === "island"
+                ) {
+                    await launchKronTermHudIsland("appstream", {
+                        appId: app.bundleid || app.appid,
+                        appName: app.name,
+                        forceNew: true,
+                    });
+                    setLaunchState({ execpath: app.execpath, name: app.name, status: "launched" });
+                    return;
+                }
                 await createBlockSplitHorizontally(
                     {
                         meta: {
@@ -177,7 +191,7 @@ function InstalledAppsView({ model }: ViewComponentProps<InstalledAppsViewModel>
                     <div>
                         <div className="text-sm font-semibold text-primary">Stream an app</div>
                         <div className="text-xs text-muted">
-                            Stream installed macOS applications without leaving Wave.
+                            Stream installed macOS applications without leaving KronTerm.
                         </div>
                     </div>
                     <button

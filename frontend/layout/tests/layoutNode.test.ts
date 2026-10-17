@@ -186,6 +186,26 @@ test("balanceNode - corrects flex directions", () => {
     assert(node1.children![0].flexDirection !== node1.flexDirection);
 });
 
+test("balanceNode - repairs missing and empty children from persisted layouts", () => {
+    const validChild = newLayoutNode(FlexDirection.Column, undefined, undefined, { blockId: "valid" });
+    const emptyChild = {
+        id: "empty",
+        flexDirection: FlexDirection.Column,
+        size: 10,
+        children: [],
+    } as LayoutNode;
+    const persistedNode = {
+        id: "root",
+        flexDirection: FlexDirection.Row,
+        size: 10,
+        children: [undefined, emptyChild, validChild],
+    } as unknown as LayoutNode;
+
+    assert.doesNotThrow(() => balanceNode(persistedNode));
+    assert.equal(persistedNode.data?.blockId, "valid");
+    assert.isUndefined(persistedNode.children);
+});
+
 test("balanceNode - collapses nodes with single grandchild 1", () => {
     let node1 = newLayoutNode(FlexDirection.Row, undefined, [
         newLayoutNode(FlexDirection.Column, undefined, [

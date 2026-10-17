@@ -6,7 +6,15 @@
 // param. Everything else is an honest
 // "not supported" stub so the renderer never mistakes the shim for the real bridge.
 
-import { getApi } from "@/app/store/global";
+import { acpAgentLogo } from "@/app/aipanel/acp-agent-logos";
+import { resolveBlockView } from "@/app/block/retired-chat-view";
+import { launchSystemApp, makeInstalledAppDescriptor, makeViewAppDescriptor } from "@/app/store/app-registry";
+import { atoms, createBlock, getApi, setActiveTab } from "@/app/store/global";
+import { globalStore } from "@/app/store/jotaiStore";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { makeTabRouteId } from "@/app/store/wshrouter";
+import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import {
     focusAgentWidget,
     listAgentWidgets,
@@ -16,7 +24,15 @@ import {
     snapshotAgentWidget,
     subscribeAgentWidgetDesignSelection,
 } from "@/app/view/agent-widget-bridge";
+import { subscribeHermesQuickSubmit } from "@/app/view/hermes/hermes-quick-submit";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
+import { hermesToolActivityToAgentActivity, subscribeAgentTakeover } from "@/app/view/hermes/hermes-tool-activity";
+import { KronosCodeHermesBackend } from "@/app/view/hermes/kronoscode-hermes-backend";
+import { openSystemCenter } from "@/app/workspace/command-center-events";
+import { hudLocationForMeta } from "@/app/workspace/hud-surface-location";
+import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
+import * as WOS from "@/store/wos";
+import { $hudSelectedSurfaceId, $hudSurfaceIslandsExpanded } from "@hermes/app/hud/surface-islands-model";
 import type {
     DesktopActiveProfile,
     DesktopAgentRoster,
@@ -53,6 +69,10 @@ const DEFAULT_BASE_URL = "http://127.0.0.1:9119";
 const STORAGE_BASE_URL = "kronterm.hermes.shim.baseUrl";
 const LEGACY_STORAGE_TOKEN = "kronterm.hermes.shim.token";
 const ShimStateKey = Symbol.for("kronterm.hermes.desktopShimState");
+
+function isNativeHudSurface(): boolean {
+    return new URLSearchParams(window.location.search).get("nativeSurface") === "hud";
+}
 
 export interface HermesDesktopShimConfig {
     baseUrl?: string;
@@ -241,13 +261,98 @@ function localConnectionConfig(profile?: null | string): DesktopConnectionConfig
     };
 }
 
+function useOwnerHudRoute(): boolean {
+    return isNativeHudSurface() || kronTermHudController.getSnapshot().active;
+}
+
+function ownerTabRoute(): string {
+    const tabId = globalStore.get(atoms.staticTabId);
+    if (!tabId) throw new Error("No KronTerm workspace tab is connected.");
+    return makeTabRouteId(tabId);
+}
+
+export function workspaceSnapshotSurfaces(snapshot: unknown): HermesKronTermSurface[] {
+    const blocks = (snapshot as { blocks?: unknown[] })?.blocks;
+    if (!Array.isArray(blocks)) return [];
+    return blocks.flatMap((value): HermesKronTermSurface[] => {
+        const block = value as {
+            blockid?: string;
+            view?: string;
+            title?: string;
+            focused?: boolean;
+            active?: boolean;
+            meta?: Record<string, unknown>;
+            location?: string;
+        };
+        if (typeof block?.blockid !== "string" || resolveBlockView(block.view) === "hermes") return [];
+        return [
+            {
+                id: block.blockid,
+                view: typeof block.view === "string" ? block.view : "widget",
+                title: typeof block.title === "string" ? block.title : "Widget",
+                ...(block.location || hudLocationForMeta(block.meta ?? {}, block.blockid)
+                    ? { location: block.location || hudLocationForMeta(block.meta ?? {}, block.blockid) }
+                    : {}),
+                focused: Boolean(block.focused),
+                active: Boolean(block.active),
+                surfaceKind: "widget",
+            },
+        ];
+    });
+}
+
 async function listKronTermSurfaces(): Promise<HermesKronTermSurface[]> {
-    return listAgentWidgets();
+    const widgets = listAgentWidgets();
+    if (!useOwnerHudRoute()) return widgets;
+    const snapshot = await RpcApi.WorkspaceSurfaceSnapshotCommand(TabRpcClient, { route: ownerTabRoute() });
+    return workspaceSnapshotSurfaces(JSON.parse(snapshot)).map((surface) => {
+        const local = widgets.find((widget) => widget.id === surface.id);
+        return local ? { ...local, focused: surface.focused } : surface;
+    });
+}
+
+async function openHudKronTermSurface(blockId: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+        const response = JSON.parse(
+            await RpcApi.WorkspaceSurfaceControlCommand(
+                TabRpcClient,
+                { action: "hud.open", blockid: blockId },
+                { route: ownerTabRoute() }
+            )
+        );
+        return { ok: response.success === true, ...(response.error ? { error: String(response.error) } : {}) };
+    } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : "Could not open the workspace widget." };
+    }
 }
 
 async function focusKronTermSurface(blockId: string): Promise<{ ok: boolean; error?: string }> {
-    return focusAgentWidget(blockId);
+    return useOwnerHudRoute() ? openHudKronTermSurface(blockId) : focusAgentWidget(blockId);
 }
+
+async function promoteKronTermSurface(blockId: string): Promise<{ ok: boolean; error?: string }> {
+    return useOwnerHudRoute() ? openHudKronTermSurface(blockId) : promoteAgentWidget(blockId);
+}
+
+async function previewKronTermSurface(blockId: string): Promise<string> {
+    if (!useOwnerHudRoute()) return previewAgentWidget(blockId);
+    const surfaces = await listKronTermSurfaces();
+    if (!surfaces.some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
+    return RpcApi.CaptureBlockScreenshotCommand(
+        TabRpcClient,
+        { blockid: blockId, passive: true },
+        { route: ownerTabRoute(), timeout: 5000 }
+    );
+}
+
+// One per renderer: ACP events are delivered only to the webContents that started the session.
+const kronosCodeBackend = new KronosCodeHermesBackend(() => {
+    try {
+        return getApi();
+    } catch {
+        return undefined;
+    }
+});
 
 const shim: Window["hermesDesktop"] = {
     getConnection,
@@ -257,13 +362,227 @@ const shim: Window["hermesDesktop"] = {
     getAgentRoster,
     krontermSurfaces: {
         list: listKronTermSurfaces,
+        toggleChatLayout: () => getApi().syncNativeNotch({ chatLayout: "toggle" }),
+        openMachines: async (kind = "desktop", settings = false) => {
+            try {
+                const surfaces = await listKronTermSurfaces();
+                const running = surfaces
+                    .filter((surface) => {
+                        const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", surface.id)));
+                        return surface.view === "linux-vms" && (block?.meta?.["machine:kind"] ?? "desktop") === kind;
+                    })
+                    .map((surface) => surface.id);
+                await launchSystemApp(makeViewAppDescriptor("linux-vms", running), {
+                    focusBlock: async (blockId) => {
+                        const result = await focusKronTermSurface(blockId);
+                        if (settings)
+                            window.dispatchEvent(new CustomEvent("kronterm:machine-settings", { detail: { blockId } }));
+                        if (!result.ok) throw new Error(result.error || "Could not focus the machine launcher.");
+                    },
+                    createView: async () => {
+                        if (useOwnerHudRoute()) {
+                            const response = JSON.parse(
+                                await RpcApi.WorkspaceSurfaceControlCommand(
+                                    TabRpcClient,
+                                    {
+                                        action: "hud.launch",
+                                        view: "machines",
+                                        text: JSON.stringify({ machineKind: kind, machineSettings: settings }),
+                                    },
+                                    { route: ownerTabRoute() }
+                                )
+                            );
+                            if (!response.success)
+                                throw new Error(response.error || "Could not open the machine launcher.");
+                            return;
+                        }
+                        await createBlock({
+                            meta: { view: "linux-vms", "machine:kind": kind, "machine:settings": settings } as MetaType,
+                        });
+                    },
+                    createAppStream: async () => {
+                        throw new Error("Unsupported machine launcher target.");
+                    },
+                });
+                return { ok: true };
+            } catch (failure) {
+                return {
+                    ok: false,
+                    error: failure instanceof Error ? failure.message : "Could not open the machine launcher.",
+                };
+            }
+        },
+        launchWorkspace: async (action) => {
+            if (["widgets", "tabs", "canvas", "os"].includes(action)) {
+                publishWorkspacePresentation(action as "widgets" | "tabs" | "canvas" | "os");
+                await RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": action });
+                return;
+            }
+            if (action === "activity" || action === "control") {
+                openSystemCenter(action);
+                return;
+            }
+            const views = {
+                terminal: "term",
+                browser: "web",
+                files: "preview",
+                connections: "waveconfig",
+                scratchpad: "term",
+            };
+            await createBlock(
+                {
+                    meta: {
+                        view: views[action],
+                        ...(action === "files" ? { file: "~" } : {}),
+                        ...(action === "terminal" || action === "scratchpad" ? { controller: "shell" } : {}),
+                    },
+                },
+                false,
+                action === "scratchpad"
+            );
+        },
+        launchApp: async (id) => {
+            const app = (await RpcApi.ListInstalledAppsCommand(TabRpcClient)).find(
+                (item) => (item.bundleid || item.appid) === id
+            );
+            if (!app) throw new Error("The selected application is unavailable.");
+            await launchSystemApp(makeInstalledAppDescriptor(app), {
+                focusBlock: async (blockId) => {
+                    await focusKronTermSurface(blockId);
+                },
+                createView: async () => {},
+                createAppStream: async (appId, appName) => {
+                    await createBlock({
+                        meta: { view: "appstream", "appstream:appid": appId, "appstream:appname": appName } as MetaType,
+                    });
+                },
+            });
+        },
+        spaces: async () => {
+            const workspace = globalStore.get(atoms.workspace);
+            return (workspace?.tabids ?? []).map((id, index) => ({ id, name: `Space ${index + 1}` }));
+        },
+        openSpace: async (id) => {
+            const workspace = globalStore.get(atoms.workspace);
+            if (!(workspace?.tabids ?? []).includes(id)) throw new Error("Workspace space is unavailable.");
+            setActiveTab(id);
+        },
+        searchResources: async (query) => getApi().searchSystemItems(query.slice(0, 200)),
+        openResource: async (path) => {
+            await createBlock({ meta: { view: "preview", file: path } });
+        },
+        apps: async () =>
+            (await RpcApi.ListInstalledAppsCommand(TabRpcClient)).map((app) => ({
+                id: app.bundleid || app.appid,
+                name: app.name,
+            })),
+        targetApp: async (id) => {
+            const app = (await RpcApi.ListInstalledAppsCommand(TabRpcClient)).find(
+                (app) => (app.bundleid || app.appid) === id
+            );
+            if (!app) throw new Error("The selected app is unavailable");
+            getApi().syncNativeNotch({ controlTarget: { name: app.name } });
+        },
         focus: focusKronTermSurface,
         openSplit: focusKronTermSurface,
-        promote: async (blockId) => promoteAgentWidget(blockId),
-        preview: previewAgentWidget,
-        snapshot: snapshotAgentWidget,
+        promote: promoteKronTermSurface,
+        preview: previewKronTermSurface,
+        select: (blockId, expanded) => getApi().selectNativeHudWidget(blockId, expanded),
+        onDisplay: (listener) =>
+            getApi().onNativeHudSelectWidget?.(({ blockId, expanded }) => {
+                $hudSelectedSurfaceId.set(blockId);
+                $hudSurfaceIslandsExpanded.set(expanded);
+                listener({ blockId, expanded });
+            }),
+        control: async (blockId, input) => {
+            const surfaces = await listKronTermSurfaces();
+            if (!surfaces.some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
+            const opts = { route: await getApi().getHudWidgetRoute(blockId), timeout: 5000 };
+            const state =
+                input.action === "click" || input.action === "scroll"
+                    ? await RpcApi.WidgetGetStateCommand(TabRpcClient, { blockid: blockId }, opts)
+                    : undefined;
+            const x = input.x == null ? undefined : input.x * state.width;
+            const y = input.y == null ? undefined : input.y * state.height;
+            const result =
+                input.action === "click"
+                    ? await RpcApi.WidgetMouseClickCommand(
+                          TabRpcClient,
+                          { blockid: blockId, x, y, button: "left", clickcount: 1 },
+                          opts
+                      )
+                    : input.action === "scroll"
+                      ? await RpcApi.WidgetMouseScrollCommand(
+                            TabRpcClient,
+                            { blockid: blockId, amount: input.amount, originx: x, originy: y },
+                            opts
+                        )
+                      : input.action === "type"
+                        ? await RpcApi.WidgetKeyboardTypeCommand(
+                              TabRpcClient,
+                              { blockid: blockId, text: input.text, delayms: 0 },
+                              opts
+                          )
+                        : await RpcApi.WidgetKeyboardPressCommand(
+                              TabRpcClient,
+                              { blockid: blockId, keys: input.keys },
+                              opts
+                          );
+            if (!result.success) throw new Error(result.message || "Widget input failed");
+        },
+        snapshot: async (blockId) => {
+            if (!useOwnerHudRoute()) return snapshotAgentWidget(blockId);
+            const surfaces = await listKronTermSurfaces();
+            if (!surfaces.some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
+            const opts = { route: await getApi().getHudWidgetRoute(blockId), timeout: 5000 };
+            const [snapshot, state] = await Promise.all([
+                RpcApi.WidgetSnapshotCommand(TabRpcClient, { blockid: blockId }, opts),
+                RpcApi.WidgetGetStateCommand(TabRpcClient, { blockid: blockId }, opts),
+            ]);
+            return {
+                blockId,
+                width: state.width,
+                height: state.height,
+                timestamp: snapshot.timestamp,
+                elements: snapshot.elements.map((element) => ({
+                    ...element,
+                    name: element.name ?? "",
+                    role: element.role ?? "",
+                })),
+            };
+        },
         inspect: async (blockId, enabled) => setAgentWidgetInspectMode(blockId, enabled),
         onSelection: subscribeAgentWidgetDesignSelection,
+    },
+    readWindowBelow: async () => ({
+        frontmost: null,
+        window: null,
+        platform: getApi().getPlatform(),
+        note: "Native window enumeration is unavailable in KronTerm. Use workspace_snapshot to inspect open widgets, browser_get_html for browser content, or widget_snapshot for an accessible widget snapshot.",
+    }),
+    krontermActivity: {
+        report: (activity) => {
+            const event = hermesToolActivityToAgentActivity(activity);
+            if (event == null) {
+                return;
+            }
+            try {
+                getApi().publishAgentSurfaceActivity(event as unknown as Record<string, unknown>);
+            } catch (error) {
+                console.warn("[hermes] activity publish failed", error);
+            }
+        },
+        onTakeover: subscribeAgentTakeover,
+    },
+    agentBackends: {
+        list: async () =>
+            (await kronosCodeBackend.list()).map((engine) => ({ ...engine, logo: acpAgentLogo(engine.id) })),
+        getSessionBackend: (sessionId) => kronosCodeBackend.getSessionBackend(sessionId),
+        getActive: () => kronosCodeBackend.getActive(),
+        setActive: (id) => kronosCodeBackend.setActive(id),
+        onActiveChange: (listener) => kronosCodeBackend.onActiveChange(listener),
+        route: (method, params) => kronosCodeBackend.route(method, params),
+        onEvent: (listener) => kronosCodeBackend.onEvent(listener),
     },
     revalidateConnection: async () => ({ ok: true, rebuilt: false }),
     touchBackend: async () => ({ ok: true }),
@@ -278,6 +597,10 @@ const shim: Window["hermesDesktop"] = {
             return { ok: true };
         },
         close: async () => {
+            if (isNativeHudSurface()) {
+                getApi().requestNativeHudExit();
+                return { ok: true };
+            }
             try {
                 await hermesSurfaceController.expandToWidget();
                 return { ok: true };
@@ -298,11 +621,21 @@ const shim: Window["hermesDesktop"] = {
             }
         },
         dismiss: async () => {
+            if (isNativeHudSurface()) {
+                getApi().requestNativeHudExit();
+                return { ok: true };
+            }
             hermesSurfaceController.dismiss();
             return { ok: true };
         },
-        setIgnoreMouse: (_ignore: boolean) => undefined,
-        moveBy: (delta) => hermesSurfaceController.moveBy(delta),
+        setIgnoreMouse: (ignore: boolean) => getApi().setWindowIgnoreMouse(ignore),
+        moveBy: (delta) => {
+            if (isNativeHudSurface()) {
+                getApi().moveNativeHudBy(delta);
+                return;
+            }
+            hermesSurfaceController.moveBy(delta);
+        },
         setBounds: (bounds) => hermesSurfaceController.setGeometry(bounds),
         setVibrancy: async (_on: boolean) => ({ ok: true }),
         setSession: (sessionId) => hermesSurfaceController.setSession(sessionId),
@@ -356,7 +689,7 @@ const shim: Window["hermesDesktop"] = {
         dismiss: () => undefined,
         pushState: (_payload: QuickEntryStatePush) => undefined,
         onState: () => () => undefined,
-        onSubmit: () => () => undefined,
+        onSubmit: (callback) => subscribeHermesQuickSubmit(callback),
         onShown: () => () => undefined,
     },
 

@@ -3,7 +3,7 @@ import { cn } from '@hermes/lib/utils'
 
 import { titlebarIconSizeCss } from './titlebar'
 
-/** Titlebar-cluster glyph — 13.9px inline (see titlebarIconSizeCss). */
+/** Titlebar-cluster glyph — 11px inline (see titlebarIconSizeCss). */
 export function TitlebarIcon({
   className,
   name,

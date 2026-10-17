@@ -1,3 +1,4 @@
+import { eventOwnsInput, selectorOwnsInput } from "./input-ownership";
 /**
  * Soft focus / type-to-focus for the chat composer.
  *
@@ -107,6 +108,7 @@ export function clarifyCardOwnsKey(event: KeyboardEvent): boolean {
  */
 export function composerFocusBlockedBySurface(): boolean {
   return (
+    selectorOwnsInput() ||
     switcherActive() ||
     $workspaceIsPage.get() ||
     isFocusWithin('[data-terminal]') ||
@@ -136,7 +138,7 @@ export function composerFocusKeysAllowed(event: KeyboardEvent, combo: string): b
   if (
     event.defaultPrevented ||
     event.isComposing ||
-    isEditableTarget(event.target) ||
+    eventOwnsInput(event) ||
     composerFocusBlockedBySurface() ||
     clarifyCardOwnsKey(event)
   ) {

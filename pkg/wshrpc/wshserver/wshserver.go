@@ -1205,7 +1205,7 @@ func (ws *WshServer) BlocksListCommand(
 }
 
 func (ws *WshServer) WorkspaceListCommand(ctx context.Context) ([]wshrpc.WorkspaceInfoData, error) {
-	workspaceList, err := wcore.ListWorkspaces(ctx)
+	workspaceList, err := wcore.ListAllWorkspaces(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error listing workspaces: %w", err)
 	}
@@ -2080,6 +2080,8 @@ func (ws *WshServer) SandboxStartCommand(ctx context.Context, data wshrpc.Sandbo
 		SessionID:  data.SessionId,
 		Mode:       data.Mode,
 		BrowserURL: data.BrowserUrl,
+		Runtime:    data.Runtime,
+		Image:      data.Image,
 	})
 	if err != nil {
 		return wshrpc.SandboxStartResponse{
@@ -2100,7 +2102,7 @@ func (ws *WshServer) SandboxStartCommand(ctx context.Context, data wshrpc.Sandbo
 		sshConn = fmt.Sprintf("ssh ubuntu@localhost -p %d", config.SSHPort)
 	}
 	vncWsURL := sandboxmanager.MakeVNCWsURL(session.SessionID)
-	if session.Runtime == sandboxmanager.SandboxRuntimeKrontermDesktop {
+	if session.Runtime != sandboxmanager.SandboxRuntimeQEMU {
 		vncWsURL = ""
 	}
 	return wshrpc.SandboxStartResponse{
@@ -2146,7 +2148,7 @@ func (ws *WshServer) SandboxStatusCommand(ctx context.Context, data wshrpc.Sandb
 
 	config := session.Config
 	vncWsURL := sandboxmanager.MakeVNCWsURL(session.SessionID)
-	if session.Runtime == sandboxmanager.SandboxRuntimeKrontermDesktop {
+	if session.Runtime != sandboxmanager.SandboxRuntimeQEMU {
 		vncWsURL = ""
 	}
 	if config == nil {

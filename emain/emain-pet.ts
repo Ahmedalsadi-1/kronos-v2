@@ -18,6 +18,7 @@ import {
     type AgentActivitySurface,
 } from "../frontend/types/agent-activity";
 import type { AcpEvent } from "./acp";
+import { listNativeHudWebContents, publishNativeNotchActivity } from "./emain-hud";
 import type { OverlayAnimationCommand } from "./emain-overlay";
 import { sendOverlayAnimation } from "./emain-overlay";
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
@@ -44,6 +45,8 @@ export type DesktopPetState = {
     surface?: AgentActivitySurface;
     action?: AgentActivityAction;
     appName?: string;
+    voiceStatus?: string;
+    voiceLevel?: number;
 };
 
 export type DesktopPetNotification = {
@@ -118,6 +121,13 @@ function sendState() {
 function updateState(update: Partial<DesktopPetState>) {
     state = { ...state, ...update };
     sendState();
+}
+
+export function updateDesktopPetVoiceState(input: { active?: boolean; status?: string; level?: number }) {
+    const allowed = ["idle", "listening", "transcribing", "thinking", "speaking", "error"];
+    const status = input?.active && allowed.includes(input.status) ? input.status : "idle";
+    const level = Number.isFinite(input?.level) ? Math.max(0, Math.min(1, input.level)) : 0;
+    updateState({ voiceStatus: status, voiceLevel: level });
 }
 
 function scheduleIdleState(detail = "KronosCode ready", delayMs = SuccessStateMs) {
@@ -494,21 +504,36 @@ function pointFromToolInput(rawInput: Record<string, unknown> | undefined): { x:
     return point ? { x: Math.round(point.x), y: Math.round(point.y) } : null;
 }
 
+function activityTargets(): Electron.WebContents[] {
+    const targets: Electron.WebContents[] = [];
+    const main = focusedWaveWindow?.activeTabView?.webContents;
+    if (main != null && !main.isDestroyed()) {
+        targets.push(main);
+    }
+    for (const hud of listNativeHudWebContents()) {
+        if (!targets.includes(hud)) {
+            targets.push(hud);
+        }
+    }
+    return targets;
+}
+
 function broadcastDesktopPetSurfaceActivity(notification: DesktopPetNotification) {
     const activity = notification.surfaceActivity;
-    const target = focusedWaveWindow?.activeTabView?.webContents;
-    if (activity == null || target == null || target.isDestroyed()) {
+    if (activity == null) {
         return;
     }
-    target.send("desktop-pet-surface-activity", activity);
+    publishNativeNotchActivity(activity);
+    for (const target of activityTargets()) {
+        target.send("desktop-pet-surface-activity", activity);
+    }
 }
 
 function broadcastAgentSurfaceActivity(activity: AgentActivityEvent) {
-    const target = focusedWaveWindow?.activeTabView?.webContents;
-    if (target == null || target.isDestroyed()) {
-        return;
+    publishNativeNotchActivity(activity);
+    for (const target of activityTargets()) {
+        target.send("desktop-pet-surface-activity", activity);
     }
-    target.send("desktop-pet-surface-activity", activity);
 }
 
 function pathFromToolInput(rawInput: Record<string, unknown> | undefined): Array<{ x: number; y: number }> | null {
@@ -679,6 +704,10 @@ function notificationForActivity(
 
 export function notifyDesktopPetSurfaceActivity(activity: AgentActivityEvent, target?: Electron.Rectangle) {
     const normalized = normalizeAgentActivity(activity);
+    if (/^(device:|vm:)/.test(normalized.surfaceid ?? "")) {
+        broadcastAgentSurfaceActivity(normalized);
+        return;
+    }
     const notification = notificationForActivity(normalized, target);
     notifyDesktopPetNotification(notification);
     broadcastAgentSurfaceActivity(normalized);
@@ -1156,7 +1185,12 @@ export function notifyDesktopPetNotification(notification: DesktopPetNotificatio
         startAgentCursorFollow();
     }
     const overlayCommand = overlayCommandFromNotification(notification);
-    if (options.mode === "expressive" && overlayCommand != null) {
+    if (
+        options.mode === "expressive" &&
+        overlayCommand != null &&
+        !activity.blockid &&
+        activity.surface !== "desktop"
+    ) {
         sendOverlayAnimation(overlayCommand);
     }
 }

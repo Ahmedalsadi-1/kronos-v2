@@ -16,7 +16,7 @@ const heroTasks = {
 
 const tabs = ["Desktop", "CLI", "Sandbox"] as const;
 
-const modelOptions = ["KronosCode runtime defaults", "KronosChamber desktop", "KronosCode repair mode"];
+const modelOptions = ["KronosCode runtime defaults", "Hermes desktop", "KronosCode repair mode"];
 
 export function KrontermAgentHero() {
     const [activeTab, setActiveTab] = useState<string>("Desktop");
@@ -32,7 +32,7 @@ export function KrontermAgentHero() {
                     </h1>
                     <p className="hero-subtitle">
                         Kronterm combines your terminal, browser, editor, sandboxes, files, and AI agents into one
-                        programmable desktop&nbsp;— with KronosCode and KronosChamber as the private-beta runtime.
+                        programmable desktop&nbsp;— with KronosCode and Hermes as the private-beta runtime.
                     </p>
                     <div className="cta-row">
                         <Link className="primary-button" to="/contact-sales">

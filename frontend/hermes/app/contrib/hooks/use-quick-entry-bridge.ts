@@ -1,34 +1,41 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from "react";
 
 import {
-  initQuickEntryBridge,
-  QUICK_TARGET_CURRENT,
-  QUICK_TARGET_NEW,
-  type QuickEntrySessionOption,
-  setQuickEntrySubmitHandler
-} from '@hermes/store/quick-entry'
-import { $gatewayState, $sessions } from '@hermes/store/session'
-import { sessionTileDelegate } from '@hermes/store/session-states'
-import { isAuxiliaryWindow } from '@hermes/store/windows'
+    $composerDraft,
+    addComposerAttachment,
+    setComposerDraft,
+    type ComposerAttachment,
+} from "@hermes/store/composer";
+import {
+    initQuickEntryBridge,
+    QUICK_TARGET_CURRENT,
+    QUICK_TARGET_NEW,
+    setQuickEntrySubmitHandler,
+    type QuickEntrySessionOption,
+} from "@hermes/store/quick-entry";
+import { $gatewayState, $sessions } from "@hermes/store/session";
+import { sessionTileDelegate } from "@hermes/store/session-states";
+import { isAuxiliaryWindow } from "@hermes/store/windows";
+import { deliverQuickEntryImages } from "./quick-entry-image-delivery";
 
 interface QuickEntryBridgeParams {
-  startFreshSessionDraft: () => void
-  submitText: (text: string) => Promise<unknown> | unknown
+    startFreshSessionDraft: () => void;
+    submitText: (text: string, options?: { attachments: ComposerAttachment[] }) => Promise<unknown> | unknown;
 }
 
 // The picker is a capture aid, not a session browser — a handful of recent
 // rows is the whole point.
-const QUICK_ENTRY_SESSION_OPTIONS = 5
+const QUICK_ENTRY_SESSION_OPTIONS = 5;
 
 function sessionOptions(): QuickEntrySessionOption[] {
-  return $sessions
-    .get()
-    .filter(session => !session.archived)
-    .slice(0, QUICK_ENTRY_SESSION_OPTIONS)
-    .map(session => ({
-      id: session.id,
-      title: session.title?.trim() || session.preview?.trim() || session.id
-    }))
+    return $sessions
+        .get()
+        .filter((session) => !session.archived)
+        .slice(0, QUICK_ENTRY_SESSION_OPTIONS)
+        .map((session) => ({
+            id: session.id,
+            title: session.title?.trim() || session.preview?.trim() || session.id,
+        }));
 }
 
 /**
@@ -51,78 +58,87 @@ function sessionOptions(): QuickEntrySessionOption[] {
  * one keystroke would send N prompts.
  */
 export function useQuickEntryBridge({ startFreshSessionDraft, submitText }: QuickEntryBridgeParams): void {
-  const submitTextRef = useRef(submitText)
-  submitTextRef.current = submitText
-  const startFreshRef = useRef(startFreshSessionDraft)
-  startFreshRef.current = startFreshSessionDraft
+    const submitTextRef = useRef(submitText);
+    submitTextRef.current = submitText;
+    const startFreshRef = useRef(startFreshSessionDraft);
+    startFreshRef.current = startFreshSessionDraft;
 
-  useEffect(() => {
-    if (isAuxiliaryWindow()) {
-      return
-    }
-
-    setQuickEntrySubmitHandler(({ target, text }) => {
-      if (target === QUICK_TARGET_NEW) {
-        // Same as the user clicking New Chat and typing: fresh draft, then the
-        // normal submit creates the backend session.
-        startFreshRef.current()
-        void submitTextRef.current(text)
-
-        return
-      }
-
-      if (target !== QUICK_TARGET_CURRENT) {
-        // A picked stored session: resume + submit in the background through
-        // the session-tile delegate so the primary view stays where it is.
-        const delegate = sessionTileDelegate()
-
-        if (delegate) {
-          void delegate
-            .resumeTile(target)
-            .then(runtimeId => delegate.submitToSession(runtimeId, text))
-            // A dead/undeliverable target must not swallow the prompt.
-            .catch(() => void submitTextRef.current(text))
-
-          return
+    useEffect(() => {
+        if (isAuxiliaryWindow()) {
+            return;
         }
-      }
 
-      void submitTextRef.current(text)
-    })
+        setQuickEntrySubmitHandler(({ target, text, images }) => {
+            if (images?.length) {
+                if (target === QUICK_TARGET_NEW) startFreshRef.current();
+                void deliverQuickEntryImages({ target, text, images }, submitTextRef.current, (draft, attachments) => {
+                    const existing = $composerDraft.get();
+                    setComposerDraft(existing ? `${existing}\n\n${draft}` : draft);
+                    attachments.forEach(addComposerAttachment);
+                });
+                return;
+            }
+            if (target === QUICK_TARGET_NEW) {
+                // Same as the user clicking New Chat and typing: fresh draft, then the
+                // normal submit creates the backend session.
+                startFreshRef.current();
+                void submitTextRef.current(text);
 
-    const dispose = initQuickEntryBridge()
+                return;
+            }
 
-    return () => {
-      setQuickEntrySubmitHandler(null)
-      dispose()
-    }
-  }, [])
+            if (target !== QUICK_TARGET_CURRENT) {
+                // A picked stored session: resume + submit in the background through
+                // the session-tile delegate so the primary view stays where it is.
+                const delegate = sessionTileDelegate();
 
-  // Push gateway truth into the quick window whenever it changes: connection
-  // state gates its input; the recent-session list feeds its target picker.
-  useEffect(() => {
-    if (isAuxiliaryWindow()) {
-      return
-    }
+                if (delegate) {
+                    void delegate
+                        .resumeTile(target)
+                        .then((runtimeId) => delegate.submitToSession(runtimeId, text))
+                        // A dead/undeliverable target must not swallow the prompt.
+                        .catch(() => void submitTextRef.current(text));
 
-    const api = window.hermesDesktop?.quickEntry
+                    return;
+                }
+            }
 
-    if (!api?.pushState) {
-      return
-    }
+            void submitTextRef.current(text);
+        });
 
-    const push = () => {
-      api.pushState({ connected: $gatewayState.get() === 'open', sessions: sessionOptions() })
-    }
+        const dispose = initQuickEntryBridge();
 
-    push()
+        return () => {
+            setQuickEntrySubmitHandler(null);
+            dispose();
+        };
+    }, []);
 
-    const offGateway = $gatewayState.listen(push)
-    const offSessions = $sessions.listen(push)
+    // Push gateway truth into the quick window whenever it changes: connection
+    // state gates its input; the recent-session list feeds its target picker.
+    useEffect(() => {
+        if (isAuxiliaryWindow()) {
+            return;
+        }
 
-    return () => {
-      offGateway()
-      offSessions()
-    }
-  }, [])
+        const api = window.hermesDesktop?.quickEntry;
+
+        if (!api?.pushState) {
+            return;
+        }
+
+        const push = () => {
+            api.pushState({ connected: $gatewayState.get() === "open", sessions: sessionOptions() });
+        };
+
+        push();
+
+        const offGateway = $gatewayState.listen(push);
+        const offSessions = $sessions.listen(push);
+
+        return () => {
+            offGateway();
+            offSessions();
+        };
+    }, []);
 }

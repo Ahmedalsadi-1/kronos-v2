@@ -3,13 +3,7 @@
     "version": "0.14.3",
     "homepage": "https://kronterm.dev",
     "build": {
-        "appId": "dev.kronterm",
-        "extraResources": [
-            {
-                "from": "third_party/kronoschamber-web",
-                "to": "kronoschamber-web"
-            }
-        ]
+        "appId": "dev.kronterm"
     },
     "private": true,
     "main": "./dist/main/index.js",
@@ -21,9 +15,10 @@
         "dev": "electron-vite dev",
         "start": "node --max-old-space-size=8192 ./node_modules/electron-vite/bin/electron-vite.js preview",
         "build:dev": "node --max-old-space-size=8192 ./node_modules/electron-vite/bin/electron-vite.js build --mode development",
-        "build:prod": "node --max-old-space-size=8192 ./node_modules/electron-vite/bin/electron-vite.js build --mode production && node scripts/prepare-kronoschamber-runtime.mjs",
+        "build:prod": "node --max-old-space-size=8192 ./node_modules/electron-vite/bin/electron-vite.js build --mode production",
         "check:build-output": "node scripts/check-build-output.mjs",
         "coverage": "vitest run --coverage",
+        "check:ts": "node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
         "test": "vitest",
         "postinstall": "node ./postinstall.cjs"
     },
@@ -109,9 +104,9 @@
         "@remixicon/react": "^4.9.0",
         "@streamdown/code": "^1.1.1",
         "@streamdown/mermaid": "^1.0.2",
-        "@tabler/icons-react": "^3.44.0",
         "@table-nav/core": "^0.0.7",
         "@table-nav/react": "^0.0.7",
+        "@tabler/icons-react": "^3.44.0",
         "@tanstack/react-query": "^5.101.2",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.13.19",
@@ -171,6 +166,7 @@
         "react-dnd-html5-backend": "^16.0.1",
         "react-dom": "^19.2.0",
         "react-frame-component": "^5.2.7",
+        "react-grab": "^0.1.50",
         "react-markdown": "^9.0.3",
         "react-resizable-panels": "^3.0.6",
         "react-router": "^8.3.0",
@@ -187,6 +183,7 @@
         "remark-math": "^6.0.0",
         "rxjs": "^7.8.2",
         "semver": "^7.7.3",
+        "serve-sim": "0.1.40",
         "shell-quote": "^1.8.3",
         "shiki": "^3.22.0",
         "sprintf-js": "^1.1.3",

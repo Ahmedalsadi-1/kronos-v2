@@ -7,12 +7,17 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getKronosCodeBinaryCandidates } from "./kronoscode-runtime";
+import { installHermesWorkflowPack } from "./hermes-workflow-packs";
+import { resolveAgentWsh } from "./agent-runtime-paths";
+import { getKronosCodeBinaryCandidates, KronosCodeRuntime, withKronosCodeAttachArgs } from "./kronoscode-runtime";
 import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
 import { startKronTermToolServer, type KronTermToolServerDescriptor } from "./kronterm-tool-server";
+export { resolveAgentWsh as resolveHermesWsh } from "./agent-runtime-paths";
 
 const StartupTimeoutMs = 90_000;
 const HealthTimeoutMs = 10_000;
+const RestartDelaysMs = [1_000, 3_000, 10_000];
+const StableRuntimeMs = 60_000;
 const ApiTimeoutMs = 15_000;
 const SurfaceRefreshLeadMs = 10 * 60 * 1000;
 
@@ -24,6 +29,8 @@ type KronTermSkillRootOptions = {
 };
 
 export type HermesSurfaceContext = {
+    nativeCallerId?: string;
+    workflowRunId?: string;
     tabId?: string;
     blockId?: string;
     workspaceId?: string;
@@ -136,9 +143,65 @@ function resolveHermesBinary(): string {
     );
 }
 
-function makeHermesPath(binary: string): string {
-    const entries = [path.dirname(binary), process.env.PATH].filter(Boolean);
-    return entries.join(path.delimiter);
+function makeHermesPath(binary: string, toolEnvironment?: Record<string, string>): string {
+    const wshPath = toolEnvironment?.KRONTERM_WSH;
+    const entries = [
+        path.dirname(binary),
+        wshPath && path.isAbsolute(wshPath) ? path.dirname(wshPath) : undefined,
+        path.join(os.homedir(), ".bun", "bin"),
+        process.platform === "darwin" ? "/opt/homebrew/bin" : undefined,
+        process.platform === "darwin" ? "/usr/local/bin" : undefined,
+        process.env.PATH,
+    ]
+        .filter(Boolean)
+        .flatMap((entry) => entry.split(path.delimiter));
+    return Array.from(new Set(entries)).join(path.delimiter);
+}
+
+export function prepareHermesBundledPlugins(binary: string, target: string, adapterSource: string): string {
+    let bundledRoot = process.env.HERMES_BUNDLED_PLUGINS;
+    if (!bundledRoot) {
+        const python = ["python", "python3", "python.exe"]
+            .map((name) => path.join(path.dirname(binary), name))
+            .find(existingExecutable);
+        if (python) {
+            const probe = spawnSync(
+                python,
+                [
+                    "-c",
+                    "import importlib.util, pathlib; spec = importlib.util.find_spec('hermes_cli'); print(pathlib.Path(next(iter(spec.submodule_search_locations))).parent / 'plugins')",
+                ],
+                {
+                    encoding: "utf8",
+                    timeout: 5_000,
+                    windowsHide: true,
+                    detached: process.platform !== "win32",
+                }
+            );
+            if (probe.status === 0) {
+                bundledRoot = probe.stdout.trim();
+            }
+        }
+    }
+    fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+    // Hermes scans its bundled plugin root, not the managed configuration directory.
+    if (bundledRoot && fs.existsSync(bundledRoot)) {
+        for (const name of fs.readdirSync(bundledRoot)) {
+            if (name === "kronterm-tools") {
+                continue;
+            }
+            const destination = path.join(target, name);
+            const source = path.resolve(bundledRoot, name);
+            fs.rmSync(destination, { recursive: true, force: true });
+            if (fs.statSync(source).isDirectory()) {
+                fs.symlinkSync(source, destination, "junction");
+            } else {
+                fs.copyFileSync(source, destination);
+            }
+        }
+    }
+    fs.cpSync(adapterSource, path.join(target, "kronterm-tools"), { recursive: true, force: true });
+    return target;
 }
 
 export function resolveKronTermSharedSkillDirs(options: KronTermSkillRootOptions = {}): string[] {
@@ -238,6 +301,7 @@ export function makeHermesRuntimeEnvironment(
     options: {
         managedDir?: string;
         kronosCodeBinary?: string;
+        kronosCodeConnection?: { baseUrl: string; username: string; password?: string };
         toolEnvironment?: Record<string, string>;
         enableKronTermTools?: boolean;
         toolServer?: KronTermToolServerDescriptor;
@@ -249,7 +313,12 @@ export function makeHermesRuntimeEnvironment(
         HERMES_DESKTOP: "1",
         HERMES_PARENT_PID: String(process.pid),
         HERMES_EPHEMERAL_SYSTEM_PROMPT: KronTermSurfaceSystemPrompt,
-        ...(options.managedDir ? { HERMES_MANAGED_DIR: options.managedDir } : {}),
+        ...(options.managedDir
+            ? {
+                  HERMES_MANAGED_DIR: options.managedDir,
+                  HERMES_BUNDLED_PLUGINS: path.join(options.managedDir, "plugins"),
+              }
+            : {}),
         ...(options.toolServer
             ? {
                   HERMES_KRONTERM_NATIVE_TOOL_URL: options.toolServer.nativeUrl,
@@ -261,10 +330,22 @@ export function makeHermesRuntimeEnvironment(
         ...(options.kronosCodeBinary
             ? {
                   HERMES_COPILOT_ACP_COMMAND: options.kronosCodeBinary,
-                  HERMES_COPILOT_ACP_ARGS: "acp",
+                  HERMES_COPILOT_ACP_ARGS: options.kronosCodeConnection
+                      ? withKronosCodeAttachArgs(["acp"], options.kronosCodeConnection.baseUrl)
+                            .map((argument) => `'${argument.replace(/'/g, `'"'"'`)}'`)
+                            .join(" ")
+                      : "acp",
               }
             : {}),
-        PATH: makeHermesPath(binary),
+        ...(options.kronosCodeConnection
+            ? {
+                  KRONOSCODE_SERVER_USERNAME: options.kronosCodeConnection.username,
+                  OPENCODE_SERVER_USERNAME: options.kronosCodeConnection.username,
+                  KRONOSCODE_SERVER_PASSWORD: options.kronosCodeConnection.password ?? "",
+                  OPENCODE_SERVER_PASSWORD: options.kronosCodeConnection.password ?? "",
+              }
+            : {}),
+        PATH: makeHermesPath(binary, options.toolEnvironment),
     };
 }
 
@@ -274,26 +355,77 @@ class ManagedHermesRuntime extends EventEmitter {
     private startPromise: Promise<HermesConnectionDescriptor> | null = null;
     private restartTimer: NodeJS.Timeout | null = null;
     private stopping = false;
+    private restartAttempt = 0;
+    private readyAt = 0;
     private surfaceContext: HermesSurfaceContext | null = null;
     private surfaceRefreshTimer: NodeJS.Timeout | null = null;
     private surfaceCapabilityReady = false;
     private surfaceGeneration = 0;
+    private startupGeneration = 0;
+    private delegationConnection: ReturnType<typeof KronosCodeRuntime.getInternalConnection> = null;
+
+    constructor() {
+        super();
+        KronosCodeRuntime.on("connection", () => {
+            const previous = this.delegationConnection;
+            const next = KronosCodeRuntime.getInternalConnection();
+            if (!previous || !next || this.stopping) {
+                return;
+            }
+            if (
+                previous.descriptor.baseUrl === next.descriptor.baseUrl &&
+                previous.descriptor.serverInstanceId === next.descriptor.serverInstanceId &&
+                previous.username === next.username &&
+                previous.password === next.password
+            ) {
+                return;
+            }
+            this.startupGeneration += 1;
+            this.startPromise = null;
+            this.connection = null;
+            this.delegationConnection = null;
+            const child = this.child;
+            this.child = null;
+            if (child) {
+                this.stopChild(child);
+            }
+            this.scheduleRestart();
+        });
+    }
 
     ensure(): Promise<HermesConnectionDescriptor> {
+        return this.ensureRuntime(false);
+    }
+
+    private ensureRuntime(automaticRestart: boolean): Promise<HermesConnectionDescriptor> {
         if (this.connection && this.child && this.child.exitCode == null) {
             return Promise.resolve(this.connection);
         }
         if (this.startPromise) {
             return this.startPromise;
         }
-        this.startPromise = this.start()
+        if (!automaticRestart) {
+            this.restartAttempt = 0;
+            if (this.restartTimer) {
+                clearTimeout(this.restartTimer);
+                this.restartTimer = null;
+            }
+        }
+        this.stopping = false;
+        const generation = ++this.startupGeneration;
+        const startPromise = this.start(generation)
             .catch((error) => {
-                this.scheduleRestart();
+                if (generation === this.startupGeneration) {
+                    this.scheduleRestart();
+                }
                 throw error;
             })
             .finally(() => {
-                this.startPromise = null;
+                if (this.startPromise === startPromise) {
+                    this.startPromise = null;
+                }
             });
+        this.startPromise = startPromise;
         return this.startPromise;
     }
 
@@ -376,15 +508,30 @@ class ManagedHermesRuntime extends EventEmitter {
         if (this.stopping || this.restartTimer) {
             return;
         }
+        if (this.restartAttempt >= RestartDelaysMs.length) {
+            this.emit("runtime-failure", {
+                message: "Hermes stopped after three recovery attempts. Retry to restart.",
+            });
+            return;
+        }
+        const delay = RestartDelaysMs[this.restartAttempt++];
         this.restartTimer = setTimeout(() => {
             this.restartTimer = null;
-            void this.ensure().catch((error) => console.log("Hermes automatic restart failed", error));
-        }, 1_000);
+            void this.ensureRuntime(true).catch((error) => console.log("Hermes automatic restart failed", error));
+        }, delay);
+        this.restartTimer.unref();
     }
 
     async api<T = unknown>(request: HermesApiRequest): Promise<T> {
         if (request.body != null && request.upload != null) {
             throw new Error("Hermes API requests cannot contain both JSON and an upload.");
+        }
+        if (request.path === "/api/kronterm/workflow-packs/install") {
+            if (request.method !== "POST" || request.upload != null) {
+                throw new Error("Workflow pack installation requires a JSON POST request.");
+            }
+            const status = await this.api<{ hermes_home: string }>({ path: "/api/status", profile: request.profile });
+            return (await installHermesWorkflowPack(request.body, status.hermes_home)) as T;
         }
         const connection = await this.ensure();
         const url = makeHermesApiUrl(connection.baseUrl, request.path, request.profile);
@@ -445,24 +592,35 @@ class ManagedHermesRuntime extends EventEmitter {
         }
     }
 
-    private async start(): Promise<HermesConnectionDescriptor> {
+    private async start(generation: number): Promise<HermesConnectionDescriptor> {
         const binary = resolveHermesBinary();
+        const kronosCodeBinary = resolveKronosCodeDelegationBinary();
+        if (!kronosCodeBinary) {
+            throw new Error("KronosCode executable not found for Hermes delegation.");
+        }
+        await KronosCodeRuntime.ensure();
+        if (generation !== this.startupGeneration) {
+            throw new Error("Hermes startup was cancelled.");
+        }
+        const kronosCodeConnection = KronosCodeRuntime.getInternalConnection();
+        if (!kronosCodeConnection) {
+            throw new Error("KronosCode disconnected before Hermes delegation could attach.");
+        }
         const token = randomBytes(32).toString("base64url");
         const capabilityFile = this.capabilityFilePath();
         const managedDir = this.managedConfigDir();
-        const toolServer = await startKronTermToolServer(() => this.surfaceContext);
-        const wshPath =
-            [
-                process.env.KRONTERM_WSH,
-                process.env.WAVETERM_WSH,
-                process.env.WAVETERM_WSH_BIN,
-                path.join(process.cwd(), "wsh"),
-            ].find((candidate) => candidate && fs.existsSync(candidate)) ?? "wsh";
+        const toolServer = await startKronTermToolServer(() => this.surfaceContext, "hermes");
+        if (generation !== this.startupGeneration) {
+            throw new Error("Hermes startup was cancelled.");
+        }
+        this.delegationConnection = kronosCodeConnection;
+        const wshPath = resolveAgentWsh();
         fs.mkdirSync(managedDir, { recursive: true, mode: 0o700 });
-        const adapterSource = path.join(resolveHermesToolAdapterRoot(), "kronterm-tools");
-        const adapterTarget = path.join(managedDir, "plugins", "kronterm-tools");
-        fs.mkdirSync(path.dirname(adapterTarget), { recursive: true, mode: 0o700 });
-        fs.cpSync(adapterSource, adapterTarget, { recursive: true, force: true });
+        prepareHermesBundledPlugins(
+            binary,
+            path.join(managedDir, "plugins"),
+            path.join(resolveHermesToolAdapterRoot(), "kronterm-tools")
+        );
         fs.writeFileSync(
             path.join(managedDir, "config.yaml"),
             JSON.stringify(makeHermesManagedConfig(toolServer), null, 2),
@@ -474,7 +632,12 @@ class ManagedHermesRuntime extends EventEmitter {
         const child = spawn(binary, ["serve", "--host", "127.0.0.1", "--port", "0"], {
             env: makeHermesRuntimeEnvironment(binary, token, {
                 managedDir,
-                kronosCodeBinary: resolveKronosCodeDelegationBinary(),
+                kronosCodeBinary,
+                kronosCodeConnection: {
+                    baseUrl: kronosCodeConnection.descriptor.baseUrl,
+                    username: kronosCodeConnection.username,
+                    password: kronosCodeConnection.password,
+                },
                 enableKronTermTools: true,
                 toolServer,
                 toolEnvironment: makeKronTermToolEnvironment(
@@ -488,7 +651,6 @@ class ManagedHermesRuntime extends EventEmitter {
             windowsHide: true,
         });
         this.child = child;
-        this.stopping = false;
         if (this.restartTimer) {
             clearTimeout(this.restartTimer);
             this.restartTimer = null;
@@ -527,7 +689,7 @@ class ManagedHermesRuntime extends EventEmitter {
                     )
                 );
             const timer = setTimeout(() => {
-                child.kill();
+                this.stopChild(child);
                 finish(
                     new Error(`Hermes did not become ready within ${StartupTimeoutMs / 1000} seconds. ${stderr.trim()}`)
                 );
@@ -543,6 +705,12 @@ class ManagedHermesRuntime extends EventEmitter {
                     finish(undefined, readyPort);
                 }
             });
+        }).catch((error) => {
+            this.stopChild(child);
+            if (this.child === child) {
+                this.child = null;
+            }
+            throw error;
         });
 
         const baseUrl = `http://127.0.0.1:${port}`;
@@ -555,7 +723,7 @@ class ManagedHermesRuntime extends EventEmitter {
                 throw new Error(`Hermes health check failed with HTTP ${response.status}.`);
             }
         } catch (error) {
-            child.kill();
+            this.stopChild(child);
             if (this.child === child) {
                 this.child = null;
             }
@@ -568,13 +736,24 @@ class ManagedHermesRuntime extends EventEmitter {
             token,
             pid: child.pid!,
         };
+        if (generation !== this.startupGeneration) {
+            this.stopChild(child);
+            throw new Error("Hermes startup was cancelled.");
+        }
         this.connection = descriptor;
+        this.readyAt = Date.now();
         this.surfaceCapabilityReady = fs.existsSync(capabilityFile);
         this.emit("connection", descriptor);
         child.once("exit", (code, signal) => {
+            if (this.child !== child) {
+                return;
+            }
             this.child = null;
             this.connection = null;
             if (!this.stopping) {
+                if (Date.now() - this.readyAt >= StableRuntimeMs) {
+                    this.restartAttempt = 0;
+                }
                 console.log(`[hermes] backend exited (code ${String(code)}, signal ${String(signal)})`);
                 this.scheduleRestart();
             }
@@ -589,8 +768,33 @@ class ManagedHermesRuntime extends EventEmitter {
         return descriptor;
     }
 
+    private stopChild(child: ChildProcessWithoutNullStreams): void {
+        if (child.exitCode != null || child.signalCode != null) {
+            return;
+        }
+        const signalChild = (signal: NodeJS.Signals) => {
+            if (process.platform !== "win32" && child.pid) {
+                try {
+                    process.kill(-child.pid, signal);
+                    return;
+                } catch {
+                    // The process may have exited between the check and signal.
+                }
+            }
+            child.kill(signal);
+        };
+        signalChild("SIGTERM");
+        setTimeout(() => {
+            if (child.exitCode == null && child.signalCode == null) {
+                signalChild("SIGKILL");
+            }
+        }, 3_000).unref();
+    }
+
     stop(): void {
         this.stopping = true;
+        this.startupGeneration += 1;
+        this.delegationConnection = null;
         this.connection = null;
         this.startPromise = null;
         this.surfaceContext = null;
@@ -629,7 +833,7 @@ class ManagedHermesRuntime extends EventEmitter {
         if (!child || child.exitCode != null) {
             return;
         }
-        child.kill("SIGTERM");
+        this.stopChild(child);
     }
 }
 

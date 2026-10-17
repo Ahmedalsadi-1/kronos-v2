@@ -97,11 +97,11 @@ a:focus-visible {
     height: 15px;
 }
 
-.chamber-button {
+.agent-chat-button {
     gap: 6px;
 }
 
-.chamber-button span {
+.agent-chat-button span {
     color: var(--ink);
     font-size: 9px;
     font-weight: 700;
@@ -670,7 +670,7 @@ a:focus-visible {
     color: #111;
 }
 
-.kronos-chamber {
+.agent-chat {
     position: fixed;
     inset: 0;
     z-index: 60;
@@ -688,7 +688,7 @@ a:focus-visible {
         visibility 0s linear 220ms;
 }
 
-.kronos-chamber.is-open {
+.agent-chat.is-open {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(0);
@@ -696,7 +696,7 @@ a:focus-visible {
     transition-delay: 0s;
 }
 
-.chamber-shell-bar {
+.agent-chat-shell-bar {
     display: flex;
     min-height: calc(env(safe-area-inset-top) + 48px);
     align-items: flex-end;
@@ -708,19 +708,19 @@ a:focus-visible {
     backdrop-filter: blur(18px);
 }
 
-.chamber-shell-identity,
-.chamber-shell-actions,
-.chamber-shell-actions button {
+.agent-chat-shell-identity,
+.agent-chat-shell-actions,
+.agent-chat-shell-actions button {
     display: flex;
     align-items: center;
 }
 
-.chamber-shell-identity {
+.agent-chat-shell-identity {
     min-width: 0;
     gap: 9px;
 }
 
-.chamber-shell-mark {
+.agent-chat-shell-mark {
     display: grid;
     width: 30px;
     height: 30px;
@@ -731,19 +731,19 @@ a:focus-visible {
     border-radius: 8px;
 }
 
-.chamber-shell-mark svg {
+.agent-chat-shell-mark svg {
     width: 15px;
     height: 15px;
 }
 
-.chamber-shell-identity > span:last-child {
+.agent-chat-shell-identity > span:last-child {
     display: flex;
     min-width: 0;
     flex-direction: column;
     gap: 2px;
 }
 
-.chamber-shell-identity strong {
+.agent-chat-shell-identity strong {
     overflow: hidden;
     color: var(--ink);
     font-size: 11px;
@@ -752,7 +752,7 @@ a:focus-visible {
     white-space: nowrap;
 }
 
-.chamber-shell-identity small {
+.agent-chat-shell-identity small {
     display: flex;
     align-items: center;
     gap: 5px;
@@ -763,7 +763,7 @@ a:focus-visible {
     white-space: nowrap;
 }
 
-.chamber-shell-identity small i {
+.agent-chat-shell-identity small i {
     width: 5px;
     height: 5px;
     flex: 0 0 auto;
@@ -771,16 +771,16 @@ a:focus-visible {
     border-radius: 50%;
 }
 
-.chamber-shell-identity small i.is-online {
+.agent-chat-shell-identity small i.is-online {
     background: var(--green);
     box-shadow: 0 0 8px rgba(124, 199, 151, 0.45);
 }
 
-.chamber-shell-actions {
+.agent-chat-shell-actions {
     gap: 5px;
 }
 
-.chamber-shell-actions button {
+.agent-chat-shell-actions button {
     height: 32px;
     justify-content: center;
     gap: 6px;
@@ -793,37 +793,30 @@ a:focus-visible {
     border-radius: 8px;
 }
 
-.chamber-shell-actions button:hover,
-.chamber-shell-actions button:active {
+.agent-chat-shell-actions button:hover,
+.agent-chat-shell-actions button:active {
     color: var(--ink);
     background: #1a1a1a;
 }
 
-.chamber-shell-actions button:first-child {
+.agent-chat-shell-actions button:first-child {
     width: 32px;
     padding: 0;
 }
 
-.chamber-shell-actions svg {
+.agent-chat-shell-actions svg {
     width: 13px;
     height: 13px;
 }
 
-.chamber-mobile-body {
+.agent-chat-mobile-body {
     position: relative;
     min-height: 0;
     flex: 1;
     background: #0b0b0b;
 }
 
-.chamber-mobile-body iframe {
-    width: 100%;
-    height: 100%;
-    background: #0b0b0b;
-    border: 0;
-}
-
-.chamber-mobile-state {
+.agent-chat-mobile-state {
     display: flex;
     height: 100%;
     flex-direction: column;
@@ -834,13 +827,13 @@ a:focus-visible {
     text-align: center;
 }
 
-.chamber-mobile-state > svg {
+.agent-chat-mobile-state > svg {
     width: 30px;
     height: 30px;
     color: var(--orange);
 }
 
-.chamber-mobile-orbit {
+.agent-chat-mobile-orbit {
     display: grid;
     width: 48px;
     height: 48px;
@@ -851,16 +844,16 @@ a:focus-visible {
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
-.chamber-mobile-orbit svg {
+.agent-chat-mobile-orbit svg {
     width: 23px;
     height: 23px;
 }
 
-.chamber-mobile-state strong {
+.agent-chat-mobile-state strong {
     font-size: 12px;
 }
 
-.chamber-mobile-state p {
+.agent-chat-mobile-state p {
     max-width: 320px;
     margin: 0;
     color: var(--muted);
@@ -868,7 +861,7 @@ a:focus-visible {
     line-height: 1.5;
 }
 
-.chamber-mobile-state button {
+.agent-chat-mobile-state button {
     display: flex;
     align-items: center;
     gap: 7px;
@@ -881,11 +874,11 @@ a:focus-visible {
     border-radius: 7px;
 }
 
-.chamber-mobile-state button svg {
+.agent-chat-mobile-state button svg {
     width: 14px;
 }
 
-.chamber-mobile-state.is-error > svg {
+.agent-chat-mobile-state.is-error > svg {
     color: #e5674f;
 }
 
@@ -3262,4 +3255,95 @@ body {
     .workspace-panel.is-active {
         animation: none;
     }
+}
+
+.agent-chat-mobile-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.agent-chat-transcript {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px;
+    color: var(--ink);
+    font-size: 14px;
+}
+
+.agent-chat-message {
+    margin-bottom: 20px;
+    padding: 12px;
+    background: #151515;
+    border-radius: 12px;
+}
+
+.agent-chat-message p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.agent-chat-message.is-user {
+    background: #222;
+}
+
+.agent-chat-composer {
+    display: flex;
+    gap: 10px;
+    padding: 12px 12px calc(env(safe-area-inset-bottom) + 12px);
+}
+
+.agent-chat-composer textarea {
+    flex: 1;
+    min-width: 0;
+    min-height: 60px;
+    padding: 12px;
+    color: var(--ink);
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 12px;
+    font: inherit;
+    resize: vertical;
+}
+
+.agent-chat-composer button,
+.agent-chat-error button {
+    min-width: 44px;
+    min-height: 44px;
+    color: #111;
+    background: var(--orange);
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.agent-chat-composer button:disabled {
+    opacity: 0.5;
+}
+
+.agent-chat-error {
+    padding: 12px 20px;
+    color: #f59d8e;
+}
+
+.agent-chat button:focus-visible,
+.agent-chat textarea:focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: 3px;
+}
+
+/* Keep release controls reachable while the software keyboard is open. */
+.focused-surface .sandbox-keyboard:focus-within + .focus-controls {
+    display: block;
+}
+
+.focused-surface .control-segment button {
+    min-height: 44px;
+    height: auto;
+    font-size: 12px;
+}
+
+.focused-surface .control-segment button:focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: 2px;
 }

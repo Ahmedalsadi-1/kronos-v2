@@ -17,7 +17,8 @@ async function* rpcResponseGenerator(
     openRpcs: Map<string, ClientRpcEntry>,
     command: string,
     reqid: string,
-    timeout: number
+    timeout: number,
+    signal?: AbortSignal
 ): AsyncGenerator<any, void, boolean> {
     const msgQueue: RpcMessage[] = [];
     let signalFn: () => void;
@@ -25,6 +26,7 @@ async function* rpcResponseGenerator(
     let timeoutId: NodeJS.Timeout = null;
     if (timeout > 0) {
         timeoutId = setTimeout(() => {
+            sendRpcCancel(reqid);
             msgQueue.push({ resid: reqid, error: "EC-TIME: timeout waiting for response" });
             signalFn();
         }, timeout);
@@ -35,6 +37,13 @@ async function* rpcResponseGenerator(
         // reset signal promise
         signalPromise = new Promise<void>((resolve) => (signalFn = resolve));
     };
+    const onAbort = () => {
+        sendRpcCancel(reqid);
+        msgQueue.push({ resid: reqid, error: "EC-CANCEL: request cancelled" });
+        signalFn();
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
     openRpcs.set(reqid, {
         reqId: reqid,
         startTs: Date.now(),
@@ -64,6 +73,7 @@ async function* rpcResponseGenerator(
             await signalPromise;
         }
     } finally {
+        signal?.removeEventListener("abort", onAbort);
         openRpcs.delete(reqid);
         if (timeoutId != null) {
             clearTimeout(timeoutId);
@@ -82,13 +92,15 @@ function sendRpcResponse(msg: RpcMessage) {
 
 function sendRpcCommand(
     openRpcs: Map<string, ClientRpcEntry>,
-    msg: RpcMessage
+    msg: RpcMessage,
+    signal?: AbortSignal
 ): AsyncGenerator<RpcMessage, void, boolean> {
+    if (signal?.aborted) throw new Error("EC-CANCEL: request cancelled before dispatch");
     DefaultRouter.recvRpcMessage(msg);
     if (msg.reqid == null) {
         return null;
     }
-    const rtnGen = rpcResponseGenerator(openRpcs, msg.command, msg.reqid, msg.timeout);
+    const rtnGen = rpcResponseGenerator(openRpcs, msg.command, msg.reqid, msg.timeout, signal);
     rtnGen.next();
     return rtnGen;
 }

@@ -1,3 +1,4 @@
+import { eventOwnsInput } from "@hermes/lib/keybinds/input-ownership";
 import { useEffect, useRef } from 'react'
 
 import { triggerHaptic } from '@hermes/lib/haptics'
@@ -32,7 +33,7 @@ export function useComposerEscCancel({ awaitingInput, busy, onCancel, target }: 
     // `awaitingInput`: the turn is parked on a clarify / approval / sudo / secret
     // prompt, which owns Esc (or is meant to persist) — never cancel the stream
     // out from under it.
-    if (event.key !== 'Escape' || event.defaultPrevented || !busy || awaitingInput) {
+    if (event.key !== 'Escape' || event.defaultPrevented || eventOwnsInput(event) || !busy || awaitingInput) {
       return
     }
 

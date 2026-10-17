@@ -1,3 +1,5 @@
+import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "./linux-desktops";
+import type { NativeTaskGroupAction, NativeTaskGroupPreview, NativeTaskGroupsSnapshot } from "./native-task-groups";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -6,6 +8,15 @@ import type { WaveEnv } from "@/app/waveenv/waveenv";
 import { type Placement } from "@floating-ui/react";
 import type * as jotai from "jotai";
 import type * as rxjs from "rxjs";
+import type {
+    ComputerTarget,
+    ComputerTargetAction,
+    ComputerTargetFrame,
+    ComputerTargetSession,
+    ComputerTargetSnapshot,
+    ComputerTargetsResult,
+} from "./computer-targets";
+import type { HermesSelection } from "./hermes-selection";
 
 declare module "@/app/store/wshclientapi" {
     interface RpcApiType {
@@ -77,37 +88,28 @@ declare global {
         debouncedValueAtom: DebouncedValueAtom<T>;
     };
 
-    type ChatHubV2RuntimeHealth = {
-        runtime: "kronoscode-kronoschamber";
-        status: "not-found" | "starting" | "ready" | "error" | "stopped";
-        checkedAt: number;
-        candidateRoots: string[];
-        detectedRoot?: string;
-        serverPath?: string;
-        distPath?: string;
-        kronosCodeBinary?: string;
-        startupError?: string;
-        logExcerpt: string[];
-        supportedProviders: string[];
-        supportedModels: string[];
-        recoveryActions: Array<"retry" | "open-settings" | "inspect-logs">;
-    };
-
-    type ChatHubV2ServerData = {
-        url: string;
-        port: number;
-        pid?: number;
-        serverPath: string;
-        distPath: string;
-        ready: boolean;
-        health?: ChatHubV2RuntimeHealth;
-    };
-
     type HermesConnectionDescriptor = {
         baseUrl: string;
         wsUrl: string;
         token: string;
         pid: number;
+    };
+
+    type HermesWebCapabilities = {
+        browser: boolean;
+        terminal: boolean;
+        files: boolean;
+        sandbox: boolean;
+        computerControl: boolean;
+        customTools?: Record<string, boolean>;
+    };
+
+    type HermesSurfaceContext = {
+        tabId?: string;
+        blockId?: string;
+        workspaceId?: string;
+        hostMode?: "kronterm" | "web-fullscreen";
+        capabilities?: HermesWebCapabilities;
     };
 
     type HermesApiIpcRequest = {
@@ -212,13 +214,36 @@ declare global {
     };
 
     type SystemSearchItem = {
-        kind: "file" | "folder" | "wallpaper";
+        kind: "file" | "folder" | "repository" | "wallpaper";
         name: string;
         path: string;
         detail: string;
     };
 
+    type HostPermissionStatus = {
+        screenCapture: "granted" | "denied" | "restricted" | "not-determined" | "unknown";
+        accessibility: "granted" | "denied" | "unknown";
+        microphone: "granted" | "denied" | "restricted" | "not-determined" | "unknown";
+    };
+
+    type NativeSurfaceCaptureDescriptor = {
+        sourceId: string;
+        title: string;
+    };
+
+    type SystemMaterialRole = "content" | "window" | "bar" | "sidebar" | "popover";
+
+    type SystemControlSize = "small" | "regular" | "large";
+
+    type SystemAppearanceSnapshot = {
+        colorScheme: "light" | "dark";
+        contrast: "normal" | "high";
+        reducedTransparency: boolean;
+        reducedMotion: boolean;
+    };
+
     type ElectronApi = {
+        onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => () => void; // os-overview-gesture
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
         getCursorPoint: () => Electron.Point; // get-cursor-point
@@ -232,6 +257,79 @@ declare global {
         getWebviewPreload: () => string; // get-webview-preload
         getAboutModalDetails: () => AboutModalDetails; // get-about-modal-details
         getZoomFactor: () => number; // get-zoom-factor
+        setHudWindowMode: (active: boolean, sessionId?: string, options?: { keepWorkspaceVisible?: boolean }) => void; // set-hud-window-mode
+        setWindowIgnoreMouse: (ignore: boolean) => void; // set-window-ignore-mouse
+        openNativeHudIsland: (input: {
+            blockId: string;
+            title?: string;
+            view?: string;
+            select?: boolean;
+        }) => Promise<boolean>; // open-native-hud-island
+        setNativeHudIslandVisibility: (blockId: string, visible: boolean) => Promise<boolean>; // set-native-hud-island-visibility
+        requestNativeHudLaunch: (
+            app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone"
+        ) => void; // request-native-hud-launch
+        getHudWidgetRoute: (blockId: string) => Promise<string>;
+        getNativeHudIslandPresentation: () => Promise<"docked" | "detached">; // get-native-hud-island-presentation
+        toggleNativeHudIslandExpanded: () => Promise<"docked" | "detached">; // toggle-native-hud-island-expanded
+        onNativeHudIslandPresentation: (callback: (presentation: "docked" | "detached") => void) => () => void; // native-hud-island-presentation
+        resizeCurrentNativeHudIsland: (width: number, height: number) => Promise<boolean>;
+        selectNativeHudWidget: (blockId: string, expanded?: boolean) => Promise<boolean>;
+        captureNativeHudBlock: (blockId: string) => Promise<string>;
+        onNativeHudSelectWidget: (callback: (value: { blockId: string; expanded: boolean }) => void) => () => void;
+        onNativeHudSummon: (callback: () => void) => () => void;
+        comfyUiRequest: (request: import("./comfyui").ComfyRequest) => Promise<import("./comfyui").ComfyResponse>;
+        workflowCommand: (command: import("./workflow").WorkflowCommand) => Promise<unknown>;
+        workflowContext: () => Promise<{ workspaceId: string; tabId: string; blockId?: string; blocks: any[] }>;
+        workflowOpen: (runId: string) => Promise<boolean>;
+        onWorkflowChanged: (callback: (snapshot: import("./workflow").WorkflowSnapshot) => void) => () => void;
+        syncNativeNotch: (state: unknown) => void; // sync-native-notch
+        getNowPlaying: () => Promise<import("./now-playing").NowPlayingState>; // now-playing-get
+        controlNowPlaying: (
+            id: string,
+            command: import("./now-playing").MediaCommand
+        ) => Promise<import("./now-playing").NowPlayingState>; // now-playing-control
+        getProductivityState: () => Promise<import("./productivity").ProductivityState>; // productivity-get
+        updateDesktopPetVoice: (voice: { active?: boolean; status?: string; level?: number }) => void; // desktop-pet-voice
+        updateProductivity: (
+            action: import("./productivity").ProductivityAction
+        ) => Promise<import("./productivity").ProductivityState>; // productivity-update
+        isProductivityAppAllowed: (input: { name: string; identifier: string }) => Promise<boolean>; // productivity-check-app
+        onProductivityState: (callback: (state: import("./productivity").ProductivityState) => void) => () => void; // productivity-state
+        desktopGrab: () => Promise<import("./desktop-grab").DesktopGrabResult>;
+        cancelDesktopGrab: () => Promise<void>;
+        browserNavigationHistory: (
+            guestId: number,
+            snapshot?: import("./browser-navigation").BrowserNavigationSnapshot
+        ) => Promise<import("./browser-navigation").BrowserNavigationSnapshot>;
+        browserGrab: (input: { guestId: number; opId: string }) => Promise<import("./browser-grab").BrowserGrabResult>;
+        browserCancelGrab: (guestId: number) => Promise<void>;
+        browserAccessibilitySnapshot: (guestId: number) => Promise<WidgetElementData[]>;
+        captureBrowserPage: (input: {
+            guestId: number;
+            rect?: import("./browser-grab").BrowserGrabRect;
+        }) => Promise<import("./browser-grab").BrowserGrabScreenshot>;
+        copyBrowserImage: (dataUrl: string) => Promise<boolean>;
+        importBrowserCookies: (input: { guestId: number; cookiesJson: string }) => Promise<{ count: number }>;
+        onNativeHudVoiceControl: (callback: (action: "mute" | "stop" | "interrupt" | "expand") => void) => () => void;
+        onNativeNotchAvailability: (callback: (available: boolean) => void) => () => void; // native-notch-availability
+        onNativeNotchNavigate: (callback: (route: string) => void) => () => void; // native-notch-navigate
+        onNativeNotchExplorer: (callback: (path: string) => void) => () => void; // native-notch-explorer
+        onNativeNotchBrowserAction: (callback: (input: { action: string; url?: string }) => void) => () => void; // native-notch-browser-action
+        onNativeNotchFocus: (callback: (blockId: string) => void) => () => void; // native-notch-focus
+        requestNativeHudExit: () => void; // request-native-hud-exit
+        moveNativeHudBy: (delta: { x: number; y: number }) => void; // move-native-hud-by
+        closeNativeHudSurface: () => void; // close-native-hud-surface
+        onNativeHudLaunch: (
+            callback: (
+                app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone",
+                forceNew?: boolean
+            ) => void
+        ) => () => void; // native-hud-launch
+        onNativeHudAppTarget: (callback: (application: string) => void) => () => void; // native-hud-app-target
+        onNativeHudExit: (callback: () => void) => () => void; // native-hud-exit
+        getSystemAppearance: () => SystemAppearanceSnapshot; // get-system-appearance
+        onSystemAppearanceChange: (callback: (appearance: SystemAppearanceSnapshot) => void) => () => void; // system-appearance-change
         showWorkspaceAppMenu: (workspaceId: string) => void; // workspace-appmenu-show
         showBuilderAppMenu: (builderId: string) => void; // builder-appmenu-show
         showContextMenu: (workspaceId: string, menu: ElectronContextMenuItem[]) => void; // contextmenu-show
@@ -267,7 +365,14 @@ declare global {
         sendLog: (log: string) => void; // fe-log
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path
-        captureScreenshot(rect: Electron.Rectangle): Promise<string>; // capture-screenshot
+        revealNativePath(filePath: string): void; // reveal-native-path
+        captureScreenshot(rect: Electron.Rectangle, passive?: boolean): Promise<string>; // capture-screenshot
+        sendInputEvent(
+            inputEvent: Electron.KeyboardInputEvent | Electron.MouseInputEvent | Electron.MouseWheelInputEvent
+        ): Promise<void>; // agent-send-input-event
+        insertText(text: string): Promise<void>; // agent-insert-text
+        readClipboard(): Promise<string>; // agent-read-clipboard
+        writeClipboard(text: string): Promise<void>; // agent-write-clipboard
         setKeyboardChordMode: () => void; // set-keyboard-chord-mode
         clearWebviewStorage: (webContentsId: number) => Promise<void>; // clear-webview-storage
         setWaveAIOpen: (isOpen: boolean) => void; // set-waveai-open
@@ -277,13 +382,24 @@ declare global {
         saveTextFile: (fileName: string, content: string) => Promise<boolean>; // save-text-file
         selectDirectory: () => Promise<string | null>; // select-directory
         selectFiles: () => Promise<string[]>; // select-files
+        selectWallpaper: () => Promise<string | null>; // select-wallpaper
         searchSystemItems: (query: string) => Promise<SystemSearchItem[]>; // search-system-items
+        getNativeAppIcons: (appPaths: string[]) => Promise<Record<string, string>>; // get-native-app-icons
+        getHostPermissionStatus: () => Promise<HostPermissionStatus>; // get-host-permission-status
+        requestHostPermission: (
+            permission: "screen-capture" | "accessibility" | "microphone"
+        ) => Promise<HostPermissionStatus>; // request-host-permission
+        prepareNativeSurfaceCapture: (input: {
+            appId: string;
+            appName: string;
+        }) => Promise<NativeSurfaceCaptureDescriptor>; // prepare-native-surface-capture
         acpApplyGitIdentity: (opts: {
             workspace: string;
             userName: string;
             userEmail: string;
         }) => Promise<{ success: boolean; error?: string }>; // acp-apply-git-identity
         setIsActive: () => Promise<void>; // set-is-active
+        reportAgentCursor: (point: { x: number; y: number } | null, owner: string) => void;
         setDesktopPetActivity: (notification: {
             kind: "idle" | "thinking" | "tool";
             detail?: string;
@@ -296,7 +412,7 @@ declare global {
             petActivityUrl?: string;
             surfaceActivity?: {
                 sessionid?: string;
-                source: "acp" | "kronoscode-tui" | "wave" | "mcp" | "plugin" | "surface-runtime";
+                source: "acp" | "hermes" | "kronoscode-tui" | "wave" | "mcp" | "plugin" | "surface-runtime";
                 phase:
                     | "queued"
                     | "awaiting-approval"
@@ -333,6 +449,45 @@ declare global {
         onDesktopPetChat: (callback: (text: string) => void) => () => void; // desktop-pet-chat
         onDesktopPetResume: (callback: () => void) => () => void; // desktop-pet-resume
         onDesktopPetSurfaceActivity: (callback: (activity: Record<string, unknown>) => void) => () => void; // desktop-pet-surface-activity
+        publishAgentSurfaceActivity: (activity: Record<string, unknown>) => void; // publish-agent-surface-activity
+        sendHermesContext: (text: string) => Promise<void>;
+        sendHermesSelection: (selection: HermesSelection) => Promise<void>; // send-hermes-selection
+        onHermesSelection: (callback: (selection: HermesSelection) => void) => () => void; // hermes-selection
+        onHermesContext: (callback: (text: string) => void) => () => void;
+        requestAgentTakeover: (sessionId?: string) => void; // request-agent-takeover
+        manageNativeTaskGroups: (
+            input: NativeTaskGroupAction | { operation: "list" }
+        ) => Promise<ComputerTargetsResult<NativeTaskGroupsSnapshot | NativeTaskGroupPreview>>; // native-task-groups:manage
+        listLinuxDesktops: () => Promise<ComputerTargetsResult<LinuxDesktop[]>>;
+        performLinuxDesktopAction: (
+            action: LinuxDesktopAction
+        ) => Promise<ComputerTargetsResult<LinuxDesktopActionResult>>;
+        assignLinuxDesktop: (
+            desktopId: string,
+            agentId: string,
+            expectedGeneration: number
+        ) => Promise<ComputerTargetsResult<LinuxDesktop>>;
+        takeOverLinuxDesktop: (desktopId: string) => Promise<ComputerTargetsResult<LinuxDesktop>>;
+        resumeLinuxDesktop: (
+            desktopId: string,
+            expectedGeneration: number
+        ) => Promise<ComputerTargetsResult<LinuxDesktop>>;
+        listComputerTargets: () => Promise<ComputerTargetsResult<ComputerTarget[]>>;
+        startComputerTargetSession: (
+            targetId: string,
+            expectedGeneration: number
+        ) => Promise<ComputerTargetsResult<ComputerTargetSession>>;
+        readComputerTargetFrame: (sessionId: string) => Promise<ComputerTargetsResult<ComputerTargetFrame>>;
+        stopComputerTargetSession: (sessionId: string) => Promise<ComputerTargetsResult<void>>;
+        performComputerTargetAction: (
+            action: ComputerTargetAction
+        ) => Promise<ComputerTargetsResult<ComputerTargetSnapshot>>;
+        takeOverComputerTarget: (targetId: string) => Promise<ComputerTargetsResult<ComputerTargetSnapshot>>;
+        resumeComputerTarget: (
+            targetId: string,
+            expectedGeneration: number
+        ) => Promise<ComputerTargetsResult<ComputerTargetSnapshot>>;
+        onAgentTakeover: (callback: (sessionId?: string) => void) => () => void; // agent-takeover
         acpDetectAgents: () => Promise<
             Array<{
                 backend: string;
@@ -406,6 +561,7 @@ declare global {
             optionId: string;
         }) => Promise<{ success: boolean; error?: string }>;
         acpStop: (opts: { conversationId: string }) => Promise<{ success: boolean; error?: string }>;
+        acpCancel: (opts: { conversationId: string }) => Promise<{ success: boolean; error?: string }>; // acp-cancel
         acpGetStatus: (opts: { conversationId: string }) => Promise<{
             found: boolean;
             status?: string;
@@ -475,26 +631,10 @@ declare global {
         lspStop: (sessionId: string) => void;
         onLspMessage: (callback: (msg: { sessionId: string; content: string }) => void) => () => void;
 
-        // ── Krondesign daemon ────────────────────────────────────────
-        krondesignStatus: () => Promise<{ running: boolean; url: string; pid: number | null }>;
-        krondesignStart: () => Promise<{ success: boolean; error?: string }>;
-
-        // ── ChatHub V2 / KronosChamber backend ──────────────────────
-        chathubv2Start: (context?: { tabId?: string; blockId?: string; surfaceId?: string }) => Promise<{
-            success: boolean;
-            error?: string;
-            data?: ChatHubV2ServerData;
-            health?: ChatHubV2RuntimeHealth;
-        }>;
-        chathubv2Status: () => Promise<{
-            success: boolean;
-            data?: ChatHubV2ServerData | null;
-            health?: ChatHubV2RuntimeHealth;
-        }>;
-        chathubv2Stop: () => Promise<{ success: boolean; error?: string }>;
-        hermesGetConnection: (context?: { tabId?: string; blockId?: string }) => Promise<HermesConnectionDescriptor>; // hermes-get-connection
+        hermesGetConnection: (context?: HermesSurfaceContext) => Promise<HermesConnectionDescriptor>; // hermes-get-connection
         hermesApi: <T = unknown>(input: HermesApiIpcRequest) => Promise<T>; // hermes-api
         onHermesConnection: (callback: (connection: HermesConnectionDescriptor) => void) => () => void; // hermes-connection
+        onHermesRuntimeFailure: (callback: (failure: { message: string }) => void) => () => void; // hermes-runtime-failure
         kronoscodeGetConnection: () => Promise<KronosCodeConnectionDescriptor>; // kronoscode-get-connection
         kronoscodeRevalidateConnection: () => Promise<KronosCodeConnectionDescriptor>; // kronoscode-revalidate-connection
         kronoscodeTouchBackend: () => Promise<boolean>; // kronoscode-touch-backend
@@ -515,6 +655,9 @@ declare global {
         onKronosCodeConnectionApplied: (callback: (connection: KronosCodeConnectionDescriptor) => void) => () => void; // kronoscode-connection-applied
 
         // ── Audio / Voice Engine IPC ──────────────────────────────
+        audioTranscribeFile: (
+            file: string
+        ) => Promise<{ segments: { start: number; end: number; text: string }[]; language?: string }>;
         audioStart: () => Promise<boolean>;
         audioShutdown: () => void;
         audioStartListening: () => void;

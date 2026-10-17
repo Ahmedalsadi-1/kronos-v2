@@ -15,6 +15,9 @@ describe("ACP harness profiles", () => {
         expect(getAcpHarnessProfile("hermes").patterns.map((pattern) => pattern.id)).toContain("prompt-tiers");
         expect(getAcpHarnessProfile("codex").patterns.map((pattern) => pattern.id)).toContain("bounded-workflows");
         expect(getAcpHarnessProfile("claude").patterns.map((pattern) => pattern.id)).toContain("lifecycle-hooks");
+        expect(getAcpHarnessProfile("kronterm-agent").patterns.map((pattern) => pattern.id)).toContain(
+            "native-surface-tools"
+        );
     });
 
     it("falls back to a live-discovery profile for unknown ACP backends", () => {
@@ -26,7 +29,7 @@ describe("ACP harness profiles", () => {
 
 describe("ACP capability leases", () => {
     it("classifies workspace control before generic coding", () => {
-        expect(classifyHarnessTask("Fix the KronosChamber canvas widget bug").taskClass).toBe("workspace-control");
+        expect(classifyHarnessTask("Fix the KronTerm canvas widget bug").taskClass).toBe("workspace-control");
         expect(classifyHarnessTask("Debug a failing TypeScript test").taskClass).toBe("debugging");
     });
 
@@ -76,6 +79,7 @@ describe("KronTerm toolset registry", () => {
     it("groups every surface tool family into a named toolset", () => {
         const ids = Object.keys(KronTermToolsets);
         expect(ids).toContain("workspace");
+        expect(ids).toContain("hud");
         expect(ids).toContain("widget");
         expect(ids).toContain("browser");
         expect(ids).toContain("terminal");
@@ -84,13 +88,20 @@ describe("KronTerm toolset registry", () => {
         expect(ids).toContain("file");
         expect(ids).toContain("memory");
         expect(ids).toContain("skills");
+        expect(ids).toContain("agents");
         expect(KronTermToolsets.desktop.tools).toContain("kron_computer_click");
-        expect(KronTermToolsets.sandbox.tools).toContain("sandbox_start");
+        expect(KronTermToolsets.sandbox.tools).toContain("linux_desktop_start");
+        expect(KronTermToolsets.sandbox.tools).toContain("sandbox_task_start");
+        expect(KronTermToolsets.sandbox.tools).toContain("sandbox_task_finish");
+        expect(KronTermToolsets.sandbox.tools).toContain("device_tap");
+        expect(classifyHarnessTask("Use my iPhone to open Settings").taskClass).toBe("workspace-control");
         expect(KronTermToolsets.widget.tools).toContain("widget_snapshot");
         expect(KronTermToolsets.workspace.tools).toContain("workspace_snapshot");
         expect(KronTermToolsets.workspace.tools).toContain("workspace_set_presentation");
         expect(KronTermToolsets.workspace.tools).toContain("workspace_canvas_add_note");
         expect(KronTermToolsets.memory.tools).toContain("get_memories");
+        expect(KronTermToolsets.hud.tools).toContain("hud_open_island");
+        expect(KronTermToolsets.agents.tools).toContain("acp_run_agent");
     });
 
     it("recommends task-appropriate toolsets and surfaces them in the lease", () => {
@@ -101,7 +112,7 @@ describe("KronTerm toolset registry", () => {
             surfaceAvailable: true,
             workspace: "/tmp/kronterm-project",
         });
-        expect(lease.toolsets).toEqual(["browser", "file", "workspace"]);
+        expect(lease.toolsets).toEqual(["browser", "file", "workspace", "agents"]);
         const prompt = formatAcpCapabilityLease(lease);
         expect(prompt).toContain("Recommended toolsets");
         expect(prompt).toContain("In-app browser");
@@ -112,10 +123,21 @@ describe("KronTerm toolset registry", () => {
         const lease = makeAcpCapabilityLease({
             backend: "kronoscode",
             capabilities: null,
-            content: "Fix the KronosChamber canvas widget bug",
+            content: "Fix the KronTerm canvas widget bug",
             surfaceAvailable: true,
             workspace: "/tmp/kronterm-project",
         });
-        expect(lease.toolsets).toEqual(["workspace", "widget", "sandbox", "desktop"]);
+        expect(lease.toolsets).toEqual(["workspace", "hud", "widget", "sandbox", "desktop", "agents"]);
+    });
+
+    it("does not recommend recursive ACP delegation to a KronTerm Agent child", () => {
+        const lease = makeAcpCapabilityLease({
+            backend: "kronterm-agent",
+            capabilities: null,
+            content: "Implement the parser",
+            surfaceAvailable: true,
+            workspace: "/tmp/kronterm-project",
+        });
+        expect(lease.toolsets).toEqual(["file", "terminal", "widget", "workspace"]);
     });
 });

@@ -21,6 +21,7 @@
         "baseUrl": "./",
         "paths": {
             "@/app/*": ["frontend/app/*"],
+            "@/types/*": ["frontend/types/*"],
             "@/builder/*": ["frontend/builder/*"],
             "@/util/*": ["frontend/util/*"],
             "@/layout/*": ["frontend/layout/*"],

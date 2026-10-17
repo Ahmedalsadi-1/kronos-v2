@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { shouldOpenKronarchyLauncher } from "./kronarchy-shell";
+import {
+    CommandSpaceCompatibilityStorageKey,
+    KronarchyEnabledStorageKey,
+    migrateKronarchyPreference,
+    shouldOpenKronarchyLauncher,
+    shouldUseNativeLauncherActivation,
+} from "./kronarchy-shell";
 
 const makeShortcut = (overrides: Partial<KeyboardEvent> = {}) =>
     ({
@@ -12,11 +18,11 @@ const makeShortcut = (overrides: Partial<KeyboardEvent> = {}) =>
     }) as KeyboardEvent;
 
 describe("shouldOpenKronarchyLauncher", () => {
-    test("opens Shift+Command+Space outside Kronarchy mode", () => {
+    test("opens the canonical Shift+Command+Space shortcut", () => {
         expect(shouldOpenKronarchyLauncher(makeShortcut(), false)).toBe(true);
     });
 
-    test("keeps plain Command+Space exclusive to Kronarchy mode", () => {
+    test("keeps plain Command+Space for migrated users", () => {
         expect(shouldOpenKronarchyLauncher(makeShortcut({ shiftKey: false }), false)).toBe(false);
         expect(shouldOpenKronarchyLauncher(makeShortcut({ shiftKey: false }), true)).toBe(true);
     });
@@ -24,5 +30,44 @@ describe("shouldOpenKronarchyLauncher", () => {
     test("does not open for conflicting modifiers", () => {
         expect(shouldOpenKronarchyLauncher(makeShortcut({ altKey: true }), true)).toBe(false);
         expect(shouldOpenKronarchyLauncher(makeShortcut({ ctrlKey: true }), true)).toBe(false);
+    });
+});
+
+describe("migrateKronarchyPreference", () => {
+    test("moves the old shell flag to the one-release Command+Space compatibility flag", () => {
+        const values = new Map([[KronarchyEnabledStorageKey, "true"]]);
+        const storage = {
+            getItem: (key: string) => values.get(key) ?? null,
+            removeItem: (key: string) => void values.delete(key),
+            setItem: (key: string, value: string) => void values.set(key, value),
+        };
+
+        expect(migrateKronarchyPreference(storage)).toBe(true);
+        expect(values.has(KronarchyEnabledStorageKey)).toBe(false);
+        expect(values.get(CommandSpaceCompatibilityStorageKey)).toBe("true");
+    });
+
+    test("removes a disabled legacy flag without enabling the shortcut", () => {
+        const values = new Map([[KronarchyEnabledStorageKey, "false"]]);
+        const storage = {
+            getItem: (key: string) => values.get(key) ?? null,
+            removeItem: (key: string) => void values.delete(key),
+            setItem: (key: string, value: string) => void values.set(key, value),
+        };
+
+        expect(migrateKronarchyPreference(storage)).toBe(false);
+        expect(values.has(KronarchyEnabledStorageKey)).toBe(false);
+        expect(values.has(CommandSpaceCompatibilityStorageKey)).toBe(false);
+    });
+});
+
+describe("Command Center focused activation", () => {
+    test("leaves Enter on a focused result or its child to the native button click", () => {
+        const button = {} as HTMLElement;
+        expect(shouldUseNativeLauncherActivation({ closest: () => button })).toBe(true);
+    });
+
+    test("uses the selected search result when Enter originates in the search field", () => {
+        expect(shouldUseNativeLauncherActivation({ closest: () => null })).toBe(false);
     });
 });

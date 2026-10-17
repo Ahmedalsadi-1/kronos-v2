@@ -33,4 +33,24 @@ describe("KronTerm Hermes host module", () => {
         expect(markup).toContain("&quot;hudMode&quot;:false");
         expect(markup).toContain("&quot;panelMode&quot;:true");
     });
+
+    it("treats web mode as a full Hermes shell even when a HUD marker is present", () => {
+        const markup = renderToStaticMarkup(
+            createElement(HermesShellModeProvider, {
+                hudMode: false,
+                panelMode: false,
+                webMode: true,
+                children: createElement(ModeProbe),
+            })
+        );
+        expect(markup).toContain("&quot;hudMode&quot;:false");
+        expect(markup).toContain("&quot;panelMode&quot;:false");
+        expect(markup).toContain("&quot;webMode&quot;:true");
+    });
+
+    it("mounts the native KronTerm panel with the real Hermes HUD shell", () => {
+        const source = readFileSync(new URL("../../native-hud.tsx", import.meta.url), "utf8");
+        expect(source).toContain('<HermesApp hudMode hostMode="hud" kronSettingsModel={settingsModel} />');
+        expect(source).not.toContain('<HermesApp hudMode hostMode="kronterm" />');
+    });
 });

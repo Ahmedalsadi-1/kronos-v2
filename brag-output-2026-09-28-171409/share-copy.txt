@@ -1,1 +1,0 @@
-Stop feeding AI a transcript. KronTerm gives agents the whole workspace — terminal, browser, sandbox, and canvas in one living command center. Private beta now open: kronterm.io

@@ -124,7 +124,7 @@ const config: Config = {
             {
                 name: "keywords",
                 content:
-                    "KronTerm, KronosCode, KronosChamber, terminal, developer workspace, AI agent, canvas, browser automation, sandbox, computer use, SSH, remote development, widgets, macOS, documentation",
+                    "KronTerm, KronosCode, Hermes, terminal, developer workspace, AI agent, canvas, browser automation, sandbox, computer use, SSH, remote development, widgets, macOS, documentation",
             },
             {
                 name: "og:type",

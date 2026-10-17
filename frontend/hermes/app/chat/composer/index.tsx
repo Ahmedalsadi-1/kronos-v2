@@ -188,7 +188,6 @@ export function ChatBar({
   const {
     dockProximity,
     dragging,
-    handleComposerToggle,
     onComposerGesturePointerDown,
     popoutAllowed,
     popoutPosition,
@@ -1124,10 +1123,10 @@ export function ChatBar({
             Anchored at the bottom, so in-flow children grow upward and still
             overlay the thread — no absolute lane needed.
 
-            The strips are siblings of the composer, not children: the pop-out
-            drag region is `absolute inset-0` INSIDE the composer, so anything
-            rendered in there is inside the grab area by construction. Keeping
-            them out here is what makes that impossible rather than excluded. */}
+            The strips are siblings of the composer, not children: pointer
+            gestures bound on the composer root must never treat strip content
+            as grab surface. Keeping them out here is what makes that impossible
+            rather than excluded. */}
         <div
           className={cn(
             'z-30 flex flex-col',
@@ -1200,6 +1199,7 @@ export function ChatBar({
             )}
             data-drag-active={dragActive ? '' : undefined}
             data-hud-grabbing={hudGrabbing ? '' : undefined}
+            data-floating-hud={hudMode ? '' : undefined}
             data-popped-out={poppedOut ? '' : undefined}
             data-slot="composer-root"
             data-status-stack={statusStackVisible ? '' : undefined}
@@ -1238,20 +1238,6 @@ export function ChatBar({
                 style={{ background: COMPOSER_FADE_BACKGROUND }}
               />
             )}
-            {/* Drag region: covers the transparent grab margin around the surface.
-              The surface sits on top (z-4) so only the exposed ring receives this
-              element's hover/cursor — grab cursor + a diagonal hatch (/////)
-              appear when you hover the draggable margin, never over the input.
-              The hatch pattern + opacity ladder live in styles.css. */}
-            {popoutAllowed && (
-              <div
-                aria-hidden
-                className={cn('pointer-events-auto absolute inset-0', dragging ? 'cursor-grabbing' : 'cursor-grab')}
-                data-dragging={dragging ? '' : undefined}
-                data-slot="composer-drag-region"
-                onDoubleClick={handleComposerToggle}
-              />
-            )}
             <div className="relative w-full rounded-[inherit]">
               {hudMode && busy && <span aria-hidden className="arc-border arc-composer" />}
               <div
@@ -1265,6 +1251,7 @@ export function ChatBar({
               >
                 <div
                   aria-hidden
+                  data-slot="composer-fill"
                   className={cn(
                     'pointer-events-none absolute inset-0 -z-10 rounded-[inherit]',
                     composerFill,

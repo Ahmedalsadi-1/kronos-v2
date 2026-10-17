@@ -24,6 +24,14 @@ export type HermesComposerSubmitted = {
 };
 
 function publishComposerSubmitted(text: string, attachments: ComposerAttachment[]): void {
+    const target = /@app:([^\s|]+)\|[^\s]+/.exec(text)?.[1];
+    if (target) {
+        try {
+            void window.hermesDesktop?.krontermSurfaces?.targetApp?.(decodeURIComponent(target)).catch(() => {});
+        } catch {
+            /* Invalid user-entered references stay in the prompt for clarification. */
+        }
+    }
     window.dispatchEvent(
         new CustomEvent<HermesComposerSubmitted>(HermesComposerSubmittedEvent, {
             detail: { attachments, text },

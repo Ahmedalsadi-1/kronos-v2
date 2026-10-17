@@ -57,7 +57,7 @@ export function useDesktopIntegrations({
     runtimeIdByStoredSessionId,
     sessions,
 }: DesktopIntegrationsParams): void {
-    const { hudMode } = useHermesShellMode();
+    const { hudMode, webMode } = useHermesShellMode();
     // Update polling — populates $desktopVersion/$updateStatus, which feed the
     // statusbar version pill and the update toasts. Also honors the main
     // process's "open updates" menu request.
@@ -90,7 +90,7 @@ export function useDesktopIntegrations({
     // This ref is a one-time lifecycle latch, not a mirror of reactive atom state.
     // eslint-disable-next-line no-restricted-syntax
     useEffect(() => {
-        if (!profileReady || hudMode || isHudWindow()) {
+        if (!profileReady || hudMode || (!webMode && isHudWindow())) {
             return;
         }
 
@@ -156,7 +156,7 @@ export function useDesktopIntegrations({
         } else if (!routedSessionId && !isOverlayView(appViewForPath(locationPathname))) {
             setRememberedRoute(locationPathname, activeProfile);
         }
-    }, [activeProfile, hudMode, locationPathname, navigate, profileReady, routedSessionId, sessions]);
+    }, [activeProfile, hudMode, locationPathname, navigate, profileReady, routedSessionId, sessions, webMode]);
 
     useEffect(() => {
         if (!profileReady || !resumeExhaustedSessionId) {

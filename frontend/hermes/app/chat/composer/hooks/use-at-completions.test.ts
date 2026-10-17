@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { liveSurfaceEntries } from "./use-at-completions";
+import { liveSurfaceEntries, nativeAppEntries } from "./use-at-completions";
 
 describe("KronTerm @ completions", () => {
     it("includes live widgets and each internal browser tab", () => {
@@ -47,4 +47,17 @@ describe("KronTerm @ completions", () => {
             ).map((entry) => entry.text)
         ).toEqual(["@widget:term-1"]);
     });
+});
+
+it("picks native apps by name and preserves stable IDs and labels containing spaces", () => {
+    const entries = nativeAppEntries(
+        [
+            { id: "com.googlecode.iterm2", name: "iTerm" },
+            { id: "com.apple.TextEdit", name: "Text Edit" },
+        ],
+        "app:text"
+    );
+    expect(entries).toEqual([
+        { text: "@app:com.apple.TextEdit|Text%20Edit", display: "Text Edit", meta: "Kron Computer Use · native app" },
+    ]);
 });

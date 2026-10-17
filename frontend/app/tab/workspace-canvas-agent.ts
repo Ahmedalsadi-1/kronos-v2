@@ -8,6 +8,7 @@ import type {
     AgentActivitySurface,
     LiveAgentSurfaceActivity,
 } from "../../types/agent-activity";
+import { isAgentActivityActive } from "../../types/agent-activity";
 import type { WorkspaceCanvasRect } from "./workspace-canvas-utils";
 
 export type CanvasContextMode = "follow" | "quote";
@@ -127,6 +128,17 @@ export function shouldRecordAgentActivity(activity: LiveAgentSurfaceActivity): b
     );
 }
 
+export function agentActivityFollowTarget(
+    activity: LiveAgentSurfaceActivity,
+    rects: Record<string, WorkspaceCanvasRect>,
+    enabled: boolean
+): string | null {
+    if (!enabled || !activity.blockid || !isAgentActivityActive(activity.phase) || !rects[activity.blockid]) {
+        return null;
+    }
+    return activity.blockid;
+}
+
 export function titleForAgentActivity(activity: LiveAgentSurfaceActivity): string {
     const nodeKind = nodeKindForAgentActivity(activity);
     if (nodeKind === "decision") {
@@ -217,15 +229,7 @@ function mergeReasoningSteps(existing: string[] | undefined, activity: LiveAgent
     if (explicitSteps?.length) {
         return explicitSteps.slice(-MaxReasoningSteps);
     }
-    const thought = activity.thought?.trim();
-    if (!thought) {
-        return existing;
-    }
-    const current = existing ?? [];
-    if (current[current.length - 1] === thought) {
-        return current;
-    }
-    return [...current, thought].slice(-MaxReasoningSteps);
+    return existing;
 }
 
 export function upsertAgentActivityCard(
@@ -255,7 +259,7 @@ export function upsertAgentActivityCard(
             blockid: activity.blockid || existing?.agent.blockid,
             contextids: contextids.length > 0 ? contextids : existing?.agent.contextids,
             createdts: existing?.agent.createdts ?? now,
-            detail: activity.detail || activity.thought || activity.action,
+            detail: activity.detail || activity.action,
             errorcode: activity.errorcode,
             eventid: activity.id,
             nodekind,

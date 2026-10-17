@@ -19,6 +19,7 @@ import { useComposerScope } from './scope'
 import type { ChatBarState } from './types'
 
 const PILL = cn(
+  'hermes-glass-selector',
   'h-(--composer-control-size) max-w-40 shrink-0 gap-1 rounded-md px-2 text-xs font-normal',
   'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
 )
@@ -116,6 +117,7 @@ export function ModelPill({
   // padding, sized to match the other composer icon buttons.
   const pillClass = compact
     ? cn(
+        'hermes-glass-selector',
         'size-(--composer-control-size) shrink-0 justify-center gap-0 rounded-md p-0',
         'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
       )

@@ -65,6 +65,12 @@ func init() {
 	flags.StringVar(&workspaceSurfaceControlData.ToObjectId, "to-object", "", "destination canvas object id")
 	flags.StringVar(&workspaceSurfaceControlData.Text, "text", "", "canvas sticky-note text")
 	flags.StringVar(&workspaceSurfaceControlData.Color, "color", "", "canvas object color")
+	flags.StringVar(&workspaceSurfaceControlData.Side, "side", "", "OS docking side: left or right")
+	flags.StringVar(&workspaceSurfaceControlData.View, "view", "", "view type for an OS application")
+	flags.StringVar(&workspaceSurfaceControlData.AppId, "app-id", "", "native application id for an OS app stream")
+	flags.StringVar(&workspaceSurfaceControlData.AppName, "app-name", "", "display name for a native OS application")
+	flags.StringVar(&workspaceSurfaceControlData.File, "file", "", "file path to open in the OS workspace")
+	flags.StringVar(&workspaceSurfaceControlData.WorkspaceId, "workspace", "", "target workspace id")
 }
 
 func workspaceSurfaceSnapshotRun(cmd *cobra.Command, args []string) (rtnErr error) {

@@ -121,7 +121,7 @@ export const pillars: Feature[] = [
     },
     {
         title: "Kronos runtime defaults",
-        text: "Private beta routes execution through KronosCode and KronosChamber so model, tool, and approval state stay inspectable.",
+        text: "Private beta routes execution through KronosCode and Hermes so model, tool, and approval state stay inspectable.",
         icon: Cpu
     },
     {

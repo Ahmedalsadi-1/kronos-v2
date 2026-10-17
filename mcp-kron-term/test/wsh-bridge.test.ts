@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -14,6 +14,7 @@ import {
     makeWidgetHoverArgs,
     makeWorkspaceSurfaceControlArgs,
     readSurfaceCapability,
+    pickNewestWshBinary,
 } from "../src/wsh-bridge.ts";
 
 describe("wsh bridge command builders", () => {
@@ -61,6 +62,30 @@ describe("wsh bridge command builders", () => {
         );
     });
 
+    it("routes HUD mode and existing-widget actions through the same authenticated surface CLI", () => {
+        assert.deepEqual(makeWorkspaceSurfaceControlArgs({ action: "hud.mode", presentation: "alongside" }), [
+            "workspace-surface",
+            "control",
+            "hud.mode",
+            "--presentation",
+            "alongside",
+        ]);
+        assert.deepEqual(makeWorkspaceSurfaceControlArgs({ action: "hud.restore", blockId: "block:browser-1" }), [
+            "workspace-surface",
+            "control",
+            "hud.restore",
+            "--block",
+            "browser-1",
+        ]);
+    });
+
+    it("rejects missing HUD identities, invalid placements and invalid geometry before calling wsh", () => {
+        assert.throws(() => makeWorkspaceSurfaceControlArgs({ action: "hud.open" }), /block ID/);
+        assert.throws(() => makeWorkspaceSurfaceControlArgs({ action: "hud.mode", presentation: "os" }), /HUD mode/);
+        assert.throws(() => makeWorkspaceSurfaceControlArgs({ action: "move", x: Infinity }), /finite/);
+        assert.throws(() => makeWorkspaceSurfaceControlArgs({ action: "resize", width: -1 }), /positive/);
+    });
+
     it("builds workspace whiteboard object args", () => {
         assert.deepEqual(
             makeWorkspaceSurfaceControlArgs({
@@ -82,6 +107,31 @@ describe("wsh bridge command builders", () => {
                 "Investigate browser flow",
                 "--color",
                 "amber",
+            ]
+        );
+    });
+
+    it("builds typed OS docking and workspace args", () => {
+        assert.deepEqual(
+            makeWorkspaceSurfaceControlArgs({
+                action: "spatial.dock",
+                blockId: "block:hermes-1",
+                targetBlockId: "browser-1",
+                side: "right",
+                workspaceId: "workspace-2",
+            }),
+            [
+                "workspace-surface",
+                "control",
+                "spatial.dock",
+                "--block",
+                "hermes-1",
+                "--target-block",
+                "browser-1",
+                "--side",
+                "right",
+                "--workspace",
+                "workspace-2",
             ]
         );
     });
@@ -196,5 +246,24 @@ describe("wsh bridge command builders", () => {
             "--button",
             "middle",
         ]);
+    });
+});
+
+describe("pickNewestWshBinary", () => {
+    it("prefers the newest mtime among build candidates", () => {
+        const dir = join(tmpdir(), `kronterm-wsh-resolve-${process.pid}-${Date.now()}`);
+        mkdirSync(dir, { recursive: true });
+        const stale = join(dir, "wsh");
+        const fresh = join(dir, "wsh-0.14.3-darwin.arm64");
+        writeFileSync(stale, "#!/bin/sh\n");
+        writeFileSync(fresh, "#!/bin/sh\n");
+        utimesSync(stale, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+        utimesSync(fresh, new Date(), new Date());
+        assert.equal(pickNewestWshBinary([stale, fresh]), fresh);
+        rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("skips missing candidates", () => {
+        assert.equal(pickNewestWshBinary(["/nonexistent/wsh", "/also/missing"]), undefined);
     });
 });

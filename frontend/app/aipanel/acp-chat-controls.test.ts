@@ -4,7 +4,7 @@ import type { AcpBackendInfo } from "./use-acp-session";
 
 const agents: AcpBackendInfo[] = [
     { backend: "kronoscode", name: "KronosCode", cliPath: "kronoscode", available: true },
-    { backend: "opencode", name: "OpenCode", cliPath: "opencode", available: false },
+    { backend: "kronterm-agent", name: "KronTerm Agent", cliPath: "opencode", available: false },
 ];
 
 describe("ACP composer suggestions", () => {
@@ -38,7 +38,7 @@ describe("ACP composer suggestions", () => {
     });
 
     it("separates runtime and referenced-file mentions", () => {
-        const runtimeSuggestions = getComposerSuggestions("mentions", "code", {}, {}, agents, [], "agents");
+        const runtimeSuggestions = getComposerSuggestions("mentions", "", {}, {}, agents, [], "agents");
         const fileSuggestions = getComposerSuggestions(
             "mentions",
             "session",
@@ -49,7 +49,7 @@ describe("ACP composer suggestions", () => {
             "files"
         );
 
-        expect(runtimeSuggestions.map((item) => item.label)).toEqual(["KronosCode", "OpenCode"]);
+        expect(runtimeSuggestions.map((item) => item.label)).toEqual(["KronosCode", "KronTerm Agent"]);
         expect(runtimeSuggestions[1].available).toBe(false);
         expect(fileSuggestions.map((item) => item.label)).toEqual(["session.ts"]);
     });

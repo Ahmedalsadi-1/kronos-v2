@@ -203,7 +203,7 @@ function handleHeaderContextMenu(
                     visible:
                         metaView === "waveai" ||
                         metaView === "kronoschat" ||
-                        metaView === "chathubv2" ||
+                        metaView === "hermes" ||
                         metaView === "codeeditor",
                     click: () => {
                         document.dispatchEvent(
@@ -216,7 +216,7 @@ function handleHeaderContextMenu(
                 },
                 {
                     label: "Improve Response",
-                    visible: metaView === "waveai" || metaView === "kronoschat" || metaView === "chathubv2",
+                    visible: metaView === "waveai" || metaView === "kronoschat" || metaView === "hermes",
                     click: () => {
                         document.dispatchEvent(
                             new CustomEvent("kronoscode:block-action", {
@@ -360,7 +360,8 @@ const BlockFrame_Header = ({
     connBtnRef,
     changeConnModalAtom,
     error,
-}: BlockFrameProps & { changeConnModalAtom: jotai.PrimitiveAtom<boolean>; error?: Error }) => {
+    integrated = false,
+}: BlockFrameProps & { changeConnModalAtom: jotai.PrimitiveAtom<boolean>; error?: Error; integrated?: boolean }) => {
     const waveEnv = useWaveEnv<BlockEnv>();
     const metaView = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "view"));
     const metaFrameTitle = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:title"));
@@ -370,6 +371,7 @@ const BlockFrame_Header = ({
     const useTermHeader = util.useAtomValueSafe(viewModel?.useTermHeader);
     const termConfigedDurable = util.useAtomValueSafe(viewModel?.termConfigedDurable);
     const headerTop = util.useAtomValueSafe(viewModel?.headerTop);
+    const contextualHeaderTop = metaView === "web" ? headerTop : null;
     const badge = jotai.useAtomValue(getBlockBadgeAtom(useTermHeader ? nodeModel.blockId : null));
     const magnified = jotai.useAtomValue(nodeModel.isMagnified);
     const folded = jotai.useAtomValue(nodeModel.isFolded);
@@ -392,24 +394,35 @@ const BlockFrame_Header = ({
     const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) =>
         handleHeaderContextMenu(event, nodeModel.blockId, viewModel, nodeModel, waveEnv, metaView);
 
+    if (integrated && contextualHeaderTop) {
+        return (
+            <div className="os-contextual-toolbar" onContextMenu={handleContextMenu}>
+                {contextualHeaderTop}
+            </div>
+        );
+    }
+
     return (
         <>
-            {headerTop && (
-                <div className="block-frame-header-top" onContextMenu={handleContextMenu}>
-                    {headerTop}
+            {contextualHeaderTop && (
+                <div className="block-frame-header-top" data-surface="web" onContextMenu={handleContextMenu}>
+                    {contextualHeaderTop}
                 </div>
             )}
             <div
-                className={cn("block-frame-default-header", useTermHeader && "!pl-[2px]")}
+                className={cn(
+                    integrated ? "os-contextual-toolbar" : "block-frame-default-header",
+                    useTermHeader && !integrated && "!pl-[2px]"
+                )}
                 data-role="block-header"
                 data-surface={surfaceName}
                 role="toolbar"
-                aria-label={`${surfaceLabel} widget controls`}
-                ref={dragHandleRef}
+                aria-label={`${surfaceLabel} controls`}
+                ref={integrated ? undefined : dragHandleRef}
                 onContextMenu={handleContextMenu}
-                onDoubleClick={handleContextMenu}
+                onDoubleClick={integrated ? undefined : handleContextMenu}
             >
-                <WidgetTrafficLights nodeModel={nodeModel} magnified={magnified} folded={folded} />
+                {!integrated && <WidgetTrafficLights nodeModel={nodeModel} magnified={magnified} folded={folded} />}
                 {!useTermHeader && preIconButton && (
                     <IconButton decl={preIconButton} className="block-frame-widget-action block-frame-preicon-button" />
                 )}

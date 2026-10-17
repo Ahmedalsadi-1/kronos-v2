@@ -1,6 +1,6 @@
 ---
 name: kronterm-ui-quality
-description: Audit and improve KronTerm desktop UI quality across widgets, tabs, canvas, settings, browser, terminal, and KronosChamber. Use for visual polish, interaction consistency, accessibility, responsive layout, motion, information hierarchy, or native macOS/iOS-like feel in frontend React, Tailwind, or SCSS work.
+description: Audit and improve KronTerm desktop UI quality across widgets, tabs, canvas, settings, browser, terminal, and Hermes. Use for visual polish, interaction consistency, accessibility, responsive layout, motion, information hierarchy, or native macOS/iOS-like feel in frontend React, Tailwind, or SCSS work.
 ---
 
 # KronTerm UI Quality
@@ -28,7 +28,7 @@ Create a calm, precise, agent-native workspace that combines the immediacy of a 
 
 - Workspace presentations: `frontend/app/tab/`, `frontend/app/workspace/`
 - Shared block chrome: `frontend/app/block/`
-- KronosChamber: `frontend/app/view/chathubv2/`, `frontend/app/aipanel/`
+- Hermes: `frontend/app/view/hermes/`, `frontend/app/aipanel/`
 - Theme and shared styles: `frontend/app/theme.scss`, `frontend/tailwindsetup.css`
 - iPhone Labs client: `mobile/src/`
 

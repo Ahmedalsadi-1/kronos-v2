@@ -37,7 +37,7 @@ reported as warnings by the current Docusaurus configuration.
 
 ## Writing rules
 
-- Use KronTerm, KronosCode, and KronosChamber in user-facing copy.
+- Use KronTerm, KronosCode, and Hermes in user-facing copy.
 - Preserve `Wave`, `WaveAI`, `waveai:*`, `.waveterm`, and related names when they identify compatibility-sensitive config,
   commands, paths, or historical releases.
 - Mark the Python voice engine as experimental and the iPhone client as Labs.

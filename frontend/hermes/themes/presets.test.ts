@@ -1,26 +1,72 @@
 // Copyright (c) 2026 KronTerm. Licensed under the Apache License, Version 2.0 (the "License").
 
 import { describe, expect, it } from "vitest";
-import { BUILTIN_THEME_LIST, DEFAULT_THEME_MODE, DEFAULT_TYPOGRAPHY, nousTheme } from "./presets";
+import { CoucouPalettes, coucouAppearance, coucouPalette } from "./coucou-palettes";
+import {
+    BUILTIN_THEME_LIST,
+    CoucouThemes,
+    DEFAULT_SKIN_NAME,
+    DEFAULT_THEME_MODE,
+    DEFAULT_TYPOGRAPHY,
+    coucouTheme,
+} from "./presets";
 
 describe("built-in Hermes themes", () => {
     it("does not inject remote font stylesheets into the KronTerm renderer", () => {
         expect(BUILTIN_THEME_LIST.map((theme) => theme.typography?.fontUrl).filter(Boolean)).toEqual([]);
     });
 
-    it("starts fresh Hermes sessions in the neutral dark Nous palette", () => {
+    it("starts fresh Hermes sessions with the Coucou palette and native typography", () => {
         expect(DEFAULT_THEME_MODE).toBe("dark");
-        expect(nousTheme.darkColors).toMatchObject({
-            background: "#09090B",
-            foreground: "#F4F4F5",
-            card: "#111113",
-            primary: "#F4F4F5",
-            midground: "#0053FD",
+        expect(DEFAULT_SKIN_NAME).toBe("coucou");
+        expect(coucouTheme.typography.fontSans).toMatch(/^-apple-system/);
+        expect(coucouTheme.darkColors).toMatchObject({
+            background: "#000000",
+            foreground: "#F5F6F8",
+            card: "#141416",
+            primary: "#F5F6F8",
+            midground: "#967AFF",
         });
     });
 
     it("uses bundled UI and code fonts as the universal Hermes pairing", () => {
         expect(DEFAULT_TYPOGRAPHY.fontSans).toContain("Inter");
         expect(DEFAULT_TYPOGRAPHY.fontMono).toContain("JetBrains Mono");
+    });
+});
+
+describe("Coucou palette parity", () => {
+    it("includes every upstream pill color on the native black material", () => {
+        expect(CoucouPalettes.slice(1).map((palette) => palette.accent)).toEqual([
+            "#F5F6F8",
+            "#F4505E",
+            "#F29B38",
+            "#FACC15",
+            "#4ADE80",
+            "#2DD4BF",
+            "#38BDF8",
+            "#818CF8",
+            "#C084FC",
+            "#E879F9",
+        ]);
+        for (const theme of CoucouThemes) {
+            expect(BUILTIN_THEME_LIST).toContainEqual(theme);
+            expect(theme.colors.background).toBe("#000000");
+            expect(theme.colors).toEqual(theme.darkColors);
+            expect(theme.typography.fontSans).toMatch(/^-apple-system/);
+        }
+    });
+    it("validates theme requests without accepting arbitrary CSS or coerced values", () => {
+        expect(coucouAppearance("coucou-teal", true)).toEqual({
+            chrome: "coucou",
+            theme: "coucou-teal",
+            reducedMotion: true,
+        });
+        expect(coucouAppearance("url(javascript:alert(1))", "yes")).toEqual({
+            chrome: "coucou",
+            theme: "coucou",
+            reducedMotion: false,
+        });
+        expect(coucouPalette({ name: "coucou-pink" })).toBeUndefined();
     });
 });

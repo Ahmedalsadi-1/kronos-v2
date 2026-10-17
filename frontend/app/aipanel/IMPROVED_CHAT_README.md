@@ -4,13 +4,13 @@ This directory contains the React chat surfaces that connect KronTerm to KronosC
 providers, workspace context, approvals, artifacts, and the optional voice engine.
 
 The name `WaveAIModel` and several `waveai-*` files remain for compatibility with the original data model. Use
-KronosCode, KronosChamber, and KronTerm in new user-facing text.
+KronosCode, Hermes, and KronTerm in new user-facing text.
 
 ## Which surface should I change?
 
 | Surface                            | Entry point                         | Use it for                                                                                          |
 | ---------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **KronosChamber**                  | `../view/chathubv2/chathubv2.tsx`   | Primary embedded KronosCode chat, sessions, artifacts, settings, and runtime recovery               |
+| **Hermes**                  | `../view/hermes/hermes.tsx`   | Primary embedded KronosCode chat, sessions, artifacts, settings, and runtime recovery               |
 | **ACP chat**                       | `acp-chat-panel.tsx`                | ACP agent sessions, agent/model switching, approvals, slash commands, mentions, and session history |
 | **Kronos chat components**         | `kronos-chat-components.tsx`        | Shared streamed message, status, reasoning, and tool presentation                                   |
 | **KronosCode V2 message renderer** | `kronoscode-v2/`                    | Structured SDK message parts, reasoning groups, tool results, and canvas insertion                  |
@@ -18,7 +18,7 @@ KronosCode, KronosChamber, and KronTerm in new user-facing text.
 | **Composer**                       | `improved-chat-input.tsx`           | Rich text entry, attachments, pasted content, models, tools, and submit behavior                    |
 | **Voice**                          | `siri-button.tsx`, `voice-model.ts` | Experimental microphone, transcription, and speech state                                            |
 
-KronosChamber's managed process lives in `emain/chathubv2-*.ts` and `emain/kronoscode-runtime.ts`. Keep runtime startup,
+Hermes's managed process lives in `emain/hermes-runtime.ts` and `emain/kronoscode-runtime.ts`. Keep runtime startup,
 health, credential refresh, reconnect, and repair logic in Electron rather than duplicating it in React.
 
 ## Message flow
@@ -29,7 +29,7 @@ Composer
 ├── selected workspace/canvas context
 └── optional voice transcript
         ↓
-KronosChamber or ACP session
+Hermes or ACP session
 ├── session and model selection
 ├── streamed assistant/reasoning/tool events
 ├── approval requests
@@ -127,12 +127,12 @@ Run the smallest checks that cover the changed surface:
 ```bash
 npx vitest run frontend/app/aipanel/acp-chat-controls.test.ts
 npx vitest run frontend/app/aipanel/use-acp-session.test.ts
-npx vitest run frontend/app/view/chathubv2/chathubv2-composer.test.ts
-npx vitest run frontend/app/view/chathubv2/chathubv2.test.ts
+
+
 task check:ts
 ```
 
-For managed-runtime changes, also run the relevant `emain/chathubv2-*.test.ts` tests. For canvas-context changes, run the
+For managed-runtime changes, also run the relevant `emain/hermes-runtime.test.ts` tests. For canvas-context changes, run the
 `frontend/app/tab/workspace-canvas-*.test.ts` suite.
 
 ## Documentation status

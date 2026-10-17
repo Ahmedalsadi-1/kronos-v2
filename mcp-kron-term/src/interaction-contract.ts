@@ -29,6 +29,7 @@ export type InteractionEvidence = {
     verifiedAfter: boolean;
     previewImageUrl?: string;
     summary?: string;
+    status?: "acknowledged" | "observed" | "verified";
 };
 
 export type InteractionResult = {
@@ -110,7 +111,14 @@ export async function runInteraction<T>(
                 const value = await execute(attempts);
                 const evidence = options.verify
                     ? await options.verify(value)
-                    : { observedBefore: true, verifiedAfter: true };
+                    : {
+                          observedBefore: options.preflight != null,
+                          verifiedAfter: false,
+                          status: "acknowledged" as const,
+                      };
+                if (!evidence.verifiedAfter && evidence.status == null) {
+                    throw new Error(evidence.summary ?? "Interaction could not be verified");
+                }
                 return {
                     value,
                     result: {
@@ -119,7 +127,7 @@ export async function runInteraction<T>(
                         attempts,
                         startedAt,
                         finishedAt: new Date().toISOString(),
-                        evidence,
+                        evidence: { ...evidence, status: evidence.verifiedAfter ? "verified" : evidence.status },
                     },
                 };
             } catch (error) {

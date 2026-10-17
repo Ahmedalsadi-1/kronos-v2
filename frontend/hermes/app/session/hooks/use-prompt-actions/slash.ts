@@ -996,6 +996,32 @@ export function useSlashCommand(deps: SlashCommandDeps) {
         files: async () => {
           toggleFileBrowserOpen()
         },
+        krontermAgent: async ctx => {
+          const task = ctx.arg.trim()
+          if (!task) {
+            notify({ kind: 'error', message: 'Usage: /kronterm-agent <task>' })
+            return
+          }
+          const resolved = await withSlashOutput(ctx)
+          if (!resolved) return
+          const { render, sessionId } = resolved
+          render(`delegating to OpenCode ACP agent: "${task}"`)
+          try {
+            const result = await requestGateway<{ answer?: string; name?: string; backend?: string; rejectedPermissions?: string[] }>(
+              'acp.run_agent',
+              { backend: 'opencode', task, session_id: sessionId },
+              180_000
+            )
+            if (result?.answer) {
+              render(result.answer)
+            }
+            if (result?.rejectedPermissions?.length) {
+              render(`rejected: ${result.rejectedPermissions.join(', ')}`)
+            }
+          } catch (err) {
+            render(`error: ${err instanceof Error ? err.message : String(err)}`)
+          }
+        },
         terminal: async () => {
           setTerminalTakeover(!$terminalTakeover.get())
         },

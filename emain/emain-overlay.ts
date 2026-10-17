@@ -1,5 +1,7 @@
-import { BrowserWindow, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen } from "electron";
 import path from "path";
+import type { AnnotationCommand, AnnotationSnapshot } from "../frontend/types/desktop-annotations";
+import { DesktopAnnotations } from "./desktop-annotations";
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
 
 let overlayWindow: BrowserWindow = null;
@@ -8,6 +10,28 @@ let overlayReady = false;
 let overlayHideTimer: NodeJS.Timeout = null;
 const pendingCommands: OverlayAnimationCommand[] = [];
 const OverlayVisibleMs = 2600;
+let annotationState: AnnotationSnapshot = { items: [], drawing: false, tool: "pen", origin: { x: 0, y: 0 } };
+let annotationIpcRegistered = false;
+export const desktopAnnotations = new DesktopAnnotations((state) => {
+    annotationState = state;
+    if (state.items.length || state.drawing) createOverlayWindow();
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.setFocusable(state.drawing);
+    overlayWindow.setIgnoreMouseEvents(!state.drawing, { forward: true });
+    if (state.items.length || state.drawing) {
+        overlayWindow.showInactive();
+        if (state.drawing) overlayWindow.focus();
+    } else overlayWindow.hide();
+    publishAnnotations();
+});
+function publishAnnotations() {
+    if (!overlayReady || !overlayWindow || !overlayBounds) return;
+    overlayWindow.webContents.send("desktop-annotations", {
+        ...annotationState,
+        origin: { x: overlayBounds.x, y: overlayBounds.y },
+        captionArea: screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea,
+    });
+}
 
 export type OverlayAnimationCommand =
     | { type: "click"; x: number; y: number }
@@ -36,6 +60,34 @@ export function createOverlayWindow() {
     }
     const bounds = getAllDisplayBounds();
     overlayBounds = bounds;
+    if (!annotationIpcRegistered) {
+        annotationIpcRegistered = true;
+        ipcMain.handle("overlay-annotation-command", (event, input: AnnotationCommand) => {
+            if (
+                !overlayWindow ||
+                event.sender !== overlayWindow.webContents ||
+                event.senderFrame !== event.sender.mainFrame
+            )
+                throw new Error("Untrusted annotation caller");
+            if ((input?.action === "begin" || input?.action === "add") && !annotationState.drawing)
+                throw new Error("Manual drawing is not active.");
+            return desktopAnnotations.command(input);
+        });
+        ipcMain.on("overlay-interactive", (event, interactive: boolean) => {
+            if (overlayWindow && event.sender === overlayWindow.webContents)
+                overlayWindow.setIgnoreMouseEvents(!annotationState.drawing && interactive !== true, { forward: true });
+        });
+        app.on("before-quit", () => desktopAnnotations.dispose());
+        const refreshDisplayBounds = () => {
+            if (!overlayWindow || overlayWindow.isDestroyed()) return;
+            overlayBounds = getAllDisplayBounds();
+            overlayWindow.setBounds(overlayBounds);
+            publishAnnotations();
+        };
+        screen.on("display-metrics-changed", refreshDisplayBounds);
+        screen.on("display-added", refreshDisplayBounds);
+        screen.on("display-removed", refreshDisplayBounds);
+    }
 
     overlayWindow = new BrowserWindow({
         x: bounds.x,
@@ -67,6 +119,7 @@ export function createOverlayWindow() {
 
     overlayWindow.webContents.once("did-finish-load", () => {
         overlayReady = true;
+        publishAnnotations();
         for (const command of pendingCommands.splice(0)) {
             sendOverlayAnimation(command);
         }
@@ -99,7 +152,7 @@ export function sendOverlayAnimation(cmd: OverlayAnimationCommand) {
         return;
     }
     if (cmd.type === "hide") {
-        overlayWindow.hide();
+        if (!annotationState.items.length && !annotationState.drawing) overlayWindow.hide();
         if (overlayHideTimer != null) {
             clearTimeout(overlayHideTimer);
             overlayHideTimer = null;
@@ -110,7 +163,7 @@ export function sendOverlayAnimation(cmd: OverlayAnimationCommand) {
             clearTimeout(overlayHideTimer);
         }
         overlayHideTimer = setTimeout(() => {
-            destroyOverlayWindow();
+            if (!annotationState.items.length && !annotationState.drawing) destroyOverlayWindow();
             overlayHideTimer = null;
         }, OverlayVisibleMs);
     }

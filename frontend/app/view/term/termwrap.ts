@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import type { BlockNodeModel } from "@/app/block/blocktypes";
@@ -91,7 +91,11 @@ export class TermWrap {
     mainFileSubject: SubjectWithRef<WSFileEventData>;
     loaded: boolean;
     heldData: Uint8Array[];
-    handleResize_debounced: () => void;
+    handleResize_debounced: ReturnType<typeof debounce>;
+    disposed = false;
+    processIdleTimer: ReturnType<typeof setTimeout>;
+    processIdleCallback: number;
+    pendingWrites = new Set<() => void>();
     hasResized: boolean;
     multiInputCallback: (data: string) => void;
     sendDataHandler: (data: string) => void;
@@ -397,6 +401,7 @@ export class TermWrap {
     };
 
     async initTerminal() {
+        if (this.disposed) return;
         const copyOnSelectAtom = getSettingsKeyAtom("term:copyonselect");
         this.toDispose.push(this.terminal.onData(this.handleTermData.bind(this)));
         this.toDispose.push(
@@ -449,12 +454,14 @@ export class TermWrap {
         }
 
         this.mainFileSubject = getFileSubject(this.getZoneId(), TermFileName);
-        this.mainFileSubject.subscribe(this.handleNewFileSubjectData.bind(this));
+        const fileSubscription = this.mainFileSubject.subscribe(this.handleNewFileSubjectData.bind(this));
+        this.toDispose.push({ dispose: () => fileSubscription.unsubscribe() });
 
         try {
             const rtInfo = await RpcApi.GetRTInfoCommand(TabRpcClient, {
                 oref: WOS.makeORef("block", this.blockId),
             });
+            if (this.disposed) return;
 
             if (rtInfo && rtInfo["shell:integration"]) {
                 const shellState = rtInfo["shell:state"] as ShellIntegrationStatus;
@@ -469,15 +476,25 @@ export class TermWrap {
             console.log("Error loading runtime info:", e);
         }
 
+        if (this.disposed) return;
         try {
             await this.loadInitialTerminalData();
         } finally {
-            this.loaded = true;
+            this.loaded = !this.disposed;
         }
         this.runProcessIdleTimeout();
     }
 
     dispose() {
+        if (this.disposed) return;
+        this.disposed = true;
+        clearTimeout(this.processIdleTimer);
+        if (this.processIdleCallback != null) {
+            window.cancelIdleCallback(this.processIdleCallback);
+        }
+        this.handleResize_debounced.cancel();
+        for (const resolve of this.pendingWrites) resolve();
+        this.pendingWrites.clear();
         this.promptMarkers.forEach((marker) => {
             try {
                 marker.dispose();
@@ -492,7 +509,10 @@ export class TermWrap {
                 d.dispose();
             } catch (_) {}
         });
-        this.mainFileSubject.release();
+        this.toDispose = [];
+        this.mainFileSubject?.release();
+        this.mainFileSubject = null;
+        this.heldData = [];
     }
 
     handleTermData(data: string) {
@@ -520,6 +540,7 @@ export class TermWrap {
     }
 
     handleNewFileSubjectData(msg: WSFileEventData) {
+        if (this.disposed) return;
         if (msg.fileop == "truncate") {
             this.terminal.clear();
             this.heldData = [];
@@ -537,6 +558,7 @@ export class TermWrap {
     }
 
     doTerminalWrite(data: string | Uint8Array, setPtyOffset?: number): Promise<void> {
+        if (this.disposed) return Promise.resolve();
         if (isDev() && this.loaded) {
             const dataStr = data instanceof Uint8Array ? new TextDecoder().decode(data) : data;
             this.recentWrites.push({ idx: this.recentWritesCounter++, ts: Date.now(), data: dataStr });
@@ -548,7 +570,13 @@ export class TermWrap {
         const prtn = new Promise<void>((presolve, _) => {
             resolve = presolve;
         });
+        this.pendingWrites.add(resolve);
         this.terminal.write(data, () => {
+            this.pendingWrites.delete(resolve);
+            if (this.disposed) {
+                resolve();
+                return;
+            }
             if (setPtyOffset != null) {
                 this.ptyOffset = setPtyOffset;
             } else {
@@ -565,6 +593,7 @@ export class TermWrap {
         const startTs = Date.now();
         const zoneId = this.getZoneId();
         const { data: cacheData, fileInfo: cacheFile } = await fetchWaveFile(zoneId, TermCacheFileName);
+        if (this.disposed) return;
         let ptyOffset = 0;
         if (cacheFile != null) {
             ptyOffset = cacheFile.meta["ptyoffset"] ?? 0;
@@ -587,6 +616,7 @@ export class TermWrap {
             }
         }
         const { data: mainData, fileInfo: mainFile } = await fetchWaveFile(zoneId, TermFileName, ptyOffset);
+        if (this.disposed) return;
         console.log(
             `terminal loaded cachefile:${cacheData?.byteLength ?? 0} main:${mainData?.byteLength ?? 0} bytes, ${Date.now() - startTs}ms`
         );
@@ -640,6 +670,7 @@ export class TermWrap {
     }
 
     handleResize() {
+        if (this.disposed) return;
         const oldRows = this.terminal.rows;
         const oldCols = this.terminal.cols;
         const atBottom = this.cachedAtBottomForResize ?? this.wasRecentlyAtBottom();
@@ -673,6 +704,7 @@ export class TermWrap {
         }
         if (atBottom) {
             setTimeout(() => {
+                if (this.disposed) return;
                 console.log("[termwrap] resize scroll-to-bottom");
                 this.cachedAtBottomForResize = null;
                 this.terminal.scrollToBottom();
@@ -682,6 +714,7 @@ export class TermWrap {
     }
 
     processAndCacheData() {
+        if (this.disposed) return;
         if (this.dataBytesProcessed < MinDataProcessedForCache) {
             return;
         }
@@ -695,8 +728,12 @@ export class TermWrap {
     }
 
     runProcessIdleTimeout() {
-        setTimeout(() => {
-            window.requestIdleCallback(() => {
+        if (this.disposed) return;
+        this.processIdleTimer = setTimeout(() => {
+            if (this.disposed) return;
+            this.processIdleCallback = window.requestIdleCallback(() => {
+                this.processIdleCallback = null;
+                if (this.disposed) return;
                 this.processAndCacheData();
                 this.runProcessIdleTimeout();
             });

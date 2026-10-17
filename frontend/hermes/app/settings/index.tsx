@@ -51,20 +51,7 @@ import { PluginsSettings } from "./plugins-settings";
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from "./providers-settings";
 import { SessionsSettings } from "./sessions-settings";
 import type { SettingsPageProps, SettingsView as SettingsViewId } from "./types";
-
-const BASE_SETTINGS_VIEWS: readonly SettingsViewId[] = [
-    ...SECTIONS.map((s) => `config:${s.id}` as SettingsViewId),
-    "providers",
-    "gateway",
-    "connections",
-    "keybinds",
-    "keys",
-    "notifications",
-    "billing",
-    "plugins",
-    "sessions",
-    "about",
-];
+import { BASE_SETTINGS_VIEWS } from "./views";
 
 export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: SettingsPageProps) {
     const { t } = useI18n();
@@ -277,22 +264,22 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             ...(kronTermSettingsHost
                 ? [
                       {
-                            active: getKronTermSettingsSectionId(activeView) != null,
+                          active: getKronTermSettingsSectionId(activeView) != null,
                           children: kronTermSettingsHost.sections.map((section) => ({
-                                    active: activeView === makeKronTermSettingsViewId(section.id),
+                              active: activeView === makeKronTermSettingsViewId(section.id),
                               icon: Settings2,
-                                    id: makeKronTermSettingsViewId(section.id),
+                              id: makeKronTermSettingsViewId(section.id),
                               label: section.label,
-                                    onSelect: () => setActiveView(makeKronTermSettingsViewId(section.id)),
+                              onSelect: () => setActiveView(makeKronTermSettingsViewId(section.id)),
                           })),
                           gapBefore: true,
                           icon: Monitor,
                           id: "kronterm",
                           label: "KronTerm",
-                            onSelect: () =>
-                                setActiveView(
-                                    makeKronTermSettingsViewId(kronTermSettingsHost.sections[0]?.id ?? "visual")
-                                ),
+                          onSelect: () =>
+                              setActiveView(
+                                  makeKronTermSettingsViewId(kronTermSettingsHost.sections[0]?.id ?? "visual")
+                              ),
                       },
                   ]
                 : []),

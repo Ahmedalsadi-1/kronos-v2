@@ -1,5 +1,6 @@
 import { atom, computed } from 'nanostores'
 
+import { PetReactionQueue } from '@hermes/lib/pet-reactions'
 import { persistBoolean, storedBoolean } from '@hermes/lib/storage'
 import { $activeGatewayProfile, normalizeProfileKey } from '@hermes/store/profile'
 import { $busy } from '@hermes/store/session'
@@ -94,6 +95,9 @@ export interface PetActivity {
   error?: boolean
   justCompleted?: boolean
   celebrate?: boolean
+  listening?: boolean
+  speaking?: boolean
+  voiceLevel?: number
 }
 
 /**
@@ -107,6 +111,14 @@ export interface PetActivity {
 export function derivePetState(activity: PetActivity): PetState {
   if (activity.error) {
     return 'failed'
+  }
+
+  if (activity.speaking) {
+    return 'review'
+  }
+
+  if (activity.listening) {
+    return 'waiting'
   }
 
   if (activity.celebrate) {
@@ -140,7 +152,7 @@ export const $petInfo = atom<PetInfo>({ enabled: false })
 export const $petActivity = atom<PetActivity>({})
 
 /** Pet installed + enabled with a loaded spritesheet (ready to show/react). */
-export const $petActive = computed($petInfo, info => info.enabled && Boolean(info.spritesheetBase64))
+export const $petActive = computed($petInfo, (info) => info.enabled && Boolean(info.spritesheetBase64))
 
 /**
  * Profile the pet RPCs should resolve against. Pets are per-profile — the active
@@ -176,10 +188,29 @@ let flashTimer: ReturnType<typeof setTimeout> | undefined
  *  race: without this, a completion beat (`celebrate`) would merge on top of a
  *  lingering `error`, and `derivePetState` checks `error` first — so a clean
  *  finish would render the sad/failed pose. */
-export const flashPetActivity = (next: Partial<PetActivity>, ms = 1600) => {
+const playPetReaction = (next: Partial<PetActivity>, ms: number) => {
   setPetActivity({ celebrate: false, error: false, justCompleted: false, ...next })
   clearTimeout(flashTimer)
   flashTimer = setTimeout(() => setPetActivity({ celebrate: false, error: false, justCompleted: false }), ms)
+}
+
+const petReactions = new PetReactionQueue<Partial<PetActivity>>(playPetReaction)
+
+export const flashPetActivity = (next: Partial<PetActivity>, ms = 1600) => {
+  if (next.error) {
+    petReactions.clear()
+    playPetReaction(next, ms)
+    return
+  }
+  petReactions.request(next, ms)
+}
+
+export function setPetVoiceActivity(
+  next: Pick<PetActivity, 'listening' | 'speaking' | 'voiceLevel'>,
+  holdReactions = Boolean(next.speaking)
+) {
+  setPetActivity(next)
+  petReactions.setSpeaking(holdReactions)
 }
 
 export const setPetInfo = (info: PetInfo) => $petInfo.set(info)
@@ -203,6 +234,8 @@ function deriveLivePetState(activity: PetActivity, busy: boolean): PetState {
     // interrupted turn can't pin the pet on `run`/`review`.
     toolRunning: live && activity.toolRunning,
     reasoning: live && activity.reasoning,
+    listening: activity.listening,
+    speaking: activity.speaking,
     error: activity.error,
     justCompleted: activity.justCompleted,
     celebrate: activity.celebrate

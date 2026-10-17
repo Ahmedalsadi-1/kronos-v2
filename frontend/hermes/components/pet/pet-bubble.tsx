@@ -98,29 +98,35 @@ export function PetBubble() {
   const specKey: null | PetState =
     state in SPECS ? state : state === 'idle' && activity.awaitingInput ? 'waiting' : null
 
+  const voiceLine = activity.speaking ? 'speaking...' : activity.listening ? 'listening...' : ''
+
   const rotating = specKey === 'run' || specKey === 'review'
 
   // Pick a fresh line on every mood change, then keep rotating (random, no
   // repeat) only while the agent is actively working/thinking.
   useEffect(() => {
+    if (voiceLine) {
+      setLine(voiceLine)
+      return
+    }
     const spec = specKey ? SPECS[specKey] : null
 
     if (!spec) {
-      setLine('')
+      setLine(voiceLine)
 
       return
     }
 
-    setLine(prev => pick(spec.lines, prev))
+    setLine((prev) => pick(spec.lines, prev))
 
     if (!rotating || spec.lines.length <= 1) {
       return
     }
 
-    const id = window.setInterval(() => setLine(prev => pick(spec.lines, prev)), 2600)
+    const id = window.setInterval(() => setLine((prev) => pick(spec.lines, prev)), 2600)
 
     return () => window.clearInterval(id)
-  }, [specKey, rotating])
+  }, [specKey, rotating, voiceLine])
 
   const spec = specKey ? SPECS[specKey] : null
 

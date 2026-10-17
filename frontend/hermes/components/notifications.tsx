@@ -117,6 +117,7 @@ function TopCenterStack({
   return createPortal(
     <div
       aria-label={copy.region}
+      data-notification-stack=""
       className={cn(
         REGION_BASE,
         'left-1/2 top-[calc(var(--titlebar-height,34px)+0.75rem)] w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 flex-col'

@@ -1,7 +1,7 @@
-import { type RefObject, useEffect } from 'react'
+import { type RefObject, useEffect } from "react";
 
 /** The caret is in the composer — see the `:has()` rules in styles.css. */
-const TYPING_SELECTOR = '[data-slot="composer-rich-input"]:focus'
+const TYPING_SELECTOR = '[data-slot="composer-rich-input"]:focus';
 
 /**
  * Native frost behind the band.
@@ -38,33 +38,38 @@ const TYPING_SELECTOR = '[data-slot="composer-rich-input"]:focus'
  * brand new thread still frosted its whole empty window.
  */
 export function useHudGlass(rootRef: RefObject<HTMLElement | null>, engaged: boolean, backing: boolean): void {
-  useEffect(() => {
-    const root = rootRef.current
-    const setVibrancy = window.hermesDesktop?.hud?.setVibrancy
+    useEffect(() => {
+        const root = rootRef.current;
+        const setVibrancy = window.hermesDesktop?.hud?.setVibrancy;
 
-    if (!root || !setVibrancy) {
-      return
-    }
+        if (root?.hasAttribute("data-hud-native-notch")) {
+            void setVibrancy?.(false);
+            return;
+        }
 
-    let on: boolean | null = null
+        if (!root || !setVibrancy) {
+            return;
+        }
 
-    const apply = () => {
-      const next = backing && (engaged || root.querySelector(TYPING_SELECTOR) !== null)
+        let on: boolean | null = null;
 
-      if (on !== next) {
-        on = next
-        void setVibrancy(next)
-      }
-    }
+        const apply = () => {
+            const next = backing && (engaged || root.querySelector(TYPING_SELECTOR) !== null);
 
-    apply()
-    root.addEventListener('focusin', apply)
-    root.addEventListener('focusout', apply)
+            if (on !== next) {
+                on = next;
+                void setVibrancy(next);
+            }
+        };
 
-    return () => {
-      void setVibrancy(false)
-      root.removeEventListener('focusin', apply)
-      root.removeEventListener('focusout', apply)
-    }
-  }, [backing, engaged, rootRef])
+        apply();
+        root.addEventListener("focusin", apply);
+        root.addEventListener("focusout", apply);
+
+        return () => {
+            void setVibrancy(false);
+            root.removeEventListener("focusin", apply);
+            root.removeEventListener("focusout", apply);
+        };
+    }, [backing, engaged, rootRef]);
 }

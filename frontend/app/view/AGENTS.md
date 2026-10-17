@@ -14,8 +14,7 @@ view/
 ├── webview/         # Web browser widget
 ├── preview/         # File preview (images, PDFs, etc)
 ├── codeeditor/      # Monaco editor + LSP integration
-├── chathubv2/       # KronosChamber V2 block view (has its own AGENTS.md)
-├── kronoschamber/   # KronosChamber classic surface
+
 ├── kronoscanvas/    # Spatial canvas workspace (+ canvas-cowork sync)
 ├── kronsettings/    # KronSettings UI
 ├── appstream/       # Computer-use application streams
@@ -56,4 +55,3 @@ See `.kilocode/skills/create-view/SKILL.md` for:
 | term     | `term/term-model.ts`         | `term/term.tsx`         |
 | waveai   | `waveai/waveai-model.ts`     | `waveai/waveai.tsx`     |
 | preview  | `preview/preview-model.ts`   | `preview/preview.tsx`   |
-| chathubv2 | `chathubv2/chathubv2-model.ts` | `chathubv2/chathubv2.tsx` |

@@ -8,6 +8,8 @@
  * context; registered panes render `<WiredPane part="…"/>` to consume them.
  */
 
+import { useNativeNotch } from "./hooks/use-native-notch";
+
 import { useStore } from "@nanostores/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type CSSProperties, lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
@@ -118,6 +120,11 @@ import { useSessionActions } from "../session/hooks/use-session-actions";
 import { useSessionListActions } from "../session/hooks/use-session-list-actions";
 import { useSessionStateCache } from "../session/hooks/use-session-state-cache";
 import { startWorkspaceSession } from "../session/workspace-session-target";
+import {
+    consumeKronTermSettingsRequest,
+    KronTermSettingsRequestEvent,
+    makeKronTermSettingsViewId,
+} from "../settings/kronterm-settings-host";
 import { useOverlayRouting } from "../shell/hooks/use-overlay-routing";
 import { useWindowControlsOverlayWidth } from "../shell/hooks/use-window-controls-overlay-width";
 import {
@@ -143,6 +150,7 @@ import { McpInstallDeepLinkDialog } from "./mcp-install-deeplink-dialog";
 import { $restartPreviewServer, useTitlebarToolContributions } from "./panes";
 import { ChatRoutesSurface, SidebarSurface, StatusbarSurface, TerminalSurface } from "./surfaces";
 import type { WiringActions, WiringApi } from "./types";
+import { isWebModeTitlebarTool, shouldMountHermesInternalTerminal } from "./web-pane-launcher";
 
 // Overlay views the controller mounts over the shell — lazy, load on demand.
 // The workspace-route full-page views (skills/messaging/artifacts) are the
@@ -161,10 +169,23 @@ const StarmapView = lazy(async () => ({ default: (await import("../starmap")).St
 export { WiredPane } from "./context";
 
 export function ContribWiring({ children }: { children: ReactNode }) {
-    const { hudMode } = useHermesShellMode();
+    const { hudMode, panelMode, webMode } = useHermesShellMode();
     const queryClient = useQueryClient();
     const location = useLocation();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const openRequestedSettings = (sectionId?: string | null) => {
+            if (!sectionId) return;
+            navigate(`${SETTINGS_ROUTE}?tab=${encodeURIComponent(makeKronTermSettingsViewId(sectionId))}`);
+        };
+        openRequestedSettings(consumeKronTermSettingsRequest());
+        const onRequest = (event: Event) => {
+            openRequestedSettings((event as CustomEvent<{ sectionId?: string }>).detail?.sectionId);
+        };
+        window.addEventListener(KronTermSettingsRequestEvent, onRequest);
+        return () => window.removeEventListener(KronTermSettingsRequestEvent, onRequest);
+    }, [navigate]);
 
     const busyRef = useRef(false);
     const creatingSessionRef = useRef(false);
@@ -282,6 +303,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     });
 
     const { connectionRef, gateway, gatewayRef, requestGateway } = useGatewayRequest();
+    useNativeNotch(requestGateway, gatewayState, navigate);
 
     const {
         loadMoreMessagingForPlatform,
@@ -616,6 +638,23 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         sttEnabled,
         updateSessionState,
     });
+
+    // KronTerm's "Take over" control on an agent-driven window stops the running turn.
+    const cancelRunRef = useRef(cancelRun);
+    cancelRunRef.current = cancelRun;
+    useEffect(() => {
+        return window.hermesDesktop?.krontermActivity?.onTakeover?.((sessionId) => {
+            if (
+                sessionId &&
+                sessionId !== activeSessionIdRef.current &&
+                sessionId !== selectedStoredSessionIdRef.current
+            )
+                return;
+            if (busyRef.current) {
+                void cancelRunRef.current();
+            }
+        });
+    }, [busyRef]);
 
     // Runs outside the selected ChatBar so queues belonging to background
     // sessions continue once those sessions are idle.
@@ -1005,7 +1044,10 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     // sets, computed here from the live connection. Page-registered tools
     // (preview's monitor/devtools cluster, …) arrive as registry contributions.
     const leftTitlebarTools = useTitlebarToolContributions("left");
-    const rightTitlebarTools = useTitlebarToolContributions("right");
+    const contributedRightTitlebarTools = useTitlebarToolContributions("right");
+    const rightTitlebarTools = webMode
+        ? contributedRightTitlebarTools.filter((tool) => isWebModeTitlebarTool(tool.id))
+        : contributedRightTitlebarTools;
     const connection = useStore($connection);
     const controlsPos = titlebarControlsPosition(connection?.windowButtonPosition, Boolean(connection?.isFullscreen));
     // Windows/WSLg reserve native min/max/close on the right (AppShell parity:
@@ -1044,8 +1086,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
                         "--titlebar-controls-left": `${controlsPos.left}px`,
                         "--titlebar-controls-top": `${controlsPos.top}px`,
                         "--titlebar-controls-y-nudge": titlebarControlsYNudge(titlebarChrome),
-                        "--titlebar-tools-right": titlebarToolsRight,
-                        "--titlebar-tools-width": titlebarToolsWidth,
+                        "--titlebar-tools-right": panelMode ? "0px" : titlebarToolsRight,
+                        "--titlebar-tools-width": panelMode ? "0px" : titlebarToolsWidth,
                         "--shell-preview-toolbar-gap": systemToolsWidth,
                     } as CSSProperties
                 }
@@ -1053,7 +1095,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
                 {/* HUD mode has no titlebar to hang these off — the clusters are
             `fixed`, so without this they'd float over the chat as orphaned
             buttons. Exits are the ⌘⇧H toggle and ⌘W. */}
-                {!hudMode && !isHudWindow() && (
+                {!hudMode && !panelMode && (webMode || !isHudWindow()) && (
                     <TitlebarControls
                         leftTools={leftTitlebarTools}
                         onOpenSettings={() => navigate(SETTINGS_ROUTE)}
@@ -1065,8 +1107,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
             {/* The full real overlay set (mirrors DesktopController's `overlays`). */}
             <RemoteDisplayBanner />
-            {!isAuxiliaryWindow() && <DesktopInstallOverlay />}
-            {!isAuxiliaryWindow() && (
+            {(webMode || !isAuxiliaryWindow()) && <DesktopInstallOverlay />}
+            {(webMode || !isAuxiliaryWindow()) && (
                 <DesktopOnboardingOverlay
                     enabled={gatewayState === "open"}
                     onCompleted={() => {
@@ -1165,13 +1207,16 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
             {/* Petdex floating mascot — renders nothing unless installed + enabled.
           Never in the HUD: that window is the chat bar and nothing else. */}
-            {!hudMode && !isHudWindow() && <FloatingPet />}
+            {!hudMode && (webMode || !isHudWindow()) && <FloatingPet />}
 
             {/* Single persistent xterm host chasing the terminal pane's slot rect.
           The HUD has no terminal pane, so it has nothing to chase. */}
-            {!hudMode && !isHudWindow() && !isKronTermWidgetHost() && (
-                <PersistentTerminal onAddSelectionToChat={composer.addTerminalSelectionAttachment} />
-            )}
+            {shouldMountHermesInternalTerminal({
+                hudMode,
+                hudWindow: isHudWindow(),
+                webMode,
+                widgetHost: isKronTermWidgetHost(),
+            }) && <PersistentTerminal onAddSelectionToChat={composer.addTerminalSelectionAttachment} />}
         </ContribWiringContext.Provider>
     );
 }

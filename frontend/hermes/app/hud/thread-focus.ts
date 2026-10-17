@@ -1,3 +1,4 @@
+import { selectorOwnsInput } from "@hermes/lib/keybinds/input-ownership";
 import { type RefObject, useEffect } from 'react'
 
 import { focusComposerInput } from '@hermes/app/chat/composer/focus'
@@ -19,7 +20,7 @@ export function useHudThreadFocus(rootRef: RefObject<HTMLElement | null>): void 
     }
 
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) {
+      if (event.button !== 0 || selectorOwnsInput()) {
         return
       }
 

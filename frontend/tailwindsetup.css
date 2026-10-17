@@ -80,7 +80,7 @@
 
     --z-window-drag: 100;
 
-    /* KronosChamber-ported tokens (settings/chat UI) — additive, mapped to KronTerm theme vars */
+    /* Shared settings/chat tokens — additive, mapped to KronTerm theme vars */
     --color-primary-foreground: var(--hermes-primary-foreground);
     --color-secondary-foreground: var(--hermes-secondary-foreground);
     --color-accent-foreground: var(--hermes-accent-foreground);

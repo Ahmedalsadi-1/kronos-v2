@@ -16,6 +16,8 @@ export interface ComposerAttachment {
     /** Legacy/on-demand full source. New local image chips omit this and read
      * `path` only when the lightbox opens, avoiding retained multi-MB base64. */
     previewUrl?: string;
+    /** Transient captured pixels; staged through image.attach_bytes at submit. */
+    imageDataUrl?: string;
     /** Downscaled data URL for the attachment card and optimistic bubble only. */
     thumbnailUrl?: string;
     path?: string;

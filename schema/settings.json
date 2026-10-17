@@ -197,6 +197,9 @@
         "app:globalhotkey": {
           "type": "string"
         },
+        "app:notchhotkey": {
+          "type": "string"
+        },
         "app:dismissarchitecturewarning": {
           "type": "boolean"
         },
@@ -239,9 +242,11 @@
         "app:layoutmode": {
           "type": "string",
           "enum": [
+            "os",
             "widgets",
             "tabs",
-            "canvas"
+            "canvas",
+            "web"
           ]
         },
         "app:quickcomposer": {
@@ -251,6 +256,15 @@
           "type": "boolean"
         },
         "feature:waveappbuilder": {
+          "type": "boolean"
+        },
+        "feature:systemlayer": {
+          "type": "boolean"
+        },
+        "feature:nativesurfacev2": {
+          "type": "boolean"
+        },
+        "feature:ambientos": {
           "type": "boolean"
         },
         "mcp:*": {

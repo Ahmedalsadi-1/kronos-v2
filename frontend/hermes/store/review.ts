@@ -7,6 +7,7 @@ import type { HermesReviewFile, HermesReviewShipInfo } from '@hermes/global'
 import { matchesQuery } from '@hermes/hooks/use-media-query'
 import { desktopGit } from '@hermes/lib/desktop-git'
 import { isExcludedPath } from '@hermes/lib/excluded-paths'
+import { isKronTermWidgetHost } from '@hermes/lib/kronterm-host'
 import { requestOneShot } from '@hermes/lib/oneshot'
 import { Codecs, persistentAtom } from '@hermes/lib/persisted'
 
@@ -42,16 +43,16 @@ export const $reviewOpen = persistentAtom(OPEN_KEY, false, Codecs.bool)
 export type CommitAction = 'commit' | 'commitPush'
 
 export const $reviewCommitDefault = persistentAtom<CommitAction>(COMMIT_DEFAULT_KEY, 'commit', {
-  decode: raw => (raw === 'commitPush' ? 'commitPush' : 'commit'),
-  encode: value => value
+  decode: (raw) => (raw === 'commitPush' ? 'commitPush' : 'commit'),
+  encode: (value) => value,
 })
 
 // Changed-file layout: a flat path list (VS Code's default) or a folder tree.
 export type ReviewTreeMode = 'list' | 'tree'
 
 export const $reviewTreeMode = persistentAtom<ReviewTreeMode>(TREE_MODE_KEY, 'tree', {
-  decode: raw => (raw === 'list' ? 'list' : 'tree'),
-  encode: value => value
+  decode: (raw) => (raw === 'list' ? 'list' : 'tree'),
+  encode: (value) => value,
 })
 
 export function toggleReviewTreeMode(): void {
@@ -68,7 +69,7 @@ export const $reviewIsRepo = atom(true)
 // Largest single-file churn (added + removed) in the current diff. Drives the
 // per-row data bars: each file's bar is its churn relative to this max, so the
 // biggest file fills the row and the rest scale down against it.
-export const $reviewMaxChurn = computed($reviewFiles, files =>
+export const $reviewMaxChurn = computed($reviewFiles, (files) =>
   files.reduce((max, file) => Math.max(max, file.added + file.removed), 0)
 )
 // Persisted so a relaunch restores the file you were diffing (its diff is
@@ -147,7 +148,7 @@ export async function refreshReview(): Promise<void> {
 
     // Hide dep/build/cache dirs and OS noise even when the repo tracks them —
     // .gitignored paths are already dropped upstream by `git status`.
-    const files = result.files.filter(file => !isExcludedPath(file.path))
+    const files = result.files.filter((file) => !isExcludedPath(file.path))
 
     $reviewFiles.set(files)
 
@@ -155,7 +156,7 @@ export async function refreshReview(): Promise<void> {
     // pane doesn't strand on a ghost; otherwise lazily fetch its diff so a
     // restored (persisted) selection re-renders on boot.
     const selected = $reviewSelectedPath.get()
-    const selectedFile = selected ? files.find(file => file.path === selected) : null
+    const selectedFile = selected ? files.find((file) => file.path === selected) : null
 
     if (selected && !selectedFile) {
       clearReviewSelection()
@@ -264,6 +265,9 @@ export function openReview(scopeCwd: null | string = null): void {
   $reviewOpen.set(true)
   void refreshReview()
   void refreshShipInfo()
+  if (isKronTermWidgetHost()) {
+    window.dispatchEvent(new CustomEvent('kronterm:open-review', { detail: { scopeCwd: $reviewScopeCwd.get() } }))
+  }
 }
 
 export function closeReview(): void {
@@ -273,6 +277,10 @@ export function closeReview(): void {
 }
 
 export function toggleReview(scopeCwd: null | string = null): void {
+  if (isKronTermWidgetHost()) {
+    openReview(scopeCwd)
+    return
+  }
   // Narrow width: the pane is a collapsed overlay (like the sidebar under ⌘B).
   // Make sure its data is loaded, then slide it in/out via the forced-reveal pin
   // — never the docked open state, which a 0px track would render invisibly.
@@ -304,6 +312,10 @@ export function toggleReview(scopeCwd: null | string = null): void {
  * by the transcript's changed-files card.
  */
 export function revealReview(scopeCwd: null | string = null): void {
+  if (isKronTermWidgetHost()) {
+    openReview(scopeCwd)
+    return
+  }
   const wasOpen = $reviewOpen.get()
 
   if (!wasOpen) {
@@ -335,7 +347,7 @@ function matchReviewFile(files: readonly HermesReviewFile[], path: string): Herm
     return undefined
   }
 
-  return files.find(file => {
+  return files.find((file) => {
     const candidate = file.path.replace(/\\/g, '/')
 
     return candidate === target || target.endsWith(`/${candidate}`) || candidate.endsWith(`/${target}`)
@@ -366,7 +378,7 @@ async function afterMutation(): Promise<void> {
   void refreshRepoStatus(repoCwd())
 
   const selected = $reviewSelectedPath.get()
-  const file = selected ? $reviewFiles.get().find(f => f.path === selected) : null
+  const file = selected ? $reviewFiles.get().find((f) => f.path === selected) : null
 
   // Re-fetch the open diff (staging flips which diff — cached vs worktree).
   if (file) {
@@ -480,7 +492,7 @@ export async function generateCommitMessage(previous = ''): Promise<string> {
     const text = await requestOneShot({
       template: 'commit_message',
       temperature: 0.8,
-      variables: { avoid: previous, diff, recent_commits: recent }
+      variables: { avoid: previous, diff, recent_commits: recent },
     })
 
     return live() ? text : ''
@@ -532,7 +544,7 @@ export async function createOrOpenPr(): Promise<void> {
     // moved since, so bind the conversation to the branch the PR actually came
     // from — otherwise a session that began on trunk badges whatever else lives
     // on trunk, or nothing.
-    const session = $sessions.get().find(s => s.id === $selectedStoredSessionId.get())
+    const session = $sessions.get().find((s) => s.id === $selectedStoredSessionId.get())
     const branch = repoStatusForCwd(ctx.cwd).get()?.branch
 
     if (session?.git_repo_root && branch) {
@@ -557,7 +569,7 @@ $workspaceChangeTick.subscribe(() => {
 // Turn settled: final list refresh + the slower gh/PR re-check.
 let prevBusy = $busy.get()
 
-$busy.subscribe(busy => {
+$busy.subscribe((busy) => {
   if (prevBusy && !busy && $reviewOpen.get()) {
     scheduleReviewRefresh()
     refreshShipInfoIfStale()
@@ -591,7 +603,7 @@ $currentCwd.subscribe(() => {
 
 let prevScopeCwd = $reviewScopeCwd.get()
 
-$reviewScopeCwd.subscribe(scope => {
+$reviewScopeCwd.subscribe((scope) => {
   if (scope !== prevScopeCwd) {
     prevScopeCwd = scope
     onReviewRepoMoved()

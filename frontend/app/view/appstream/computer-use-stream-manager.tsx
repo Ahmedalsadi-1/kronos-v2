@@ -39,13 +39,18 @@ export function ComputerUseStreamManager() {
             appStreamBlocks.current.set(appStreamKey(detail.appName), detail.blockId);
         };
         const handleControl = (event: Event) => {
-            const detail = (event as CustomEvent<{ action?: string; activity?: { appname?: string; blockid?: string } }>).detail;
+            const detail = (
+                event as CustomEvent<{ action?: string; activity?: { appname?: string; blockid?: string } }>
+            ).detail;
             const appName = detail?.activity?.appname;
-            const blockId = (appName && appStreamBlocks.current.get(appStreamKey(appName))) || detail?.activity?.blockid;
+            const blockId =
+                (appName && appStreamBlocks.current.get(appStreamKey(appName))) || detail?.activity?.blockid;
             if (!blockId) return;
-            const model = (getAllBlockComponentModels() as any[]).find((candidate) => candidate?.viewModel?.blockId === blockId)?.viewModel;
+            const model = (getAllBlockComponentModels() as any[]).find(
+                (candidate) => candidate?.viewModel?.blockId === blockId
+            )?.viewModel;
             if (detail.action === "focus" || detail.action === "takeover") refocusNode(blockId);
-            if (detail.action === "stop") void model?.stopStream?.();
+            if (detail.action === "stop" || detail.action === "cancel") void model?.stopStream?.();
             if (detail.action === "retry") void model?.startStream?.();
         };
         const unsubscribeActivity = subscribeAgentActivityStream((activity) => {
@@ -57,7 +62,6 @@ export function ComputerUseStreamManager() {
             reconcileStreams();
             const existingBlockId = appStreamBlocks.current.get(key);
             if (existingBlockId) {
-                refocusNode(existingBlockId);
                 return;
             }
             creatingApps.current.add(key);

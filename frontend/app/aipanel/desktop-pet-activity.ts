@@ -15,6 +15,7 @@ type DesktopPetNotification = Parameters<ReturnType<typeof getApi>["setDesktopPe
 
 export type AgentWidgetActivity = {
     blockId: string;
+    active: boolean;
     action: "browse" | "cursor" | "typing" | "scroll" | "view";
     detail: string;
     point?: { x: number; y: number };
@@ -168,6 +169,7 @@ export function reportDesktopPetActivity(
             new CustomEvent<AgentWidgetActivity>("agent-widget-activity", {
                 detail: {
                     blockId,
+                    active: true,
                     action,
                     detail,
                     point,
@@ -220,6 +222,7 @@ export function reportAgentSurfaceActivity(activity: AgentSurfaceActivity) {
         new CustomEvent<AgentWidgetActivity>("agent-widget-activity", {
             detail: {
                 blockId: normalized.blockid,
+                active: petNotificationKindForPhase(normalized.phase) !== "idle",
                 action,
                 detail: normalized.detail ?? normalized.action,
                 point: normalized.point,

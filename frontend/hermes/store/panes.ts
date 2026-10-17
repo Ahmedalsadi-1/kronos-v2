@@ -50,7 +50,11 @@ function load(): Record<string, PaneStateSnapshot> {
 
         for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
           if (isSnapshot(value)) {
-            out[id] = { open: value.open, widthOverride: value.widthOverride, heightOverride: value.heightOverride }
+            out[id] = {
+              open: value.open,
+              widthOverride: value.widthOverride,
+              heightOverride: value.heightOverride,
+            }
           }
         }
 
@@ -71,7 +75,10 @@ function persist(states: Record<string, PaneStateSnapshot>) {
   }
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(states))
+    const serialized = JSON.stringify(states)
+    if (window.localStorage.getItem(STORAGE_KEY) !== serialized) {
+      window.localStorage.setItem(STORAGE_KEY, serialized)
+    }
   } catch {
     // Storage failures are nonfatal.
   }
@@ -80,6 +87,14 @@ function persist(states: Record<string, PaneStateSnapshot>) {
 export const $paneStates = atom<Record<string, PaneStateSnapshot>>(load())
 
 $paneStates.subscribe(persist)
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== STORAGE_KEY || event.storageArea !== window.localStorage) return
+    const next = load()
+    if (JSON.stringify(next) !== JSON.stringify($paneStates.get())) $paneStates.set(next)
+  })
+}
 
 // Cached per-pane derived atoms keep useStore subscriptions referentially stable.
 function memoized<T>(
@@ -90,7 +105,7 @@ function memoized<T>(
   let cached = cache.get(id)
 
   if (!cached) {
-    cached = computed($paneStates, states => selector(states[id]))
+    cached = computed($paneStates, (states) => selector(states[id]))
     cache.set(id, cached)
   }
 
@@ -102,10 +117,10 @@ const stateCache = new Map<string, ReadableAtom<PaneStateSnapshot | undefined>>(
 const widthCache = new Map<string, ReadableAtom<number | undefined>>()
 const heightCache = new Map<string, ReadableAtom<number | undefined>>()
 
-export const $paneOpen = (id: string) => memoized(openCache, id, s => s?.open ?? false)
-export const $paneState = (id: string) => memoized(stateCache, id, s => s)
-export const $paneWidthOverride = (id: string) => memoized(widthCache, id, s => s?.widthOverride)
-export const $paneHeightOverride = (id: string) => memoized(heightCache, id, s => s?.heightOverride)
+export const $paneOpen = (id: string) => memoized(openCache, id, (s) => s?.open ?? false)
+export const $paneState = (id: string) => memoized(stateCache, id, (s) => s)
+export const $paneWidthOverride = (id: string) => memoized(widthCache, id, (s) => s?.widthOverride)
+export const $paneHeightOverride = (id: string) => memoized(heightCache, id, (s) => s?.heightOverride)
 
 export function ensurePaneRegistered(id: string, defaults: PaneRegisterDefaults) {
   const current = $paneStates.get()

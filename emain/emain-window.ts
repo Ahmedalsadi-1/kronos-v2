@@ -21,6 +21,7 @@ import { getOrCreateWebViewForTab, getWaveTabViewByWebContentsId, WaveTabView } 
 import { delay, ensureBoundsAreVisible, waveKeyToElectronKey } from "./emain-util";
 import { ElectronWshClient } from "./emain-wsh";
 import { updater } from "./updater";
+import { installOSOverviewGestures } from "./os-overview-gestures";
 
 const DevInitTimeoutMs = 5000;
 
@@ -169,13 +170,9 @@ export class WaveBrowserWindow extends BaseWindow {
             winOpts.titleBarStyle = "hiddenInset";
             winOpts.titleBarOverlay = false;
             winOpts.autoHideMenuBar = !settings?.["window:showmenubar"];
-            if (isTransparent) {
-                winOpts.transparent = true;
-            } else if (isBlur) {
-                winOpts.vibrancy = "fullscreen-ui";
-            } else {
-                winOpts.backgroundColor = "#222222";
-            }
+            winOpts.transparent = true;
+            winOpts.backgroundColor = "#00000000";
+            if (isBlur) winOpts.vibrancy = "fullscreen-ui";
         } else if (opts.unamePlatform === "linux") {
             winOpts.titleBarStyle = settings["window:nativetitlebar"] ? "default" : "hidden";
             winOpts.titleBarOverlay = {
@@ -222,6 +219,7 @@ export class WaveBrowserWindow extends BaseWindow {
         this.actionQueue = [];
         this.waveWindowId = waveWindow.oid;
         this.workspaceId = waveWindow.workspaceid;
+        installOSOverviewGestures(this, () => this.activeTabView?.webContents);
         this.allLoadedTabViews = new Map<string, WaveTabView>();
         const winBoundsPoller = setInterval(() => {
             if (this.isDestroyed()) {
@@ -234,7 +232,6 @@ export class WaveBrowserWindow extends BaseWindow {
             this.finalizePositioning();
         }, 1000);
         this.on(
-            // @ts-expect-error -- "resize" event with debounce handler not in Electron type definitions
             "resize",
             debounce(400, (e) => this.mainResizeHandler(e))
         );
@@ -245,7 +242,6 @@ export class WaveBrowserWindow extends BaseWindow {
             this.activeTabView?.positionTabOnScreen(this.getContentBounds());
         });
         this.on(
-            // @ts-expect-error -- "move" event with debounce handler not in Electron type definitions
             "move",
             debounce(400, (e) => this.mainResizeHandler(e))
         );
@@ -278,6 +274,7 @@ export class WaveBrowserWindow extends BaseWindow {
                 return;
             }
             focusedWaveWindow = this; // eslint-disable-line @typescript-eslint/no-this-alias
+            lastFocusedWaveWindow = this; // eslint-disable-line @typescript-eslint/no-this-alias
             console.log("focus win", this.waveWindowId);
             fireAndForget(() => ClientService.FocusWindow(this.waveWindowId));
             setWasInFg(true);
@@ -928,6 +925,27 @@ export async function relaunchBrowserWindows() {
     for (const win of wins) {
         console.log("show window", win.waveWindowId);
         win.show();
+    }
+}
+
+let lastFocusedWaveWindow: WaveBrowserWindow = null;
+
+// The HUD hides its owning window, so the renderer keybinding cannot reach it from other apps.
+export function registerNotchHotkey(rawNotchHotKey: string) {
+    try {
+        const electronHotKey = waveKeyToElectronKey(rawNotchHotKey);
+        const registered = globalShortcut.register(electronHotKey, () => {
+            const candidates = [focusedWaveWindow, lastFocusedWaveWindow, ...getAllWaveWindows()];
+            const target = candidates.find((win) => win != null && !win.isDestroyed() && win.activeTabView != null);
+            if (target == null) {
+                fireAndForget(createNewWaveWindow);
+                return;
+            }
+            target.activeTabView.webContents.send("native-hud-summon");
+        });
+        if (!registered) console.log("notch hotkey already in use:", electronHotKey);
+    } catch (e) {
+        console.log("error registering notch hotkey: ", e);
     }
 }
 

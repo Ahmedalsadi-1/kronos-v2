@@ -121,6 +121,7 @@ type AiSettingsType struct {
 type SettingsType struct {
 	AppClear                      bool   `json:"app:*,omitempty"`
 	AppGlobalHotkey               string `json:"app:globalhotkey,omitempty"`
+	AppNotchHotkey                string `json:"app:notchhotkey,omitempty"`
 	AppDismissArchitectureWarning bool   `json:"app:dismissarchitecturewarning,omitempty"`
 	AppDefaultNewBlock            string `json:"app:defaultnewblock,omitempty"`
 	AppShowOverlayBlockNums       *bool  `json:"app:showoverlayblocknums,omitempty"`
@@ -131,11 +132,14 @@ type SettingsType struct {
 	AppDisableCtrlShiftDisplay    bool   `json:"app:disablectrlshiftdisplay,omitempty"`
 	AppFocusFollowsCursor         string `json:"app:focusfollowscursor,omitempty" jsonschema:"enum=off,enum=on,enum=term"`
 	AppTabBar                     string `json:"app:tabbar,omitempty" jsonschema:"enum=top,enum=left"`
-	AppLayoutMode                 string `json:"app:layoutmode,omitempty" jsonschema:"enum=widgets,enum=tabs,enum=canvas"`
+	AppLayoutMode                 string `json:"app:layoutmode,omitempty" jsonschema:"enum=os,enum=widgets,enum=tabs,enum=canvas,enum=web"`
 	AppQuickComposer              *bool  `json:"app:quickcomposer,omitempty"`
 	AppMinimalUi                  bool   `json:"app:minimalui,omitempty"`
 
-	FeatureWaveAppBuilder bool `json:"feature:waveappbuilder,omitempty"`
+	FeatureWaveAppBuilder  bool `json:"feature:waveappbuilder,omitempty"`
+	FeatureSystemLayer     bool `json:"feature:systemlayer,omitempty"`
+	FeatureNativeSurfaceV2 bool `json:"feature:nativesurfacev2,omitempty"`
+	FeatureAmbientOS       bool `json:"feature:ambientos,omitempty"`
 
 	MCPClear   bool                 `json:"mcp:*,omitempty"`
 	MCPEnabled bool                 `json:"mcp:enabled,omitempty"`

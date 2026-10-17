@@ -1,5 +1,4 @@
 // Adapted from Nous Research Hermes Agent's MIT-licensed JSON-RPC gateway client.
-// KronosChamber already carries the same attribution in its imported source.
 
 import type { GatewayEvent } from "../types";
 

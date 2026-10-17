@@ -1,8 +1,9 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChildProcess, spawn, spawnSync } from "child_process";
+import { ChildProcess, execFile, spawn } from "child_process";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { createSpawnConfig, prepareCleanEnv } from "./acp-env";
 import { ACP_BACKENDS_ALL } from "./acp-types";
@@ -33,13 +34,29 @@ export async function spawnAcpAgent(
     if (backend === "hermes") {
         runtimeEnv.HERMES_ACP_SKIP_CONFIGURED_MCP ??= "1";
     }
+    if (backend === "kronterm-agent") {
+        const dataDir = path.join(os.homedir(), ".kronterm", "agents", "kronterm-agent");
+        fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+        runtimeEnv.OPENCODE_DB ??= path.join(dataDir, "opencode.db");
+        runtimeEnv.OPENCODE_DISABLE_AUTOUPDATE ??= "1";
+        runtimeEnv.OPENCODE_CLIENT ??= "kronterm-agent";
+    }
     const bunBinary = path.join(process.env.HOME || "", ".bun", "bin", "bun");
     if (!runtimeEnv.BUN_BINARY && !process.env.BUN_BINARY && isExecutablePath(bunBinary)) {
         runtimeEnv.BUN_BINARY = bunBinary;
     }
 
     const cleanEnv = await prepareCleanEnv(runtimeEnv);
-    const spawnConfig = createSpawnConfig(cliPath, workingDir, acpArgs, cleanEnv as Record<string, string>);
+    let executable = cliPath;
+    if (backend === "kronoscode" && cliPath === "kronoscode") {
+        executable = detectKronosCodeCli(config?.defaultCliPath) ?? (await detectCommand("kronoscode"));
+        if (!executable) {
+            throw new Error(
+                "KronosCode executable is unavailable. Repair the managed runtime or set KRONTERM_KRONOSCODE_BIN to its executable path."
+            );
+        }
+    }
+    const spawnConfig = createSpawnConfig(executable, workingDir, acpArgs, cleanEnv as Record<string, string>);
 
     const detached = process.platform !== "win32";
     const child = spawn(spawnConfig.command, spawnConfig.args, {
@@ -69,6 +86,8 @@ function detectKronosCodeCli(defaultCliPath?: string): string | null {
         process.env.KRONOSCODE_BIN,
         process.env.KRONTERM_KRONOSCODE_BIN,
         resourcesPath ? path.join(resourcesPath, "agents", "kronoscode", "bin", "kronoscode") : null,
+        path.join(process.cwd(), "agents", "kronoscode", "bin", "kronoscode"),
+        path.resolve(import.meta.dirname, "..", "agents", "kronoscode", "bin", "kronoscode"),
         path.resolve(import.meta.dirname, "..", "..", "agents", "kronoscode", "bin", "kronoscode"),
         path.join(process.cwd(), "kronoscoder", "packages", "kronoscode", "bin", "kronoscode"),
         path.join(process.cwd(), "kronoscode", "bin", "kronoscode"),
@@ -92,6 +111,30 @@ function detectHermesCli(defaultCliPath?: string): string | null {
         defaultCliPath,
     ].filter((candidate): candidate is string => Boolean(candidate));
     return candidates.find((candidate) => isExecutablePath(candidate)) ?? null;
+}
+
+function detectCommand(command: string): Promise<string | null> {
+    const whichCmd = process.platform === "win32" ? "where" : "which";
+    return new Promise((resolve) => {
+        execFile(whichCmd, [command], { timeout: 5000, encoding: "utf8" }, (error, stdout) => {
+            resolve(error ? null : stdout.trim().split(/\r?\n/)[0] || null);
+        });
+    });
+}
+
+async function detectKronTermAgentCli(defaultCliPath?: string): Promise<string | null> {
+    const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
+    const candidates = [
+        process.env.KRONTERM_AGENT_BIN,
+        resourcesPath ? path.join(resourcesPath, "agents", "kronterm-agent", "bin", "kronterm-agent") : null,
+        path.resolve(import.meta.dirname, "..", "..", "agents", "kronterm-agent", "bin", "kronterm-agent"),
+        defaultCliPath,
+    ].filter((candidate): candidate is string => Boolean(candidate));
+    return (
+        candidates.find((candidate) => isExecutablePath(candidate)) ??
+        (await detectCommand("kronterm-agent")) ??
+        (await detectCommand("opencode"))
+    );
 }
 
 export async function detectInstalledAgents(): Promise<
@@ -121,96 +164,105 @@ export async function detectInstalledAgents(): Promise<
         skillsDirs?: string[];
     }> = [];
 
-    for (const [id, config] of Object.entries(ACP_BACKENDS_ALL)) {
-        if (id === "custom" || !config.enabled) continue;
+    const discovered = await Promise.all(
+        Object.entries(ACP_BACKENDS_ALL).map(async ([id, config]) => {
+            if (id === "custom" || !config.enabled) return;
 
-        const cliCommand = config.cliCommand;
-        if (!cliCommand) {
-            results.push({
+            const cliCommand = config.cliCommand;
+            if (!cliCommand) {
+                return {
+                    backend: id,
+                    name: config.name,
+                    cliPath: config.defaultCliPath || "",
+                    available: false,
+                    avatar: config.avatar,
+                    description: config.description,
+                    authRequired: config.authRequired,
+                    supportsStreaming: config.supportsStreaming,
+                    acpArgs: config.acpArgs,
+                    skillsDirs: config.skillsDirs,
+                };
+            }
+
+            let available = false;
+            let cliPath = config.defaultCliPath || cliCommand;
+
+            if (id === "kronoscode") {
+                const detectedCliPath = detectKronosCodeCli(config.defaultCliPath);
+                if (detectedCliPath) {
+                    available = true;
+                    cliPath = detectedCliPath;
+                }
+            }
+
+            if (id === "hermes") {
+                const detectedCliPath = detectHermesCli(config.defaultCliPath);
+                if (detectedCliPath) {
+                    available = true;
+                    cliPath = detectedCliPath;
+                }
+            }
+
+            if (id === "kronterm-agent") {
+                const detectedCliPath = await detectKronTermAgentCli(config.defaultCliPath);
+                if (detectedCliPath) {
+                    available = true;
+                    cliPath = detectedCliPath;
+                }
+            }
+
+            if (config.defaultCliPath && isExecutablePath(config.defaultCliPath)) {
+                if (!available) {
+                    available = true;
+                    cliPath = config.defaultCliPath;
+                }
+            }
+
+            if (!available) {
+                try {
+                    const detected = await detectCommand(cliCommand);
+                    available = detected != null;
+                    if (detected) {
+                        cliPath = detected;
+                    }
+                } catch {
+                    available = false;
+                }
+            }
+
+            if (!available && config.defaultCliPath) {
+                const parts = config.defaultCliPath.split(/\s+/);
+                const defaultCommand = parts[0];
+                if (defaultCommand && !defaultCommand.includes("/") && defaultCommand !== cliCommand) {
+                    try {
+                        available = (await detectCommand(defaultCommand)) != null;
+                    } catch {
+                        available = false;
+                    }
+                }
+                cliPath = config.defaultCliPath;
+            }
+
+            if (available && config.preferDefaultCliPath && config.defaultCliPath) {
+                cliPath = config.defaultCliPath;
+            }
+
+            return {
                 backend: id,
                 name: config.name,
-                cliPath: config.defaultCliPath || "",
-                available: false,
+                cliPath,
+                available,
                 avatar: config.avatar,
                 description: config.description,
                 authRequired: config.authRequired,
                 supportsStreaming: config.supportsStreaming,
                 acpArgs: config.acpArgs,
                 skillsDirs: config.skillsDirs,
-            });
-            continue;
-        }
-
-        let available = false;
-        let cliPath = config.defaultCliPath || cliCommand;
-
-        if (id === "kronoscode") {
-            const detectedCliPath = detectKronosCodeCli(config.defaultCliPath);
-            if (detectedCliPath) {
-                available = true;
-                cliPath = detectedCliPath;
-            }
-        }
-
-        if (id === "hermes") {
-            const detectedCliPath = detectHermesCli(config.defaultCliPath);
-            if (detectedCliPath) {
-                available = true;
-                cliPath = detectedCliPath;
-            }
-        }
-
-        if (config.defaultCliPath && isExecutablePath(config.defaultCliPath)) {
-            if (!available) {
-                available = true;
-                cliPath = config.defaultCliPath;
-            }
-        }
-
-        if (!available) {
-            try {
-                const whichCmd = process.platform === "win32" ? "where" : "which";
-                const result = spawnSync(whichCmd, [cliCommand], { stdio: ["pipe", "pipe", "pipe"] });
-                available = result.status === 0;
-                if (available && result.stdout) {
-                    cliPath = result.stdout.toString().trim().split("\n")[0];
-                }
-            } catch {
-                available = false;
-            }
-        }
-
-        if (!available && config.defaultCliPath) {
-            const parts = config.defaultCliPath.split(/\s+/);
-            const defaultCommand = parts[0];
-            if (defaultCommand && !defaultCommand.includes("/") && defaultCommand !== cliCommand) {
-                try {
-                    const whichCmd = process.platform === "win32" ? "where" : "which";
-                    const result = spawnSync(whichCmd, [defaultCommand], { stdio: ["pipe", "pipe", "pipe"] });
-                    available = result.status === 0;
-                } catch {
-                    available = false;
-                }
-            }
-            cliPath = config.defaultCliPath;
-        }
-
-        if (available && config.preferDefaultCliPath && config.defaultCliPath) {
-            cliPath = config.defaultCliPath;
-        }
-
-        results.push({
-            backend: id,
-            name: config.name,
-            cliPath,
-            available,
-            avatar: config.avatar,
-            description: config.description,
-            authRequired: config.authRequired,
-            supportsStreaming: config.supportsStreaming,
-            acpArgs: config.acpArgs,
-            skillsDirs: config.skillsDirs,
-        });
+            };
+        })
+    );
+    for (const agent of discovered) {
+        if (agent) results.push(agent);
     }
 
     return results;

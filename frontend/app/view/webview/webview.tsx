@@ -1,3 +1,4 @@
+import { browserNavigationSnapshot } from "../../../types/browser-navigation";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -15,179 +16,304 @@ import {
     SuggestionControlNoResults,
 } from "@/app/suggestion/suggestion";
 import { ActionMarker } from "@/app/view/action-marker";
-import {
-    AgentWidgetInspectModeEvent,
-    isAgentWidgetInspectModeActive,
-    publishAgentWidgetDesignSelection,
-    setAgentWidgetInspectMode,
-    type AgentWidgetDesignSelection,
-} from "@/app/view/agent-widget-bridge";
-import { CURSOR_OVERLAY_SCRIPT, CursorOverlay, reportCursorToPet } from "@/app/view/cursor-overlay";
+import { reportCursorToPet } from "@/app/view/cursor-overlay";
 import { useAgentOverlays } from "@/app/view/use-agent-overlays";
 import { WaterFlowOverlay } from "@/app/view/waterflow-overlay";
+import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
+import { BrowserAddressBar, clearBrowserAddressHistory } from "@/app/view/webview/browser-address-bar";
 import { BrowserAnnotationTray } from "@/app/view/webview/browser-annotation-tray";
-import { displayWebviewUrl } from "@/app/view/webview/browser-annotations";
-import { BrowserNavigationRow, type BrowserNavigationControls } from "@/app/view/webview/browser-nav-controls";
+import { BrowserMarkupEvent } from "@/app/view/webview/browser-markup-overlay";
+import {
+    BrowserChromeToolbar,
+    BrowserNavigationControlRow,
+    type BrowserNavigationControls,
+} from "@/app/view/webview/browser-nav-controls";
 import { BrowserToolbarMenu, type BrowserDeviceProfile } from "@/app/view/webview/browser-toolbar-menu";
 import { MockBoundary } from "@/app/waveenv/mockboundary";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
+import { getApi } from "@/store/global";
 import { adaptFromReactOrNativeKeyEvent, checkKeyPressed } from "@/util/keyutil";
 import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
-import { WebviewTag } from "electron";
+import type { WebviewTag } from "electron";
 import { Atom, PrimitiveAtom, atom, useAtomValue, useSetAtom } from "jotai";
+import { Code2, Cookie, ExternalLink } from "lucide-react";
 import { Fragment, createRef, memo, useCallback, useEffect, useRef, useState } from "react";
 import { subscribeAgentActivityStream } from "../../../types/agent-activity";
 import { makeBrowserPayload, publishCrossViewEvent } from "../../../types/cross-view-bus";
+import { getBrowserAnnotationsAtom } from "./browser-annotations";
+import { BrowserGrabController, type BrowserGrabIntent } from "./browser-grab-controller";
+import { BrowserGrabSheet } from "./browser-grab-sheet";
+import { BrowserMarkupOverlay } from "./browser-markup-overlay";
+import { BrowserResearchPanel } from "./browser-research-panel";
 import "./webview.scss";
 import type { WebViewEnv } from "./webviewenv";
 
-function readHermesOpenDesignTheme() {
-    const resolveColor = (token: string, fallback: string) => {
-        const probe = document.createElement("span");
-        probe.style.color = `var(${token}, ${fallback})`;
-        probe.style.display = "none";
-        document.documentElement.append(probe);
-        const color = getComputedStyle(probe).color || fallback;
-        probe.remove();
-        return color;
-    };
-    return {
-        background: resolveColor("--ui-bg-elevated", "#171717"),
-        surface: resolveColor("--ui-bg-secondary", "#242424"),
-        foreground: resolveColor("--foreground", "#f5f5f5"),
-        muted: resolveColor("--ui-text-secondary", "#b4b4b4"),
-        border: resolveColor("--ui-border", "#454545"),
-    };
-}
+export const BrowserPageToolbar = memo(
+    ({ model, islandControls }: { model: WebViewModel; islandControls?: React.ReactNode }) => {
+        const block = useAtomValue(model.blockAtom);
+        const currentUrl = useAtomValue(model.url);
+        const homepageUrl = useAtomValue(model.homepageUrl);
+        const canGoBack = useAtomValue(model.canGoBack);
+        const canGoForward = useAtomValue(model.canGoForward);
+        const isLoading = useAtomValue(model.isLoading);
+        const refreshIcon = useAtomValue(model.refreshIcon);
+        const faviconUrl = useAtomValue(model.faviconUrl);
+        const urlInputFocused = useAtomValue(model.urlInputFocused);
+        const userAgentType = (useAtomValue(model.userAgentType) || "default") as BrowserDeviceProfile;
+        const zoomValue = Number(block?.meta?.["web:zoom"] ?? 1);
+        const zoom = Number.isFinite(zoomValue) ? zoomValue : 1;
+        const grabIntent = useAtomValue(model.grabIntentAtom);
+        const toolError = useAtomValue(model.browserToolErrorAtom);
+        const inspectMode = grabIntent === "grab";
+        const [cookieDialog, setCookieDialog] = useState(false);
+        const [cookiesJson, setCookiesJson] = useState("");
+        const [cookieStatus, setCookieStatus] = useState("");
+        const markupSequence = useRef(0);
+        const url = currentUrl ?? block?.meta?.url ?? homepageUrl ?? "";
+        useEffect(() => {
+            markupSequence.current++;
+            window.dispatchEvent(
+                new CustomEvent(BrowserMarkupEvent, { detail: { blockId: model.blockId, dataUrl: null } })
+            );
+            return () => {
+                markupSequence.current++;
+            };
+        }, [model, currentUrl]);
 
-const WebViewBrowserChrome = memo(({ model }: { model: WebViewModel }) => {
-    const block = useAtomValue(model.blockAtom);
-    const currentUrl = useAtomValue(model.url);
-    const homepageUrl = useAtomValue(model.homepageUrl);
-    const canGoBack = useAtomValue(model.canGoBack);
-    const canGoForward = useAtomValue(model.canGoForward);
-    const isLoading = useAtomValue(model.isLoading);
-    const refreshIcon = useAtomValue(model.refreshIcon);
-    const faviconUrl = useAtomValue(model.faviconUrl);
-    const urlInputFocused = useAtomValue(model.urlInputFocused);
-    const userAgentType = (useAtomValue(model.userAgentType) || "default") as BrowserDeviceProfile;
-    const zoomValue = Number(block?.meta?.["web:zoom"] ?? 1);
-    const zoom = Number.isFinite(zoomValue) ? zoomValue : 1;
-    const [faviconBroken, setFaviconBroken] = useState(false);
-    const [inspectMode, setInspectMode] = useState(() => isAgentWidgetInspectModeActive(model.blockId));
-    const url = currentUrl ?? block?.meta?.url ?? homepageUrl ?? "";
-    const shownUrl = displayWebviewUrl(url, urlInputFocused);
-
-    useEffect(() => {
-        const handleInspectMode = (event: Event) => {
-            const detail = (event as CustomEvent<{ blockId: string; enabled: boolean }>).detail;
-            if (detail.blockId !== model.blockId) {
-                return;
+        const openExternal = () => {
+            if (url) {
+                void model.env.electron.openExternal(model.modifyExternalUrl?.(url) ?? url);
             }
-            setInspectMode(detail.enabled);
-            model.webviewRef.current?.send("open-design-set-inspect-mode", {
-                enabled: detail.enabled,
-                theme: readHermesOpenDesignTheme(),
+        };
+        const toggleInspect = () => model.setGrabIntent(inspectMode ? null : "grab");
+        const toggleAnnotate = () => model.setGrabIntent(grabIntent === "annotate" ? null : "annotate");
+        const markup = async () => {
+            const sequence = ++markupSequence.current;
+            try {
+                model.setGrabIntent(null);
+                const webview = model.webviewRef.current;
+                const screenshot = await getApi().captureBrowserPage({ guestId: webview.getWebContentsId() });
+                if (sequence !== markupSequence.current || webview !== model.webviewRef.current || !webview.isConnected)
+                    return;
+                if (!screenshot) throw new Error("The browser page could not be captured");
+                window.dispatchEvent(
+                    new CustomEvent(BrowserMarkupEvent, {
+                        detail: { blockId: model.blockId, dataUrl: screenshot.dataUrl },
+                    })
+                );
+            } catch (error) {
+                if (sequence === markupSequence.current)
+                    globalStore.set(
+                        model.browserToolErrorAtom,
+                        error instanceof Error ? error.message : "Screenshot capture failed"
+                    );
+            }
+        };
+        const partition = String(block?.meta?.["web:partition"] ?? "");
+        const sessionProfile = partition.includes("kronterm-work")
+            ? "work"
+            : partition.includes("kronterm-personal")
+              ? "personal"
+              : partition.startsWith("kronterm-private-")
+                ? "private"
+                : "default";
+        const changeSession = (profile: string) => {
+            model.setGrabIntent(null);
+            const nextPartition =
+                profile === "default"
+                    ? null
+                    : profile === "private"
+                      ? `kronterm-private-${model.blockId}`
+                      : `persist:kronterm-${profile}`;
+            void model.env.rpc.SetMetaCommand(TabRpcClient, {
+                oref: makeORef("block", model.blockId),
+                meta: { "web:partition": nextPartition },
             });
         };
-        window.addEventListener(AgentWidgetInspectModeEvent, handleInspectMode);
-        return () => window.removeEventListener(AgentWidgetInspectModeEvent, handleInspectMode);
-    }, [model]);
+        const importCookies = async () => {
+            setCookieStatus("Importing…");
+            try {
+                const result = await getApi().importBrowserCookies({
+                    guestId: model.webviewRef.current.getWebContentsId(),
+                    cookiesJson,
+                });
+                setCookieStatus(`${result.count} cookies imported`);
+                setCookiesJson("");
+                model.hardReload();
+            } catch (error) {
+                setCookieStatus(error instanceof Error ? error.message : "Cookie import failed");
+            }
+        };
+        const openCookieDialog = () => {
+            model.setGrabIntent(null);
+            setCookieStatus("");
+            setCookieDialog(true);
+        };
+        const openSettings = () =>
+            void model.env.createBlock(
+                { meta: { view: "preview", file: `${model.env.electron.getConfigDir()}/settings.json` } },
+                false,
+                true
+            );
+        const navControls: BrowserNavigationControls = {
+            canGoBack,
+            canGoForward,
+            loading: isLoading,
+            goBack: () => model.handleBack(),
+            goForward: () => model.handleForward(),
+            reload: () => model.handleRefresh(null),
+            navigate: (nextUrl: string) => model.loadUrl(nextUrl, "navigation-row"),
+        };
 
-    const navControls: BrowserNavigationControls = {
-        canGoBack,
-        canGoForward,
-        loading: isLoading,
-        goBack: () => model.handleBack(),
-        goForward: () => model.handleForward(),
-        reload: () => model.handleRefresh(null),
-        navigate: (nextUrl: string) => model.loadUrl(nextUrl, "navigation-row"),
-    };
-
-    return (
-        <div className="webview-browser-chrome">
-            <BrowserNavigationRow
-                addressSlot={
-                    <>
-                        {faviconUrl && !faviconBroken ? (
-                            <img
-                                src={faviconUrl}
-                                alt=""
-                                aria-hidden="true"
-                                className="webview-favicon"
-                                onError={() => setFaviconBroken(true)}
-                            />
-                        ) : (
-                            <i className="fa-solid fa-shield-halved" aria-hidden="true" />
-                        )}
-                        <input
-                            ref={model.urlInputRef}
-                            value={shownUrl}
-                            onChange={(event) => model.handleUrlChange(event)}
-                            onKeyDown={(event) => model.handleKeyDown(event)}
-                            onFocus={(event) => model.handleFocus(event)}
-                            onBlur={(event) => model.handleBlur(event)}
-                            aria-label="Address and search"
-                            spellCheck={false}
-                        />
-                    </>
-                }
-                controls={navControls}
-                reloadIcon={refreshIcon}
-                reloadLabel={isLoading ? "Stop" : "Reload"}
-            >
-                <button
-                    type="button"
-                    className={clsx("webview-open-design", inspectMode && "is-active")}
-                    onClick={() => setAgentWidgetInspectMode(model.blockId, !inspectMode)}
-                    aria-label={inspectMode ? "Stop selecting design components" : "Select design components"}
-                    aria-pressed={inspectMode}
-                    title={
-                        inspectMode ? "Stop Open Design inspection" : "Open Design: select and comment on components"
+        return (
+            <BrowserChromeToolbar>
+                <BrowserNavigationControlRow
+                    addressSlot={
+                        <BrowserAddressBar model={model} url={url} focused={urlInputFocused} faviconUrl={faviconUrl} />
                     }
+                    controls={navControls}
+                    reloadIcon={refreshIcon}
+                    reloadLabel={isLoading ? "Stop" : "Reload"}
                 >
-                    <i className="fa-solid fa-crosshairs" aria-hidden="true" />
-                </button>
-                <button type="button" onClick={() => model.openFind()} aria-label="Find in page" title="Find in page">
-                    <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => model.toggleDevTools()}
-                    aria-label="Open browser DevTools"
-                    title="Open browser DevTools"
-                >
-                    <i className="fa-solid fa-square-code" aria-hidden="true" />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => {
-                        if (url) {
-                            void model.env.electron.openExternal(model.modifyExternalUrl?.(url) ?? url);
-                        }
-                    }}
-                    aria-label="Open in external browser"
-                    title="Open in external browser"
-                >
-                    <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true" />
-                </button>
-                <BrowserToolbarMenu
-                    deviceProfile={userAgentType}
-                    zoom={zoom}
-                    onHome={() => model.handleHome()}
-                    onHardReload={() => model.hardReload()}
-                    onCopyUrl={() => model.copyUrlToClipboard()}
-                    onZoomChange={(nextZoom) => model.setZoomFactor(nextZoom)}
-                    onDeviceProfileChange={(profile) => model.setUserAgentType(profile)}
-                    onClearHistory={() => model.clearHistory()}
-                    onClearSiteData={() => void model.clearCookiesAndStorage()}
-                />
-            </BrowserNavigationRow>
-        </div>
-    );
-});
-WebViewBrowserChrome.displayName = "WebViewBrowserChrome";
+                    <button
+                        type="button"
+                        className="webview-toolbar-secondary"
+                        onClick={openCookieDialog}
+                        aria-label="Import session cookies"
+                        title="Import session cookies"
+                    >
+                        <Cookie size={16} />
+                    </button>
+                    <button
+                        type="button"
+                        className="webview-toolbar-secondary"
+                        onClick={() => model.openFind()}
+                        aria-label="Find in page"
+                        title="Find in page"
+                    >
+                        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        className="webview-toolbar-secondary"
+                        onClick={() => model.toggleDevTools()}
+                        aria-label="Open browser DevTools"
+                        title="Open browser DevTools"
+                    >
+                        <Code2 size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        className="webview-toolbar-secondary"
+                        onClick={openExternal}
+                        aria-label="Open in external browser"
+                        title="Open in external browser"
+                    >
+                        <ExternalLink size={16} aria-hidden="true" />
+                    </button>
+                    <BrowserToolbarMenu
+                        deviceProfile={userAgentType}
+                        inspectMode={inspectMode}
+                        onInspect={toggleInspect}
+                        onFind={() => model.openFind()}
+                        onDevTools={() => model.toggleDevTools()}
+                        onOpenExternal={openExternal}
+                        zoom={zoom}
+                        onHome={() => model.handleHome()}
+                        onHardReload={() => model.hardReload()}
+                        onCopyUrl={() => model.copyUrlToClipboard()}
+                        onZoomChange={(nextZoom) => model.setZoomFactor(nextZoom)}
+                        onDeviceProfileChange={(profile) => model.setUserAgentType(profile)}
+                        onClearHistory={() => {
+                            model.clearHistory();
+                            clearBrowserAddressHistory(model.blockId);
+                        }}
+                        onClearSiteData={() => void model.clearCookiesAndStorage()}
+                        onAnnotate={toggleAnnotate}
+                        onMarkup={() => void markup()}
+                        onImportCookies={openCookieDialog}
+                        onSessionChange={changeSession}
+                        sessionProfile={sessionProfile}
+                        onSettings={openSettings}
+                        onResearch={() => globalStore.set(model.grabController.researchOpen, true)}
+                    />
+                    {islandControls}
+                </BrowserNavigationControlRow>
+                {toolError && (
+                    <div className="flex items-center gap-2 bg-red-950 px-3 py-1 text-xs text-red-200" role="status">
+                        {toolError}
+                        <button
+                            type="button"
+                            className="ml-auto cursor-pointer"
+                            onClick={() => globalStore.set(model.browserToolErrorAtom, "")}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
+                {cookieDialog && (
+                    <div
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+                        onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                                setCookiesJson("");
+                                setCookieDialog(false);
+                            }
+                        }}
+                    >
+                        <section
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label="Import session cookies"
+                            className="flex w-full max-w-lg flex-col gap-3 rounded-2xl border border-white/15 bg-[#171719] p-4 text-white"
+                        >
+                            <h2 className="text-sm font-semibold">Import session cookies</h2>
+                            <p className="text-xs text-white/60">
+                                Paste a JSON cookie array exported from your browser. Cookies stay in the selected
+                                browser session.
+                            </p>
+                            <textarea
+                                autoFocus
+                                value={cookiesJson}
+                                maxLength={1000000}
+                                aria-label="Cookies JSON"
+                                className="h-40 resize-none rounded-lg bg-black p-2 font-mono text-xs"
+                                onChange={(event) => setCookiesJson(event.target.value)}
+                            />
+                            {cookieStatus && (
+                                <p className="text-xs" role="status">
+                                    {cookieStatus}
+                                </p>
+                            )}
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    className="cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10"
+                                    onClick={() => {
+                                        setCookiesJson("");
+                                        setCookieDialog(false);
+                                    }}
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!cookiesJson.trim()}
+                                    className="cursor-pointer rounded-lg bg-violet-400/25 px-3 py-2 text-xs disabled:opacity-30"
+                                    onClick={() => void importCookies()}
+                                >
+                                    Import
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+                )}
+            </BrowserChromeToolbar>
+        );
+    }
+);
+BrowserPageToolbar.displayName = "BrowserPageToolbar";
 
 // User agent strings for mobile emulation
 const USER_AGENT_IPHONE =
@@ -242,12 +368,33 @@ export class WebViewModel implements ViewModel {
     partitionOverride: PrimitiveAtom<string> | null;
     userAgentType: Atom<string>;
     env: WebViewEnv;
+    grabController: BrowserGrabController;
+    grabIntentAtom: PrimitiveAtom<BrowserGrabIntent>;
+    annotationCountAtom: Atom<number>;
+    browserToolErrorAtom: PrimitiveAtom<string>;
 
     constructor({ blockId, nodeModel, tabModel, waveEnv }: ViewModelInitType) {
         this.nodeModel = nodeModel;
         this.tabModel = tabModel;
         this.viewType = "web";
         this.blockId = blockId;
+        this.grabController = new BrowserGrabController(blockId, () => this.webviewRef.current);
+        this.grabIntentAtom = this.grabController.intent;
+        this.browserToolErrorAtom = this.grabController.error;
+        this.annotationCountAtom = atom((get) => {
+            const url = get(this.url) ?? "";
+            const pageKey = (value: string) => {
+                try {
+                    const parsed = new URL(value);
+                    parsed.search = "";
+                    parsed.hash = "";
+                    return parsed.toString();
+                } catch {
+                    return value;
+                }
+            };
+            return get(getBrowserAnnotationsAtom(blockId)).filter((row) => pageKey(row.url) === pageKey(url)).length;
+        });
         this.env = waveEnv;
         this.noPadding = atom(true);
         this.blockAtom = this.env.wos.getWaveObjectAtom<Block>(`block:${blockId}`);
@@ -356,7 +503,7 @@ export class WebViewModel implements ViewModel {
             if (get(this.hideNav)) {
                 return null;
             }
-            return <WebViewBrowserChrome model={this} />;
+            return <BrowserPageToolbar model={this} />;
         });
 
         this.endIconButtons = atom((get) => {
@@ -500,6 +647,10 @@ export class WebViewModel implements ViewModel {
         this.webviewRef.current?.goBack();
     }
 
+    setGrabIntent(intent: BrowserGrabIntent): void {
+        void this.grabController.setIntent(intent);
+    }
+
     handleForward(e?: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         if (e) {
             e.preventDefault();
@@ -516,8 +667,8 @@ export class WebViewModel implements ViewModel {
     }
 
     handleRefresh(e?: React.MouseEvent<HTMLDivElement, MouseEvent>) {
-        e.preventDefault();
-        e.stopPropagation();
+        e?.preventDefault();
+        e?.stopPropagation();
         try {
             if (this.webviewRef.current) {
                 if (globalStore.get(this.isLoading)) {
@@ -582,10 +733,10 @@ export class WebViewModel implements ViewModel {
     }
 
     handleFocus(event: React.FocusEvent<HTMLInputElement>) {
+        this.urlInputRef.current = event.currentTarget;
         globalStore.set(this.urlWrapperClassName, "focused");
         globalStore.set(this.urlInputFocused, true);
-        this.urlInputRef.current.focus();
-        event.target.select();
+        event.currentTarget.select();
     }
 
     handleBlur(_event: React.FocusEvent<HTMLInputElement>) {
@@ -604,7 +755,7 @@ export class WebViewModel implements ViewModel {
                 meta: { url } as unknown as MetaType,
             })
         );
-        globalStore.set(this.url, url);
+        if (!globalStore.get(this.urlInputFocused)) globalStore.set(this.url, url);
         if (this.searchAtoms) {
             globalStore.set(this.searchAtoms.isOpen, false);
         }
@@ -661,7 +812,7 @@ export class WebViewModel implements ViewModel {
         const defaultSearchAtom = this.env.getSettingsKeyAtom("web:defaultsearch");
         const searchTemplate = globalStore.get(defaultSearchAtom);
         const nextUrl = this.ensureUrlScheme(newUrl, searchTemplate);
-        console.log("webview loadUrl", reason, nextUrl, "cur=", this.webviewRef.current.getURL());
+        console.log("webview loadUrl", reason, nextUrl, "cur=", this.webviewRef.current?.getURL());
         if (!this.webviewRef.current) {
             return;
         }
@@ -738,6 +889,7 @@ export class WebViewModel implements ViewModel {
 
     giveFocus(): boolean {
         console.log("webview giveFocus");
+        if (globalStore.get(this.urlInputFocused)) return true;
         if (this.searchAtoms && globalStore.get(this.searchAtoms.isOpen)) {
             console.log("search is open, not giving focus");
             return true;
@@ -751,7 +903,7 @@ export class WebViewModel implements ViewModel {
                     unsubFn();
                     const isStillFocused = globalStore.get(this.nodeModel.isFocused);
                     if (isStillFocused) {
-                        this.webviewRef.current?.focus();
+                        if (!globalStore.get(this.urlInputFocused)) this.webviewRef.current?.focus();
                     }
                 }
             });
@@ -770,6 +922,7 @@ export class WebViewModel implements ViewModel {
 
     clearHistory() {
         try {
+            window.localStorage.removeItem(`kronterm:browser-history:v1:${this.blockId}`);
             this.webviewRef.current?.clearHistory();
         } catch (e) {
             console.error("Failed to clear history", e);
@@ -1073,41 +1226,6 @@ function isWebviewReadyForElectronCall(
     return webview != null && webview === currentWebview && webview.isConnected && domReady;
 }
 
-function normalizeOpenDesignSelection(blockId: string, payload: unknown): AgentWidgetDesignSelection | null {
-    const raw = payload as Record<string, any> | null;
-    const element = raw?.element as Record<string, any> | null;
-    const numbers = [element?.x, element?.y, element?.width, element?.height];
-    if (!element || numbers.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
-        return null;
-    }
-    const text = (value: unknown, max: number) =>
-        String(value ?? "")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, max);
-    const selection: AgentWidgetDesignSelection = {
-        blockId,
-        url: text(raw?.url, 2_048),
-        element: {
-            ref: text(element.ref, 512),
-            role: text(element.role, 80) || "element",
-            name: text(element.name, 240),
-            ...(text(element.value, 240) ? { value: text(element.value, 240) } : {}),
-            x: Math.round(element.x),
-            y: Math.round(element.y),
-            width: Math.max(0, Math.round(element.width)),
-            height: Math.max(0, Math.round(element.height)),
-            focusable: element.focusable === true,
-            visible: element.visible !== false,
-            ...(text(element.selector, 512) ? { selector: text(element.selector, 512) } : {}),
-            ...(text(element.tagName, 80) ? { tagName: text(element.tagName, 80) } : {}),
-            ...(text(element.componentName, 120) ? { componentName: text(element.componentName, 120) } : {}),
-        },
-    };
-    const comment = text(raw?.comment, 2_000);
-    return comment ? { ...selection, comment } : selection;
-}
-
 function WebViewPreviewFallback({ url }: { url?: string | null }) {
     const displayUrl = getWebPreviewDisplayUrl(url);
 
@@ -1355,14 +1473,50 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         if (!webview) {
             return;
         }
+        const historyKey = `kronterm:browser-history:v1:${model.blockId}`;
+        let historyReady = false;
+        let restored = false;
+        let disposed = false;
+        let historyRevision = 0;
+        const rememberHistory = async () => {
+            if (!historyReady || disposed || !getApi().browserNavigationHistory) return;
+            const revision = ++historyRevision;
+            try {
+                const snapshot = await getApi().browserNavigationHistory(webview.getWebContentsId());
+                if (snapshot && !disposed && revision === historyRevision) {
+                    window.localStorage.setItem(historyKey, JSON.stringify(snapshot));
+                }
+            } catch (error) {
+                console.warn("Browser history could not be saved", error);
+            }
+        };
+        const restoreHistory = async () => {
+            if (restored || !getApi().browserNavigationHistory) return;
+            restored = true;
+            try {
+                const snapshot = browserNavigationSnapshot(
+                    JSON.parse(window.localStorage.getItem(historyKey) ?? "null")
+                );
+                if (snapshot && snapshot.entries[snapshot.index].url === webview.getURL()) {
+                    await getApi().browserNavigationHistory(webview.getWebContentsId(), snapshot);
+                }
+            } catch (error) {
+                console.warn("Browser history could not be restored", error);
+            } finally {
+                historyReady = true;
+            }
+            await rememberHistory();
+        };
         const navigateListener = (e: any) => {
             setErrorText("");
             globalStore.set(model.faviconUrl, null);
             if (e.isMainFrame) {
+                model.setGrabIntent(null);
                 model.handleNavigate(e.url);
                 publishCrossViewEvent("browser:navigate", model.blockId, makeBrowserPayload(model.blockId, e.url));
             }
             model.updateNavState();
+            void rememberHistory();
         };
         const newWindowHandler = (e: any) => {
             e.preventDefault();
@@ -1419,31 +1573,15 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             env.electron.setWebviewFocus(null);
         };
         const handleDomReady = () => {
+            void restoreHistory().then(() => model.updateNavState());
             globalStore.set(model.domReady, true);
             setBgColor();
-            webview.send("open-design-set-inspect-mode", {
-                enabled: isAgentWidgetInspectModeActive(model.blockId),
-                theme: readHermesOpenDesignTheme(),
-            });
-            // Inject cursor overlay (starts hidden, activated by agent activity events)
-            webview.executeJavaScript(CURSOR_OVERLAY_SCRIPT).catch((err: unknown) => {
-                console.warn("cursor overlay inject failed", err);
-            });
         };
         const handleMediaPlaying = () => {
             model.setMediaPlaying(true);
         };
         const handleMediaPaused = () => {
             model.setMediaPlaying(false);
-        };
-        const handleIpcMessage = (event: any) => {
-            if (event.channel !== "open-design-selection" && event.channel !== "open-design-comment") {
-                return;
-            }
-            const selection = normalizeOpenDesignSelection(model.blockId, event.args?.[0]);
-            if (selection) {
-                publishAgentWidgetDesignSelection(selection);
-            }
         };
 
         webview.addEventListener("did-frame-navigate", navigateListener);
@@ -1461,10 +1599,11 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         webview.addEventListener("media-started-playing", handleMediaPlaying);
         webview.addEventListener("media-paused", handleMediaPaused);
         webview.addEventListener("found-in-page", onFoundInPage);
-        webview.addEventListener("ipc-message", handleIpcMessage);
 
         // Clean up event listeners on component unmount
         return () => {
+            disposed = true;
+            model.setGrabIntent(null);
             webview.removeEventListener("did-frame-navigate", navigateListener);
             webview.removeEventListener("did-navigate", navigateListener);
             webview.removeEventListener("did-navigate-in-page", navigateListener);
@@ -1480,11 +1619,9 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             webview.removeEventListener("media-started-playing", handleMediaPlaying);
             webview.removeEventListener("media-paused", handleMediaPaused);
             webview.removeEventListener("found-in-page", onFoundInPage);
-            webview.removeEventListener("ipc-message", handleIpcMessage);
         };
-    }, []);
+    }, [webPartition]);
 
-    // Listen for agent activity events to show/hide cursor overlay in webview
     useEffect(() => {
         const webview = model.webviewRef.current;
         if (!webview) {
@@ -1492,17 +1629,31 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         }
 
         let previewCapturePending = false;
+        let lastPreviewCapturedAt = 0;
+        let previewDisposed = false;
         let previewCaptureTimer: number | null = null;
 
         const requestPreviewCapture = (detail: AgentWidgetActivity) => {
-            if (detail.previewImageUrl || previewCapturePending || typeof webview.capturePage !== "function") {
+            if (
+                document.hidden ||
+                Date.now() - lastPreviewCapturedAt < 1000 ||
+                detail.previewImageUrl ||
+                previewCapturePending ||
+                typeof webview.capturePage !== "function"
+            ) {
                 return;
             }
             previewCapturePending = true;
             previewCaptureTimer = window.setTimeout(() => {
+                if (document.hidden || previewDisposed) {
+                    previewCapturePending = false;
+                    return;
+                }
+                lastPreviewCapturedAt = Date.now();
                 void webview
                     .capturePage()
                     .then((image) => {
+                        if (previewDisposed || document.hidden) return;
                         const previewImageUrl = image.toDataURL();
                         if (!previewImageUrl || previewImageUrl === "data:image/png;base64,") {
                             return;
@@ -1536,7 +1687,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             if (detail.blockId !== model.blockId) {
                 return;
             }
-            webview.executeJavaScript("window.__showKronCursor(true)").catch(() => {});
+            webview.executeJavaScript("window.__showKronCursor?.(false)").catch(() => {});
             if (detail.point) {
                 reportCursorToPet(detail.point, "browser");
             }
@@ -1549,36 +1700,34 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             }
             const phase = detail.phase;
             if (phase === "succeeded" || phase === "failed" || phase === "cancelled") {
-                webview.executeJavaScript("window.__showKronCursor(false)").catch(() => {});
+                webview.executeJavaScript("window.__showKronCursor?.(false)").catch(() => {});
             } else if (phase === "running") {
-                webview.executeJavaScript("window.__showKronCursor(true)").catch(() => {});
+                webview.executeJavaScript("window.__showKronCursor?.(false)").catch(() => {});
             }
         });
 
         window.addEventListener("agent-widget-activity", handleWidgetActivity);
 
         return () => {
+            previewDisposed = true;
             if (previewCaptureTimer != null) {
                 window.clearTimeout(previewCaptureTimer);
             }
             window.removeEventListener("agent-widget-activity", handleWidgetActivity);
             unsubscribeSurfaceActivity();
         };
-    }, [model.blockId]);
+    }, [model.blockId, webPartition]);
 
-    const { waterflowActive, markers, cursorPoint, cursorActive, cursorLabel, clickFlashCount } = useAgentOverlays(
-        "browser",
-        model.blockId
-    );
+    const { waterflowActive, markers } = useAgentOverlays("browser", model.blockId);
     const stageRef = useRef<HTMLDivElement>(null);
-    const cursorContainerRect = stageRef.current?.getBoundingClientRect() ?? null;
 
     return (
         <Fragment>
             <div className="webview-shell">
-                <div className="webview-stage" ref={stageRef}>
+                <div className="webview-stage" ref={stageRef} data-viewport={userAgentType}>
                     <MockBoundary fallback={<WebViewPreviewFallback url={metaUrl} />}>
                         <webview
+                            key={webPartition ?? "default"}
                             id="webview"
                             className="webview"
                             ref={model.webviewRef}
@@ -1593,25 +1742,11 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                         />
                     </MockBoundary>
                     {errorText ? <WebViewFailureOverlay key={errorText} model={model} errorText={errorText} /> : null}
-                    <CursorOverlay
-                        cursorPoint={cursorPoint}
-                        containerRect={cursorContainerRect}
-                        active={cursorActive}
-                        triggerClickFlash={clickFlashCount}
-                        label={cursorLabel}
-                    />
-                    <WaterFlowOverlay active={waterflowActive} />
-                    {markers.map((m) => (
-                        <ActionMarker
-                            key={m.id}
-                            actionType={m.actionType}
-                            label={m.label}
-                            x={m.x}
-                            y={m.y}
-                            active={true}
-                        />
-                    ))}
-                    <BrowserAnnotationTrayLazy blockId={model.blockId} />
+                    <AgentSurfaceCursor surface="browser" blockId={model.blockId} />
+                    <BrowserAnnotationTrayLazy blockId={model.blockId} url={metaUrl} />
+                    <BrowserResearchPanel controller={model.grabController} />
+                    <BrowserGrabSheet controller={model.grabController} />
+                    <BrowserMarkupOverlay blockId={model.blockId} />
                 </div>
             </div>
             <Search {...searchProps} />

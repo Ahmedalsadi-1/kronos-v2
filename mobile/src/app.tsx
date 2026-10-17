@@ -1,17 +1,33 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AgentChat } from "./components/agent-chat";
 import { FocusedSurface } from "./components/focused-surface";
 import { HostSheet, type ConnectHostInput } from "./components/host-sheet";
-import { KronosChamber } from "./components/kronos-chamber";
-import { SurfaceBrowser, type SurfaceWidget } from "./components/surface-browser";
+import { LocalAgent } from "./components/local-agent";
+import { LocalLinuxPanel } from "./components/local-linux-panel";
+import { LocalTools } from "./components/local-tools";
+import { MobileWorkspace } from "./components/mobile-workspace";
+import type { SurfaceWidget } from "./components/surface-browser";
 import { ToastStack } from "./components/toast-stack";
 import { resultHaptic, selectionHaptic, tapHaptic } from "./lib/haptics";
 import { loadHosts, makeHostProfile, saveHosts } from "./lib/host-store";
 import type { RoutedAgentObjective, RuntimeTarget } from "./lib/kron-local-workspace";
 import { KronosHostClient, normalizeHostUrl } from "./lib/kronos-client";
+import { localLinux } from "./lib/local-linux";
+import { shouldStartLocalLinux } from "./lib/local-linux-protocol";
 import { gatewayReconnectDelay, transitionMobileLifecycle } from "./lib/mobile-lifecycle";
+import {
+    endNativeWorkspace,
+    listenWorkspaceNotifications,
+    parseWorkspaceDeepLink,
+    requestWorkspaceNotifications,
+    updateNativeWorkspace,
+    type NativeWorkspaceSurface,
+} from "./lib/native-workspace";
+import { parsePairingLink } from "./lib/pairing-link";
+import { phoneWidgetSurfaces } from "./lib/phone-widget-surfaces";
 import { buildSurfaces, findPreferredSurface, makePreviewDataUrl } from "./lib/surface-model";
 import type {
     BrowserRuntimeState,
@@ -52,6 +68,8 @@ const emptyRuntime = (profile: HostProfile): HostRuntimeState => ({
 
 export const App = () => {
     const [profiles, setProfiles] = useState<HostProfile[]>([]);
+    const authorizedHosts = useRef(new Set<string>());
+    const [pairingUrl, setPairingUrl] = useState("");
     const [hostStates, setHostStates] = useState<Record<string, HostRuntimeState>>({});
     const [snapshots, setSnapshots] = useState<Record<string, HostSnapshot>>({});
     const [runtimeSurfaces, setRuntimeSurfaces] = useState<Surface[]>([]);
@@ -62,6 +80,14 @@ export const App = () => {
     const [hostsLoaded, setHostsLoaded] = useState(false);
     const [hostsOpen, setHostsOpen] = useState(false);
     const [chatOpen, setChatOpen] = useState(true);
+    const [localToolsOpen, setLocalToolsOpen] = useState(false);
+    const [localLinuxOpen, setLocalLinuxOpen] = useState(false);
+    const [localLinuxTab, setLocalLinuxTab] = useState("terminal");
+    const [localBrowserPageId, setLocalBrowserPageId] = useState<string>();
+    const [lastUsedSurfaceId, setLastUsedSurfaceId] = useState<string>();
+    const [localResumeRequest, setLocalResumeRequest] = useState<{ id: string; text: string }>();
+    const phoneSurfaces = useSyncExternalStore(phoneWidgetSurfaces.subscribe, phoneWidgetSurfaces.getSnapshot);
+    const linuxState = useSyncExternalStore(localLinux.subscribe, localLinux.getSnapshot);
     const [focusedSurface, setFocusedSurface] = useState<Surface>();
     const [controlMode, setControlMode] = useState<SurfaceControlMode>("watch");
     const [leaseEndsAt, setLeaseEndsAt] = useState<number>();
@@ -73,6 +99,11 @@ export const App = () => {
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const [lifecycleActive, setLifecycleActive] = useState(() => document.visibilityState !== "hidden");
     const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
+    const [pendingNativeLink, setPendingNativeLink] = useState<ReturnType<typeof parseWorkspaceDeepLink>>(null);
+    const nativeStatusRef = useRef(new Map<string, string>());
+    const nativeTaskRef = useRef<string | undefined>(undefined);
+    const snapshotsRef = useRef(snapshots);
+    snapshotsRef.current = snapshots;
     const clientsRef = useRef(new Map<string, KronosHostClient>());
     const eventRefreshTimersRef = useRef(new Map<string, number>());
     const lifecycleActiveRef = useRef(lifecycleActive);
@@ -128,6 +159,7 @@ export const App = () => {
 
     const refreshHost = useCallback(
         async (profile: HostProfile): Promise<HostSnapshot | null> => {
+            if (!authorizedHosts.current.has(profile.id)) return null;
             const client = clientFor(profile);
             setHostStates((current) => ({
                 ...current,
@@ -141,16 +173,27 @@ export const App = () => {
             try {
                 const health = await client.health();
                 const [sessions, statuses, sandboxes, phoneControl] = await Promise.all([
-                    client.listSessions().catch(() => []),
-                    client.getSessionStatuses().catch(() => ({})),
-                    client.listSandboxes().catch(() => []),
+                    client.listSessions().catch(() => snapshotsRef.current[profile.id]?.sessions ?? []),
+                    client.getSessionStatuses().catch(() => snapshotsRef.current[profile.id]?.statuses ?? {}),
+                    client.listSandboxes().catch(() => snapshotsRef.current[profile.id]?.sandboxes ?? []),
                     health.phoneControl?.available
                         ? Promise.resolve(health.phoneControl)
                         : client.getPhoneStatus().catch(() => health.phoneControl),
                 ]);
                 const browserStates = (
                     await Promise.all(
-                        sessions.slice(0, 16).map((session) => client.getBrowserState(session.id).catch(() => null))
+                        sessions
+                            .slice(0, 16)
+                            .map((session) =>
+                                client
+                                    .getBrowserState(session.id)
+                                    .catch(
+                                        () =>
+                                            snapshotsRef.current[profile.id]?.browserStates.find(
+                                                (state) => state.sessionID === session.id
+                                            ) ?? null
+                                    )
+                            )
                     )
                 ).filter((state): state is BrowserRuntimeState => Boolean(state?.enabled));
                 const degraded = health.connected === false || health.ready === false;
@@ -172,6 +215,7 @@ export const App = () => {
                     phoneControl,
                     surfaces: buildSurfaces(profile, sessions, statuses, browserStates, sandboxes, phoneControl),
                 };
+                if (!authorizedHosts.current.has(profile.id)) return null;
                 setHostStates((current) => ({ ...current, [profile.id]: runtime }));
                 setSnapshots((current) => ({ ...current, [profile.id]: snapshot }));
                 return snapshot;
@@ -199,7 +243,9 @@ export const App = () => {
             return refreshAllPromiseRef.current;
         }
         setRefreshing(true);
-        const refreshPromise = Promise.all(profiles.map((profile) => refreshHost(profile))).then(() => undefined);
+        const refreshPromise = Promise.all(
+            profiles.filter((profile) => authorizedHosts.current.has(profile.id)).map((profile) => refreshHost(profile))
+        ).then(() => undefined);
         refreshAllPromiseRef.current = refreshPromise;
         return refreshPromise.finally(() => {
             if (refreshAllPromiseRef.current === refreshPromise) {
@@ -212,13 +258,13 @@ export const App = () => {
     useEffect(() => {
         void (async () => {
             if (Capacitor.isNativePlatform()) {
-                await StatusBar.setStyle({ style: Style.Light }).catch(() => undefined);
+                await StatusBar.setStyle({ style: Style.Dark }).catch(() => undefined);
                 await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => undefined);
             }
             const hosts = await loadHosts();
             setProfiles(hosts);
             setHostStates(Object.fromEntries(hosts.map((host) => [host.id, emptyRuntime(host)])));
-            setChatHostId(hosts.find((host) => host.capabilities.includes("kronoscode"))?.id);
+            setChatHostId(undefined);
             setHostsLoaded(true);
         })();
         return () => {
@@ -298,70 +344,72 @@ export const App = () => {
         if (!lifecycleActive || !networkOnline) {
             return;
         }
-        const unsubscribers = profiles.map((profile) => {
-            const client = clientFor(profile);
-            let disposed = false;
-            let reconnectAttempt = 0;
-            let reconnectTimer: number | undefined;
-            const connect = async () => {
-                if (disposed || !lifecycleActiveRef.current || !navigator.onLine) {
-                    return;
-                }
-                try {
-                    await client.connectGateway();
-                    reconnectAttempt = 0;
-                } catch {
-                    scheduleReconnect();
-                }
-            };
-            const scheduleReconnect = () => {
-                if (disposed || !lifecycleActiveRef.current || !navigator.onLine) {
-                    return;
-                }
-                if (reconnectTimer) {
-                    window.clearTimeout(reconnectTimer);
-                }
-                reconnectTimer = window.setTimeout(() => {
-                    reconnectTimer = undefined;
-                    void connect();
-                }, gatewayReconnectDelay(reconnectAttempt++));
-            };
-            const unsubscribeEvent = client.onEvent(() => {
-                const previous = eventRefreshTimersRef.current.get(profile.id);
-                if (previous) {
-                    window.clearTimeout(previous);
-                }
-                const timer = window.setTimeout(() => {
-                    eventRefreshTimersRef.current.delete(profile.id);
-                    if (lifecycleActiveRef.current) {
-                        void refreshHost(profile);
+        const unsubscribers = profiles
+            .filter((profile) => authorizedHosts.current.has(profile.id))
+            .map((profile) => {
+                const client = clientFor(profile);
+                let disposed = false;
+                let reconnectAttempt = 0;
+                let reconnectTimer: number | undefined;
+                const connect = async () => {
+                    if (disposed || !lifecycleActiveRef.current || !navigator.onLine) {
+                        return;
                     }
-                }, 350);
-                eventRefreshTimersRef.current.set(profile.id, timer);
-            });
-            const unsubscribeState = client.onGatewayState((state) => {
-                if (state === "open") {
-                    reconnectAttempt = 0;
+                    try {
+                        await client.connectGateway();
+                        reconnectAttempt = 0;
+                    } catch {
+                        scheduleReconnect();
+                    }
+                };
+                const scheduleReconnect = () => {
+                    if (disposed || !lifecycleActiveRef.current || !navigator.onLine) {
+                        return;
+                    }
                     if (reconnectTimer) {
                         window.clearTimeout(reconnectTimer);
-                        reconnectTimer = undefined;
                     }
-                    return;
-                }
-                if (state === "closed" || state === "error") {
-                    scheduleReconnect();
-                }
+                    reconnectTimer = window.setTimeout(() => {
+                        reconnectTimer = undefined;
+                        void connect();
+                    }, gatewayReconnectDelay(reconnectAttempt++));
+                };
+                const unsubscribeEvent = client.onEvent(() => {
+                    const previous = eventRefreshTimersRef.current.get(profile.id);
+                    if (previous) {
+                        window.clearTimeout(previous);
+                    }
+                    const timer = window.setTimeout(() => {
+                        eventRefreshTimersRef.current.delete(profile.id);
+                        if (lifecycleActiveRef.current) {
+                            void refreshHost(profile);
+                        }
+                    }, 350);
+                    eventRefreshTimersRef.current.set(profile.id, timer);
+                });
+                const unsubscribeState = client.onGatewayState((state) => {
+                    if (state === "open") {
+                        reconnectAttempt = 0;
+                        if (reconnectTimer) {
+                            window.clearTimeout(reconnectTimer);
+                            reconnectTimer = undefined;
+                        }
+                        return;
+                    }
+                    if (state === "closed" || state === "error") {
+                        scheduleReconnect();
+                    }
+                });
+                void connect();
+                return () => {
+                    disposed = true;
+                    if (reconnectTimer) {
+                        window.clearTimeout(reconnectTimer);
+                    }
+                    unsubscribeEvent();
+                    unsubscribeState();
+                };
             });
-            void connect();
-            return () => {
-                disposed = true;
-                if (reconnectTimer) {
-                    window.clearTimeout(reconnectTimer);
-                }
-                unsubscribeEvent();
-                unsubscribeState();
-            };
-        });
         return () => {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
             clearEventRefreshTimers();
@@ -392,23 +440,213 @@ export const App = () => {
         [hostStates, profiles]
     );
 
-    const surfaces = useMemo(
+    useEffect(() => {
+        if (
+            !shouldStartLocalLinux(
+                hostsLoaded,
+                lifecycleActive,
+                hostRuntimes
+                    .filter((host) => authorizedHosts.current.has(host.profile.id))
+                    .map((host) => host.connection),
+                networkOnline
+            ) ||
+            linuxState.phase !== "idle"
+        )
+            return;
+        setChatOpen(true);
+        void localLinux.start().catch(() => undefined);
+    }, [hostsLoaded, lifecycleActive, hostRuntimes, linuxState.phase, networkOnline]);
+
+    useEffect(() => {
+        void localLinux.setActive(lifecycleActive).catch(() => undefined);
+    }, [lifecycleActive]);
+
+    const localLinuxSurface = useMemo<Surface | undefined>(
         () =>
-            [...profiles.flatMap((profile) => snapshots[profile.id]?.surfaces ?? []), ...runtimeSurfaces].flatMap(
-                (surface) =>
-                    hiddenSurfaceIds.has(surface.id)
-                        ? []
-                        : [{ ...surface, previewUrl: previews[surface.id] ?? surface.previewUrl }]
-            ),
-        [hiddenSurfaceIds, previews, profiles, runtimeSurfaces, snapshots]
+            linuxState.phase === "idle"
+                ? undefined
+                : {
+                      id: "local-linux",
+                      localLinux: true,
+                      kind: "terminal",
+                      hostId: "local-linux",
+                      hostLabel: "This iPhone",
+                      hostColor: "#7143e8",
+                      title: "Local Linux",
+                      subtitle: "On this device · Network off",
+                      status:
+                          linuxState.phase === "failed"
+                              ? "failed"
+                              : linuxState.phase === "paused"
+                                ? "suspended"
+                                : linuxState.ready
+                                  ? "live"
+                                  : "working",
+                      attention: linuxState.phase === "failed" ? "failed" : "none",
+                      updatedAt: linuxState.savedAt ?? 0,
+                      capabilities: ["focus"],
+                      previewText: linuxState.output
+                          .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+                          .split("\n")
+                          .slice(-9)
+                          .join("\n"),
+                  },
+        [linuxState.phase, linuxState.ready, linuxState.savedAt, linuxState.output]
     );
 
-    const currentChatHost = profiles.find((profile) => profile.id === chatHostId);
+    const surfaces = useMemo(
+        () =>
+            [
+                ...profiles.flatMap((profile) => snapshots[profile.id]?.surfaces ?? []),
+                ...runtimeSurfaces,
+                ...(localLinuxSurface ? [localLinuxSurface] : []),
+                ...phoneSurfaces,
+            ].flatMap((surface) =>
+                hiddenSurfaceIds.has(surface.id)
+                    ? []
+                    : [{ ...surface, previewUrl: previews[surface.id] ?? surface.previewUrl }]
+            ),
+        [hiddenSurfaceIds, previews, profiles, runtimeSurfaces, snapshots, localLinuxSurface, phoneSurfaces]
+    );
+
+    const currentChatHost = profiles.find(
+        (profile) => profile.id === chatHostId && authorizedHosts.current.has(profile.id)
+    );
+
+    useEffect(() => {
+        if (chatSession?.id || !chatHostId) return;
+        const session = snapshots[chatHostId]?.sessions[0];
+        if (session) setChatSession(session);
+    }, [chatHostId, chatSession?.id, snapshots]);
+
+    useEffect(() => {
+        if (Capacitor.getPlatform() !== "ios") return;
+        let disposed = false;
+        const listener = CapacitorApp.addListener("appUrlOpen", ({ url }) => {
+            if (parsePairingLink(url)) {
+                setPairingUrl(url);
+                setLocalLinuxOpen(false);
+                setLocalToolsOpen(false);
+                setHostsOpen(true);
+                return;
+            }
+            const link = parseWorkspaceDeepLink(url);
+            if (link) setPendingNativeLink(link);
+        });
+        const notifications = listenWorkspaceNotifications((url) => {
+            if (!disposed) setPendingNativeLink(parseWorkspaceDeepLink(url));
+        });
+        void CapacitorApp.getLaunchUrl().then((value) => {
+            if (!disposed && value?.url && parsePairingLink(value.url)) {
+                setPairingUrl(value.url);
+                setLocalLinuxOpen(false);
+                setLocalToolsOpen(false);
+                setHostsOpen(true);
+                return;
+            }
+            if (!disposed && value?.url) setPendingNativeLink(parseWorkspaceDeepLink(value.url));
+        });
+        return () => {
+            disposed = true;
+            void listener.then((handle) => handle.remove());
+            void notifications.then((remove) => remove()).catch(() => undefined);
+        };
+    }, []);
+
+    const nativeSnapshot = useMemo(() => {
+        if (localLinuxSurface && !hostRuntimes.some((host) => host.connection === "online"))
+            return {
+                taskID: "local-linux",
+                title: "Local Linux",
+                step:
+                    linuxState.phase === "starting"
+                        ? "Booting Linux on this device"
+                        : linuxState.phase === "paused"
+                          ? "Linux paused on this device"
+                          : linuxState.phase === "failed"
+                            ? "Linux needs attention"
+                            : "Linux running on this device",
+                status: linuxState.phase === "failed" ? "failed" : linuxState.phase === "paused" ? "idle" : "running",
+                surface: "sandbox",
+            } as const;
+        const sessionSurfaces = surfaces.filter((surface) => surface.kind === "run");
+        const tracked = sessionSurfaces.find(
+            (surface) => `${surface.hostId}:${surface.sessionId}` === nativeTaskRef.current
+        );
+        const run =
+            tracked ??
+            sessionSurfaces.find((surface) => surface.status === "working" || surface.status === "waiting") ??
+            sessionSurfaces.find((surface) => surface.sessionId === chatSession?.id && surface.hostId === chatHostId);
+        if (!run) return null;
+        const key = `${run.hostId}:${run.sessionId}`;
+        const status =
+            run.status === "working"
+                ? "running"
+                : run.status === "waiting"
+                  ? "waiting"
+                  : run.status === "failed"
+                    ? "failed"
+                    : ["running", "waiting", "completed"].includes(nativeStatusRef.current.get(key) ?? "")
+                      ? "completed"
+                      : "idle";
+        const context =
+            focusedSurface?.hostId === run.hostId
+                ? focusedSurface
+                : surfaces.find(
+                      (surface) =>
+                          surface.kind !== "run" && surface.sessionId === run.sessionId && surface.hostId === run.hostId
+                  );
+        const surface: NativeWorkspaceSurface = context?.phoneControl
+            ? "emulator"
+            : context?.sandboxId
+              ? "sandbox"
+              : context?.kind === "file"
+                ? "files"
+                : context?.kind === "browser"
+                  ? "browser"
+                  : context?.kind === "terminal"
+                    ? "terminal"
+                    : "workspace";
+        return {
+            taskID: key,
+            title: run.title,
+            step:
+                status === "running"
+                    ? "Agent is working"
+                    : status === "waiting"
+                      ? "Needs your attention"
+                      : status === "completed"
+                        ? "Ready to review"
+                        : status === "failed"
+                          ? "Task needs attention"
+                          : "Open your workspace",
+            status,
+            surface,
+        } as const;
+    }, [surfaces, focusedSurface, chatHostId, chatSession?.id, localLinuxSurface, hostRuntimes, linuxState.phase]);
+
+    const nativeSnapshotKey = JSON.stringify(nativeSnapshot);
+    const nativeHostsResolved = profiles.every((host) => snapshots[host.id] != null);
+    useEffect(() => {
+        if (Capacitor.getPlatform() !== "ios" || !hostsLoaded) return;
+        const snapshot = JSON.parse(nativeSnapshotKey) as typeof nativeSnapshot;
+        if (!snapshot) {
+            if (nativeHostsResolved) void endNativeWorkspace().catch(() => undefined);
+            return;
+        }
+        nativeStatusRef.current.set(snapshot.taskID, snapshot.status === "completed" ? "completed" : snapshot.status);
+        nativeTaskRef.current = ["running", "waiting"].includes(snapshot.status) ? snapshot.taskID : undefined;
+        void updateNativeWorkspace(snapshot).catch(() => undefined);
+    }, [nativeSnapshotKey, hostsLoaded, nativeHostsResolved]);
 
     const chooseHost = useCallback(
         (capability?: string): HostProfile => {
             const selected = profiles.find((profile) => profile.id === selectedHostId);
-            const eligible = profiles.filter((profile) => !capability || profile.capabilities.includes(capability));
+            const eligible = profiles.filter(
+                (profile) =>
+                    authorizedHosts.current.has(profile.id) &&
+                    (!capability || profile.capabilities.includes(capability))
+            );
             const host = selected && eligible.some((profile) => profile.id === selected.id) ? selected : eligible[0];
             if (!host) {
                 throw new Error(capability ? `Add a host with ${capability} capability` : "Add a host first");
@@ -472,6 +710,15 @@ export const App = () => {
 
     const openSurface = useCallback(
         (surface: Surface) => {
+            setLastUsedSurfaceId(surface.id);
+            phoneWidgetSurfaces.markUsed(surface.id);
+            if (surface.localLinux) {
+                setLocalLinuxTab(surface.localWidget ?? "terminal");
+                setLocalBrowserPageId(surface.pageId);
+                setLocalLinuxOpen(true);
+                setChatOpen(false);
+                return;
+            }
             void selectionHaptic();
             if (surface.kind === "run" && surface.sessionId) {
                 const host = profiles.find((profile) => profile.id === surface.hostId);
@@ -491,6 +738,104 @@ export const App = () => {
         },
         [loadPreview, profiles, snapshots]
     );
+
+    useEffect(() => {
+        if (!lifecycleActive || !networkOnline || focusedSurface || hostsOpen) return;
+        let disposed = false;
+        const candidates = Object.values(snapshots)
+            .flatMap((snapshot) => {
+                if (hostStates[snapshot.host.profile.id]?.connection !== "online") return [];
+                return snapshot.surfaces.filter((surface) => {
+                    if (hiddenSurfaceIds.has(surface.id)) return false;
+                    if (
+                        chatOpen &&
+                        (surface.hostId !== chatHostId || (surface.sessionId && surface.sessionId !== chatSession?.id))
+                    )
+                        return false;
+                    if (surface.sandboxId && surface.kind === "app") return true;
+                    return (
+                        surface.kind === "browser" &&
+                        snapshot.browserStates.some(
+                            (state) => state.sessionID === surface.sessionId && state.activePageID === surface.pageId
+                        )
+                    );
+                });
+            })
+            .slice(0, 4);
+        void Promise.allSettled(
+            candidates.map(async (surface) => {
+                const host = profiles.find((profile) => profile.id === surface.hostId);
+                if (!host) return;
+                const client = clientFor(host);
+                let preview: string;
+                if (surface.sandboxId) {
+                    const frame = await client.getSandboxScreenshot(surface.sandboxId);
+                    preview = makePreviewDataUrl("image/png", frame.image);
+                } else {
+                    const frame = await client.getBrowserFrame(surface.sessionId!);
+                    if (frame.pageID && frame.pageID !== surface.pageId) return;
+                    preview = makePreviewDataUrl(frame.mime, frame.base64);
+                }
+                if (!disposed && preview) setPreviews((current) => ({ ...current, [surface.id]: preview }));
+            })
+        );
+        return () => {
+            disposed = true;
+        };
+    }, [
+        snapshots,
+        profiles,
+        lifecycleActive,
+        networkOnline,
+        focusedSurface,
+        hostsOpen,
+        hiddenSurfaceIds,
+        chatOpen,
+        chatHostId,
+        chatSession?.id,
+        clientFor,
+    ]);
+
+    useEffect(() => {
+        if (!pendingNativeLink || !hostsLoaded) return;
+        if (pendingNativeLink.taskID === "local-linux") {
+            setLocalLinuxOpen(true);
+            setChatOpen(false);
+            void localLinux.start().catch(() => undefined);
+            setPendingNativeLink(null);
+            return;
+        }
+        const run = surfaces.find(
+            (surface) => surface.kind === "run" && `${surface.hostId}:${surface.sessionId}` === pendingNativeLink.taskID
+        );
+        if (pendingNativeLink.taskID && !run) {
+            if (hostRuntimes.some((host) => host.connection === "connecting" || host.connection === "idle")) return;
+            setChatOpen(false);
+            setLocalToolsOpen(false);
+            setPendingNativeLink(null);
+            pushToast("neutral", "Task unavailable", "Reconnect its paired host from Workspace.");
+            return;
+        }
+        const candidates = surfaces.filter(
+            (surface) =>
+                !run || (surface.hostId === run.hostId && (!surface.sessionId || surface.sessionId === run.sessionId))
+        );
+        const target = candidates.find((surface) =>
+            pendingNativeLink.surface === "sandbox"
+                ? Boolean(surface.sandboxId) && surface.kind === "app"
+                : pendingNativeLink.surface === "emulator"
+                  ? Boolean(surface.phoneControl)
+                  : pendingNativeLink.surface === "chat"
+                    ? surface.kind === "run"
+                    : surface.kind === (pendingNativeLink.surface === "files" ? "file" : pendingNativeLink.surface)
+        );
+        if (target) openSurface(target);
+        else {
+            setLocalToolsOpen(false);
+            setChatOpen(false);
+        }
+        setPendingNativeLink(null);
+    }, [pendingNativeLink, hostsLoaded, surfaces, hostRuntimes, openSurface, pushToast]);
 
     const closeSurface = useCallback(
         async (surface: Surface) => {
@@ -566,6 +911,7 @@ export const App = () => {
                 );
                 await clientFor(profile).health();
                 const next = [...profiles, profile];
+                authorizedHosts.current.add(profile.id);
                 await saveHosts(next);
                 setProfiles(next);
                 setHostStates((current) => ({ ...current, [profile.id]: emptyRuntime(profile) }));
@@ -669,7 +1015,9 @@ export const App = () => {
 
     const chooseAgentHost = useCallback(
         (target: RuntimeTarget): HostProfile => {
-            const eligible = profiles.filter((profile) => profile.capabilities.includes("kronoscode"));
+            const eligible = profiles.filter(
+                (profile) => authorizedHosts.current.has(profile.id) && profile.capabilities.includes("kronoscode")
+            );
             if (target === "sandbox") {
                 const sandbox = eligible.find((profile) => profile.capabilities.includes("sandbox"));
                 if (sandbox) {
@@ -775,6 +1123,15 @@ export const App = () => {
 
     const openWidget = useCallback(
         async (widget: SurfaceWidget): Promise<void> => {
+            if (
+                ["sandbox", "terminal", "kronoscode"].includes(widget) &&
+                !hostRuntimes.some((host) => host.connection === "online")
+            ) {
+                setLocalLinuxOpen(true);
+                setChatOpen(false);
+                await localLinux.start();
+                return;
+            }
             if (widget === "browser") {
                 await submitOmnibox("https://www.google.com");
                 return;
@@ -835,6 +1192,7 @@ export const App = () => {
             }
         },
         [
+            hostRuntimes,
             chooseHost,
             clientFor,
             createSandbox,
@@ -848,7 +1206,7 @@ export const App = () => {
         ]
     );
 
-    const openChamber = useCallback(() => {
+    const openAgentChat = useCallback(() => {
         setChatOpen(true);
         void selectionHaptic();
         try {
@@ -858,35 +1216,6 @@ export const App = () => {
             setHostsOpen(true);
         }
     }, [chooseHost, currentChatHost]);
-
-    const openChamberWidget = useCallback(
-        (widget: string, data: Record<string, unknown>) => {
-            const normalized = widget.toLowerCase();
-            const url = typeof data.url === "string" ? data.url.trim() : "";
-            if (normalized === "surfaces" || normalized === "workspace") {
-                setChatOpen(false);
-                return;
-            }
-            if (normalized === "web" || normalized === "browser" || normalized.includes("browser")) {
-                setChatOpen(false);
-                void submitOmnibox(url || "https://www.google.com");
-                return;
-            }
-            const surfaceWidget: SurfaceWidget =
-                normalized === "kronoscode" || normalized.includes("kronoscode tui")
-                    ? "kronoscode"
-                    : normalized === "terminal" || normalized === "shell"
-                      ? "terminal"
-                      : normalized === "file" || normalized === "files"
-                        ? "file"
-                        : normalized === "sandbox"
-                          ? "sandbox"
-                          : "app";
-            setChatOpen(false);
-            void openWidget(surfaceWidget);
-        },
-        [openWidget, submitOmnibox]
-    );
 
     const runBrowserAction = useCallback(
         async (action: string, payload: Record<string, unknown> = {}) => {
@@ -1088,6 +1417,19 @@ export const App = () => {
             void (async () => {
                 const host = profiles.find((profile) => profile.id === focusedSurface?.hostId);
                 try {
+                    const sessionId = focusedSurface?.sessionId;
+                    if (
+                        mode === "takeover" &&
+                        host &&
+                        sessionId &&
+                        ["busy", "retry"].includes(snapshots[host.id]?.statuses[sessionId]?.type)
+                    ) {
+                        const directory = snapshots[host.id]?.sessions.find(
+                            (session) => session.id === sessionId
+                        )?.directory;
+                        const stopped = await clientFor(host).abortSession(sessionId, directory);
+                        if (!stopped) throw new Error("The host did not confirm agent interruption");
+                    }
                     if (focusedSurface?.phoneControl && host) {
                         if (mode === "takeover") {
                             const lease = await clientFor(host).startPhoneControlLease(ControlLeaseDuration);
@@ -1106,7 +1448,7 @@ export const App = () => {
                 }
             })();
         },
-        [clientFor, focusedSurface, profiles, pushToast]
+        [clientFor, focusedSurface, profiles, pushToast, snapshots]
     );
 
     const closeFocusedSurface = useCallback(() => {
@@ -1123,26 +1465,41 @@ export const App = () => {
 
     return (
         <div className="kronterm-app">
-            {!chatOpen ? (
-                <SurfaceBrowser
-                    hosts={hostRuntimes}
+            {!chatOpen && !localToolsOpen ? (
+                <MobileWorkspace
+                    blocked={hostsOpen || !!focusedSurface || localLinuxOpen}
                     surfaces={surfaces}
+                    hosts={hostRuntimes}
                     closedSurfaces={closedSurfaces}
-                    selectedHostId={selectedHostId}
                     refreshing={refreshing}
-                    onSelectHost={setSelectedHostId}
+                    onOpenSurface={openSurface}
+                    onOpenChat={openAgentChat}
                     onOpenHosts={() => setHostsOpen(true)}
                     onRefresh={refreshAll}
-                    onOpenSurface={openSurface}
-                    onCloseSurface={(surface) => void closeSurface(surface)}
-                    onRestoreSurface={(closed) => void restoreSurface(closed)}
-                    onCreateSandbox={async () => {
-                        await createSandbox();
-                    }}
-                    onAgentSubmit={sendAgentObjective}
-                    onBrowserNavigate={submitOmnibox}
                     onOpenWidget={openWidget}
-                    onOpenChat={openChamber}
+                    onLocalTools={() => setLocalToolsOpen(true)}
+                    onRestoreSurface={(closed) => void restoreSurface(closed)}
+                    onNotifications={
+                        Capacitor.getPlatform() === "ios"
+                            ? async () => {
+                                  const granted = await requestWorkspaceNotifications();
+                                  pushToast(
+                                      "neutral",
+                                      granted ? "Task alerts enabled" : "Notifications are off",
+                                      granted
+                                          ? "Result and attention alerts are enabled for this device."
+                                          : "You can enable notifications in iPhone Settings."
+                                  );
+                              }
+                            : undefined
+                    }
+                />
+            ) : null}
+            {!chatOpen && localToolsOpen ? (
+                <LocalTools
+                    blocked={hostsOpen || !!focusedSurface || localLinuxOpen}
+                    onBack={() => setLocalToolsOpen(false)}
+                    onRemoteShell={() => openWidget("kronoscode")}
                 />
             ) : null}
 
@@ -1162,8 +1519,49 @@ export const App = () => {
                 onTerminalResize={resizeFocusedTerminal}
                 onControlMode={changeControlMode}
                 onAskKronos={() => void openKronosForSurface()}
+                onResumeKronos={async (note) => {
+                    const surface = focusedSurface;
+                    const host = profiles.find((profile) => profile.id === surface?.hostId);
+                    if (!surface || !host) throw new Error("The widget host is unavailable");
+                    const session = await ensureSession(host, `Continue ${surface.title}`);
+                    await clientFor(host).sendMessage(
+                        session.id,
+                        `I finished taking control of ${surface.title}. ${note.trim() || "Continue the task from the current state."}`,
+                        session.directory
+                    );
+                    setFocusedSurface(undefined);
+                    setControlMode("watch");
+                    setLeaseEndsAt(undefined);
+                    setChatOpen(true);
+                }}
                 onStop={stopFocusedSurface}
             />
+            {
+                <LocalLinuxPanel
+                    open={localLinuxOpen}
+                    foreground={lifecycleActive}
+                    initialTab={localLinuxTab}
+                    initialBrowserPageId={localBrowserPageId}
+                    onAgent={() => {
+                        setLocalLinuxOpen(false);
+                        setChatOpen(true);
+                    }}
+                    onResumeAgent={(note) => {
+                        setChatHostId(undefined);
+                        setLocalLinuxOpen(false);
+                        setChatOpen(true);
+                        setLocalResumeRequest({
+                            id: crypto.randomUUID(),
+                            text: `I finished taking control of the local widget. ${note.trim() || "Continue from the current state."}`,
+                        });
+                    }}
+                    onBack={() => {
+                        setLocalLinuxOpen(false);
+                        setChatOpen(true);
+                        setLocalToolsOpen(false);
+                    }}
+                />
+            }
 
             {hostsOpen && !focusedSurface ? (
                 <button
@@ -1175,6 +1573,35 @@ export const App = () => {
             ) : null}
 
             <HostSheet
+                pairingUrl={pairingUrl}
+                onUse={(id) => {
+                    const host = profiles.find((profile) => profile.id === id);
+                    if (!host) return;
+                    authorizedHosts.current.add(id);
+                    setChatHostId(id);
+                    setSelectedHostId(id);
+                    setProfiles((current) => [...current]);
+                    void refreshHost(host);
+                    setHostsOpen(false);
+                    setLocalLinuxOpen(false);
+                    setChatOpen(true);
+                }}
+                onUseLocal={() => {
+                    authorizedHosts.current.clear();
+                    for (const client of clientsRef.current.values()) client.close();
+                    setSnapshots({});
+                    setRuntimeSurfaces([]);
+                    setChatHostId(undefined);
+                    setChatSession(undefined);
+                    setHostStates(Object.fromEntries(profiles.map((profile) => [profile.id, emptyRuntime(profile)])));
+                    setProfiles((current) => [...current]);
+                    setHostsOpen(false);
+                    setLocalLinuxOpen(true);
+                    setChatOpen(false);
+                    void localLinux
+                        .start()
+                        .catch((reason) => pushToast("error", "Local Linux unavailable", errorMessage(reason)));
+                }}
                 open={hostsOpen}
                 hosts={hostRuntimes}
                 connecting={connecting}
@@ -1184,15 +1611,55 @@ export const App = () => {
                 onRefresh={refreshAll}
             />
 
-            <KronosChamber
-                open={chatOpen}
+            <AgentChat
+                open={!!currentChatHost && chatOpen && !hostsOpen && !focusedSurface && !localLinuxOpen}
+                lastUsedSurfaceId={phoneWidgetSurfaces.getLastUsedId() ?? lastUsedSurfaceId}
                 hostsLoaded={hostsLoaded}
                 host={currentChatHost}
                 session={chatSession}
-                selectedSurface={focusedSurface}
+                client={currentChatHost ? clientFor(currentChatHost) : null}
+                onEnsureSession={() => ensureSession(currentChatHost ?? chooseHost("kronoscode"))}
                 onOpenHosts={() => setHostsOpen(true)}
-                onOpenWorkspace={() => setChatOpen(false)}
-                onOpenWidget={openChamberWidget}
+                onOpenWorkspace={() => {
+                    setLocalToolsOpen(false);
+                    setChatOpen(false);
+                }}
+                surfaces={surfaces.filter(
+                    (surface) =>
+                        surface.localLinux ||
+                        (surface.hostId === chatHostId && (!surface.sessionId || surface.sessionId === chatSession?.id))
+                )}
+                onOpenSurface={openSurface}
+                connectionError={
+                    hostStates[chatHostId ?? ""]?.connection === "offline"
+                        ? (hostStates[chatHostId ?? ""]?.detail ?? "Host offline")
+                        : undefined
+                }
+            />
+
+            <LocalAgent
+                open={!currentChatHost && chatOpen && !hostsOpen && !focusedSurface && !localLinuxOpen}
+                surfaces={surfaces}
+                resumeRequest={localResumeRequest}
+                lastUsedSurfaceId={phoneWidgetSurfaces.getLastUsedId() ?? lastUsedSurfaceId}
+                onOpenSurface={openSurface}
+                onHosts={() => setHostsOpen(true)}
+                onWorkspace={() => {
+                    setLocalToolsOpen(false);
+                    setChatOpen(false);
+                }}
+                onLaunchWidget={(widget) => {
+                    phoneWidgetSurfaces.markUsed(
+                        widget === "browser"
+                            ? "phone-browser-initial"
+                            : widget === "desktop"
+                              ? "phone-desktop"
+                              : "local-linux"
+                    );
+                    setLocalLinuxTab(widget);
+                    setLocalLinuxOpen(true);
+                    setChatOpen(false);
+                }}
             />
 
             <ToastStack

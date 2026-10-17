@@ -780,6 +780,7 @@ type CommandWaveAIGetToolDiffRtnData struct {
 
 type CommandCaptureBlockScreenshotData struct {
 	BlockId string `json:"blockid"`
+	Passive bool `json:"passive,omitempty"`
 }
 
 type CommandVarData struct {
@@ -1458,6 +1459,8 @@ type SandboxStartRequest struct {
 	Mode          string `json:"mode,omitempty"`
 	BrowserUrl    string `json:"browserUrl,omitempty"`
 	EnsureBrowser bool   `json:"ensureBrowser,omitempty"`
+	Runtime       string `json:"runtime,omitempty"`
+	Image         string `json:"image,omitempty"`
 }
 
 type SandboxStartResponse struct {

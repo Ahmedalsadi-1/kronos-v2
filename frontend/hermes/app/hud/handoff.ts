@@ -57,14 +57,14 @@ interface HudHandoffParams {
 /** App-window side: take the session back when the HUD goes away. Also keeps
  *  the titlebar toggle honest when the HUD is closed from its own side. */
 export function useHudHandoff({ navigate, resumeSession }: HudHandoffParams): void {
-    const { hudMode } = useHermesShellMode();
+    const { hudMode, webMode } = useHermesShellMode();
     const paramsRef = useRef<HudHandoffParams>({ navigate, resumeSession });
     paramsRef.current = { navigate, resumeSession };
 
     useEffect(() => {
         // The HUD's own renderer mounts the same wiring; it is the window going
         // away, so it has nothing to re-home.
-        if (hudMode || isHudWindow()) {
+        if (hudMode || (!webMode && isHudWindow())) {
             return;
         }
 
@@ -104,7 +104,7 @@ export function useHudHandoff({ navigate, resumeSession }: HudHandoffParams): vo
                 void paramsRef.current.resumeSession(target);
             }
         });
-    }, [hudMode]);
+    }, [hudMode, webMode]);
 }
 
 /** HUD side: follow a retarget. Asking for HUD mode from another tab while the
@@ -118,12 +118,12 @@ export function useHudGoto(navigate: OpenSessionNavigate): void {
 
 /** HUD side: keep main told which session this window is on. */
 export function useReportHudSession(): void {
-    const { hudMode } = useHermesShellMode();
+    const { hudMode, webMode } = useHermesShellMode();
     const selectedStoredSessionId = useStore($selectedStoredSessionId);
 
     useEffect(() => {
-        if (hudMode || isHudWindow()) {
+        if (hudMode || (!webMode && isHudWindow())) {
             reportHudSession(selectedStoredSessionId);
         }
-    }, [hudMode, selectedStoredSessionId]);
+    }, [hudMode, selectedStoredSessionId, webMode]);
 }

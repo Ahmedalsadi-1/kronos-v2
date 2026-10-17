@@ -11,20 +11,30 @@ import {
 } from "@/app/block/blocktypes";
 import type { TabModel } from "@/app/store/tab-model";
 import { useTabModel } from "@/app/store/tab-model";
-import { HermesViewModel } from "@/app/view/hermes/hermes-model";
 import { AiFileDiffViewModel } from "@/app/view/aifilediff/aifilediff";
 import { AppStreamViewModel } from "@/app/view/appstream/appstream-model";
-import { ChatHubV2ViewModel } from "@/app/view/chathubv2/chathubv2-model";
+import { AudioStudioModel } from "@/app/view/audiostudio/audiostudio";
+import { BlenderProjectModel } from "@/app/view/blenderproject/blenderproject";
+import { ComputersViewModel } from "@/app/view/computers/computers-model";
+import { DataStudioModel } from "@/app/view/datastudio/datastudio-model";
+import { DocumentStudioModel } from "@/app/view/documentstudio/documentstudio-model";
+import { GameStudioModel } from "@/app/view/gamestudio/game-studio";
+import { HermesViewModel } from "@/app/view/hermes/hermes-model";
+import { ImageStudioModel } from "@/app/view/imagestudio/imagestudio";
 import { InstalledAppsViewModel } from "@/app/view/installedapps/installedapps";
 import { KronosCanvasViewModel } from "@/app/view/kronoscanvas/kronoscanvas-model";
-import { KronosChamberViewModel } from "@/app/view/kronoschamber/kronoschamber-model";
 import { KronSettingsViewModel } from "@/app/view/kronsettings/kronsettings-model";
 import { LauncherViewModel } from "@/app/view/launcher/launcher";
+import { LinuxVmsViewModel } from "@/app/view/linux-vms/linux-vms-model";
+import { MediaLibraryViewModel } from "@/app/view/medialibrary/media-library";
+import { PersonalViewModel } from "@/app/view/personal/personal";
 import { PreviewModel } from "@/app/view/preview/preview-model";
+import { ReviewViewModel } from "@/app/view/review/review-model";
 import { SysinfoViewModel } from "@/app/view/sysinfo/sysinfo";
 import { TsunamiViewModel } from "@/app/view/tsunami/tsunami";
-import { WarpAgentViewModel } from "@/app/view/warpagent/warpagent-model";
 import { VDomModel } from "@/app/view/vdom/vdom-model";
+import { VideoStudioViewModel } from "@/app/view/videostudio/video-studio";
+import { WarpAgentViewModel } from "@/app/view/warpagent/warpagent-model";
 import { useWaveEnv, WaveEnv } from "@/app/waveenv/waveenv";
 import { ErrorBoundary } from "@/element/errorboundary";
 import { CenteredDiv } from "@/element/quickelems";
@@ -48,14 +58,22 @@ import "./block.scss";
 import { BlockEnv } from "./blockenv";
 import { BlockFrame } from "./blockframe";
 import { blockViewToIcon, blockViewToName } from "./blockutil";
+import { resolveBlockView } from "./retired-chat-view";
 
 const BlockRegistry: Map<string, ViewModelClass> = new Map();
+BlockRegistry.set("videostudio", VideoStudioViewModel);
+BlockRegistry.set("audiostudio", AudioStudioModel);
+BlockRegistry.set("documentstudio", DocumentStudioModel);
+BlockRegistry.set("datastudio", DataStudioModel);
+BlockRegistry.set("blenderproject", BlenderProjectModel);
+BlockRegistry.set("medialibrary", MediaLibraryViewModel);
+BlockRegistry.set("imagestudio", ImageStudioModel);
+BlockRegistry.set("personal", PersonalViewModel);
+BlockRegistry.set("gamestudio", GameStudioModel);
 BlockRegistry.set("term", TermViewModel);
 BlockRegistry.set("preview", PreviewModel);
 BlockRegistry.set("web", WebViewModel);
 BlockRegistry.set("waveai", WaveAiModel);
-BlockRegistry.set("kronoschat", ChatHubV2ViewModel);
-BlockRegistry.set("chathubv2", ChatHubV2ViewModel);
 BlockRegistry.set("warpagent", WarpAgentViewModel);
 BlockRegistry.set("cpuplot", SysinfoViewModel);
 BlockRegistry.set("sysinfo", SysinfoViewModel);
@@ -67,12 +85,14 @@ BlockRegistry.set("tsunami", TsunamiViewModel);
 BlockRegistry.set("aifilediff", AiFileDiffViewModel);
 BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("kronsettings", KronSettingsViewModel);
-BlockRegistry.set("kronoschamber", KronosChamberViewModel);
 BlockRegistry.set("kronoscanvas", KronosCanvasViewModel);
 BlockRegistry.set("hermes", HermesViewModel);
+BlockRegistry.set("review", ReviewViewModel);
 BlockRegistry.set("sandbox", SandboxViewModel);
 BlockRegistry.set("appstream", AppStreamViewModel);
 BlockRegistry.set("installedapps", InstalledAppsViewModel);
+BlockRegistry.set("computers", ComputersViewModel);
+BlockRegistry.set("linux-vms", LinuxVmsViewModel);
 
 function makeViewModel(
     blockId: string,
@@ -81,7 +101,7 @@ function makeViewModel(
     tabModel: TabModel,
     waveEnv: WaveEnv
 ): ViewModel {
-    const ctor = BlockRegistry.get(blockView);
+    const ctor = BlockRegistry.get(resolveBlockView(blockView));
     if (ctor != null) {
         return new ctor({ blockId, nodeModel, tabModel, waveEnv });
     }

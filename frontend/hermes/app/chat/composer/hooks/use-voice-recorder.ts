@@ -18,13 +18,14 @@ export function useVoiceRecorder({
   maxRecordingSeconds,
   onTranscribeAudio,
   focusInput,
-  onTranscript
+  onTranscript,
 }: VoiceRecorderOptions) {
   const { t } = useI18n()
   const voiceCopy = t.notifications.voice
   const { handle, level, recording } = useMicRecorder(voiceCopy)
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const generationRef = useRef(0)
   const startedAtRef = useRef(0)
   const intervalRef = useRef<number | null>(null)
   const timeoutRef = useRef<number | null>(null)
@@ -41,9 +42,17 @@ export function useVoiceRecorder({
     }
   }
 
-  useEffect(() => () => clearTimers(), [])
+  useEffect(
+    () => () => {
+      generationRef.current += 1
+      clearTimers()
+      handle.cancel()
+    },
+    []
+  )
 
   const stop = async () => {
+    const generation = generationRef.current
     clearTimers()
     const result = await handle.stop()
 
@@ -63,6 +72,7 @@ export function useVoiceRecorder({
 
     try {
       const transcript = (await onTranscribeAudio(result.audio)).trim()
+      if (generation !== generationRef.current) return
 
       if (!transcript) {
         notify({ kind: 'warning', title: voiceCopy.noSpeechDetected, message: voiceCopy.tryRecordingAgain })
@@ -70,10 +80,12 @@ export function useVoiceRecorder({
         onTranscript(transcript)
       }
     } catch (error) {
-      notifyError(error, voiceCopy.transcriptionFailed)
+      if (generation === generationRef.current) notifyError(error, voiceCopy.transcriptionFailed)
     } finally {
-      setVoiceStatus('idle')
-      focusInput()
+      if (generation === generationRef.current) {
+        setVoiceStatus('idle')
+        focusInput()
+      }
     }
   }
 
@@ -84,8 +96,18 @@ export function useVoiceRecorder({
       return
     }
 
+    const generation = ++generationRef.current
+    setVoiceStatus('recording')
     try {
-      await handle.start({ onError: error => notifyError(error, voiceCopy.recordingFailed) })
+      await handle.start({
+        onError: (error) => {
+          generationRef.current += 1
+          clearTimers()
+          setVoiceStatus('idle')
+          notifyError(error, voiceCopy.recordingFailed)
+        },
+      })
+      if (generation !== generationRef.current) return
       startedAtRef.current = Date.now()
       setElapsedSeconds(0)
       setVoiceStatus('recording')
@@ -99,7 +121,7 @@ export function useVoiceRecorder({
   }
 
   const dictate = () => {
-    if (recording) {
+    if (recording || voiceStatus === 'recording') {
       void stop()
     } else if (voiceStatus === 'idle') {
       void start()
@@ -109,7 +131,7 @@ export function useVoiceRecorder({
   const voiceActivityState: VoiceActivityState = {
     elapsedSeconds,
     level,
-    status: voiceStatus
+    status: voiceStatus,
   }
 
   return { dictate, voiceActivityState, voiceStatus }

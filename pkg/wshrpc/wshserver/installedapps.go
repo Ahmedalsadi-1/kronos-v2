@@ -109,6 +109,7 @@ func parseMacOSApp(ctx context.Context, appPath, source string) *wshrpc.Installe
 	return &wshrpc.InstalledAppInfo{
 		Name:        name,
 		AppId:       bundleId,
+		Path:        appPath,
 		ExecPath:    appPath,
 		Icon:        icon,
 		BundleId:    bundleId,

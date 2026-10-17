@@ -8,14 +8,7 @@ export type DeveloperMemoryStatus = "active" | "superseded" | "tombstoned";
 export type DeveloperMemoryProcessingState = "pending" | "processed" | "blocked";
 export type DeveloperMemoryCategory = "project" | "system" | "manual" | "workflow" | "integration" | "other";
 export type DeveloperMemorySourceType =
-    | "workspace_session"
-    | "terminal"
-    | "browser"
-    | "file"
-    | "agent"
-    | "sandbox"
-    | "desktop"
-    | "manual";
+    "workspace_session" | "terminal" | "browser" | "file" | "agent" | "sandbox" | "desktop" | "manual";
 
 export type DeveloperMemoryScope = {
     workspaceId?: string;
@@ -777,8 +770,20 @@ export class DeveloperMemoryStore {
             return {
                 ...emptyState(),
                 ...parsed,
-                memories: Array.isArray(parsed.memories) ? parsed.memories : [],
-                sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+                memories: Array.isArray(parsed.memories)
+                    ? parsed.memories.map((memory) => ({
+                          ...memory,
+                          evidence: Array.isArray(memory.evidence) ? memory.evidence : [],
+                      }))
+                    : [],
+                sessions: Array.isArray(parsed.sessions)
+                    ? parsed.sessions.map((session) => ({
+                          ...session,
+                          events: Array.isArray(session.events) ? session.events : [],
+                          memoryIds: Array.isArray(session.memoryIds) ? session.memoryIds : [],
+                          actionItemIds: Array.isArray(session.actionItemIds) ? session.actionItemIds : [],
+                      }))
+                    : [],
                 actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems : [],
             };
         } catch (err: any) {
@@ -797,11 +802,12 @@ export class DeveloperMemoryStore {
     }
 
     private async updateState(mutator: (state: DeveloperMemoryStoreState) => void): Promise<void> {
-        this.pendingWrite = this.pendingWrite.then(async () => {
+        const write = this.pendingWrite.then(async () => {
             const state = await this.readState();
             mutator(state);
             await this.writeState(state);
         });
-        await this.pendingWrite;
+        this.pendingWrite = write.catch(() => {});
+        await write;
     }
 }

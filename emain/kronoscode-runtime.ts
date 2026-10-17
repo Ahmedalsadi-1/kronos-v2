@@ -7,6 +7,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { resolveAgentWsh } from "./agent-runtime-paths";
 import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
 
 const HealthTimeoutMs = 3_000;
@@ -145,8 +146,10 @@ export function getKronosCodeBinaryCandidates(override?: string): string[] {
     const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
     const candidates = [
         override,
+        process.env.KRONTERM_KRONOSCODE_BIN,
         resourcesPath ? path.join(resourcesPath, "agents", "kronoscode", "bin", "kronoscode") : undefined,
         path.join(process.cwd(), "agents", "kronoscode", "bin", "kronoscode"),
+        path.resolve(import.meta.dirname, "..", "agents", "kronoscode", "bin", "kronoscode"),
         path.resolve(import.meta.dirname, "..", "..", "agents", "kronoscode", "bin", "kronoscode"),
         path.join(process.cwd(), "kronoscoder", "packages", "kronoscode", "bin", "kronoscode"),
         path.resolve(import.meta.dirname, "..", "..", "kronoscoder", "packages", "kronoscode", "bin", "kronoscode"),
@@ -216,6 +219,8 @@ export class KronosCodeRuntimeManager extends EventEmitter {
         progress: 0,
     };
     private appliedSettings: ConnectionSettings | null = null;
+    private startupGeneration = 0;
+    private childErrors = new WeakMap<ChildProcessWithoutNullStreams, Error>();
 
     constructor(private readonly apiRequestTimeoutMs = ApiRequestTimeoutMs) {
         super();
@@ -300,6 +305,10 @@ export class KronosCodeRuntimeManager extends EventEmitter {
     ): Promise<ManagedReadyDescriptor> {
         const startedAt = Date.now();
         while (Date.now() - startedAt < StartupTimeoutMs) {
+            const spawnError = this.childErrors.get(child);
+            if (spawnError) {
+                throw spawnError;
+            }
             if (child.exitCode != null || child.killed) {
                 throw new Error(`KronosCode exited before readiness (code ${child.exitCode ?? "unknown"}).`);
             }
@@ -321,6 +330,9 @@ export class KronosCodeRuntimeManager extends EventEmitter {
     }
 
     private attachChildHandlers(child: ChildProcessWithoutNullStreams): void {
+        child.on("error", (error) => {
+            this.childErrors.set(child, error);
+        });
         child.stdout.on("data", (chunk) => console.log(`[kronoscode] ${String(chunk).trimEnd()}`));
         child.stderr.on("data", (chunk) => console.log(`[kronoscode:err] ${String(chunk).trimEnd()}`));
         child.once("exit", (code, signal) => {
@@ -376,6 +388,7 @@ export class KronosCodeRuntimeManager extends EventEmitter {
         const username = "kronoscode";
         const password = randomBytes(32).toString("base64url");
         const bunBinary = path.join(os.homedir(), ".bun", "bin", "bun");
+        const wshPath = resolveAgentWsh();
         this.publishProgress({
             phase: "launching",
             message: `Starting managed KronosCode from ${binary}.`,
@@ -387,6 +400,8 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             env: {
                 ...process.env,
                 KRONOSCODE_CLIENT: "desktop",
+                KRONTERM_WSH: wshPath,
+                WAVETERM_WSH: wshPath,
                 KRONOSCODE_DISABLE_AUTOUPDATE: "1",
                 KRONTERM_AGENT_SYSTEM_PROMPT: KronTermSurfaceSystemPrompt,
                 KRONOSCODE_SERVER_USERNAME: username,
@@ -395,6 +410,7 @@ export class KronosCodeRuntimeManager extends EventEmitter {
                 PATH: Array.from(
                     new Set(
                         [
+                            path.dirname(wshPath),
                             path.join(os.homedir(), ".bun", "bin"),
                             "/opt/homebrew/bin",
                             "/usr/local/bin",
@@ -426,8 +442,9 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             this.stopChild(child);
             throw error;
         } finally {
-            void fs.promises.unlink(readyFile).catch(() => undefined);
-            void fs.promises.rmdir(runtimeDir).catch(() => undefined);
+            await fs.promises
+                .rm(runtimeDir, { recursive: true, force: true })
+                .catch((error) => console.log("KronosCode runtime directory cleanup failed", error));
         }
     }
 
@@ -439,9 +456,13 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             return this.startPromise;
         }
         this.stopping = false;
-        this.startPromise = (async () => {
+        const generation = ++this.startupGeneration;
+        const startPromise = (async () => {
             this.publishProgress({ phase: "resolving", message: "Resolving the KronosCode runtime.", progress: 10 });
             const settings = this.appliedSettings ?? (await readConnectionSettings(fullConfig));
+            if (generation !== this.startupGeneration) {
+                throw new Error("KronosCode startup was cancelled.");
+            }
             let connection: InternalConnection;
             if (settings.endpoint) {
                 this.publishProgress({
@@ -453,7 +474,11 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             } else {
                 connection = await this.launchManaged(settings);
             }
+            if (generation !== this.startupGeneration) {
+                throw new Error("KronosCode startup was cancelled.");
+            }
             this.connection = connection;
+            this.emit("connection", connection.descriptor);
             this.restartAttempt = 0;
             this.publishProgress({
                 phase: "ready",
@@ -462,14 +487,19 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             });
             return connection.descriptor;
         })();
+        this.startPromise = startPromise;
         try {
-            return await this.startPromise;
+            return await startPromise;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            this.publishProgress({ phase: "error", message, progress: 100, error: message });
+            if (generation === this.startupGeneration) {
+                this.publishProgress({ phase: "error", message, progress: 100, error: message });
+            }
             throw error;
         } finally {
-            this.startPromise = null;
+            if (this.startPromise === startPromise) {
+                this.startPromise = null;
+            }
         }
     }
 
@@ -484,7 +514,11 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             current.username,
             current.password
         );
+        if (this.connection !== current) {
+            throw new Error("KronosCode connection changed during validation.");
+        }
         this.connection = next;
+        this.emit("connection", next.descriptor);
         return next.descriptor;
     }
 
@@ -494,6 +528,7 @@ export class KronosCodeRuntimeManager extends EventEmitter {
         username?: string;
         password?: string;
     }): Promise<KronosCodeConnectionDescriptor> {
+        const generation = this.startupGeneration;
         const endpoint = input.endpoint?.trim() || undefined;
         const settings: ConnectionSettings = {
             endpoint,
@@ -504,7 +539,12 @@ export class KronosCodeRuntimeManager extends EventEmitter {
         const validated = endpoint
             ? await this.validate(endpoint, "external", settings.username, settings.password)
             : null;
+        if (generation !== this.startupGeneration) {
+            throw new Error("KronosCode connection change was cancelled.");
+        }
         const oldChild = this.child;
+        this.startupGeneration += 1;
+        this.startPromise = null;
         this.appliedSettings = settings;
         this.connection = validated;
         this.child = null;
@@ -512,6 +552,9 @@ export class KronosCodeRuntimeManager extends EventEmitter {
             this.stopChild(oldChild);
         }
         const descriptor = validated?.descriptor ?? (await this.ensure());
+        if (validated) {
+            this.emit("connection", descriptor);
+        }
         return descriptor;
     }
 
@@ -622,6 +665,7 @@ export class KronosCodeRuntimeManager extends EventEmitter {
 
     stop(): void {
         this.stopping = true;
+        this.startupGeneration += 1;
         if (this.restartTimer) {
             clearTimeout(this.restartTimer);
             this.restartTimer = null;

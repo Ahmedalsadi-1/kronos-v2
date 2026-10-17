@@ -1,3 +1,4 @@
+import { resolveBlockView } from "@/app/block/retired-chat-view";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -80,12 +81,14 @@ const WidgetGroupColors: Record<string, string> = {
     tools: "#94a3b8",
 };
 
-const CompactPrimaryWidgetViews = ["chathubv2", "term", "preview", "web", "appstream"];
+const CompactPrimaryWidgetViews = ["hermes", "term", "preview", "web", "appstream"];
 
 function getCompactPrimaryWidgets(widgets: WidgetConfigType[]): WidgetConfigType[] {
     const selected = new Set<WidgetConfigType>();
     for (const view of CompactPrimaryWidgetViews) {
-        const match = widgets.find((widget) => widget.blockdef?.meta?.view === view && !selected.has(widget));
+        const match = widgets.find(
+            (widget) => resolveBlockView(String(widget.blockdef?.meta?.view)) === view && !selected.has(widget)
+        );
         if (match) {
             selected.add(match);
         }
@@ -102,7 +105,7 @@ function widgetGroupKey(widget: WidgetConfigType): WidgetGroupKey {
     if (view === "term" || view === "vdom") return "terminal";
     if (view === "web") return "browser";
     if (view === "sandbox") return "sandbox";
-    if (view === "waveai" || view === "kronoschat" || view === "chathubv2" || view === "waveconfig") return "ai";
+    if (["hermes", "waveai", "waveconfig"].includes(resolveBlockView(String(view)))) return "ai";
     if (view === "tsunami") return "apps";
     return "tools";
 }
@@ -141,29 +144,29 @@ type WidgetPropsType = {
     env: WidgetsEnv;
 };
 
-function isChatHubWidget(widget: WidgetConfigType): boolean {
+function isAgentChatWidget(widget: WidgetConfigType): boolean {
     const view = widget.blockdef?.meta?.view;
-    return view === "waveai" || view === "kronoschat" || view === "chathubv2";
+    return ["hermes", "waveai"].includes(resolveBlockView(String(view)));
 }
 
 function getWidgetLabel(widget: WidgetConfigType): string {
-    if (isChatHubWidget(widget)) {
-        return "Chamber V2";
+    if (isAgentChatWidget(widget)) {
+        return "KronTerm Agent";
     }
     return widget.label;
 }
 
 function getWidgetDescription(widget: WidgetConfigType): string {
-    if (isChatHubWidget(widget)) {
+    if (isAgentChatWidget(widget)) {
         return "Open the canonical KronTerm Agent workspace";
     }
     return widget.description || widget.label;
 }
 
 async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv) {
-    // Redirect the old deprecated WaveAI/ACP chat widgets to ChatHub V2.
-    if (isChatHubWidget(widget)) {
-        env.createBlock({ meta: { view: "chathubv2" } }, widget.magnified);
+    // Saved chat launcher definitions open the supported Hermes surface.
+    if (isAgentChatWidget(widget)) {
+        env.createBlock({ meta: { view: "hermes" } }, widget.magnified);
         return;
     }
     const blockDef = widget.blockdef;
@@ -1219,8 +1222,8 @@ const Widgets = memo((props: WidgetsProps) => {
                 <div ref={containerRef} className="widget-rail-compact" onContextMenu={handleWidgetsBarContextMenu}>
                     <div className="widget-rail-compact-grid">
                         {primaryWidgets.map((widget, idx) => {
-                            const chamber = isChatHubWidget(widget);
-                            const label = chamber ? "Chamber V2" : getWidgetLabel(widget);
+                            const agent = isAgentChatWidget(widget);
+                            const label = agent ? "KronTerm Agent" : getWidgetLabel(widget);
                             return (
                                 <Tooltip
                                     key={`compact-widget-${idx}`}
@@ -1230,7 +1233,7 @@ const Widgets = memo((props: WidgetsProps) => {
                                 >
                                     <button
                                         type="button"
-                                        className={clsx("widget-rail-compact-item", chamber && "is-chamber")}
+                                        className={clsx("widget-rail-compact-item", agent && "is-agent")}
                                         onClick={() => handleWidgetSelect(widget, env)}
                                         aria-label={`Open ${label || "widget"}`}
                                     >
@@ -1241,7 +1244,7 @@ const Widgets = memo((props: WidgetsProps) => {
                                                 })}
                                             ></i>
                                         </div>
-                                        {chamber && <span>Chamber V2</span>}
+                                        {agent && <span>KronTerm Agent</span>}
                                     </button>
                                 </Tooltip>
                             );

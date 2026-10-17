@@ -10,17 +10,17 @@ const config: CapacitorConfig = {
     },
     ios: {
         contentInset: "never",
-        backgroundColor: "#0b0b0b",
+        backgroundColor: "#ffffff",
         preferredContentMode: "mobile",
     },
     plugins: {
         StatusBar: {
-            style: "LIGHT",
+            style: "DARK",
             overlaysWebView: true,
         },
         Keyboard: {
             resize: KeyboardResize.Native,
-            style: KeyboardStyle.Dark,
+            style: KeyboardStyle.Light,
         },
     },
 };

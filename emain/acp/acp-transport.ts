@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChildProcess } from "child_process";
@@ -57,6 +57,7 @@ export class NdjsonTransport extends EventEmitter {
     private stderrBufferTruncated = false;
     private keepaliveTimer: NodeJS.Timeout | null = null;
     private keepalivePending = false;
+    private permissionSessions = new Map<number, string>();
 
     constructor(child: ChildProcess, detached = false, workspace = process.cwd()) {
         super();
@@ -225,13 +226,9 @@ export class NdjsonTransport extends EventEmitter {
         });
 
         this.child.on("close", (code, signal) => {
-            if (this.pending.size > 0) {
-                this.rejectAllPending(
-                    new Error(
-                        `ACP transport closed before response (code=${code ?? "null"}, signal=${signal ?? "none"})`
-                    )
-                );
-            }
+            this.rejectAllPending(
+                new Error(`ACP transport closed before response (code=${code ?? "null"}, signal=${signal ?? "none"})`)
+            );
             this.emit("disconnect", {
                 type: "disconnect",
                 code,
@@ -262,9 +259,9 @@ export class NdjsonTransport extends EventEmitter {
         }, pending.timeoutMs);
     }
 
-    private pausePromptTimeouts() {
+    private pausePromptTimeouts(sessionId: string) {
         for (const pending of this.pending.values()) {
-            if (pending.method !== "session/prompt" || pending.paused) {
+            if (pending.method !== "session/prompt" || pending.params?.sessionId !== sessionId || pending.paused) {
                 continue;
             }
             if (pending.timer) {
@@ -275,9 +272,17 @@ export class NdjsonTransport extends EventEmitter {
         }
     }
 
-    private resumePromptTimeouts() {
+    private resumePromptTimeouts(permissionId: number) {
+        const sessionId = this.permissionSessions.get(permissionId);
+        if (sessionId == null) {
+            return;
+        }
+        this.permissionSessions.delete(permissionId);
+        if ([...this.permissionSessions.values()].includes(sessionId)) {
+            return;
+        }
         for (const [id, pending] of this.pending) {
-            if (pending.method !== "session/prompt" || !pending.paused) {
+            if (pending.method !== "session/prompt" || pending.params?.sessionId !== sessionId || !pending.paused) {
                 continue;
             }
             pending.paused = false;
@@ -285,9 +290,9 @@ export class NdjsonTransport extends EventEmitter {
         }
     }
 
-    private resetPromptTimeouts() {
+    private resetPromptTimeouts(sessionId: unknown) {
         for (const [id, pending] of this.pending) {
-            if (pending.method !== "session/prompt" || pending.paused) {
+            if (pending.method !== "session/prompt" || pending.params?.sessionId !== sessionId || pending.paused) {
                 continue;
             }
             if (pending.timer) {
@@ -298,10 +303,16 @@ export class NdjsonTransport extends EventEmitter {
     }
 
     private handleMessage(msg: AcpJsonRpcMessage) {
+        if (msg == null || typeof msg !== "object" || Array.isArray(msg) || msg.jsonrpc !== JSONRPC_VERSION) {
+            return;
+        }
         if ("method" in msg) {
             const request = msg as any;
             if (request.method === "session/request_permission" && request.id != null) {
-                this.pausePromptTimeouts();
+                if (typeof request.params?.sessionId === "string") {
+                    this.permissionSessions.set(request.id, request.params.sessionId);
+                    this.pausePromptTimeouts(request.params.sessionId);
+                }
                 this.emit("permission_request", {
                     id: request.id,
                     params: request.params,
@@ -313,7 +324,7 @@ export class NdjsonTransport extends EventEmitter {
             } else if (request.id != null) {
                 this.sendError(request.id, -32601, `Unsupported ACP client method: ${request.method}`);
             } else if (request.method === "session/update") {
-                this.resetPromptTimeouts();
+                this.resetPromptTimeouts(request.params?.sessionId);
                 this.emit("session_update", request.params);
             }
             this.emit("notification", {
@@ -442,7 +453,7 @@ export class NdjsonTransport extends EventEmitter {
     }
 
     sendResponse(id: number, result: unknown) {
-        this.resumePromptTimeouts();
+        this.resumePromptTimeouts(id);
         const response = {
             jsonrpc: JSONRPC_VERSION,
             id,
@@ -452,7 +463,7 @@ export class NdjsonTransport extends EventEmitter {
     }
 
     sendError(id: number, code: number, message: string) {
-        this.resumePromptTimeouts();
+        this.resumePromptTimeouts(id);
         const response = {
             jsonrpc: JSONRPC_VERSION,
             id,
@@ -518,6 +529,8 @@ export class NdjsonTransport extends EventEmitter {
     }
 
     private rejectAllPending(err: Error) {
+        this.stopKeepalive();
+        this.permissionSessions.clear();
         for (const [id, pending] of this.pending) {
             if (pending.timer) {
                 clearTimeout(pending.timer);

@@ -24,6 +24,7 @@ export type ReferenceKind =
     | "terminal"
     | "session"
     | "widget"
+    | "app"
     | "git"
     | "diff"
     | "staged"
@@ -103,6 +104,7 @@ export const REFERENCE_STYLES: Record<ReferenceKind, ReferenceStyle> = {
         ],
         label: "Sessions",
     },
+    app: { codicon: "device-desktop", paths: ["M4 5h16v12h-16z", "M8 21h8", "M12 17v4"], label: "Apps" },
     widget: {
         codicon: "multiple-windows",
         paths: ["M4 5h16v12h-16z", "M8 21h8", "M12 17v4"],
@@ -153,6 +155,7 @@ export const WIRE_REFERENCE_KINDS = [
     "terminal",
     "session",
     "widget",
+    "app",
 ] as const;
 
 /**
@@ -163,7 +166,7 @@ export const WIRE_REFERENCE_KINDS = [
  * would end at the first space and strand the rest as prose.
  */
 const REFERENCE_PATTERN =
-    /@(file|folder|url|image|tool|line|terminal|session|widget):(`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\S+)/;
+    /@(file|folder|url|image|tool|line|terminal|session|widget|app):(`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\S+)/;
 
 /**
  * A fresh matcher for every surface that has to find references in text: the

@@ -9,6 +9,7 @@ import {
 } from '@hermes/store/voice-playback'
 
 import { sanitizeTextForSpeech } from './speech-text'
+import { audioElementSpeechMotion, scheduledSpeechMotion } from './speech-motion'
 
 // Free Edge TTS occasionally hands back audio that never fires `playing`/`ended`
 // nor `error` — leaving voice mode stuck "speaking" forever. Reject if playback
@@ -153,6 +154,7 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
   ws.binaryType = 'arraybuffer'
 
   let context: AudioContext | null = null
+  let motion: ReturnType<typeof scheduledSpeechMotion> | null = null
   let streamRate = 24_000
   let nextStartAt = 0
   let carry: null | Uint8Array = null
@@ -170,6 +172,8 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
       }
 
       settled = true
+      motion?.stop()
+      motion = null
       currentStop = null
 
       try {
@@ -242,6 +246,7 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
     source.connect(context.destination)
 
     const startAt = Math.max(context.currentTime + 0.05, nextStartAt)
+    motion?.schedule(channel, streamRate, startAt)
     source.start(startAt)
     nextStartAt = startAt + buffer.duration
 
@@ -273,6 +278,8 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
     if (frame.type === 'start') {
       streamRate = frame.sample_rate || 24_000
       context = new AudioContext()
+      motion?.stop()
+      motion = scheduledSpeechMotion(context)
 
       // Autoplay policy can hand back a suspended context when playback wasn't
       // started by a user gesture (e.g. a wake-word-started voice turn). Resume
@@ -363,6 +370,7 @@ async function playSpeechDataUrl(
   }
 
   const audio = new Audio(response.data_url)
+  const stopMotion = audioElementSpeechMotion(audio, response.data_url)
   currentAudio = audio
   setVoicePlaybackState(currentState('speaking', options, audio))
 
@@ -370,6 +378,7 @@ async function playSpeechDataUrl(
     let stall: number | null = null
 
     const cleanup = () => {
+      stopMotion()
       if (stall !== null) {
         window.clearTimeout(stall)
         stall = null
@@ -442,6 +451,10 @@ export async function playSpeechText(text: string, options: VoicePlaybackOptions
 
   if (!speakableText) {
     return false
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('kronterm:voice-response', { detail: { text: speakableText } }))
   }
 
   const ownSequence = sequence

@@ -26,6 +26,8 @@ const sandboxCommandTimeout = 30000
 var sandboxSessionID string
 var sandboxMode string
 var sandboxBrowserURL string
+var sandboxRuntime string
+var sandboxImage string
 var sandboxClickX int
 var sandboxClickY int
 var sandboxClickHasCoordinates bool
@@ -120,6 +122,8 @@ func init() {
 	sandboxCmd.PersistentFlags().StringVar(&sandboxSessionID, "session-id", "default", "sandbox session ID")
 	sandboxStartCmd.Flags().StringVar(&sandboxMode, "mode", "desktop", "presentation mode: desktop or background")
 	sandboxStartCmd.Flags().StringVar(&sandboxBrowserURL, "browser-url", "", "browser URL associated with background mode")
+	sandboxStartCmd.Flags().StringVar(&sandboxRuntime, "runtime", "auto", "sandbox runtime: auto, qemu, docker, or kronterm-desktop")
+	sandboxStartCmd.Flags().StringVar(&sandboxImage, "image", "", "configured Docker sandbox image")
 	sandboxClickCmd.Flags().IntVar(&sandboxClickX, "x", 0, "X coordinate")
 	sandboxClickCmd.Flags().IntVar(&sandboxClickY, "y", 0, "Y coordinate")
 	sandboxClickCmd.Flags().BoolVar(&sandboxClickHasCoordinates, "at", false, "click at --x and --y instead of the current cursor")
@@ -157,6 +161,8 @@ func sandboxStartRun(cmd *cobra.Command, args []string) (rtnErr error) {
 		SessionId:  sandboxSessionID,
 		Mode:       sandboxMode,
 		BrowserUrl: sandboxBrowserURL,
+		Runtime:    sandboxRuntime,
+		Image:      sandboxImage,
 	}, &wshrpc.RpcOpts{Timeout: sandboxCommandTimeout})
 	if err != nil {
 		return fmt.Errorf("sandbox start: %w", err)

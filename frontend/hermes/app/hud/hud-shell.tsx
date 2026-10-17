@@ -1,6 +1,7 @@
+import { appViewForPath, isOverlayView } from "@hermes/app/routes";
 import { useStore } from "@nanostores/react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import { TitlebarIcon } from "@hermes/app/shell/titlebar-icon";
 import { Button } from "@hermes/components/ui/button";
@@ -171,6 +172,10 @@ function useHudHeld(): boolean {
  * `useRecentActivity`).
  */
 export function HudShell() {
+    const nativeNotch = new URLSearchParams(window.location.search).get("nativeNotch") === "1";
+    const location = useLocation();
+    const view = appViewForPath(location.pathname);
+    const pageOpen = view !== "chat" && !isOverlayView(view);
     const { embedded } = useHermesShellMode();
     const { t } = useI18n();
     const [recent, holdBand] = useRecentActivity();
@@ -299,6 +304,7 @@ export function HudShell() {
 
             const contentSpan = text < 1 ? 0 : text + HUD_SHEET_OVERHANG_PX;
             const viewportHeight = root.getBoundingClientRect().height || window.innerHeight;
+            root.style.setProperty("--hud-available-height", `${Math.round(viewportHeight)}px`);
 
             // Once the HUD has a transcript, a resize must buy readable scrollback.
             // The old glance-band ceiling froze this at 152px and turned every extra
@@ -373,11 +379,13 @@ export function HudShell() {
 
     return (
         <div
-            className={`relative flex ${embedded ? "h-full w-full" : "h-screen w-screen"} flex-col overflow-hidden`}
+            className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
             data-hud-embedded={embedded ? "" : undefined}
             data-hud-edge={edge}
             data-hud-recent={recent || held ? "" : undefined}
             data-hud-shell
+            data-hud-native-notch={nativeNotch ? "" : undefined}
+            data-hud-page={pageOpen ? "" : undefined}
             // Letting go of the composer re-arms the hold, so the transcript steps
             // down to its glanceable opacity and lingers there instead of jumping
             // straight from full to gone.
@@ -401,63 +409,67 @@ export function HudShell() {
 
             {/* The way back — without it the only exits are ⌘⇧H and ⌘W, both
           invisible. Placed and revealed entirely from styles.css. */}
-            <Tip label={t.titlebar.exitHud}>
-                <Button
-                    aria-label={t.titlebar.exitHud}
-                    className={`${titlebarButtonClass} absolute z-20`}
-                    data-hud-exit=""
-                    onClick={closeHud}
-                    size="icon-titlebar"
-                    type="button"
-                    variant="ghost"
-                >
-                    <TitlebarIcon name="screen-normal" />
-                </Button>
-            </Tip>
+            {!nativeNotch && (
+                <>
+                    <Tip label={t.titlebar.exitHud}>
+                        <Button
+                            aria-label={t.titlebar.exitHud}
+                            className={`${titlebarButtonClass} absolute z-20`}
+                            data-hud-exit=""
+                            onClick={closeHud}
+                            size="icon-titlebar"
+                            type="button"
+                            variant="ghost"
+                        >
+                            <TitlebarIcon name="screen-normal" />
+                        </Button>
+                    </Tip>
 
-            <Tip label="Dock KronTerm Agent in the workspace">
-                <Button
-                    aria-label="Dock KronTerm Agent in the workspace"
-                    className={`${titlebarButtonClass} absolute z-20`}
-                    data-hud-dock=""
-                    onClick={() => void window.hermesDesktop?.hud?.dock?.()}
-                    size="icon-titlebar"
-                    type="button"
-                    variant="ghost"
-                >
-                    <TitlebarIcon name="layout-sidebar-left" />
-                </Button>
-            </Tip>
+                    <Tip label="Dock KronTerm Agent in the workspace">
+                        <Button
+                            aria-label="Dock KronTerm Agent in the workspace"
+                            className={`${titlebarButtonClass} absolute z-20`}
+                            data-hud-dock=""
+                            onClick={() => void window.hermesDesktop?.hud?.dock?.()}
+                            size="icon-titlebar"
+                            type="button"
+                            variant="ghost"
+                        >
+                            <TitlebarIcon name="layout-sidebar-left" />
+                        </Button>
+                    </Tip>
 
-            {embedded ? (
-                <Tip label="Dismiss KronTerm Agent HUD">
-                    <Button
-                        aria-label="Dismiss KronTerm Agent HUD"
-                        className={`${titlebarButtonClass} absolute z-20`}
-                        data-hud-dismiss=""
-                        onClick={() => void window.hermesDesktop?.hud?.dismiss?.()}
-                        size="icon-titlebar"
-                        type="button"
-                        variant="ghost"
-                    >
-                        <TitlebarIcon name="close" />
-                    </Button>
-                </Tip>
-            ) : null}
+                    {embedded ? (
+                        <Tip label="Dismiss KronTerm Agent HUD">
+                            <Button
+                                aria-label="Dismiss KronTerm Agent HUD"
+                                className={`${titlebarButtonClass} absolute z-20`}
+                                data-hud-dismiss=""
+                                onClick={() => void window.hermesDesktop?.hud?.dismiss?.()}
+                                size="icon-titlebar"
+                                type="button"
+                                variant="ghost"
+                            >
+                                <TitlebarIcon name="close" />
+                            </Button>
+                        </Tip>
+                    ) : null}
 
-            {/* The resize handle: bottom-right corner, the one sanctioned way to
+                    {/* The resize handle: bottom-right corner, the one sanctioned way to
           change the HUD's size. Invisible chrome — a hot corner, not a
           button — so it never reads as part of the surface. `data-hud-grabbing`
           is the same flag the composer drag raises: a gesture in progress owns
           the window, so click-through can't hand the mouse away mid-resize
           when the growing edge outruns the cursor. */}
-            <div
-                aria-hidden
-                className="absolute bottom-0 right-0 z-20"
-                data-hud-grabbing={hudResizing ? "" : undefined}
-                data-hud-resize=""
-                onPointerDown={onHudResizePointerDown}
-            />
+                    <div
+                        aria-hidden
+                        className="absolute bottom-0 right-0 z-20"
+                        data-hud-grabbing={hudResizing ? "" : undefined}
+                        data-hud-resize=""
+                        onPointerDown={onHudResizePointerDown}
+                    />
+                </>
+            )}
         </div>
     );
 }

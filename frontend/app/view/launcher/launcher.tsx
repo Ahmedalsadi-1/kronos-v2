@@ -1,3 +1,4 @@
+import { resolveBlockView } from "@/app/block/retired-chat-view";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -12,8 +13,57 @@ import { atom, useAtom, useAtomValue } from "jotai";
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 
 function sortByDisplayOrder(wmap: { [key: string]: WidgetConfigType } | null | undefined): WidgetConfigType[] {
-    if (!wmap) return [];
-    const wlist = Object.values(wmap);
+    const builtins: Record<string, WidgetConfigType> = {
+        "kronterm@documentstudio": {
+            label: "Document Studio",
+            icon: "file-lines",
+            "display:order": 18,
+            blockdef: { meta: { view: "documentstudio" } },
+        },
+        "kronterm@audiostudio": {
+            label: "Audio Studio",
+            icon: "headphones",
+            "display:order": 17,
+            blockdef: { meta: { view: "audiostudio" } },
+        },
+        "kronterm@videostudio": {
+            label: "Video Studio",
+            icon: "film",
+            "display:order": 16,
+            blockdef: { meta: { view: "videostudio" } },
+        },
+        "kronterm@datastudio": {
+            label: "Data Studio",
+            icon: "table",
+            "display:order": 15,
+            blockdef: { meta: { view: "datastudio" } },
+        },
+        "kronterm@blenderproject": {
+            label: "Blender Project",
+            icon: "cube",
+            "display:order": 14,
+            blockdef: { meta: { view: "blenderproject" } },
+        },
+        "kronterm@medialibrary": {
+            label: "Media Library",
+            icon: "photo-film",
+            "display:order": 13,
+            blockdef: { meta: { view: "medialibrary" } },
+        },
+        "kronterm@imagestudio": {
+            label: "Image Studio",
+            icon: "image",
+            "display:order": 12,
+            blockdef: { meta: { view: "imagestudio" } },
+        },
+        "kronterm@gamestudio": {
+            label: "Game Studio",
+            icon: "gamepad",
+            "display:order": 10,
+            blockdef: { meta: { view: "gamestudio" } },
+        },
+    };
+    const wlist = Object.values({ ...builtins, ...(wmap ?? {}) });
     wlist.sort((a, b) => (a["display:order"] ?? 0) - (b["display:order"] ?? 0));
     return wlist;
 }
@@ -131,10 +181,9 @@ export class LauncherViewModel implements ViewModel {
     async handleWidgetSelect(widget: WidgetConfigType) {
         if (
             widget.blockdef?.meta?.view === "waveai" ||
-            widget.blockdef?.meta?.view === "kronoschat" ||
-            widget.blockdef?.meta?.view === "chathubv2"
+            resolveBlockView(String(widget.blockdef?.meta?.view)) === "hermes"
         ) {
-            await replaceBlock(this.blockId, { meta: { view: "chathubv2" } }, true);
+            await replaceBlock(this.blockId, { meta: { view: "hermes" } }, true);
             return;
         }
         try {

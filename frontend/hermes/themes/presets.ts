@@ -3,6 +3,7 @@
  * Add new themes here — no code changes needed elsewhere.
  */
 
+import { CoucouPalettes } from "./coucou-palettes";
 import type { DesktopTheme, DesktopThemeTypography } from "./types";
 
 // Color-emoji fonts to append to every stack as a last resort. None of the UI
@@ -271,7 +272,55 @@ export const slateTheme: DesktopTheme = {
     },
 };
 
+export const coucouTheme: DesktopTheme = {
+    ...nousTheme,
+    name: "coucou",
+    label: "Coucou",
+    description: "Quiet black surfaces, native typography, and soft violet accents",
+    darkColors: {
+        ...nousTheme.darkColors,
+        background: "#000000",
+        foreground: "#F5F6F8",
+        card: "#141416",
+        cardForeground: "#F5F6F8",
+        popover: "#141416",
+        primary: "#F5F6F8",
+        mutedForeground: "#8E939C",
+        border: "#2C2C30",
+        input: "#2C2C30",
+        ring: "#967AFF",
+        midground: "#967AFF",
+        composerRing: "#967AFF",
+        sidebarBackground: "#000000",
+        sidebarBorder: "#2C2C30",
+        userBubble: "#141416",
+        userBubbleBorder: "#2C2C30",
+    },
+    typography: {
+        fontSans: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif, ${EMOJI_FALLBACK}`,
+        fontMono: SYSTEM_MONO,
+    },
+};
+
+export const CoucouThemes: DesktopTheme[] = CoucouPalettes.map((palette) => {
+    const colors = {
+        ...coucouTheme.darkColors,
+        ring: palette.accent,
+        midground: palette.accent,
+        composerRing: palette.accent,
+    };
+    return {
+        ...coucouTheme,
+        name: palette.name,
+        label: palette.label,
+        description: `${palette.label} accent on Coucou's black surfaces`,
+        colors,
+        darkColors: colors,
+    };
+});
+
 export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
+    ...Object.fromEntries(CoucouThemes.map((theme) => [theme.name, theme])),
     nous: nousTheme,
     midnight: midnightTheme,
     ember: emberTheme,
@@ -283,4 +332,4 @@ export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
 export const BUILTIN_THEME_LIST = Object.values(BUILTIN_THEMES);
 
 /** Skin used when nothing is persisted or the persisted name is retired. */
-export const DEFAULT_SKIN_NAME = "nous";
+export const DEFAULT_SKIN_NAME = "coucou";

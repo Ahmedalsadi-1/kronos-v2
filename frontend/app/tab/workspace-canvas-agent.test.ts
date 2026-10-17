@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { LiveAgentSurfaceActivity } from "../../types/agent-activity";
 import {
     agentActivityCardId,
+    agentActivityFollowTarget,
     buildCanvasContextPrompt,
     makeCanvasRequestCard,
     nodeKindForAgentActivity,
@@ -27,6 +28,15 @@ function activity(overrides: Partial<LiveAgentSurfaceActivity> = {}): LiveAgentS
 }
 
 describe("workspace canvas agent graph", () => {
+    it("follows only active work attached to a live canvas widget", () => {
+        const rects = { browser: { x: 20, y: 30, width: 840, height: 540 } };
+
+        expect(agentActivityFollowTarget(activity({ blockid: "browser" }), rects, true)).toBe("browser");
+        expect(agentActivityFollowTarget(activity({ blockid: "missing" }), rects, true)).toBeNull();
+        expect(agentActivityFollowTarget(activity({ blockid: "browser", phase: "succeeded" }), rects, true)).toBeNull();
+        expect(agentActivityFollowTarget(activity({ blockid: "browser" }), rects, false)).toBeNull();
+    });
+
     it("keeps one card while an activity advances through phases", () => {
         const running = activity({ id: "tool-1", detail: "Opening docs" });
         const first = upsertAgentActivityCard([], running, { x: 20, y: 30, width: 320, height: 172 }, [
@@ -152,7 +162,7 @@ describe("workspace canvas agent graph", () => {
         });
     });
 
-    it("accumulates activity thoughts as fallback reasoning without duplicates", () => {
+    it("does not persist private thoughts as public reasoning summaries", () => {
         const first = upsertAgentActivityCard([], activity({ id: "thought", thought: "Checked the task context" }), {
             x: 0,
             y: 0,
@@ -170,7 +180,8 @@ describe("workspace canvas agent graph", () => {
             { x: 0, y: 0, width: 320, height: 172 }
         );
 
-        expect(second.card.agent.reasoningsteps).toEqual(["Checked the task context", "Prepared the browser evidence"]);
+        expect(second.card.agent.reasoningsteps).toBeUndefined();
+        expect(second.card.agent.detail).not.toContain("Prepared the browser evidence");
     });
 
     it("labels real execution nodes by their role in the task", () => {

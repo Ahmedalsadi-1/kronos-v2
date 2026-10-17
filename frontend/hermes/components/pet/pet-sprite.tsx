@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createRendererLoopPauseController } from '@hermes/lib/renderer-loop-pause'
-import { $petState, type PetInfo, type PetState } from '@hermes/store/pet'
+import { $petActivity, $petState, type PetInfo, type PetState } from '@hermes/store/pet'
 
 const DEFAULT_FRAME_W = 192
 const DEFAULT_FRAME_H = 208
@@ -32,7 +32,7 @@ function useDevicePixelRatio(): number {
 
       const next = readDevicePixelRatio()
 
-      setRatio(current => (current === next ? current : next))
+      setRatio((current) => (current === next ? current : next))
 
       resolutionQuery = typeof window.matchMedia === 'function' ? window.matchMedia(`(resolution: ${next}dppx)`) : null
       resolutionQuery?.addEventListener('change', update)
@@ -232,6 +232,8 @@ function PetSpriteImpl({ info, zoom = 1, stateOverride, rowOverride, pauseWhenUn
     let drawnRow = -1
     let activeRow = -1
     let activeCount = -1
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    let voice = $petActivity.get()
     let pauseController: ReturnType<typeof createRendererLoopPauseController> | null = null
 
     const rendererPaused = () => pauseController?.isPaused() ?? document.visibilityState === 'hidden'
@@ -365,7 +367,8 @@ function PetSpriteImpl({ info, zoom = 1, stateOverride, rowOverride, pauseWhenUn
 
       // Only touch the canvas when the visible cell actually changes. The RAF
       // wakes when a sprite cell is due, so the idle path avoids a 60Hz loop.
-      if (frame !== drawnFrame || row !== drawnRow) {
+      const speaking = voice.speaking && !reducedMotion?.matches && !stateOverride
+      if (frame !== drawnFrame || row !== drawnRow || speaking) {
         const sx = frame * frameW
         const sy = row * frameH
         ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -373,21 +376,38 @@ function PetSpriteImpl({ info, zoom = 1, stateOverride, rowOverride, pauseWhenUn
         // pixel art — nearest-neighbour makes zoomed frames look blocky.
         ctx.imageSmoothingEnabled = true
         ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(image, sx, sy, frameW, frameH, 0, 0, backingW, backingH)
+        const pulse = speaking ? 0.006 + 0.024 * Math.max(0, Math.min(1, voice.voiceLevel ?? 0)) : 0
+        const inset = backingW * pulse
+        ctx.drawImage(
+          image,
+          sx,
+          sy,
+          frameW,
+          frameH,
+          inset,
+          backingH * pulse,
+          backingW - inset * 2,
+          backingH * (1 - pulse)
+        )
         drawnFrame = frame
         drawnRow = row
       }
 
-      scheduleFrame(Math.max(0, stepMs - (now - lastStep)))
+      scheduleFrame(Math.min(speaking ? 33 : Infinity, Math.max(0, stepMs - (now - lastStep))))
     }
 
     kickAnimationRef.current = kickAnimation
 
-    const unsubState = $petState.listen(next => {
+    const unsubState = $petState.listen((next) => {
       stateRef.current = next
       kickAnimation()
     })
 
+    const unsubVoice = $petActivity.listen((next) => {
+      voice = next
+      drawnFrame = -1
+      kickAnimation()
+    })
     image.addEventListener('load', kickAnimation)
     pauseController = createRendererLoopPauseController(handleVisibilityChange, { pauseWhenUnfocused })
     scheduleFrame()
@@ -399,6 +419,7 @@ function PetSpriteImpl({ info, zoom = 1, stateOverride, rowOverride, pauseWhenUn
       image.removeEventListener('load', kickAnimation)
       pauseController?.dispose()
       unsubState()
+      unsubVoice()
     }
   }, [image, frameW, frameH, frames, framesByState, framesByRow, loopMs, backingW, backingH, rows, pauseWhenUnfocused])
 
@@ -418,3 +439,5 @@ function PetSpriteImpl({ info, zoom = 1, stateOverride, rowOverride, pauseWhenUn
  * re-run the canvas setup. Props change only when the pet itself changes.
  */
 export const PetSprite = memo(PetSpriteImpl)
+
+PetSprite.displayName = 'PetSprite'

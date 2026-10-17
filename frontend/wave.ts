@@ -15,6 +15,9 @@ import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { makeTabRouteId } from "@/app/store/wshrouter";
 import { initWshrpc, TabRpcClient } from "@/app/store/wshrpcutil";
+import { NativeIslandApp } from "@/app/workspace/native-island-app";
+import { initializeReactGrab } from "@/app/lib/react-grab-dev-gate";
+import "@/app/workspace/coucou-chrome.css";
 import { getLayoutModelForStaticTab } from "@/layout/lib/layoutModelHooks";
 import { countersClear, countersPrint } from "@/store/counters";
 import {
@@ -63,6 +66,7 @@ async function initBare() {
 
     setKeyUtilPlatform(platform);
     loadFonts();
+    initializeReactGrab();
     updateZoomFactor(getApi().getZoomFactor());
     getApi().onZoomFactorChange((zoomFactor) => {
         updateZoomFactor(zoomFactor);
@@ -144,6 +148,9 @@ function loadAllWorkspaceTabs(ws: Workspace) {
 
 async function initWave(initOpts: WaveInitOpts) {
     getApi().sendLog("Init Wave " + JSON.stringify(initOpts));
+    const query = new URLSearchParams(window.location.search);
+    const nativeHud = query.get("nativeSurface") === "hud";
+    const nativeIslandBlockId = query.get("nativeSurface") === "island" ? query.get("blockId") : null;
     const globalInitOpts: GlobalInitOptions = {
         tabId: initOpts.tabId,
         clientId: initOpts.clientId,
@@ -159,7 +166,12 @@ async function initWave(initOpts: WaveInitOpts) {
     (window as any).globalAtoms = atoms;
 
     // Init WPS event handlers
-    const globalWS = initWshrpc(makeTabRouteId(initOpts.tabId));
+    const routeId = nativeIslandBlockId
+        ? `${makeTabRouteId(initOpts.tabId)}:island:${nativeIslandBlockId}`
+        : nativeHud
+          ? `${makeTabRouteId(initOpts.tabId)}:hud:${initOpts.windowId}`
+          : makeTabRouteId(initOpts.tabId);
+    const globalWS = initWshrpc(routeId);
     (window as any).globalWS = globalWS;
     (window as any).TabRpcClient = TabRpcClient;
 
@@ -189,7 +201,7 @@ async function initWave(initOpts: WaveInitOpts) {
         console.error("Failed initialization error", e);
         getApi().sendLog("Error in initialization (wave.ts, loading required objects) " + e.message + "\n" + e.stack);
     }
-    registerGlobalKeys();
+    if (!nativeHud) registerGlobalKeys();
     registerElectronReinjectKeyHandler();
     registerControlShiftStateUpdateHandler();
     await loadMonaco();
@@ -203,7 +215,20 @@ async function initWave(initOpts: WaveInitOpts) {
     const firstRenderPromise = new Promise<void>((resolve) => {
         firstRenderResolveFn = resolve;
     });
-    const reactElem = createElement(App, { onFirstRender: firstRenderResolveFn }, null);
+    if (nativeIslandBlockId) {
+        document.documentElement.dataset.nativeSurface = "island";
+        document.body.style.background = "transparent";
+    }
+    const NativeHud = nativeHud ? (await import("./native-hud")).NativeHud : null;
+    const reactElem = nativeHud
+        ? createElement(NativeHud, { tabId: initOpts.tabId, onReady: firstRenderResolveFn })
+        : nativeIslandBlockId
+          ? createElement(NativeIslandApp, {
+                blockId: nativeIslandBlockId,
+                tabId: initOpts.tabId,
+                onReady: firstRenderResolveFn,
+            })
+          : createElement(App, { onFirstRender: firstRenderResolveFn }, null);
     const elem = document.getElementById("main");
     const root = createRoot(elem);
     root.render(reactElem);

@@ -1,9 +1,22 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export const CanvasMinZoom = 0.2;
-export const CanvasMaxZoom = 2.4;
-const CanvasMinFitZoom = 0.04;
+import {
+    SpatialMaxZoom,
+    SpatialMinZoom,
+    fitSpatialViewportToBounds,
+    makeSpatialViewportCenteredRect,
+    spatialBoundsForRects,
+    spatialScreenToWorld,
+    zoomSpatialViewportAtPoint,
+    type SpatialPoint,
+    type SpatialRect,
+    type SpatialSize,
+    type SpatialViewport,
+} from "@/app/spatial/spatial-engine";
+
+export const CanvasMinZoom = SpatialMinZoom;
+export const CanvasMaxZoom = SpatialMaxZoom;
 const CanvasInteractiveTargetSelector = [
     "button",
     "a[href]",
@@ -32,21 +45,10 @@ const CanvasInteractiveTargetSelector = [
     "[data-canvas-shortcuts='ignore']",
 ].join(",");
 
-export type WorkspaceCanvasPoint = {
-    x: number;
-    y: number;
-};
-
-export type WorkspaceCanvasSize = {
-    width: number;
-    height: number;
-};
-
-export type WorkspaceCanvasRect = WorkspaceCanvasPoint & WorkspaceCanvasSize;
-
-export type WorkspaceCanvasCamera = WorkspaceCanvasPoint & {
-    zoom: number;
-};
+export type WorkspaceCanvasPoint = SpatialPoint;
+export type WorkspaceCanvasSize = SpatialSize;
+export type WorkspaceCanvasRect = SpatialRect;
+export type WorkspaceCanvasCamera = SpatialViewport;
 
 export function canvasRectsOverlap(a: WorkspaceCanvasRect, b: WorkspaceCanvasRect, gap = 0): boolean {
     return !(
@@ -117,10 +119,7 @@ export function clampCanvasZoom(zoom: number): number {
 }
 
 export function screenPointToCanvas(camera: WorkspaceCanvasCamera, point: WorkspaceCanvasPoint): WorkspaceCanvasPoint {
-    return {
-        x: (point.x - camera.x) / camera.zoom,
-        y: (point.y - camera.y) / camera.zoom,
-    };
+    return spatialScreenToWorld(camera, point);
 }
 
 export function zoomCanvasCameraAtPoint(
@@ -128,13 +127,7 @@ export function zoomCanvasCameraAtPoint(
     nextZoom: number,
     point: WorkspaceCanvasPoint
 ): WorkspaceCanvasCamera {
-    const zoom = clampCanvasZoom(nextZoom);
-    const worldPoint = screenPointToCanvas(camera, point);
-    return {
-        zoom,
-        x: point.x - worldPoint.x * zoom,
-        y: point.y - worldPoint.y * zoom,
-    };
+    return zoomSpatialViewportAtPoint(camera, nextZoom, point);
 }
 
 export function makeViewportCenteredCanvasRect(
@@ -143,32 +136,11 @@ export function makeViewportCenteredCanvasRect(
     size: WorkspaceCanvasSize,
     offset: WorkspaceCanvasPoint = { x: 0, y: 0 }
 ): WorkspaceCanvasRect {
-    const center = screenPointToCanvas(camera, {
-        x: viewport.width / 2,
-        y: viewport.height / 2,
-    });
-    return {
-        x: Math.round(center.x - size.width / 2 + offset.x),
-        y: Math.round(center.y - size.height / 2 + offset.y),
-        width: size.width,
-        height: size.height,
-    };
+    return makeSpatialViewportCenteredRect(camera, viewport, size, offset);
 }
 
 export function canvasBoundsForRects(rects: WorkspaceCanvasRect[]): WorkspaceCanvasRect | null {
-    if (rects.length === 0) {
-        return null;
-    }
-    const minX = Math.min(...rects.map((rect) => rect.x));
-    const minY = Math.min(...rects.map((rect) => rect.y));
-    const maxX = Math.max(...rects.map((rect) => rect.x + rect.width));
-    const maxY = Math.max(...rects.map((rect) => rect.y + rect.height));
-    return {
-        x: minX,
-        y: minY,
-        width: Math.max(1, maxX - minX),
-        height: Math.max(1, maxY - minY),
-    };
+    return spatialBoundsForRects(rects);
 }
 
 export function fitCanvasCameraToBounds(
@@ -177,15 +149,5 @@ export function fitCanvasCameraToBounds(
     padding = 96,
     maxZoom = 1.15
 ): WorkspaceCanvasCamera {
-    const availableWidth = Math.max(1, viewport.width - padding * 2);
-    const availableHeight = Math.max(1, viewport.height - padding * 2);
-    const zoom = Math.max(
-        CanvasMinFitZoom,
-        Math.min(CanvasMaxZoom, maxZoom, availableWidth / bounds.width, availableHeight / bounds.height)
-    );
-    return {
-        zoom,
-        x: Math.round(viewport.width / 2 - (bounds.x + bounds.width / 2) * zoom),
-        y: Math.round(viewport.height / 2 - (bounds.y + bounds.height / 2) * zoom),
-    };
+    return fitSpatialViewportToBounds(bounds, viewport, padding, maxZoom);
 }

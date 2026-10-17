@@ -5,7 +5,6 @@ import "@xterm/xterm/css/xterm.css";
 import {
     ArrowLeft,
     ArrowRight,
-    Bot,
     ChevronLeft,
     CircleStop,
     Eye,
@@ -13,7 +12,6 @@ import {
     ListTree,
     LoaderCircle,
     LockKeyhole,
-    MessageSquareText,
     MousePointer2,
     RefreshCw,
     RotateCcw,
@@ -22,7 +20,10 @@ import {
     X,
 } from "lucide-react";
 import { FormEvent, PointerEvent, useEffect, useRef, useState } from "react";
+import { handleWidgetDialogKey } from "../lib/widget-dialog-keys";
 import type { BrowserSnapshot, BrowserSnapshotItem, Surface, SurfaceControlMode, TerminalStreamEvent } from "../types";
+import { AgentAvatar } from "./agent-avatar";
+import { SurfaceIcon } from "./workspace-surface-card";
 
 interface FocusedSurfaceProps {
     surface?: Surface;
@@ -40,6 +41,7 @@ interface FocusedSurfaceProps {
     onTerminalResize: (cols: number, rows: number) => Promise<void>;
     onControlMode: (mode: SurfaceControlMode) => void;
     onAskKronos: () => void;
+    onResumeKronos?: (note: string) => Promise<void>;
     onStop: () => Promise<void>;
 }
 
@@ -67,25 +69,48 @@ export const FocusedSurface = ({
     onTerminalResize,
     onControlMode,
     onAskKronos,
+    onResumeKronos,
     onStop,
 }: FocusedSurfaceProps) => {
     const [address, setAddress] = useState("");
     const [keyboardText, setKeyboardText] = useState("");
+    const [handoffOpen, setHandoffOpen] = useState(false);
+    const [handoffText, setHandoffText] = useState("");
+    const [handoffBusy, setHandoffBusy] = useState(false);
+    const [handoffError, setHandoffError] = useState("");
+    useEffect(() => {
+        setHandoffOpen(false);
+        setHandoffText("");
+        setHandoffError("");
+    }, [surface?.id]);
     const [now, setNow] = useState(Date.now());
     const [browserControlsOpen, setBrowserControlsOpen] = useState(false);
     const [browserControlsLoading, setBrowserControlsLoading] = useState(false);
     const [browserControlsError, setBrowserControlsError] = useState("");
     const [browserSnapshot, setBrowserSnapshot] = useState<BrowserSnapshot>();
     const [browserValues, setBrowserValues] = useState<Record<string, string>>({});
+    const sectionRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        if (!surface?.id) return;
+        const previous = document.activeElement as HTMLElement;
+        sectionRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+        return () => previous?.focus();
+    }, [surface?.id]);
+    const [controlError, setControlError] = useState("");
+    const surfaceGenerationRef = useRef(0);
     const [terminalInput, setTerminalInput] = useState("");
     const [terminalStatus, setTerminalStatus] = useState("Connecting…");
     const previewRef = useRef<HTMLImageElement>(null);
-    const pointerStartRef = useRef<{ x: number; y: number } | undefined>(undefined);
+    const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | undefined>(undefined);
     const terminalElementRef = useRef<HTMLDivElement>(null);
     const sandboxKeyboardInputRef = useRef<HTMLInputElement>(null);
     const launchedTerminalSessionsRef = useRef(new Set<string>());
 
     useEffect(() => {
+        surfaceGenerationRef.current += 1;
+        pointerStartRef.current = undefined;
+        setControlError("");
+        setBrowserControlsLoading(false);
         setAddress(surface?.url ?? "");
         setKeyboardText("");
         setBrowserControlsOpen(false);
@@ -131,7 +156,7 @@ export const FocusedSurface = ({
         };
         const resizeObserver = new ResizeObserver(fit);
         resizeObserver.observe(terminalElementRef.current);
-        window.requestAnimationFrame(() => {
+        const focusFrame = window.requestAnimationFrame(() => {
             fit();
             terminal.focus();
         });
@@ -170,6 +195,7 @@ export const FocusedSurface = ({
             }
         });
         return () => {
+            window.cancelAnimationFrame(focusFrame);
             resizeObserver.disconnect();
             inputSubscription.dispose();
             unsubscribe();
@@ -199,14 +225,34 @@ export const FocusedSurface = ({
         await onBrowserAction("navigate", { type: "url", url });
     };
 
+    const canControlNow = () => controlMode === "takeover" && (leaseEndsAt == null || leaseEndsAt > Date.now());
+
+    const sendSandboxAction = async (action: Record<string, unknown>) => {
+        if (!canControlNow()) {
+            return false;
+        }
+        const generation = surfaceGenerationRef.current;
+        setControlError("");
+        try {
+            await onSandboxAction(action);
+            return generation === surfaceGenerationRef.current;
+        } catch (reason) {
+            if (generation === surfaceGenerationRef.current) {
+                setControlError(reason instanceof Error ? reason.message : "Direct control failed. Try again.");
+            }
+            return false;
+        }
+    };
+
     const typeIntoSandbox = async (event: FormEvent) => {
         event.preventDefault();
         if (!keyboardText.trim()) {
             return;
         }
         const text = keyboardText;
-        setKeyboardText("");
-        await onSandboxAction({ action: "type", text });
+        if (await sendSandboxAction({ action: "type", text })) {
+            setKeyboardText((current) => (current === text ? "" : current));
+        }
     };
 
     const submitTerminalInput = async (event: FormEvent) => {
@@ -220,10 +266,14 @@ export const FocusedSurface = ({
     };
 
     const loadBrowserControls = async () => {
+        const generation = surfaceGenerationRef.current;
         setBrowserControlsLoading(true);
         setBrowserControlsError("");
         try {
             const nextSnapshot = await onBrowserSnapshot();
+            if (generation !== surfaceGenerationRef.current) {
+                return;
+            }
             setBrowserSnapshot(nextSnapshot);
             setBrowserValues(
                 Object.fromEntries(
@@ -231,9 +281,13 @@ export const FocusedSurface = ({
                 )
             );
         } catch (reason) {
-            setBrowserControlsError(reason instanceof Error ? reason.message : "Could not read the page controls");
+            if (generation === surfaceGenerationRef.current) {
+                setBrowserControlsError(reason instanceof Error ? reason.message : "Could not read the page controls");
+            }
         } finally {
-            setBrowserControlsLoading(false);
+            if (generation === surfaceGenerationRef.current) {
+                setBrowserControlsLoading(false);
+            }
         }
     };
 
@@ -270,44 +324,52 @@ export const FocusedSurface = ({
     };
 
     const startDirectInteraction = (event: PointerEvent<HTMLImageElement>) => {
-        pointerStartRef.current = { x: event.clientX, y: event.clientY };
+        if (!canControlNow()) {
+            return;
+        }
+        pointerStartRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
         event.currentTarget.setPointerCapture(event.pointerId);
     };
 
     const finishDirectInteraction = async (event: PointerEvent<HTMLImageElement>) => {
-        if (controlMode !== "takeover" || !previewRef.current) {
+        if (!canControlNow() || !previewRef.current) {
+            pointerStartRef.current = undefined;
             return;
         }
         const start = pointerStartRef.current;
         pointerStartRef.current = undefined;
+        if (!start || start.pointerId !== event.pointerId) {
+            return;
+        }
         const coordinate = previewCoordinate(event);
         const deltaX = event.clientX - (start?.x ?? event.clientX);
         const deltaY = event.clientY - (start?.y ?? event.clientY);
         if (surface.phoneControl && Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 36) {
             const direction =
                 Math.abs(deltaX) > Math.abs(deltaY) ? (deltaX > 0 ? "right" : "left") : deltaY > 0 ? "down" : "up";
-            await onSandboxAction({ action: "swipe", coordinate, direction });
+            await sendSandboxAction({ action: "swipe", coordinate, direction });
             return;
         }
-        await onSandboxAction({ action: "left_click", coordinate });
+        await sendSandboxAction({ action: "left_click", coordinate });
     };
 
     const directTerminal = Boolean(surface.terminalSessionId);
     const hasDirectControl = Boolean(surface.sandboxId || surface.phoneControl);
-    const hasLease = controlMode === "takeover";
+    const hasLease = controlMode === "takeover" && (leaseEndsAt == null || leaseEndsAt > now);
 
     return (
-        <section className="focused-surface" aria-label={`${surface.title} focused surface`}>
+        <section ref={sectionRef} className="focused-surface" aria-label={`${surface.title} focused surface`}>
             <header className="focus-header">
                 <button type="button" className="focus-back" onClick={onBack} aria-label="Back to surfaces">
                     <ChevronLeft />
                 </button>
-                <div className="focus-title">
-                    <span style={{ background: surface.hostColor }} />
-                    <div>
-                        <strong>{surface.title}</strong>
-                        <small>{surface.hostLabel}</small>
-                    </div>
+                <div className="focus-title" title={`${surface.title} · ${surface.hostLabel}`}>
+                    <SurfaceIcon surface={surface} />
+                    <span className="sr-only">
+                        {surface.title} on {surface.hostLabel}
+                    </span>
+                    <i className={`focus-status-dot status-${surface.status}`} />
+                    {surface.phoneControl && <small>Labs</small>}
                 </div>
                 <button type="button" onClick={() => void onRefresh()} aria-label="Refresh surface">
                     <RefreshCw className={loading ? "spin" : ""} />
@@ -359,6 +421,7 @@ export const FocusedSurface = ({
                         className={browserControlsOpen ? "is-selected" : ""}
                         onClick={toggleBrowserControls}
                         aria-label="Show page controls"
+                        aria-expanded={browserControlsOpen}
                     >
                         <ListTree />
                     </button>
@@ -408,6 +471,9 @@ export const FocusedSurface = ({
                             alt={`Live view of ${surface.title}`}
                             onPointerDown={hasDirectControl ? startDirectInteraction : undefined}
                             onPointerUp={hasDirectControl ? (event) => void finishDirectInteraction(event) : undefined}
+                            onPointerCancel={() => {
+                                pointerStartRef.current = undefined;
+                            }}
                         />
                     ) : (
                         <div className="focus-empty-preview">
@@ -498,6 +564,12 @@ export const FocusedSurface = ({
                 </section>
             ) : null}
 
+            {controlError ? (
+                <p className="browser-control-error" role="alert">
+                    {controlError}
+                </p>
+            ) : null}
+
             {hasDirectControl && hasLease ? (
                 <form className="sandbox-keyboard" onSubmit={typeIntoSandbox}>
                     <Keyboard />
@@ -505,6 +577,7 @@ export const FocusedSurface = ({
                         ref={sandboxKeyboardInputRef}
                         value={keyboardText}
                         onChange={(event) => setKeyboardText(event.target.value)}
+                        aria-label="Text for the focused app"
                         placeholder="Type into the focused app"
                         autoCapitalize="none"
                         autoCorrect="off"
@@ -529,31 +602,36 @@ export const FocusedSurface = ({
             ) : null}
 
             <footer className="focus-controls">
-                {!directTerminal ? (
+                {!directTerminal && hasDirectControl ? (
                     <div className="control-segment" aria-label="Surface control mode">
                         <button
                             type="button"
-                            className={controlMode === "watch" ? "is-selected" : ""}
-                            onClick={() => onControlMode("watch")}
+                            className={!hasLease ? "is-selected" : ""}
+                            aria-pressed={!hasLease}
+                            onClick={() => {
+                                onControlMode("watch");
+                                if (hasLease && onResumeKronos) setHandoffOpen(true);
+                            }}
                         >
-                            <Eye /> Watch
+                            <Eye /> {hasLease ? "Exit takeover" : "Watch"}
                         </button>
                         <button
                             type="button"
-                            className={controlMode === "takeover" ? "is-selected" : ""}
+                            className={hasLease ? "is-selected" : ""}
+                            aria-pressed={hasLease}
                             onClick={() => onControlMode("takeover")}
                         >
-                            <MousePointer2 /> Control
+                            <MousePointer2 /> Take control
                         </button>
                     </div>
                 ) : null}
-                <button type="button" className="ask-kronos-button" onClick={onAskKronos}>
-                    <Bot />
-                    <span>
-                        <strong>Ask Kronos</strong>
-                        <small>Act on this surface</small>
-                    </span>
-                    <MessageSquareText />
+                <button
+                    type="button"
+                    className="ask-kronos-button"
+                    onClick={onAskKronos}
+                    aria-label="Ask KronosCode about this surface"
+                >
+                    <AgentAvatar small />
                 </button>
                 <div className="focus-safety-row">
                     <span>
@@ -571,6 +649,56 @@ export const FocusedSurface = ({
                     ) : null}
                 </div>
             </footer>
+            {handoffOpen && (
+                <div className="widget-handoff-backdrop">
+                    <form
+                        className="widget-handoff"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Tell the agent what you changed"
+                        onKeyDown={(event) =>
+                            handleWidgetDialogKey(event, () => {
+                                if (!handoffBusy) setHandoffOpen(false);
+                            })
+                        }
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            if (handoffBusy || controlMode !== "watch") return;
+                            setHandoffBusy(true);
+                            setHandoffError("");
+                            void onResumeKronos?.(handoffText)
+                                .then(() => setHandoffOpen(false))
+                                .catch((reason) =>
+                                    setHandoffError(reason instanceof Error ? reason.message : String(reason))
+                                )
+                                .finally(() => setHandoffBusy(false));
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className="widget-handoff-close"
+                            aria-label="Close handoff"
+                            onClick={() => setHandoffOpen(false)}
+                        >
+                            <X />
+                        </button>
+                        <h2>Tell the agent what you changed</h2>
+                        <p>Briefly describe what you did so the agent can continue from here.</p>
+                        <textarea
+                            autoFocus
+                            aria-label="Takeover handoff note"
+                            placeholder="For example, I signed in and opened the project."
+                            value={handoffText}
+                            onChange={(event) => setHandoffText(event.target.value)}
+                            disabled={handoffBusy}
+                        />
+                        {handoffError && <p role="alert">{handoffError}</p>}
+                        <button type="submit" disabled={handoffBusy || controlMode !== "watch"}>
+                            {handoffBusy ? "Resuming…" : "Send and continue"}
+                        </button>
+                    </form>
+                </div>
+            )}
         </section>
     );
 };

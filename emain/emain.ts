@@ -11,7 +11,8 @@ import { initElectronWshrpc, shutdownWshrpc } from "../frontend/app/store/wshrpc
 import { fireAndForget, sleep } from "../frontend/util/util";
 import { stopAllAgentManagers } from "./acp";
 import { AuthKey, configureAuthKeyRequestInjection } from "./authkey";
-import { stopChatHubV2Server } from "./chathubv2-server";
+import { installBackgroundLaunchPolicy } from "./background-launch";
+import { installBrowserElementTool } from "./browser-element-tool";
 import {
     getActivityState,
     getAndClearTermCommandsDurable,
@@ -30,7 +31,6 @@ import {
 } from "./emain-activity";
 import { stopAudioEngine } from "./emain-audio";
 import { initIpcHandlers } from "./emain-ipc";
-import { runKrondesignDaemon, stopKrondesignDaemon } from "./emain-krondesign";
 import { log } from "./emain-log";
 import { stopAllLanguageServers } from "./emain-lsp";
 import { initMenuEventSubscriptions, makeAndSetAppMenu, makeDockTaskbar } from "./emain-menu";
@@ -55,6 +55,7 @@ import {
     getWaveWindowById,
     getWaveWindowByWorkspaceId,
     registerGlobalHotkey,
+    registerNotchHotkey,
     relaunchBrowserWindows,
     WaveBrowserWindow,
 } from "./emain-window";
@@ -65,13 +66,18 @@ import { getLaunchSettings } from "./launchsettings";
 import { configureAutoUpdater, updater } from "./updater";
 
 const electronApp = electron.app;
+installBackgroundLaunchPolicy();
 
 let confirmQuit = true;
 
 const waveDataDir = getWaveDataDir();
 const waveConfigDir = getWaveConfigDir();
 
-electron.nativeTheme.themeSource = "dark";
+// requestSingleInstanceLock keys off the default userData path, which is
+// shared by every same-named instance — this makes the lock per-profile.
+electronApp.setPath("userData", path.join(waveDataDir, "electron-userdata"));
+
+electron.nativeTheme.themeSource = "system";
 
 console.log = log;
 console.log(
@@ -297,11 +303,9 @@ electronApp.on("before-quit", (e) => {
     }
     setGlobalIsQuitting(true);
     void stopAllAgentManagers();
-    stopChatHubV2Server();
     HermesRuntime.stop();
     KronosCodeRuntime.stop();
     stopAllLanguageServers();
-    stopKrondesignDaemon();
     stopAudioEngine();
     updater?.stop();
     if (unamePlatform == "win32") {
@@ -377,6 +381,39 @@ globalEvents.on("windows-updated", () => {
     makeAndSetAppMenu();
 });
 
+const GPU_CRASH_WATCHDOG_WINDOW_MS = 10 * 60 * 1000;
+const GPU_CRASH_WATCHDOG_THRESHOLD = 3;
+
+// Chromium already falls back to software compositing after a GPU process crash, so the session
+// keeps running. Persisting the opt-out here only makes the *next* launch skip the crash-recovery
+// churn on machines whose drivers cannot keep the GPU process alive.
+function installGpuCrashWatchdog(launchSettings: SettingsType) {
+    if (launchSettings?.["window:disablehardwareacceleration"]) {
+        return;
+    }
+    const crashTimestamps: number[] = [];
+    let optOutWritten = false;
+    electronApp.on("child-process-gone", (_event, details) => {
+        if (details.type !== "GPU" || details.reason !== "crashed") {
+            return;
+        }
+        const now = Date.now();
+        crashTimestamps.push(now);
+        while (crashTimestamps.length > 0 && now - crashTimestamps[0] > GPU_CRASH_WATCHDOG_WINDOW_MS) {
+            crashTimestamps.shift();
+        }
+        console.log(`gpu process crashed (exitCode=${details.exitCode}), ${crashTimestamps.length} in watchdog window`);
+        if (crashTimestamps.length < GPU_CRASH_WATCHDOG_THRESHOLD || optOutWritten) {
+            return;
+        }
+        optOutWritten = true;
+        console.log("gpu crashes repeated, persisting window:disablehardwareacceleration for next launch");
+        fireAndForget(async () => {
+            await RpcApi.SetConfigCommand(ElectronWshClient, { "window:disablehardwareacceleration": true });
+        });
+    });
+}
+
 async function appMain() {
     // Set disableHardwareAcceleration as early as possible, if required.
     const launchSettings = getLaunchSettings();
@@ -384,6 +421,7 @@ async function appMain() {
         console.log("disabling hardware acceleration, per launch settings");
         electronApp.disableHardwareAcceleration();
     }
+    installGpuCrashWatchdog(launchSettings);
     const startTs = Date.now();
     const instanceLock = electronApp.requestSingleInstanceLock();
     if (!instanceLock) {
@@ -394,6 +432,13 @@ async function appMain() {
     }
     const allowedWebviewPreloads = [path.join(getElectronAppBasePath(), "preload", "preload-webview.cjs")];
     electronApp.on("web-contents-created", (_event, contents) => {
+        if (isDev && process.env.VITE_ENABLE_REACT_GRAB !== "false" && contents.getType() === "webview") {
+            contents.on("dom-ready", () => {
+                void installBrowserElementTool(contents).catch((error) =>
+                    console.warn("Browser element tool could not initialize", error.message)
+                );
+            });
+        }
         contents.on("will-attach-webview", (attachEvent, webPreferences, params) => {
             const decision = applyWebviewAttachPolicy(webPreferences, params, allowedWebviewPreloads);
             if (decision.strippedPreload != null) {
@@ -420,8 +465,13 @@ async function appMain() {
 
     // Start background daemons (non-blocking)
     fireAndForget(async () => {
-        await runKrondesignDaemon();
+        try {
+            await HermesRuntime.ensure();
+        } catch (error) {
+            console.log("background Hermes startup failed", error);
+        }
     });
+
     if (process.platform === "darwin") {
         const micStatus = electron.systemPreferences.getMediaAccessStatus("microphone");
         if (micStatus === "not-determined") {
@@ -430,13 +480,6 @@ async function appMain() {
     }
     configureAuthKeyRequestInjection(electron.session.defaultSession);
     initIpcHandlers();
-    fireAndForget(async () => {
-        try {
-            await HermesRuntime.ensure();
-        } catch (error) {
-            console.log("background Hermes startup failed", error);
-        }
-    });
 
     await sleep(10); // wait a bit for wavesrv to be ready
     try {
@@ -502,6 +545,10 @@ async function appMain() {
     const rawGlobalHotKey = launchSettings?.["app:globalhotkey"];
     if (rawGlobalHotKey) {
         registerGlobalHotkey(rawGlobalHotKey);
+    }
+    const rawNotchHotKey = launchSettings?.["app:notchhotkey"];
+    if (rawNotchHotKey) {
+        registerNotchHotkey(rawNotchHotKey);
     }
 }
 

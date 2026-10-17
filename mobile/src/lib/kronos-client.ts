@@ -7,7 +7,6 @@ import type {
     KronosMessage,
     KronosMessagePart,
     KronosSession,
-    MobileUiSession,
     PairingResult,
     PhoneActionResult,
     PhoneAuditEvent,
@@ -59,28 +58,6 @@ interface HealthPayload {
 interface RequestOptions extends RequestInit {
     timeoutMs?: number;
 }
-
-export const makeDirectMobileUiUrl = (
-    baseUrl: string,
-    context: { sessionId?: string; surfaceId?: string } = {}
-): string => {
-    const rootUrl = normalizeHostUrl(baseUrl);
-    const url = new URL(`${rootUrl}/`);
-    url.searchParams.set("apiBaseUrl", `${rootUrl}/api`);
-    url.searchParams.set("embeddedHost", "kronterm");
-    url.searchParams.set("mobileShell", "iphone");
-    url.searchParams.set("route", "chat");
-    url.searchParams.set("surface", "page");
-    url.searchParams.set("layoutMode", "full-page");
-    url.searchParams.set("profile", "chat-shell");
-    if (context.sessionId) {
-        url.searchParams.set("currentSessionId", context.sessionId);
-    }
-    if (context.surfaceId) {
-        url.searchParams.set("surfaceId", context.surfaceId);
-    }
-    return url.toString();
-};
 
 export const normalizeHostUrl = (value: string): string => {
     const trimmed = value.trim();
@@ -179,29 +156,6 @@ export class KronosHostClient {
 
     async health(): Promise<HealthPayload> {
         return this.requestAbsolute<HealthPayload>(`${this.rootUrl}/health`, { timeoutMs: 8_000 });
-    }
-
-    async createMobileUiSession(context: { sessionId?: string; surfaceId?: string } = {}): Promise<MobileUiSession> {
-        const uiRootUrl = this.host.uiBaseUrl ? normalizeHostUrl(this.host.uiBaseUrl) : this.rootUrl;
-        try {
-            const session = await this.requestAbsolute<MobileUiSession>(`${this.rootUrl}/v1/ui-ticket`, {
-                method: "POST",
-                body: JSON.stringify(context),
-                timeoutMs: 10_000,
-            });
-            if (!session.url) {
-                throw new Error("Host did not return a KronosChamber URL");
-            }
-            return {
-                ...session,
-                url: new URL(session.url, `${this.rootUrl}/`).toString(),
-            };
-        } catch (error) {
-            if (this.host.token) {
-                throw error;
-            }
-            return { url: makeDirectMobileUiUrl(uiRootUrl, context) };
-        }
     }
 
     async connectGateway(directory = ""): Promise<JsonRpcGatewayClient> {

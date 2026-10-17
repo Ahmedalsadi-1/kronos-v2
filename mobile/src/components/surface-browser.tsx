@@ -103,7 +103,7 @@ const InitialTabs: WorkspaceTab[] = [
 
 const DockItems: DockItem[] = [
     { type: "browser", label: "Browser", icon: <Globe2 /> },
-    { type: "agent", label: "KronosChamber", icon: <Sparkles /> },
+    { type: "agent", label: "KronTerm Agent", icon: <Sparkles /> },
     { type: "workspace", label: "Workspace", icon: <GitBranch /> },
     { type: "files", label: "Files", icon: <Folder /> },
     { type: "code", label: "Code", icon: <Code2 /> },
@@ -112,7 +112,7 @@ const DockItems: DockItem[] = [
 ];
 
 const TabLabels: Record<WorkspaceTabType, string> = {
-    agent: "KronosChamber",
+    agent: "KronTerm Agent",
     browser: "YouTube",
     code: "input-pipeline.ts",
     devices: "Runtimes",
@@ -802,7 +802,7 @@ export const SurfaceBrowser = ({
                     <Sparkles />
                 </span>
                 <div>
-                    <small>KronosChamber</small>
+                    <small>KronTerm Agent</small>
                     <h2>One agent, every workspace</h2>
                     <p>Kronos sees the browser, code, terminal, files, and runtime state in this workspace.</p>
                 </div>
@@ -826,7 +826,7 @@ export const SurfaceBrowser = ({
                 <div className="agent-empty-state">
                     <Bot />
                     <strong>No active KronosCode run</strong>
-                    <p>Start an objective below, or open the live chamber to resume a real session.</p>
+                    <p>Start an objective below, or open the agent chat to resume a real session.</p>
                 </div>
             )}
             <div className="agent-result">
@@ -835,7 +835,7 @@ export const SurfaceBrowser = ({
                 <p>{runtimeRoute.reason}</p>
                 <div>
                     <button type="button" onClick={onOpenChat}>
-                        <Bot /> Open live chamber
+                        <Bot /> Open agent chat
                     </button>
                     <button type="button" onClick={() => openTab("code")}>
                         <FileCode2 /> Affected files
@@ -1055,14 +1055,14 @@ export const SurfaceBrowser = ({
                         <Folder /> kronterm
                     </button>
                     <button type="button">
-                        <Folder /> kronoschamber
+                        <Folder /> kronterm
                     </button>
                     <strong>Quick access</strong>
                     <button type="button" onClick={() => openTab("workspace")}>
                         <GitBranch /> Pull Requests
                     </button>
                     <button type="button" onClick={onOpenChat}>
-                        <Sparkles /> KronosChamber
+                        <Sparkles /> KronTerm Agent
                     </button>
                 </aside>
 
@@ -1222,15 +1222,15 @@ export const SurfaceBrowser = ({
                             setObjective(event.target.value);
                             setRuntimeRoute(routeRuntimeIntent(event.target.value));
                         }}
-                        placeholder="Ask KronosChamber anything…"
-                        aria-label="Ask KronosChamber anything"
+                        placeholder="Ask KronTerm Agent anything…"
+                        aria-label="Ask KronTerm Agent anything"
                         autoCapitalize="sentences"
                     />
                     <button
                         className="composer-send"
                         type="submit"
                         disabled={!objective.trim() || submitting}
-                        aria-label="Send to KronosChamber"
+                        aria-label="Send to KronTerm Agent"
                     >
                         {submitting ? <LoaderCircle className="spin" /> : <Send />}
                     </button>

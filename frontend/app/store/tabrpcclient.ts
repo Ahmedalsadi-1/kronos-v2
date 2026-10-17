@@ -1,12 +1,30 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
-import { atoms, getApi, getBlockComponentModel, getConnStatusAtom, globalStore, WOS } from "@/app/store/global";
-import { isWorkspacePresentation, type WorkspacePresentation } from "@/app/tab/workspace-presentation";
-import { getWorkspaceSurfaceModeProvider } from "@/app/tab/workspace-surface-runtime";
+import {
+    atoms,
+    getApi,
+    getBlockComponentModel,
+    getConnStatusAtom,
+    globalStore,
+    refocusNode,
+    WOS,
+} from "@/app/store/global";
+import {
+    isWorkspacePresentation,
+    publishWorkspacePresentation,
+    readWorkspacePresentation,
+    type WorkspacePresentation,
+} from "@/app/tab/workspace-presentation";
+import { controlWorkspaceSurface, getWorkspaceSurfaceModeProvider } from "@/app/tab/workspace-surface-runtime";
+import { listAgentWidgets } from "@/app/view/agent-widget-bridge";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import type { TermViewModel } from "@/app/view/term/term-model";
+import { hudLocationForMeta } from "@/app/workspace/hud-surface-location";
+import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
+import { launchKronTermHudIsland, type KronTermHudApp } from "@/app/workspace/kronterm-hud-islands";
+import { handleKronTermHudSurfaceAction } from "@/app/workspace/kronterm-hud-surface-actions";
 import type {
     LayoutNode,
     LayoutTreeComputeMoveNodeAction,
@@ -16,10 +34,13 @@ import type {
 import { DropDirection, getLayoutModelForStaticTab, LayoutTreeActionType, NavigateDirection } from "@/layout/index";
 import { base64ToArrayBuffer } from "@/util/util";
 import { WebviewTag } from "electron";
+import { browserHtmlScript, browserObservationScript, browserTargetPointScript } from "./browser-observation";
+import { sendPointerDrag } from "./pointer-drag";
+import { assessWorkspaceLayout, observeWorkspaceBlock, workspaceSurfaceElement } from "./workspace-surface-observation";
 import { RpcResponseHelper, WshClient } from "./wshclient";
 import { RpcApi } from "./wshclientapi";
 
-type BrowserInteractionAction = "click" | "scroll" | "type" | "press" | "drag" | "scroll-to";
+type BrowserInteractionAction = "click" | "hover" | "longpress" | "scroll" | "type" | "press" | "drag" | "scroll-to";
 
 type BrowserInteractionResult = {
     success: boolean;
@@ -350,10 +371,10 @@ export function buildBrowserInteractionScript(
             }
 
             if (action === "drag") {
-                const start = findTarget(payload.startref, payload.startx, payload.starty);
-                const end = findTarget(payload.endref, payload.endx, payload.endy);
+                const start = findTarget(payload.startref, payload.startx, payload.starty, false);
+                const end = findTarget(payload.endref, payload.endx, payload.endy, false);
                 if (!(start instanceof HTMLElement) || !(end instanceof HTMLElement)) {
-                    return { success: false, message: "Drag target not found" };
+                    return { success: false, message: "Drag targets must both be visible in the current viewport; take a fresh snapshot after scrolling" };
                 }
                 start.scrollIntoView({ block: "nearest", inline: "nearest" });
                 const startPoint = pointFor(start, payload.startx, payload.starty);
@@ -394,22 +415,409 @@ export class TabClient extends WshClient {
         super(routeId);
     }
 
+    private widgetRoot(blockId: string): HTMLElement | null {
+        return document.querySelector<HTMLElement>(`div[data-blockid='${CSS.escape(blockId)}']`);
+    }
+
+    private observeWidgetForAgent(blockId: string): HTMLElement {
+        const root = this.widgetRoot(blockId);
+        if (!root)
+            throw new Error(`Widget is not mounted: ${blockId}. Focus the widget explicitly before interacting.`);
+        return root;
+    }
+
+    private async focusWidgetForAgent(blockId: string): Promise<HTMLElement> {
+        const mounted = this.widgetRoot(blockId);
+        const hud = kronTermHudController.getSnapshot();
+        const nativeIsland = new URLSearchParams(window.location.search).get("nativeSurface") === "island";
+        if (mounted && (nativeIsland || (hud.active && !hud.keepWorkspaceVisible))) {
+            const target = mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"], webview');
+            target?.focus({ preventScroll: true });
+            return mounted;
+        }
+        const layoutModel = getLayoutModelForStaticTab();
+        if (!layoutModel) {
+            throw new Error("Layout model not found");
+        }
+        const node = layoutModel.getNodeByBlockId(blockId);
+        if (!node && mounted) {
+            const target = mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"], webview');
+            target?.focus({ preventScroll: true });
+            return mounted;
+        }
+        if (!node) {
+            throw new Error(`Block not found: ${blockId}`);
+        }
+
+        const presentation = this.getWorkspacePresentation();
+        if (presentation === "canvas" || presentation === "os") {
+            const tabId = globalStore.get(atoms.staticTabId);
+            await controlWorkspaceSurface(tabId, { action: "focus", blockid: blockId });
+        }
+
+        layoutModel.focusNode(node.id);
+        refocusNode(blockId);
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
+        const root = this.widgetRoot(blockId);
+        if (!root) {
+            throw new Error(`Widget is not mounted after focus: ${blockId}`);
+        }
+        root.scrollIntoView({ block: "nearest", inline: "nearest" });
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
+        if (webview) {
+            webview.focus();
+        } else {
+            const activeElement = document.activeElement;
+            const target =
+                activeElement instanceof HTMLElement && root.contains(activeElement)
+                    ? activeElement
+                    : root.querySelector<HTMLElement>(
+                          'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])'
+                      );
+            (target ?? root).focus({ preventScroll: true });
+        }
+        return root;
+    }
+
+    private inputModifiers(keys: string[]): Electron.InputEvent["modifiers"] {
+        const values = keys.map((key) => key.toLowerCase());
+        const modifiers: NonNullable<Electron.InputEvent["modifiers"]> = [];
+        if (values.some((key) => key === "shift")) modifiers.push("shift");
+        const platformModifier = values.some((key) => key === "commandorcontrol" || key === "cmdorctrl");
+        if (
+            values.some((key) => key === "control" || key === "ctrl") ||
+            (platformModifier && getApi().getPlatform() !== "darwin")
+        ) {
+            modifiers.push("control");
+        }
+        if (values.some((key) => key === "alt" || key === "option")) modifiers.push("alt");
+        if (
+            values.some((key) => key === "meta" || key === "command" || key === "cmd") ||
+            (platformModifier && getApi().getPlatform() === "darwin")
+        ) {
+            modifiers.push("meta");
+        }
+        return modifiers;
+    }
+
+    private primaryInputKey(keys: string[]): string | undefined {
+        const modifierNames = new Set([
+            "shift",
+            "control",
+            "ctrl",
+            "alt",
+            "option",
+            "meta",
+            "command",
+            "cmd",
+            "commandorcontrol",
+            "cmdorctrl",
+        ]);
+        return [...keys].reverse().find((key) => !modifierNames.has(key.toLowerCase()));
+    }
+
+    private async sendKeyChord(target: Electron.WebviewTag | null, keys: string[]): Promise<void> {
+        const keyCode = this.primaryInputKey(keys);
+        if (!keyCode) {
+            throw new Error("A non-modifier key is required");
+        }
+        const modifiers = this.inputModifiers(keys);
+        const keyDown: Electron.KeyboardInputEvent = { type: "keyDown", keyCode, modifiers };
+        const keyUp: Electron.KeyboardInputEvent = { type: "keyUp", keyCode, modifiers };
+        if (target) {
+            await target.sendInputEvent(keyDown);
+            await target.sendInputEvent(keyUp);
+            return;
+        }
+        await getApi().sendInputEvent(keyDown);
+        await getApi().sendInputEvent(keyUp);
+    }
+
+    private async webviewPoint(
+        webview: Electron.WebviewTag,
+        elementRef: unknown,
+        x: unknown,
+        y: unknown,
+        scroll = true
+    ): Promise<{ x: number; y: number } | undefined> {
+        if (typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y)) {
+            return { x: Math.round(x), y: Math.round(y) };
+        }
+        const ref = typeof elementRef === "string" ? elementRef : "";
+        return (await webview.executeJavaScript(browserTargetPointScript(ref, scroll))) ?? undefined;
+    }
+
+    private rendererTarget(
+        root: HTMLElement,
+        elementRef: unknown,
+        x: unknown,
+        y: unknown
+    ): { target: HTMLElement; x: number; y: number } | undefined {
+        let target: HTMLElement | null = null;
+        if (typeof elementRef === "string" && elementRef) {
+            const escaped = CSS.escape(elementRef);
+            const candidate =
+                document.getElementById(elementRef) ??
+                root.querySelector<HTMLElement>(`[name="${escaped}"]`) ??
+                root.querySelector<HTMLElement>(`[aria-label="${escaped}"]`) ??
+                root.querySelector<HTMLElement>(`[data-wave-ref="${escaped}"]`);
+            target = candidate instanceof HTMLElement && root.contains(candidate) ? candidate : null;
+        }
+        const rootRect = root.getBoundingClientRect();
+        const suppliedX = typeof x === "number" && Number.isFinite(x) ? x : undefined;
+        const suppliedY = typeof y === "number" && Number.isFinite(y) ? y : undefined;
+        const rendererX =
+            suppliedX == null ? undefined : suppliedX <= rootRect.width ? rootRect.left + suppliedX : suppliedX;
+        const rendererY =
+            suppliedY == null ? undefined : suppliedY <= rootRect.height ? rootRect.top + suppliedY : suppliedY;
+        target ??=
+            rendererX != null && rendererY != null
+                ? (document.elementFromPoint(rendererX, rendererY) as HTMLElement)
+                : null;
+        if (!(target instanceof HTMLElement) || !root.contains(target)) {
+            target = root;
+        }
+        const targetRect = target.getBoundingClientRect();
+        return {
+            target,
+            x: Math.round(rendererX ?? targetRect.left + targetRect.width / 2),
+            y: Math.round(rendererY ?? targetRect.top + targetRect.height / 2),
+        };
+    }
+
+    private rendererElementByRef(root: HTMLElement, elementRef: string): HTMLElement | null {
+        if (!elementRef) {
+            return null;
+        }
+        const escaped = CSS.escape(elementRef);
+        const candidate =
+            document.getElementById(elementRef) ??
+            root.querySelector<HTMLElement>(`[name="${escaped}"]`) ??
+            root.querySelector<HTMLElement>(`[aria-label="${escaped}"]`) ??
+            root.querySelector<HTMLElement>(`[data-wave-ref="${escaped}"]`);
+        return candidate instanceof HTMLElement && root.contains(candidate) ? candidate : null;
+    }
+
+    private rendererElements(
+        root: HTMLElement,
+        maxCount: number,
+        filters: { role?: string; name?: string; value?: string; text?: string } = {}
+    ): WidgetElementData[] {
+        const rootRect = root.getBoundingClientRect();
+        const candidates = root.querySelectorAll<HTMLElement>(
+            'a, button, input, select, textarea, [contenteditable="true"], [role], [tabindex], [onclick], [aria-label]'
+        );
+        const elements: WidgetElementData[] = [];
+        for (let index = 0; index < candidates.length && elements.length < maxCount; index++) {
+            const element = candidates[index];
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            if (rect.width <= 0 || rect.height <= 0 || style.visibility === "hidden" || style.display === "none") {
+                continue;
+            }
+            const role = element.getAttribute("role") || element.tagName.toLowerCase();
+            const name = element.getAttribute("aria-label") || (element as HTMLInputElement).name || "";
+            const value = "value" in element ? String((element as HTMLInputElement).value ?? "") : "";
+            const content = element.textContent || "";
+            if (filters.role && role !== filters.role) continue;
+            if (filters.name && !name.includes(filters.name)) continue;
+            if (filters.value && !value.includes(filters.value)) continue;
+            if (filters.text && !content.includes(filters.text)) continue;
+            let ref =
+                element.id ||
+                (element as HTMLInputElement).name ||
+                element.getAttribute("aria-label") ||
+                element.getAttribute("data-wave-ref");
+            if (!ref) {
+                ref = `kronterm-ref-${index}`;
+                element.setAttribute("data-wave-ref", ref);
+            }
+            elements.push({
+                ref,
+                role,
+                name: (name || content).trim().slice(0, 80),
+                value: value.slice(0, 200),
+                x: Math.round(rect.x - rootRect.x),
+                y: Math.round(rect.y - rootRect.y),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+                focusable: !(element as HTMLInputElement).disabled && element.tabIndex >= 0,
+                visible: true,
+            });
+        }
+        return elements;
+    }
+
+    private rendererCondition(root: HTMLElement, elementRef: string, condition: string): boolean {
+        const element = elementRef ? this.rendererElementByRef(root, elementRef) : null;
+        if (condition === "exists") return elementRef ? element != null : root.isConnected;
+        if (condition === "hidden") {
+            return (
+                !element || element.getBoundingClientRect().width === 0 || element.getBoundingClientRect().height === 0
+            );
+        }
+        if (!element) return !elementRef && root.isConnected;
+        if (condition === "visible") {
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+        }
+        if (condition === "enabled") return !(element as HTMLInputElement).disabled;
+        if (condition === "disabled") return Boolean((element as HTMLInputElement).disabled);
+        if (condition === "focused") return document.activeElement === element;
+        if (condition === "text") return Boolean(element.textContent?.length);
+        if (condition === "value")
+            return Boolean("value" in element && String((element as HTMLInputElement).value).length);
+        if (condition.startsWith("text:")) return (element.textContent || "").includes(condition.slice(5));
+        if (condition.startsWith("value:")) {
+            return "value" in element && String((element as HTMLInputElement).value).includes(condition.slice(6));
+        }
+        return true;
+    }
+
+    private async executeRendererInteraction(
+        root: HTMLElement,
+        blockId: string,
+        action: BrowserInteractionAction,
+        payload: Record<string, unknown>
+    ): Promise<WidgetMouseActionRtnData> {
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
+        if (action === "type") {
+            const text = String(payload.text ?? "");
+            const delayMs = Math.max(0, Number(payload.delayMs ?? 0));
+            if (webview) {
+                if (delayMs === 0) {
+                    await webview.insertText(text);
+                } else {
+                    for (const character of text) {
+                        await webview.insertText(character);
+                        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+                    }
+                }
+            } else if (delayMs === 0) {
+                await getApi().insertText(text);
+            } else {
+                for (const character of text) {
+                    await getApi().insertText(character);
+                    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+                }
+            }
+            return { blockid: blockId, success: true, message: `Typed ${text.length} character(s)` };
+        }
+        if (action === "press") {
+            await this.sendKeyChord(webview, Array.isArray(payload.keys) ? payload.keys.map(String) : []);
+            return { blockid: blockId, success: true, message: "Keyboard shortcut sent" };
+        }
+        if (action === "scroll-to") {
+            if (webview) {
+                const result = (await webview.executeJavaScript(
+                    buildBrowserInteractionScript(action, payload)
+                )) as BrowserInteractionResult;
+                return { blockid: blockId, success: result.success, message: result.message };
+            }
+            const point = this.rendererTarget(root, payload.elementref, payload.x, payload.y);
+            point?.target.scrollIntoView({ block: "center", inline: "nearest" });
+            return { blockid: blockId, success: true, message: "Scrolled target into view" };
+        }
+
+        if (action === "drag") {
+            const start = webview
+                ? await this.webviewPoint(webview, payload.startref, payload.startx, payload.starty, false)
+                : this.rendererTarget(root, payload.startref, payload.startx, payload.starty);
+            const end = webview
+                ? await this.webviewPoint(webview, payload.endref, payload.endx, payload.endy, false)
+                : this.rendererTarget(root, payload.endref, payload.endx, payload.endy);
+            if (!start || !end) {
+                return {
+                    blockid: blockId,
+                    success: false,
+                    message:
+                        "Drag targets must both be visible in the current viewport; take a fresh snapshot after scrolling",
+                };
+            }
+            const send = (event: Electron.MouseInputEvent) =>
+                webview ? webview.sendInputEvent(event) : getApi().sendInputEvent(event);
+            const button = ["left", "middle", "right"].includes(String(payload.button))
+                ? (payload.button as "left" | "middle" | "right")
+                : "left";
+            await sendPointerDrag(send, start, end, button, (point) => {
+                window.dispatchEvent(
+                    new CustomEvent("kron-agent-pointer", {
+                        detail: { blockId, point, action },
+                    })
+                );
+            });
+            return { blockid: blockId, success: true, message: "Drag completed" };
+        }
+
+        const domPoint = webview ? undefined : this.rendererTarget(root, payload.elementref, payload.x, payload.y);
+        const point = webview
+            ? await this.webviewPoint(
+                  webview,
+                  payload.elementref,
+                  payload.x ?? payload.originX,
+                  payload.y ?? payload.originY
+              )
+            : domPoint;
+        if (!point) {
+            return { blockid: blockId, success: false, message: "Interaction target not found" };
+        }
+        if (domPoint) {
+            domPoint.target.focus({ preventScroll: true });
+        }
+        window.dispatchEvent(
+            new CustomEvent("kron-agent-pointer", {
+                detail: { blockId, point: { x: point.x, y: point.y }, action },
+            })
+        );
+        const send = (event: Electron.MouseInputEvent | Electron.MouseWheelInputEvent) =>
+            webview ? webview.sendInputEvent(event) : getApi().sendInputEvent(event);
+        if (action === "hover") {
+            await send({ type: "mouseMove", x: point.x, y: point.y });
+            return { blockid: blockId, success: true, message: "Hover completed" };
+        }
+        if (action === "scroll") {
+            await send({
+                type: "mouseWheel",
+                x: point.x,
+                y: point.y,
+                deltaY: Number(payload.amount ?? 0),
+                canScroll: true,
+            });
+            return { blockid: blockId, success: true, message: "Scroll sent" };
+        }
+        const button = ["left", "middle", "right"].includes(String(payload.button))
+            ? (payload.button as Electron.MouseInputEvent["button"])
+            : "left";
+        const clickCount = Math.max(
+            1,
+            Number(payload.clickCount ?? (payload.clicktype === "triple" ? 3 : payload.clicktype === "double" ? 2 : 1))
+        );
+        await send({ type: "mouseMove", x: point.x, y: point.y });
+        await send({ type: "mouseDown", x: point.x, y: point.y, button, clickCount });
+        if (action === "longpress") {
+            await new Promise((resolve) => window.setTimeout(resolve, Math.max(0, Number(payload.duration ?? 500))));
+        }
+        await send({ type: "mouseUp", x: point.x, y: point.y, button, clickCount });
+        return {
+            blockid: blockId,
+            success: true,
+            message: action === "longpress" ? "Long press completed" : "Click completed",
+        };
+    }
+
     private async executeBrowserInteraction(
         blockId: string,
         action: BrowserInteractionAction,
         payload: Record<string, unknown>
     ): Promise<WidgetMouseActionRtnData> {
-        const webview = document.querySelector(`div[data-blockid='${blockId}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: blockId, success: false, message: "Webview not found" };
-        }
         try {
-            const result = (await webview.executeJavaScript(
-                buildBrowserInteractionScript(action, payload)
-            )) as BrowserInteractionResult;
-            return { blockid: blockId, success: result.success, message: result.message };
+            const root = await this.focusWidgetForAgent(blockId);
+            return await this.executeRendererInteraction(root, blockId, action, payload);
         } catch (e) {
-            return { blockid: blockId, success: false, message: `Browser interaction failed: ${e}` };
+            return { blockid: blockId, success: false, message: `Widget interaction failed: ${e}` };
         }
     }
 
@@ -420,6 +828,7 @@ export class TabClient extends WshClient {
         button: string
     ): Promise<WidgetMouseActionRtnData> {
         try {
+            await this.focusWidgetForAgent(blockId);
             const payload = {
                 action: "click_mouse",
                 button: button || "left",
@@ -447,6 +856,7 @@ export class TabClient extends WshClient {
 
     private async sandboxKeyboardType(blockId: string, text: string): Promise<WidgetMouseActionRtnData> {
         try {
+            await this.focusWidgetForAgent(blockId);
             const payload = { action: "type_text", text };
             const response = await fetch(await this.sandboxComputerUseUrl(blockId), {
                 method: "POST",
@@ -469,6 +879,7 @@ export class TabClient extends WshClient {
 
     private async sandboxKeyboardPress(blockId: string, keys: string[]): Promise<WidgetMouseActionRtnData> {
         try {
+            await this.focusWidgetForAgent(blockId);
             const payload = buildSandboxKeyboardPressPayload(keys);
             const response = await fetch(await this.sandboxComputerUseUrl(blockId), {
                 method: "POST",
@@ -497,6 +908,7 @@ export class TabClient extends WshClient {
         originY?: number
     ): Promise<WidgetMouseActionRtnData> {
         try {
+            await this.focusWidgetForAgent(blockId);
             const payload = buildSandboxScrollPayload(direction, amount, originX, originY);
             const response = await fetch(await this.sandboxComputerUseUrl(blockId), {
                 method: "POST",
@@ -525,6 +937,7 @@ export class TabClient extends WshClient {
         endY: number
     ): Promise<WidgetMouseActionRtnData> {
         try {
+            await this.focusWidgetForAgent(blockId);
             const payload = buildSandboxDragPayload(startX, startY, endX, endY);
             const response = await fetch(await this.sandboxComputerUseUrl(blockId), {
                 method: "POST",
@@ -555,10 +968,34 @@ export class TabClient extends WshClient {
     }
 
     handle_captureblockscreenshot(rh: RpcResponseHelper, data: CommandCaptureBlockScreenshotData): Promise<string> {
-        return this.captureBlockScreenshot(data.blockid);
+        return this.captureBlockScreenshot(data.blockid, data.passive);
     }
 
-    async captureBlockScreenshot(blockId: string): Promise<string> {
+    async captureBlockScreenshot(blockId: string, passive = false): Promise<string> {
+        const root = passive ? this.widgetRoot(blockId) : await this.focusWidgetForAgent(blockId);
+        const guest = root?.querySelector("webview") as Electron.WebviewTag | null;
+        // Browser pointer coordinates and observations use the guest viewport, without workspace chrome.
+        if (guest) return (await getApi().captureBrowserPage({ guestId: guest.getWebContentsId() })).dataUrl;
+        if (passive) {
+            const native = await getApi().captureNativeHudBlock(blockId);
+            if (native) return native;
+        }
+        if (!root) throw new Error("Widget is not mounted");
+        const mountedRect = root.getBoundingClientRect();
+        if (mountedRect.width > 0 && mountedRect.height > 0) {
+            return getApi().captureScreenshot(
+                {
+                    x: Math.round(mountedRect.x),
+                    y: Math.round(mountedRect.y),
+                    width: Math.max(1, Math.round(mountedRect.width)),
+                    height: Math.max(1, Math.round(mountedRect.height)),
+                },
+                passive
+            );
+        }
+
+        if (passive) throw new Error("Widget is not rendered yet");
+
         const layoutModel = getLayoutModelForStaticTab();
         if (!layoutModel) {
             throw new Error("Layout model not found");
@@ -598,7 +1035,7 @@ export class TabClient extends WshClient {
             };
         }
 
-        return await getApi().captureScreenshot(electronRect);
+        return await getApi().captureScreenshot(electronRect, passive);
     }
 
     async handle_workspacesurfacesnapshot(): Promise<string> {
@@ -609,11 +1046,15 @@ export class TabClient extends WshClient {
         const presentation = this.getWorkspacePresentation();
         const layoutModel = getLayoutModelForStaticTab();
         const container =
-            presentation === "canvas"
-                ? document.querySelector<HTMLElement>(".workspace-canvas")
-                : presentation === "tabs"
-                  ? document.querySelector<HTMLElement>(".widget-tabs-layout")
-                  : layoutModel?.displayContainerRef.current;
+            presentation === "os"
+                ? document.querySelector<HTMLElement>(".os-mode-root")
+                : presentation === "canvas"
+                  ? document.querySelector<HTMLElement>(".workspace-canvas")
+                  : presentation === "tabs"
+                    ? document.querySelector<HTMLElement>(".widget-tabs-layout")
+                    : presentation === "web"
+                      ? document.querySelector<HTMLElement>(".web-mode")
+                      : layoutModel?.displayContainerRef.current;
         if (!container) {
             throw new Error(`Workspace ${presentation} surface is not mounted`);
         }
@@ -632,37 +1073,80 @@ export class TabClient extends WshClient {
     ): Promise<string> {
         const presentation = this.getWorkspacePresentation();
         const tabId = globalStore.get(atoms.staticTabId);
-        const provider = getWorkspaceSurfaceModeProvider(tabId);
+        if (data.action === "hud.launch") {
+            if (!kronTermHudController.getSnapshot().active) throw new Error("KronTerm HUD mode is not active");
+            const options = data.text ? JSON.parse(data.text) : {};
+            const blockId = await launchKronTermHudIsland(data.view as KronTermHudApp, { ...options, forceNew: true });
+            return JSON.stringify({ success: true, blockId, snapshot: this.makeWorkspaceSurfaceSnapshot() });
+        }
+        const hudResult = await handleKronTermHudSurfaceAction(data, {
+            isKnownBlock: (blockId) => {
+                const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
+                return (
+                    ((tab?.blockids ?? []).includes(blockId) || kronTermHudController.isIsland(blockId)) &&
+                    globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId))) != null
+                );
+            },
+            isDetached: (blockId) => {
+                const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
+                return !(tab?.blockids ?? []).includes(blockId) && kronTermHudController.isIsland(blockId);
+            },
+            setMode: (mode) => {
+                if (mode === "workspace") {
+                    kronTermHudController.setActive(false);
+                    hermesSurfaceController.dismiss();
+                    return;
+                }
+                if (mode === "alongside") kronTermHudController.openAlongsideWorkspace();
+                else kronTermHudController.openExclusiveHud();
+                hermesSurfaceController.requestOpenHud();
+            },
+            setBackground: async (blockId, background) => {
+                const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
+                if (
+                    !kronTermHudController.getSnapshot().active &&
+                    presentation === "os" &&
+                    (tab?.blockids ?? []).includes(blockId)
+                ) {
+                    await controlWorkspaceSurface(tabId, {
+                        action: background ? "spatial.collapse" : "spatial.restore",
+                        blockid: blockId,
+                    });
+                }
+                kronTermHudController.setBlockBackground(blockId, background);
+                const hud = kronTermHudController.getSnapshot();
+                if (hud.active && hud.selectedBlockId === blockId && background)
+                    await getApi().selectNativeHudWidget(blockId, false);
+            },
+            showWorkspaceBlock: async (blockId) => {
+                if (!(await getApi().selectNativeHudWidget(blockId, true)))
+                    throw new Error("HUD widget is not ready. Retry shortly.");
+            },
+            showDetachedBlock: async (blockId) => {
+                return getApi().selectNativeHudWidget(blockId, true);
+            },
+            hideDetachedBlock: (blockId) => getApi().setNativeHudIslandVisibility(blockId, false),
+        });
+        if (hudResult) {
+            return JSON.stringify({ ...hudResult, snapshot: this.makeWorkspaceSurfaceSnapshot() }, null, 2);
+        }
         if (data.action === "set_presentation") {
             if (!isWorkspacePresentation(data.presentation)) {
                 throw new Error(`Invalid workspace presentation: ${data.presentation}`);
             }
-            window.localStorage.setItem("kronterm:layoutmode", data.presentation);
-            (window as any).__krontermLayoutMode = data.presentation;
-            window.dispatchEvent(
-                new CustomEvent("kronterm:layoutmode-changed", { detail: { mode: data.presentation } })
-            );
-            await RpcApi.SetConfigCommand(this, { "app:layoutmode": data.presentation });
+            const nextPresentation = publishWorkspacePresentation(data.presentation);
+            await RpcApi.SetConfigCommand(this, { "app:layoutmode": nextPresentation });
             return JSON.stringify({
                 success: true,
-                message: `Workspace presentation changed to ${data.presentation}.`,
-                presentation: data.presentation,
+                message: `Workspace presentation changed to ${nextPresentation}.`,
+                presentation: nextPresentation,
             });
         }
-        if (presentation === "canvas" && provider) {
-            const result = provider.control({
-                action: data.action as
-                    | "focus"
-                    | "move"
-                    | "resize"
-                    | "navigate"
-                    | "fit"
-                    | "arrange"
-                    | "add_note"
-                    | "update_object"
-                    | "delete_object"
-                    | "connect_objects",
+        if (presentation === "canvas" || presentation === "os") {
+            const result = await controlWorkspaceSurface(tabId, {
+                action: data.action as any,
                 blockid: data.blockid,
+                targetblockid: data.targetblockid,
                 direction: data.direction as "up" | "right" | "down" | "left",
                 x: data.x,
                 y: data.y,
@@ -673,10 +1157,15 @@ export class TabClient extends WshClient {
                 toobjectid: data.toobjectid,
                 text: data.text,
                 color: data.color,
+                side: data.side as "left" | "right",
+                view: data.view,
+                appid: data.appid,
+                appname: data.appname,
+                file: data.file,
+                workspaceid: data.workspaceid,
+                presentation: data.presentation,
+                position: data.position,
             });
-            if (!result.success) {
-                throw new Error(result.message);
-            }
             return JSON.stringify({ ...result, snapshot: this.makeWorkspaceSurfaceSnapshot() }, null, 2);
         }
 
@@ -789,8 +1278,7 @@ export class TabClient extends WshClient {
     }
 
     private getWorkspacePresentation(): WorkspacePresentation {
-        const current = (window as any).__krontermLayoutMode;
-        return isWorkspacePresentation(current) ? current : "widgets";
+        return readWorkspacePresentation("widgets");
     }
 
     private findWorkspaceSurfaceParent(root: LayoutNode, nodeId: string): LayoutNode | undefined {
@@ -817,12 +1305,24 @@ export class TabClient extends WshClient {
         const layoutModel = getLayoutModelForStaticTab();
         const modeState = getWorkspaceSurfaceModeProvider(tabId)?.snapshot();
         const leafOrder = layoutModel ? globalStore.get(layoutModel.leafOrder) : [];
-        const orderedBlockIds =
-            presentation === "canvas" ? (tab?.blockids ?? []) : leafOrder.map((entry) => entry.blockid);
+        const workspaceBlockIds =
+            presentation === "canvas" || presentation === "os"
+                ? (tab?.blockids ?? [])
+                : leafOrder.map((entry) => entry.blockid);
+        const hud = kronTermHudController.getSnapshot();
+        const orderedBlockIds = [
+            ...new Set([...workspaceBlockIds, ...(tab?.blockids ?? []), ...hud.islandBlockIds]),
+        ].filter((blockId) => globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId))) != null);
         const focusedNode = layoutModel ? globalStore.get(layoutModel.focusedNode) : undefined;
-        const focusedBlockId = presentation === "canvas" ? modeState?.selectedblockid : focusedNode?.data?.blockId;
-        const containerRect = layoutModel?.displayContainerRef.current?.getBoundingClientRect();
+        const focusedBlockId =
+            presentation === "canvas" || presentation === "os"
+                ? modeState?.selectedblockid
+                : focusedNode?.data?.blockId;
+        const surface = workspaceSurfaceElement(presentation, layoutModel?.displayContainerRef.current);
+        const containerRect = surface?.getBoundingClientRect();
         const canvasRect = document.querySelector<HTMLElement>(".workspace-canvas")?.getBoundingClientRect();
+        const osRect = document.querySelector<HTMLElement>(".os-mode-root")?.getBoundingClientRect();
+        const activities = new Map(listAgentWidgets().map((widget) => [widget.id, widget]));
         const blocks = orderedBlockIds.map((blockId, index) => {
             const blockAtom = WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId));
             const block = globalStore.get(blockAtom);
@@ -830,11 +1330,12 @@ export class TabClient extends WshClient {
             const localRect = node ? layoutModel.getNodeRect(node) : undefined;
             const worldBounds = modeState?.rects?.[blockId];
             const camera = modeState?.camera;
-            const bounds =
-                presentation === "canvas" && worldBounds && camera && canvasRect
+            const observation = observeWorkspaceBlock(blockId, hud.islandBlockIds.includes(blockId));
+            const modelBounds =
+                (presentation === "canvas" || presentation === "os") && worldBounds && camera && (canvasRect || osRect)
                     ? {
-                          x: canvasRect.x + camera.x + worldBounds.x * camera.zoom,
-                          y: canvasRect.y + camera.y + worldBounds.y * camera.zoom,
+                          x: (canvasRect ?? osRect).x + camera.x + worldBounds.x * camera.zoom,
+                          y: (canvasRect ?? osRect).y + camera.y + worldBounds.y * camera.zoom,
                           width: worldBounds.width * camera.zoom,
                           height: worldBounds.height * camera.zoom,
                       }
@@ -847,7 +1348,15 @@ export class TabClient extends WshClient {
                         }
                       : undefined;
             const view = String(block?.meta?.view ?? "unknown");
-            const title = String(block?.meta?.["frame:title"] ?? "").trim() || view;
+            const title =
+                String(
+                    block?.meta?.["frame:title"] ??
+                        block?.meta?.["web:title"] ??
+                        block?.meta?.["appstream:appname"] ??
+                        ""
+                ).trim() || view;
+            const background =
+                hud.backgroundBlockIds.includes(blockId) || modeState?.presentations?.[blockId] === "collapsed";
             return {
                 order: index + 1,
                 blockid: blockId,
@@ -855,25 +1364,58 @@ export class TabClient extends WshClient {
                 view,
                 title,
                 focused: focusedBlockId === blockId,
-                visible: presentation !== "tabs" || focusedBlockId === blockId,
-                bounds,
+                visible: !background && (!hud.active || hud.keepWorkspaceVisible) && observation.visible,
+                uservisible:
+                    document.visibilityState === "visible" &&
+                    !background &&
+                    (!hud.active || hud.keepWorkspaceVisible) &&
+                    observation.visible,
+                background,
+                hudisland: hud.islandBlockIds.includes(blockId),
+                ownerroute: hud.islandBlockIds.includes(blockId) ? `tab:${tabId}:island:${blockId}` : `tab:${tabId}`,
+                hudselected: hud.selectedBlockId === blockId,
+                hudvisible: hud.active && hud.selectedBlockId === blockId && hud.expanded !== false,
+                bounds: observation.bounds,
+                modelbounds: modelBounds,
+                geometryscope: observation.geometryscope,
+                availability: observation.availability,
+                visiblefraction: observation.visibleFraction,
+                clipped: observation.clipped,
+                centeroccluded: observation.centerOccluded,
                 worldbounds: worldBounds,
+                active: activities.get(blockId)?.active ?? false,
+                location: hudLocationForMeta(block?.meta ?? {}, blockId),
                 meta: block?.meta ?? {},
             };
         });
         return {
-            version: 1,
+            version: 2,
             timestamp: Date.now(),
             tabid: tabId,
+            workspaceid: globalStore.get(atoms.workspaceId),
+            userview: {
+                rendererVisible: document.visibilityState === "visible",
+                rendererFocused: document.hasFocus(),
+                coordinateSpace: "renderer-viewport-css-pixels",
+                viewport: { width: window.innerWidth, height: window.innerHeight },
+                devicePixelRatio: window.devicePixelRatio,
+            },
+            visualassessment: assessWorkspaceLayout(blocks),
             presentation,
+            hud,
             focusedblockid: focusedBlockId,
             magnifiedblockid: layoutModel?.magnifiedNodeId
                 ? globalStore.get(layoutModel.leafs).find((leaf) => leaf.id === layoutModel.magnifiedNodeId)?.data
                       ?.blockId
                 : undefined,
             viewport:
-                presentation === "canvas" && canvasRect
-                    ? { x: canvasRect.x, y: canvasRect.y, width: canvasRect.width, height: canvasRect.height }
+                (presentation === "canvas" || presentation === "os") && (canvasRect || osRect)
+                    ? {
+                          x: (canvasRect ?? osRect).x,
+                          y: (canvasRect ?? osRect).y,
+                          width: (canvasRect ?? osRect).width,
+                          height: (canvasRect ?? osRect).height,
+                      }
                     : containerRect
                       ? {
                             x: containerRect.x,
@@ -887,12 +1429,18 @@ export class TabClient extends WshClient {
             selectedcanvasobjectid: modeState?.selectedobjectid,
             canvascontextids: modeState?.contextids ?? [],
             canvascontextmode: modeState?.contextmode,
+            osscene: modeState?.scene,
+            osgroups: modeState?.groups,
+            ospresentations: modeState?.presentations,
+            osview: modeState?.osview,
             layouttree: presentation === "widgets" ? layoutModel?.treeState.rootNode : undefined,
             blocks,
             capabilities: {
                 presentation: ["set_presentation"],
+                hud: ["hud.mode", "hud.open", "hud.background", "hud.restore", "hud.launch"],
                 widgets: ["focus", "move", "swap", "resize", "magnify", "navigate", "screenshot"],
                 tabs: ["focus", "move", "swap", "navigate", "screenshot"],
+                web: ["screenshot", "set_presentation"],
                 canvas: [
                     "focus",
                     "move",
@@ -906,13 +1454,53 @@ export class TabClient extends WshClient {
                     "connect_objects",
                     "screenshot",
                 ],
+                os: [
+                    "focus",
+                    "move",
+                    "resize",
+                    "fit",
+                    "navigate",
+                    "arrange",
+                    "connect_objects",
+                    "add_note",
+                    "update_object",
+                    "delete_object",
+                    "spatial.dock",
+                    "spatial.detach",
+                    "spatial.collapse",
+                    "spatial.restore",
+                    "spatial.showOverview",
+                    "os.view.set",
+                    "spatial.openApp",
+                    "spatial.openFile",
+                    "spatial.openCommandCenter",
+                    "os.app.launch",
+                    "os.space.switch",
+                    "os.resource.open",
+                    "os.window.focus",
+                    "os.window.move",
+                    "os.window.resize",
+                    "os.window.snap",
+                    "os.window.minimize",
+                    "os.window.restore",
+                    "os.window.maximize",
+                    "os.window.close",
+                    "os.window.overview",
+                    "os.window.place",
+                    "os.window.arrange",
+                    "screenshot",
+                ],
             },
             guidance:
-                presentation === "canvas"
-                    ? "Use worldbounds for widget geometry, canvasobjects for whiteboard object IDs and geometry, selectedcanvasobjectid and canvascontextids for the user's active spatial context, and bounds for on-screen interactions. Requested placements are moved to open space to prevent overlap."
-                    : presentation === "tabs"
-                      ? "Only the focused widget is visible; use focus or navigate before widget interaction."
-                      : "Use layouttree and bounds for split-aware move, resize, magnify, and directional navigation.",
+                presentation === "os"
+                    ? "Use osscene, osgroups, ospresentations, worldbounds, and canvasobjects to control the live hybrid OS workspace. Presentation actions preserve canonical block identity."
+                    : presentation === "canvas"
+                      ? "Use worldbounds for widget geometry, canvasobjects for whiteboard object IDs and geometry, selectedcanvasobjectid and canvascontextids for the user's active spatial context, and bounds for on-screen interactions. Requested placements are moved to open space to prevent overlap."
+                      : presentation === "tabs"
+                        ? "Visible panes can include the agent and a companion widget; inspect each block's visible flag and bounds before interaction."
+                        : presentation === "web"
+                          ? "The full-screen web shell owns this viewport. Workspace blocks are parked; use browser tools for the active web surface or change presentation. HUD island geometry belongs to a separate desktop window."
+                          : "Use layouttree and bounds for split-aware move, resize, magnify, and directional navigation.",
         };
     }
 
@@ -1042,9 +1630,10 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             throw new Error(`Block not found: ${data.blockid}`);
         }
+        const root = this.observeWidgetForAgent(data.blockid);
 
         const blockAtom = WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", data.blockid));
         const blockData = globalStore.get(blockAtom);
@@ -1106,15 +1695,11 @@ export class TabClient extends WshClient {
 
             // For kronterm-desktop runtime, try to fetch a screenshot
             try {
-                const controller = new AbortController();
-                const timeoutId = window.setTimeout(() => controller.abort(), 5000);
                 const response = await fetch(await this.sandboxComputerUseUrl(data.blockid), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "screenshot" }),
-                    signal: controller.signal,
                 });
-                window.clearTimeout(timeoutId);
                 if (response.ok) {
                     const data = await response.json();
                     if (data?.image) {
@@ -1135,6 +1720,8 @@ export class TabClient extends WshClient {
             } catch {
                 // Sandbox API not available — return basic info only
             }
+        } else {
+            elements.push(...this.rendererElements(root, 50));
         }
 
         return {
@@ -1155,21 +1742,21 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             throw new Error(`Block not found: ${data.blockid}`);
         }
 
         const blockAtom = WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", data.blockid));
         const blockData = globalStore.get(blockAtom);
         const viewType = blockData?.meta?.view ?? "";
+        const root = this.observeWidgetForAgent(data.blockid);
 
-        const additionalProps = layoutModel.getNodeAdditionalProperties(node);
-        let width = 800;
-        let height = 600;
-        if (additionalProps?.rect) {
-            width = additionalProps.rect.width;
-            height = additionalProps.rect.height;
-        }
+        const additionalProps = node ? layoutModel.getNodeAdditionalProperties(node) : undefined;
+        const mountedRect = root.getBoundingClientRect();
+        const guest = root.querySelector("webview") as Electron.WebviewTag;
+        const viewport = guest ? await guest.executeJavaScript("({width:innerWidth,height:innerHeight})") : undefined;
+        const width = viewport?.width || mountedRect.width || additionalProps?.rect?.width || 800;
+        const height = viewport?.height || mountedRect.height || additionalProps?.rect?.height || 600;
 
         const focusedNode = globalStore.get(layoutModel.focusedNode);
         const isFocused = focusedNode?.data?.blockId === data.blockid;
@@ -1179,8 +1766,8 @@ export class TabClient extends WshClient {
             viewtype: viewType,
             state: {},
             focused: isFocused,
-            x: 0,
-            y: 0,
+            x: Math.round(mountedRect.x),
+            y: Math.round(mountedRect.y),
             width: width,
             height: height,
         };
@@ -1196,7 +1783,7 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
 
@@ -1227,7 +1814,7 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
 
@@ -1257,7 +1844,7 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
 
@@ -1288,7 +1875,7 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
 
@@ -1313,7 +1900,7 @@ export class TabClient extends WshClient {
         }
 
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
 
@@ -1337,7 +1924,7 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return {
                 blockid: data.blockid,
                 condition: data.condition || "visible",
@@ -1352,9 +1939,19 @@ export class TabClient extends WshClient {
         const condition = data.condition || "visible";
         const ref = data.elementref || "";
 
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = await this.focusWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
             while (Date.now() - startTime < timeout) {
+                if (this.rendererCondition(root, ref, condition)) {
+                    return {
+                        blockid: data.blockid,
+                        condition,
+                        met: true,
+                        wait_time_ms: Date.now() - startTime,
+                        message: "Condition met",
+                    };
+                }
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
             return {
@@ -1362,7 +1959,7 @@ export class TabClient extends WshClient {
                 condition: condition,
                 met: false,
                 wait_time_ms: Date.now() - startTime,
-                message: "Webview not found",
+                message: "Element wait timeout - condition not met",
             };
         }
 
@@ -1422,6 +2019,13 @@ export class TabClient extends WshClient {
         };
     }
 
+    async handle_webselector(_rh: RpcResponseHelper, data: CommandWebSelectorData): Promise<string[]> {
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag;
+        if (!webview) throw new Error("Target is not a browser widget");
+        return webview.executeJavaScript(browserHtmlScript(data.selector, data.opts?.inner, data.opts?.all));
+    }
+
     async handle_widgetsnapshot(
         rh: RpcResponseHelper,
         data: CommandWidgetSnapshotData
@@ -1431,43 +2035,21 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
-            return { blockid: data.blockid, elements: [], count: 0, timestamp: Date.now() };
+        if (!node && !this.widgetRoot(data.blockid)) {
+            throw new Error("Browser snapshot unavailable: block is not mounted; refresh workspace inventory");
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
-            return { blockid: data.blockid, elements: [], count: 0, timestamp: Date.now() };
+            const elements = this.rendererElements(root, 50);
+            return { blockid: data.blockid, elements, count: elements.length, timestamp: Date.now() };
         }
         try {
-            const elements = await webview.executeJavaScript(`
-                (function() {
-                    var interactive = document.querySelectorAll('a, button, input, select, textarea, [role], [tabindex], [onclick], [aria-label]');
-                    var result = [];
-                    for (var i = 0; i < interactive.length && i < 50; i++) {
-                        var el = interactive[i];
-                        var rect = el.getBoundingClientRect();
-                        if (rect.width === 0 && rect.height === 0) continue;
-                        var ref = el.id || el.name || el.getAttribute('aria-label') || el.getAttribute('data-wave-ref');
-                        if (!ref) {
-                            ref = 'wave-ref-' + i;
-                            el.setAttribute('data-wave-ref', ref);
-                        }
-                        result.push({
-                            ref: ref,
-                            role: el.getAttribute('role') || el.tagName.toLowerCase(),
-                            name: el.getAttribute('aria-label') || el.textContent?.substring(0, 80) || el.name || '',
-                            value: el.value || '',
-                            x: Math.round(rect.x),
-                            y: Math.round(rect.y),
-                            width: Math.round(rect.width),
-                            height: Math.round(rect.height),
-                            focusable: !el.disabled && el.tabIndex >= 0,
-                            visible: rect.width > 0 && rect.height > 0
-                        });
-                    }
-                    return result;
-                })()
-            `);
+            const accessibility = getApi()?.browserAccessibilitySnapshot;
+            const axElements = accessibility ? await accessibility(webview.getWebContentsId()).catch(() => null) : null;
+            const elements = axElements?.length
+                ? axElements
+                : await webview.executeJavaScript(browserObservationScript());
             return {
                 blockid: data.blockid,
                 elements: elements || [],
@@ -1475,7 +2057,7 @@ export class TabClient extends WshClient {
                 timestamp: Date.now(),
             };
         } catch (e) {
-            return { blockid: data.blockid, elements: [], count: 0, timestamp: Date.now() };
+            throw new Error(`Browser snapshot failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -1485,12 +2067,19 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, elements: [], count: 0 };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
-            return { blockid: data.blockid, elements: [], count: 0 };
+            const elements = this.rendererElements(root, data.maxcount || 10, {
+                role: data.role,
+                name: data.name,
+                value: data.value,
+                text: data.text,
+            });
+            return { blockid: data.blockid, elements, count: elements.length };
         }
         try {
             const maxCount = data.maxcount || 10;
@@ -1498,48 +2087,16 @@ export class TabClient extends WshClient {
             const nameFilter = data.name || "";
             const valueFilter = data.value || "";
             const textFilter = data.text || "";
-            const elements = await webview.executeJavaScript(`
-                (function() {
-                    var maxCount = ${maxCount};
-                    var roleFilter = ${JSON.stringify(roleFilter)};
-                    var nameFilter = ${JSON.stringify(nameFilter)};
-                    var valueFilter = ${JSON.stringify(valueFilter)};
-                    var textFilter = ${JSON.stringify(textFilter)};
-                    var all = document.querySelectorAll('a, button, input, select, textarea, [role], [tabindex], [onclick], [aria-label]');
-                    var result = [];
-                    for (var i = 0; i < all.length && result.length < maxCount; i++) {
-                        var el = all[i];
-                        var rect = el.getBoundingClientRect();
-                        if (rect.width === 0 && rect.height === 0) continue;
-                        var elRole = el.getAttribute('role') || el.tagName.toLowerCase();
-                        var elName = el.getAttribute('aria-label') || el.name || '';
-                        var elValue = el.value || '';
-                        var elText = el.textContent || '';
-                        if (roleFilter && elRole !== roleFilter) continue;
-                        if (nameFilter && elName.indexOf(nameFilter) === -1) continue;
-                        if (valueFilter && String(elValue).indexOf(valueFilter) === -1) continue;
-                        if (textFilter && elText.indexOf(textFilter) === -1) continue;
-                        var ref = el.id || el.name || el.getAttribute('aria-label') || el.getAttribute('data-wave-ref');
-                        if (!ref) {
-                            ref = 'wave-ref-' + i;
-                            el.setAttribute('data-wave-ref', ref);
-                        }
-                        result.push({
-                            ref: ref,
-                            role: elRole,
-                            name: elName.substring(0, 80),
-                            value: String(elValue).substring(0, 200),
-                            x: Math.round(rect.x),
-                            y: Math.round(rect.y),
-                            width: Math.round(rect.width),
-                            height: Math.round(rect.height),
-                            focusable: !el.disabled && el.tabIndex >= 0,
-                            visible: true
-                        });
-                    }
-                    return result;
-                })()
-            `);
+            const candidates = await webview.executeJavaScript(browserObservationScript(1000));
+            const elements = candidates
+                .filter(
+                    (element) =>
+                        (!roleFilter || element.role === roleFilter) &&
+                        (!nameFilter || element.name.includes(nameFilter)) &&
+                        (!valueFilter || element.value.includes(valueFilter)) &&
+                        (!textFilter || element.name.includes(textFilter))
+                )
+                .slice(0, maxCount);
             return { blockid: data.blockid, elements: elements || [], count: (elements || []).length };
         } catch (e) {
             return { blockid: data.blockid, elements: [], count: 0 };
@@ -1552,7 +2109,7 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return {
                 blockid: data.blockid,
                 elementref: data.elementref,
@@ -1567,8 +2124,33 @@ export class TabClient extends WshClient {
                 enabled: false,
             };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
+            const element = this.rendererElementByRef(root, data.elementref || "");
+            if (element) {
+                const rootRect = root.getBoundingClientRect();
+                const rect = element.getBoundingClientRect();
+                const style = window.getComputedStyle(element);
+                return {
+                    blockid: data.blockid,
+                    elementref: data.elementref,
+                    role: element.getAttribute("role") || element.tagName.toLowerCase(),
+                    name:
+                        element.getAttribute("aria-label") ||
+                        (element as HTMLInputElement).name ||
+                        element.textContent?.trim().slice(0, 80) ||
+                        "",
+                    x: Math.round(rect.x - rootRect.x),
+                    y: Math.round(rect.y - rootRect.y),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    focusable: !(element as HTMLInputElement).disabled && element.tabIndex >= 0,
+                    visible:
+                        rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none",
+                    enabled: !(element as HTMLInputElement).disabled,
+                };
+            }
             return {
                 blockid: data.blockid,
                 elementref: data.elementref,
@@ -1662,12 +2244,41 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, x: data.x, y: data.y, found: false };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
-            return { blockid: data.blockid, x: data.x, y: data.y, found: false };
+            const rootRect = root.getBoundingClientRect();
+            const rendererX = data.x <= rootRect.width ? rootRect.x + data.x : data.x;
+            const rendererY = data.y <= rootRect.height ? rootRect.y + data.y : data.y;
+            const element = document.elementFromPoint(rendererX, rendererY);
+            if (!(element instanceof HTMLElement) || !root.contains(element)) {
+                return { blockid: data.blockid, x: data.x, y: data.y, found: false };
+            }
+            let ref =
+                element.id ||
+                (element as HTMLInputElement).name ||
+                element.getAttribute("aria-label") ||
+                element.getAttribute("data-wave-ref");
+            if (!ref) {
+                ref = "kronterm-ref-element-at";
+                element.setAttribute("data-wave-ref", ref);
+            }
+            return {
+                blockid: data.blockid,
+                x: data.x,
+                y: data.y,
+                found: true,
+                elementref: ref,
+                role: element.getAttribute("role") || element.tagName.toLowerCase(),
+                name:
+                    element.getAttribute("aria-label") ||
+                    (element as HTMLInputElement).name ||
+                    element.textContent?.trim().slice(0, 80) ||
+                    "",
+            };
         }
         try {
             const result = await webview.executeJavaScript(`
@@ -1716,7 +2327,7 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
         return this.executeBrowserInteraction(data.blockid, "click", {
@@ -1734,24 +2345,14 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: data.blockid, success: false, message: "Webview not found" };
-        }
-        try {
-            webview.send("human-sim-widget-hover", {
-                blockid: data.blockid,
-                elementref: data.elementref,
-                x: data.x,
-                y: data.y,
-            });
-            return { blockid: data.blockid, success: true, message: "Hover executed" };
-        } catch (e) {
-            return { blockid: data.blockid, success: false, message: `Failed to hover: ${e}` };
-        }
+        return this.executeBrowserInteraction(data.blockid, "hover", {
+            elementref: data.elementref,
+            x: data.x,
+            y: data.y,
+        });
     }
 
     async handle_widgetlongpress(
@@ -1763,25 +2364,15 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: data.blockid, success: false, message: "Webview not found" };
-        }
-        try {
-            webview.send("human-sim-widget-long-press", {
-                blockid: data.blockid,
-                elementref: data.elementref,
-                x: data.x,
-                y: data.y,
-                duration: data.duration,
-            });
-            return { blockid: data.blockid, success: true, message: "Long press executed" };
-        } catch (e) {
-            return { blockid: data.blockid, success: false, message: `Failed to long press: ${e}` };
-        }
+        return this.executeBrowserInteraction(data.blockid, "longpress", {
+            elementref: data.elementref,
+            x: data.x,
+            y: data.y,
+            duration: data.duration,
+        });
     }
 
     async handle_widgetdrag(rh: RpcResponseHelper, data: CommandWidgetDragData): Promise<WidgetMouseActionRtnData> {
@@ -1790,7 +2381,7 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
         return this.executeBrowserInteraction(data.blockid, "drag", {
@@ -1813,7 +2404,7 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
         return this.executeBrowserInteraction(data.blockid, "scroll-to", {
@@ -1832,12 +2423,18 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, elementref: data.elementref, value: "" };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
-            return { blockid: data.blockid, elementref: data.elementref, value: "" };
+            const element = this.rendererElementByRef(root, data.elementref || "");
+            const value =
+                element && "value" in element
+                    ? String((element as HTMLInputElement).value ?? "")
+                    : element?.textContent || "";
+            return { blockid: data.blockid, elementref: data.elementref, value };
         }
         try {
             const ref = data.elementref || "";
@@ -1869,14 +2466,26 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: data.blockid, success: false, message: "Webview not found" };
-        }
         try {
+            const root = await this.focusWidgetForAgent(data.blockid);
+            const webview = root.querySelector("webview") as Electron.WebviewTag | null;
+            if (!webview) {
+                const target = this.rendererTarget(root, data.elementref, undefined, undefined)?.target;
+                if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+                    return { blockid: data.blockid, success: false, message: "Element does not accept text input" };
+                }
+                const prototype =
+                    target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(target, data.value);
+                target.dispatchEvent(
+                    new InputEvent("input", { bubbles: true, inputType: "insertText", data: data.value })
+                );
+                target.dispatchEvent(new Event("change", { bubbles: true }));
+                return { blockid: data.blockid, success: true, message: "Value set" };
+            }
             const result = await webview.executeJavaScript(`
                 (function() {
                     var ref = ${JSON.stringify(data.elementref || "")};
@@ -1910,16 +2519,47 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: data.blockid, success: false, message: "Webview not found" };
-        }
         try {
-            webview.send("human-sim-widget-clear", { blockid: data.blockid, elementref: data.elementref });
-            return { blockid: data.blockid, success: true, message: "Clear executed" };
+            const root = await this.focusWidgetForAgent(data.blockid);
+            const webview = root.querySelector("webview") as Electron.WebviewTag | null;
+            if (webview) {
+                const result = (await webview.executeJavaScript(`
+                    (() => {
+                        const ref = ${JSON.stringify(data.elementref || "")};
+                        const escaped = CSS.escape(ref);
+                        const target = document.getElementById(ref) ||
+                            document.querySelector('[name="' + escaped + '"]') ||
+                            document.querySelector('[aria-label="' + escaped + '"]') ||
+                            document.querySelector('[data-wave-ref="' + escaped + '"]');
+                        if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+                            return false;
+                        }
+                        target.focus();
+                        target.select();
+                        return true;
+                    })()
+                `)) as boolean;
+                if (!result) {
+                    return { blockid: data.blockid, success: false, message: "Text element not found" };
+                }
+                await this.sendKeyChord(webview, ["CommandOrControl", "A"]);
+                await webview.insertText("");
+                await this.sendKeyChord(webview, ["Backspace"]);
+                return { blockid: data.blockid, success: true, message: "Value cleared" };
+            }
+            const target = this.rendererTarget(root, data.elementref, undefined, undefined)?.target;
+            if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+                return { blockid: data.blockid, success: false, message: "Text element not found" };
+            }
+            const prototype =
+                target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(target, "");
+            target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+            target.dispatchEvent(new Event("change", { bubbles: true }));
+            return { blockid: data.blockid, success: true, message: "Value cleared" };
         } catch (e) {
             return { blockid: data.blockid, success: false, message: `Failed to clear: ${e}` };
         }
@@ -1931,14 +2571,28 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: data.blockid, success: false, message: "Webview not found" };
-        }
         try {
+            const root = await this.focusWidgetForAgent(data.blockid);
+            const webview = root.querySelector("webview") as Electron.WebviewTag | null;
+            if (!webview) {
+                const target = this.rendererTarget(root, data.elementref, undefined, undefined)?.target;
+                if (!(target instanceof HTMLSelectElement)) {
+                    return { blockid: data.blockid, success: false, message: "Select element not found" };
+                }
+                const option = Array.from(target.options).find(
+                    (item) => item.value === data.option || item.text === data.option
+                );
+                if (!option) {
+                    return { blockid: data.blockid, success: false, message: "Option not found" };
+                }
+                Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(target, option.value);
+                target.dispatchEvent(new Event("input", { bubbles: true }));
+                target.dispatchEvent(new Event("change", { bubbles: true }));
+                return { blockid: data.blockid, success: true, message: "Select executed" };
+            }
             const result = await webview.executeJavaScript(`
                 (function() {
                     var ref = ${JSON.stringify(data.elementref || "")};
@@ -1973,37 +2627,10 @@ export class TabClient extends WshClient {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(data.blockid);
-        if (!node) {
+        if (!node && !this.widgetRoot(data.blockid)) {
             return { blockid: data.blockid, success: false, message: `Block not found: ${data.blockid}` };
         }
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
-        if (!webview) {
-            return { blockid: data.blockid, success: false, message: "Webview not found" };
-        }
-        try {
-            const result = await webview.executeJavaScript(`
-                (function() {
-                    var ref = ${JSON.stringify(data.elementref || "")};
-                    var el = document.getElementById(ref) || document.querySelector('[name="' + ref + '"]') || document.querySelector('[aria-label="' + ref + '"]') || document.querySelector('[data-wave-ref="' + ref + '"]');
-                    if (!el) return { success: false, message: 'Element not found' };
-                    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
-                        el.checked = !el.checked;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                        return { success: true, message: 'Toggle executed' };
-                    }
-                    el.click();
-                    return { success: true, message: 'Toggle executed' };
-                })()
-            `);
-            return {
-                blockid: data.blockid,
-                success: !!result?.success,
-                message: result?.message ?? "Failed to toggle",
-            };
-        } catch (e) {
-            return { blockid: data.blockid, success: false, message: `Failed to toggle: ${e}` };
-        }
+        return this.executeBrowserInteraction(data.blockid, "click", { elementref: data.elementref });
     }
 
     async handle_widgetclipboardget(
@@ -2011,7 +2638,8 @@ export class TabClient extends WshClient {
         data: CommandWidgetClipboardGetData
     ): Promise<WidgetClipboardGetRtnData> {
         try {
-            const text = await navigator.clipboard.readText();
+            await this.focusWidgetForAgent(data.blockid);
+            const text = await getApi().readClipboard();
             return { blockid: data.blockid, text };
         } catch (e) {
             return { blockid: data.blockid, text: "" };
@@ -2023,7 +2651,8 @@ export class TabClient extends WshClient {
         data: CommandWidgetClipboardSetData
     ): Promise<WidgetMouseActionRtnData> {
         try {
-            await navigator.clipboard.writeText(data.text);
+            await this.focusWidgetForAgent(data.blockid);
+            await getApi().writeClipboard(data.text);
             return { blockid: data.blockid, success: true, message: "Clipboard set" };
         } catch (e) {
             return { blockid: data.blockid, success: false, message: `Failed to set clipboard: ${e}` };
@@ -2039,17 +2668,27 @@ export class TabClient extends WshClient {
         const condition = data.condition || "";
         const elementref = data.elementref || "";
 
-        const webview = document.querySelector(`div[data-blockid='${data.blockid}'] webview`) as Electron.WebviewTag;
+        const root = this.observeWidgetForAgent(data.blockid);
+        const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
             while (Date.now() - startTime < timeout) {
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                if (this.rendererCondition(root, elementref, condition)) {
+                    return {
+                        blockid: data.blockid,
+                        condition,
+                        met: true,
+                        wait_time_ms: Date.now() - startTime,
+                        message: "Condition met",
+                    };
+                }
+                await new Promise((resolve) => setTimeout(resolve, 200));
             }
             return {
                 blockid: data.blockid,
                 condition,
                 met: false,
                 wait_time_ms: Date.now() - startTime,
-                message: "Webview not found",
+                message: "Element wait timeout - condition not met",
             };
         }
 

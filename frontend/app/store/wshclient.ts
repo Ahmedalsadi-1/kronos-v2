@@ -47,7 +47,7 @@ class WshClient {
         this.routeId = routeId;
     }
 
-    wshRpcCall(command: string, data: any, opts: RpcOpts): Promise<any> {
+    wshRpcCall(command: string, data: any, opts: RpcOpts & { signal?: AbortSignal }): Promise<any> {
         const msg: RpcMessage = {
             command: command,
             data: data,
@@ -62,7 +62,7 @@ class WshClient {
         if (opts?.route) {
             msg.route = opts.route;
         }
-        const rpcGen = sendRpcCommand(this.openRpcs, msg);
+        const rpcGen = sendRpcCommand(this.openRpcs, msg, (opts as RpcOpts & { signal?: AbortSignal })?.signal);
         if (rpcGen == null) {
             return null;
         }
@@ -88,7 +88,7 @@ class WshClient {
         if (opts?.route) {
             msg.route = opts.route;
         }
-        const rpcGen = sendRpcCommand(this.openRpcs, msg);
+        const rpcGen = sendRpcCommand(this.openRpcs, msg, (opts as RpcOpts & { signal?: AbortSignal })?.signal);
         return rpcGen;
     }
 

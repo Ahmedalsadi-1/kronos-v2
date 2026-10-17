@@ -6,11 +6,11 @@ title: "KronosCode"
 
 import { Kbd } from "@site/src/components/kbd";
 
-KronosCode is KronTerm's local agent execution layer. KronosChamber is its primary chat and control surface. Together they
+KronosCode is KronTerm's local agent execution layer. Hermes is its primary chat and control surface. Together they
 connect a request to the terminal, files, browser, sandbox, native desktop, canvas, research tools, and configured MCP
 servers while keeping meaningful actions visible.
 
-## Open KronosChamber
+## Open Hermes
 
 | Shortcut                                 | Action                   |
 | ---------------------------------------- | ------------------------ |
@@ -20,7 +20,7 @@ servers while keeping meaningful actions visible.
 | <Kbd k="Enter" />                        | Send a message           |
 | <Kbd k="Shift:Enter" />                  | Insert a new line        |
 
-KronTerm starts and monitors the local KronosCode/KronosChamber runtime. The view reports startup, connection, degraded,
+KronTerm starts and monitors the local KronosCode and Hermes runtime. The view reports startup, connection, degraded,
 and unavailable states. When startup fails, use the displayed component status and suggested recovery action instead of
 repeatedly reopening the widget.
 
@@ -122,7 +122,7 @@ is available. See [Voice](./voice) for dependencies and privacy details.
 
 ## Troubleshooting
 
-### KronosChamber does not load
+### Hermes does not load
 
 Read the runtime repair panel. It identifies whether the child process, HTTP health endpoint, credentials, or embedded
 client failed and supplies the next recovery action.
@@ -141,5 +141,5 @@ Confirm that its AI mode includes the `tools` capability and that the endpoint i
 Voice requires the optional Python process, its dependencies, a usable microphone, and operating-system permission. The
 rest of KronosCode works without it.
 
-KronosCode and KronosChamber are active private-beta features. The voice engine is experimental, and behavior may change
+KronosCode and Hermes are active private-beta features. The voice engine is experimental, and behavior may change
 before general release.

@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-iPhone Labs client: React 19 + Vite + Capacitor 8 + TypeScript. Opens into KronosChamber and connects to a managed host or an explicitly paired computer. Separate app from the core desktop build — see `README.md` for the implemented slice and phase boundaries.
+iPhone Labs client: React 19 + Vite + Capacitor 8 + TypeScript. Opens into Hermes and connects to a managed host or an explicitly paired computer. Separate app from the core desktop build — see `README.md` for the implemented slice and phase boundaries.
 
 ## STRUCTURE
 

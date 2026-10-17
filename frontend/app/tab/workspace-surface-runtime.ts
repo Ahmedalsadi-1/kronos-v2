@@ -5,7 +5,14 @@ import type { WorkspaceCanvasRect } from "./workspace-canvas-utils";
 import type { WorkspacePresentation } from "./workspace-presentation";
 
 type WorkspaceSurfaceControlAction =
+    | "os.tabs.group"
+    | "os.tabs.detach"
+    | "os.tabs.reorder"
     | "focus"
+    | "hud.mode"
+    | "hud.open"
+    | "hud.background"
+    | "hud.restore"
     | "move"
     | "resize"
     | "navigate"
@@ -26,11 +33,27 @@ type WorkspaceSurfaceControlAction =
     | "spatial.showOverview"
     | "spatial.switchWorkspace"
     | "spatial.openApp"
+    | "os.view.set"
     | "spatial.setWidgetPresentation"
     | "spatial.openFile"
-    | "spatial.openCommandCenter";
+    | "spatial.openCommandCenter"
+    | "os.app.launch"
+    | "os.space.switch"
+    | "os.resource.open"
+    | "os.window.focus"
+    | "os.window.move"
+    | "os.window.resize"
+    | "os.window.snap"
+    | "os.window.minimize"
+    | "os.window.restore"
+    | "os.window.maximize"
+    | "os.window.close"
+    | "os.window.place"
+    | "os.window.arrange"
+    | "os.window.overview";
 
 type WorkspaceSurfaceControlInput = {
+    index?: number;
     action: WorkspaceSurfaceControlAction;
     blockid?: string;
     targetblockid?: string;
@@ -50,6 +73,7 @@ type WorkspaceSurfaceControlInput = {
     appid?: string;
     appname?: string;
     presentation?: string;
+    position?: string;
     file?: string;
 };
 
@@ -65,13 +89,34 @@ type WorkspaceSurfaceModeState = {
     objects?: unknown[];
     scene?: unknown;
     groups?: unknown;
+    tabgroups?: unknown;
     presentations?: Record<string, string>;
+    osview?: "canvas" | "file";
 };
 
 type WorkspaceSurfaceModeProvider = {
     snapshot: () => WorkspaceSurfaceModeState;
-    control: (input: WorkspaceSurfaceControlInput) => { success: boolean; message: string };
+    control: (
+        input: WorkspaceSurfaceControlInput
+    ) => WorkspaceSurfaceControlResult | Promise<WorkspaceSurfaceControlResult>;
 };
+
+type WorkspaceSurfaceControlResult = { success: boolean; message: string };
+
+async function controlWorkspaceSurface(
+    tabId: string,
+    input: WorkspaceSurfaceControlInput
+): Promise<WorkspaceSurfaceControlResult> {
+    const provider = getWorkspaceSurfaceModeProvider(tabId);
+    if (!provider) {
+        throw new Error("Workspace surface is not mounted; refresh the workspace snapshot before retrying.");
+    }
+    const result = await provider.control(input);
+    if (!result.success) {
+        throw new Error(result.message);
+    }
+    return result;
+}
 
 const providers = new Map<string, WorkspaceSurfaceModeProvider>();
 
@@ -88,5 +133,5 @@ function getWorkspaceSurfaceModeProvider(tabId: string): WorkspaceSurfaceModePro
     return providers.get(tabId);
 }
 
-export { getWorkspaceSurfaceModeProvider, registerWorkspaceSurfaceModeProvider };
+export { controlWorkspaceSurface, getWorkspaceSurfaceModeProvider, registerWorkspaceSurfaceModeProvider };
 export type { WorkspaceSurfaceControlInput, WorkspaceSurfaceModeProvider, WorkspaceSurfaceModeState };

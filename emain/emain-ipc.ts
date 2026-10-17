@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import * as electron from "electron";
@@ -23,12 +23,6 @@ import {
     removeAgentManager,
 } from "./acp";
 import {
-    getChatHubV2RuntimeHealth,
-    getChatHubV2ServerStatus,
-    startChatHubV2Server,
-    stopChatHubV2Server,
-} from "./chathubv2-server";
-import {
     incrementTermCommandsDurable,
     incrementTermCommandsRemote,
     incrementTermCommandsRun,
@@ -36,6 +30,9 @@ import {
     setWasActive,
 } from "./emain-activity";
 
+import { registerComfyUiIpc } from "./comfyui-ipc";
+import { registerComputerTargetsIpc } from "./computer-targets-ipc";
+import { loadNativeAppIcons } from "./emain-app-icons";
 import {
     audioGetStatus,
     audioSetWakeWord,
@@ -43,10 +40,11 @@ import {
     audioSpeak,
     audioStartListening,
     audioStopListening,
+    audioTranscribeFile,
     registerAudioCallbacks,
     runAudioEngine,
 } from "./emain-audio";
-import { getKrondesignProc, getKrondesignUrl, isKrondesignHealthy, runKrondesignDaemon } from "./emain-krondesign";
+import { handleNativeHudRendererReady, isTrustedNativeHudSender } from "./emain-hud";
 import { sendLspMessage, startLanguageServer, stopLanguageServer } from "./emain-lsp";
 import {
     getDesktopPetClickThroughStatus,
@@ -56,6 +54,7 @@ import {
     submitDesktopPetChat,
     toggleDesktopPetClickThrough,
     updateDesktopPetOptions,
+    updateDesktopPetVoiceState,
 } from "./emain-pet";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
@@ -72,6 +71,12 @@ import {
     type KronosCodeBootProgress,
     type KronosCodeConnectionDescriptor,
 } from "./kronoscode-runtime";
+import { registerLinuxDesktopsIpc } from "./linux-desktops-ipc";
+import { registerNativeHudIpc } from "./native-hud-ipc";
+import { registerNativeTaskGroupsIpc } from "./native-task-groups-ipc";
+import { registerProductivityIpc } from "./productivity-ipc";
+import { managedAppBlocked } from "./productivity-runtime";
+import { registerSystemAppearanceIpc } from "./system-appearance-ipc";
 
 const electronApp = electron.app;
 
@@ -337,6 +342,28 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
+    registerNativeHudIpc();
+    registerProductivityIpc();
+    registerComfyUiIpc();
+    registerComputerTargetsIpc();
+    registerNativeTaskGroupsIpc();
+    registerLinuxDesktopsIpc();
+    registerSystemAppearanceIpc();
+    electron.ipcMain.on("desktop-pet-voice", (event, input: unknown) => {
+        if (
+            event.senderFrame !== event.sender.mainFrame ||
+            (getWaveTabViewByWebContentsId(event.sender.id) == null && !isTrustedNativeHudSender(event.sender.id))
+        )
+            return;
+        if (input && typeof input === "object") updateDesktopPetVoiceState(input);
+    });
+    electron.ipcMain.handle("get-native-app-icons", (_event, paths: unknown) => {
+        if (!Array.isArray(paths)) return {};
+        const appPaths = paths
+            .filter((value): value is string => typeof value === "string" && path.isAbsolute(value))
+            .slice(0, 128);
+        return loadNativeAppIcons(appPaths, path.join(electronApp.getPath("userData"), "native-app-icons"));
+    });
     const broadcastKronosCodeEvent = (channel: string, payload: unknown) => {
         for (const webContents of electron.webContents.getAllWebContents()) {
             if (!webContents.isDestroyed()) {
@@ -349,6 +376,7 @@ export function initIpcHandlers() {
     );
     KronosCodeRuntime.on("exit", (payload) => broadcastKronosCodeEvent("kronoscode-exit", payload));
     HermesRuntime.on("connection", (payload) => broadcastKronosCodeEvent("hermes-connection", payload));
+    HermesRuntime.on("runtime-failure", (payload) => broadcastKronosCodeEvent("hermes-runtime-failure", payload));
     electron.ipcMain.on("desktop-pet-options", (_event, options) => {
         updateDesktopPetOptions(options ?? {});
     });
@@ -612,6 +640,7 @@ export function initIpcHandlers() {
     });
 
     electron.ipcMain.on("open-native-path", (event, filePath: string) => {
+        if (managedAppBlocked(filePath) || managedAppBlocked(path.basename(filePath, path.extname(filePath)))) return;
         console.log("open-native-path", filePath);
         filePath = filePath.replace("~", electronApp.getPath("home"));
         fireAndForget(() =>
@@ -624,6 +653,7 @@ export function initIpcHandlers() {
     });
 
     electron.ipcMain.on("set-window-init-status", (event, status: "ready" | "wave-ready") => {
+        if (handleNativeHudRendererReady(event.sender.id, status)) return;
         const tabView = getWaveTabViewByWebContentsId(event.sender.id);
         if (tabView != null && tabView.initResolve != null) {
             if (status === "ready") {
@@ -817,7 +847,11 @@ export function initIpcHandlers() {
                     },
                 };
             }
-            const manager = createAgentManager(opts);
+            const existingManager = opts.resumeSessionId ? getAgentManager(opts.conversationId) : undefined;
+            if (existingManager && existingManager.backend !== opts.backend) {
+                return { success: false, error: "Saved session backend does not match the running agent" };
+            }
+            const manager = existingManager ?? createAgentManager(opts);
 
             const senderWc = event.sender;
             manager.on("event", (acpEvent: AcpEvent) => {
@@ -828,7 +862,9 @@ export function initIpcHandlers() {
             });
 
             try {
-                await manager.initialize(opts);
+                if (!existingManager) {
+                    await manager.initialize(opts);
+                }
                 return {
                     success: true,
                     conversationId: opts.conversationId,
@@ -1028,27 +1064,6 @@ export function initIpcHandlers() {
         stopLanguageServer(sessionId);
     });
 
-    // ── Krondesign Daemon IPC ──────────────────────────────────────────
-
-    electron.ipcMain.handle("krondesign-status", async () => {
-        const proc = getKrondesignProc();
-        const healthy = await isKrondesignHealthy();
-        return {
-            running: healthy,
-            url: getKrondesignUrl(),
-            pid: healthy ? (proc?.pid ?? null) : null,
-        };
-    });
-
-    electron.ipcMain.handle("krondesign-start", async () => {
-        try {
-            await runKrondesignDaemon();
-            return { success: true };
-        } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : String(err) };
-        }
-    });
-
     // ── Audio / Voice Engine IPC ──────────────────────────────────────
 
     electron.ipcMain.handle("audio-start", async () => {
@@ -1079,6 +1094,12 @@ export function initIpcHandlers() {
         return audioReady;
     });
 
+    electron.ipcMain.handle("audio-transcribe-file", (event, file: string) => {
+        if (getWaveTabViewByWebContentsId(event.sender.id) == null && !isTrustedNativeHudSender(event.sender.id)) {
+            throw new Error("Untrusted transcription caller");
+        }
+        return audioTranscribeFile(file);
+    });
     electron.ipcMain.handle("audio-status", async () => {
         return audioGetStatus();
     });
@@ -1101,33 +1122,6 @@ export function initIpcHandlers() {
 
     electron.ipcMain.on("audio-set-wake-word", (_event, enabled: boolean) => {
         audioSetWakeWord(enabled);
-    });
-
-    // ── ChatHub V2 / KronosChamber backend IPC ────────────────────────
-
-    electron.ipcMain.handle(
-        "chathubv2-start",
-        async (_event, context?: { tabId?: string; blockId?: string; surfaceId?: string }) => {
-            try {
-                const data = await startChatHubV2Server(context);
-                return { success: true, data, health: data.health };
-            } catch (err) {
-                return {
-                    success: false,
-                    error: err instanceof Error ? err.message : String(err),
-                    health: getChatHubV2RuntimeHealth(),
-                };
-            }
-        }
-    );
-
-    electron.ipcMain.handle("chathubv2-status", async () => {
-        return { success: true, data: getChatHubV2ServerStatus(), health: getChatHubV2RuntimeHealth() };
-    });
-
-    electron.ipcMain.handle("chathubv2-stop", async () => {
-        stopChatHubV2Server();
-        return { success: true };
     });
 
     electron.ipcMain.handle("kronoscode-get-connection", async () => {
@@ -1169,7 +1163,6 @@ export function initIpcHandlers() {
         ): Promise<KronosCodeConnectionDescriptor> => {
             const descriptor = await KronosCodeRuntime.applyConnection(input);
             const internal = KronosCodeRuntime.getInternalConnection();
-            stopChatHubV2Server();
             await rehomeIdleKronosCodeAgents({
                 baseUrl: descriptor.baseUrl,
                 username: internal?.username ?? "kronoscode",

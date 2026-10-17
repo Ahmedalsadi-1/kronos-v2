@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -13,6 +13,9 @@ import (
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc/wshclient"
 )
+
+// Storage initialization performs an Electron encryption RPC with a five-second timeout.
+const secretCommandTimeout = 10000
 
 // secretNameRegex must match the validation in pkg/wconfig/secretstore.go
 var secretNameRegex = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
@@ -85,7 +88,7 @@ func secretGetRun(cmd *cobra.Command, args []string) (rtnErr error) {
 		return fmt.Errorf("invalid secret name: must start with a letter and contain only letters, numbers, and underscores")
 	}
 
-	resp, err := wshclient.GetSecretsCommand(RpcClient, []string{name}, &wshrpc.RpcOpts{Timeout: 2000})
+	resp, err := wshclient.GetSecretsCommand(RpcClient, []string{name}, &wshrpc.RpcOpts{Timeout: secretCommandTimeout})
 	if err != nil {
 		return fmt.Errorf("getting secret: %w", err)
 	}
@@ -116,7 +119,7 @@ func secretSetRun(cmd *cobra.Command, args []string) (rtnErr error) {
 		return fmt.Errorf("secret name cannot be empty")
 	}
 
-	backend, err := wshclient.GetSecretsLinuxStorageBackendCommand(RpcClient, &wshrpc.RpcOpts{Timeout: 2000})
+	backend, err := wshclient.GetSecretsLinuxStorageBackendCommand(RpcClient, &wshrpc.RpcOpts{Timeout: secretCommandTimeout})
 	if err != nil {
 		return fmt.Errorf("checking secret storage backend: %w", err)
 	}
@@ -126,7 +129,7 @@ func secretSetRun(cmd *cobra.Command, args []string) (rtnErr error) {
 	}
 
 	secrets := map[string]*string{name: &value}
-	err = wshclient.SetSecretsCommand(RpcClient, secrets, &wshrpc.RpcOpts{Timeout: 2000})
+	err = wshclient.SetSecretsCommand(RpcClient, secrets, &wshrpc.RpcOpts{Timeout: secretCommandTimeout})
 	if err != nil {
 		return fmt.Errorf("setting secret: %w", err)
 	}
@@ -140,7 +143,7 @@ func secretListRun(cmd *cobra.Command, args []string) (rtnErr error) {
 		sendActivity("secret", rtnErr == nil)
 	}()
 
-	names, err := wshclient.GetSecretsNamesCommand(RpcClient, &wshrpc.RpcOpts{Timeout: 2000})
+	names, err := wshclient.GetSecretsNamesCommand(RpcClient, &wshrpc.RpcOpts{Timeout: secretCommandTimeout})
 	if err != nil {
 		return fmt.Errorf("listing secrets: %w", err)
 	}
@@ -162,7 +165,7 @@ func secretDeleteRun(cmd *cobra.Command, args []string) (rtnErr error) {
 	}
 
 	secrets := map[string]*string{name: nil}
-	err := wshclient.SetSecretsCommand(RpcClient, secrets, &wshrpc.RpcOpts{Timeout: 2000})
+	err := wshclient.SetSecretsCommand(RpcClient, secrets, &wshrpc.RpcOpts{Timeout: secretCommandTimeout})
 	if err != nil {
 		return fmt.Errorf("deleting secret: %w", err)
 	}

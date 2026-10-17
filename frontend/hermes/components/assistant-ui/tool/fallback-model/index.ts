@@ -759,23 +759,109 @@ function toolPreviewTarget(toolName: string, args: Record<string, unknown>, resu
   return ''
 }
 
-function toolImageUrl(args: Record<string, unknown>, result: Record<string, unknown>): string {
-  const candidate =
-    firstStringField(result, ['image_url', 'url', 'path', 'image_path']) ||
-    firstStringField(args, ['image_url', 'url', 'path'])
+// Keys a tool payload may carry a screenshot under — flat strings, base64
+// blobs, or multimodal content parts. Any tool that returns a screenshot
+// should inline-render it, so the scan is shape-driven, not tool-name-driven.
+const TOOL_IMAGE_KEYS = ['image', 'image_base64', 'image_path', 'image_url', 'base64', 'screenshot', 'screenshot_url'] as const
 
-  if (!candidate) {
-    return ''
+const REMOTE_IMAGE_RE = /^https?:\/\/\S+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)/i
+const RAW_BASE64_RE = /^[A-Za-z0-9+/=\s]{200,}$/
+
+const MAX_TOOL_IMAGES = 6
+
+function normalizeImageUrl(candidate: unknown): string | null {
+  if (typeof candidate !== 'string') {
+    return null
   }
 
-  // Only inline-render images the renderer can actually fetch: data URLs or
-  // remote http(s). A bare filesystem path (e.g. vision_analyze's input image)
-  // resolves against the dev-server origin and 404s — fall back to the tool's
-  // codicon instead of a broken <img>.
-  const isDataImage = candidate.toLowerCase().startsWith('data:image/')
-  const isRemoteImage = /^https?:\/\//i.test(candidate) && /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(candidate)
+  const value = candidate.trim()
 
-  return isDataImage || isRemoteImage ? candidate : ''
+  if (!value) {
+    return null
+  }
+
+  if (value.toLowerCase().startsWith('data:image/')) {
+    return value
+  }
+
+  if (REMOTE_IMAGE_RE.test(value)) {
+    return value
+  }
+
+  // A raw base64 blob (MCP image data, screenshot bytes) becomes a data URL.
+  // Bare filesystem paths are rejected: they resolve against the dev-server
+  // origin and 404 — fall back to the tool's codicon instead of a broken <img>.
+  if (RAW_BASE64_RE.test(value) && !value.startsWith('/') && !value.startsWith('\\')) {
+    return `data:image/png;base64,${value.replace(/\s+/g, '')}`
+  }
+
+  return null
+}
+
+function collectImageUrls(value: unknown, out: string[]): void {
+  if (out.length >= MAX_TOOL_IMAGES) {
+    return
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectImageUrls(item, out)
+
+      if (out.length >= MAX_TOOL_IMAGES) {
+        return
+      }
+    }
+
+    return
+  }
+
+  if (!isRecord(value)) {
+    return
+  }
+
+  // Multimodal content parts ({"type": "image_url", "image_url": {"url"}} and
+  // MCP {"type": "image", "data", "mimeType"}).
+  if (typeof value.type === 'string' && /image/.test(value.type)) {
+    const nested = isRecord(value.image_url) ? value.image_url.url : value.image_url ?? value.data
+    const url = normalizeImageUrl(nested)
+
+    if (url && !out.includes(url)) {
+      out.push(url)
+    }
+  }
+
+  for (const key of TOOL_IMAGE_KEYS) {
+    const nested = isRecord(value[key]) ? value[key].url : value[key]
+    const url = normalizeImageUrl(nested)
+
+    if (url && !out.includes(url)) {
+      out.push(url)
+    }
+  }
+
+  // The KronTerm screenshot envelope nests its parts under `content`.
+  if (Array.isArray(value.content)) {
+    collectImageUrls(value.content, out)
+  }
+}
+
+function toolImageUrls(args: Record<string, unknown>, result: Record<string, unknown>): string[] {
+  const urls: string[] = []
+
+  const scan = (value: unknown) => {
+    collectImageUrls(value, urls)
+
+    const payload = unwrapToolPayload(value)
+
+    if (payload !== value) {
+      collectImageUrls(payload, urls)
+    }
+  }
+
+  scan(result)
+  scan(args)
+
+  return urls
 }
 
 function stripAnsi(value: string): string {
@@ -1480,7 +1566,7 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
     detailLabel: error ? 'Error details' : toolDetailLabel(part.toolName),
     durationLabel: durationLabel(resultRecord),
     icon: meta.icon,
-    imageUrl: toolImageUrl(argsRecord, resultRecord),
+    imageUrls: toolImageUrls(argsRecord, resultRecord),
     inlineDiff,
     previewTarget: toolPreviewTarget(part.toolName, argsRecord, resultRecord),
     rendersAnsi: rendersAnsi || undefined,

@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChatHubV2Frame } from "@/app/view/chathubv2/chathubv2";
+import { HermesRuntimeChat } from "@/app/view/hermes/hermes-runtime-chat";
 import { WaveEnvContext } from "@/app/waveenv/waveenv";
 import { makeMockWaveEnv } from "@/preview/mock/mockwaveenv";
 import { installPreviewElectronApi } from "@/preview/mock/preview-electron-api";
@@ -30,7 +30,7 @@ window.addEventListener("unhandledrejection", (event) => {
     showPreviewError(reason?.stack || reason?.message || String(reason));
 });
 
-document.title = "ChatHub V2 Preview";
+document.title = "KronTerm Agent Preview";
 document.body.style.visibility = null;
 document.body.style.opacity = null;
 document.body.classList.remove("is-transparent");
@@ -46,7 +46,7 @@ root.render(
         createElement(
             "div",
             { className: "flex h-screen min-h-0 w-screen bg-[#0f1014]" },
-            createElement(ChatHubV2Frame, { blockId: "browser-preview" })
+            createElement(HermesRuntimeChat, {})
         )
     )
 );

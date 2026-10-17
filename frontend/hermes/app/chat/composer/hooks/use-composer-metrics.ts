@@ -195,8 +195,8 @@ export function useComposerMetrics({
   // the row AND compacted the pill in the same instant, regardless of how much
   // room the composer actually had. That collapsed the whole progressive ladder
   // into one step for small windows — HUD mode is ~470px, so it never saw the
-  // ladder at all — and it disagreed with the measured breakpoints (320 to
-  // stack) by 160px. The ResizeObserver knows the real width; the viewport is
+  // ladder at all — and it disagreed with the measured breakpoints (448 to
+  // stack). The ResizeObserver knows the real width; the viewport is
   // not a proxy for it.
   //
   // The pill still compacts whenever the row stacks, so the controls row can't

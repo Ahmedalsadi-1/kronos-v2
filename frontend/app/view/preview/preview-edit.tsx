@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/jotaiStore";
@@ -38,6 +38,7 @@ export const shellFileMap: Record<string, string> = {
 
 function CodeEditPreview({ model }: SpecializedViewProps) {
     const fileContent = useAtomValue(model.fileContent);
+    const draft = useAtomValue(model.newFileContent);
     const setNewFileContent = useSetAtom(model.newFileContent);
     const fileInfo = useAtomValue(model.statFile);
     const fileName = fileInfo?.path || fileInfo?.name;
@@ -69,12 +70,14 @@ function CodeEditPreview({ model }: SpecializedViewProps) {
         return () => {
             model.codeEditKeyDownHandler = null;
             model.monacoRef.current = null;
+            window.dispatchEvent(new CustomEvent("preview-editor-ready", { detail: model.blockId }));
             model.refreshCallback = null;
         };
     }, []);
 
     function onMount(editor: MonacoTypes.editor.IStandaloneCodeEditor, monacoApi: typeof monaco): () => void {
         model.monacoRef.current = editor;
+        window.dispatchEvent(new CustomEvent("preview-editor-ready", { detail: model.blockId }));
 
         const keyDownDisposer = editor.onKeyDown((e: MonacoTypes.IKeyboardEvent) => {
             const waveEvent = adaptFromReactOrNativeKeyEvent(e.browserEvent);
@@ -98,7 +101,7 @@ function CodeEditPreview({ model }: SpecializedViewProps) {
     return (
         <CodeEditor
             blockId={model.blockId}
-            text={fileContent}
+            text={draft ?? fileContent}
             fileName={fileName}
             language={language}
             readonly={fileInfo.readonly}

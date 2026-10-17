@@ -8,7 +8,7 @@ coding tools that load `GEMINI.md` automatically.
 
 - **KronTerm:** the desktop product and persistent developer workspace.
 - **KronosCode:** the local agent execution engine and tool layer.
-- **KronosChamber:** the main KronosCode chat, session, approval, artifact, and control surface.
+- **Hermes:** the main KronosCode chat, session, approval, artifact, and control surface.
 - **Widget Protocol:** the structured interaction layer used to inspect and operate visible blocks.
 - **Kron Sandbox:** an isolated Linux desktop surface.
 
@@ -26,7 +26,7 @@ three presentations over the same workspace blocks:
 3. `canvas` — a spatial, pan-and-zoom workspace with live widgets, notes, shapes, connectors, and agent task cards.
 
 The current development line includes live agent activity, task/evidence graphs, selection-to-agent context, a managed
-KronosChamber runtime with recovery state, LSP-backed editing, and computer-use streaming. The Python voice engine is
+Hermes runtime with recovery state, LSP-backed editing, and computer-use streaming. The Python voice engine is
 experimental. The `mobile/` client and phone-control bridge are Labs work; describe them with that status.
 
 ## Architecture Map
@@ -37,8 +37,8 @@ experimental. The `mobile/` client and phone-control bridge are Labs work; descr
 | React renderer                            | `frontend/`                                                                   |
 | Workspace modes                           | `frontend/app/tab/`                                                           |
 | Jotai application state                   | `frontend/app/store/`                                                         |
-| KronosChamber UI                          | `frontend/app/view/chathubv2/`                                                |
-| Managed KronosCode/KronosChamber process  | `emain/chathubv2-*.ts`, `emain/kronoscode-runtime.ts`                         |
+| Hermes UI                          | `frontend/app/view/hermes/`                                                |
+| Managed KronosCode and Hermes process  | `emain/hermes-runtime.ts`, `emain/kronoscode-runtime.ts`                         |
 | Agent activity overlays                   | `frontend/app/view/use-agent-overlays.ts`, `frontend/types/agent-activity.ts` |
 | Computer-use stream                       | `frontend/app/view/appstream/`                                                |
 | LSP services                              | `frontend/app/lsp/`, `emain/emain-lsp.ts`                                     |

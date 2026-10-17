@@ -7,6 +7,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { after, before, describe, it } from "node:test";
+import { WshBridge, type WorkspaceSurfaceControl } from "../src/wsh-bridge.ts";
 
 const RequiredFamilies = {
     workspace: [
@@ -16,6 +17,13 @@ const RequiredFamilies = {
         "workspace_focus_widget",
         "workspace_move_widget",
         "workspace_resize_widget",
+        "workspace_open_app",
+        "workspace_dock_widget",
+        "workspace_detach_widget",
+        "workspace_set_widget_collapsed",
+        "workspace_show_overview",
+        "workspace_switch_workspace",
+        "workspace_organize",
         "workspace_swap_widgets",
         "workspace_toggle_magnify",
         "workspace_navigate",
@@ -25,6 +33,19 @@ const RequiredFamilies = {
         "workspace_canvas_delete_object",
         "workspace_canvas_connect",
     ],
+    hud: [
+        "hud_set_mode",
+        "hud_show_widget",
+        "hud_set_widget_background",
+        "hud_list_islands",
+        "hud_open_island",
+        "hud_focus_island",
+        "hud_move_island",
+        "hud_resize_island",
+        "hud_arrange_islands",
+        "hud_close_island",
+    ],
+    agents: ["acp_list_agents", "acp_run_agent"],
     terminal: ["block_run_command", "terminal_open", "terminal_scrollback"],
     browser: [
         "browser_open",
@@ -36,6 +57,7 @@ const RequiredFamilies = {
         "widget_click",
         "widget_type",
         "widget_press",
+        "widget_sequence",
     ],
     desktop: [
         "kron_computer_status",
@@ -49,19 +71,18 @@ const RequiredFamilies = {
         "kron_computer_set_value",
         "kron_computer_secondary_action",
         "kron_computer_turn_ended",
+        "kron_computer_sequence",
     ],
     sandbox: [
-        "sandbox_start",
-        "sandbox_status",
-        "sandbox_stop",
-        "sandbox_screenshot",
-        "sandbox_mouse_move",
-        "sandbox_click",
-        "sandbox_type",
-        "sandbox_paste",
-        "sandbox_press",
-        "sandbox_scroll",
-        "sandbox_drag",
+        "linux_desktop_list",
+        "linux_desktop_start",
+        "linux_desktop_stop",
+        "linux_desktop_screenshot",
+        "linux_desktop_click",
+        "linux_desktop_type",
+        "linux_desktop_key",
+        "linux_desktop_scroll",
+        "linux_desktop_exec",
     ],
     canvas: [
         "canvas_load",
@@ -135,12 +156,14 @@ describe("Hermes KronTerm tool parity", () => {
             "terminal_scrollback",
             "workspace_snapshot",
             "workspace_screenshot",
+            "hud_list_islands",
+            "acp_list_agents",
             "browser_get_html",
             "kron_computer_status",
             "kron_computer_list_apps",
             "kron_computer_get_app_state",
-            "sandbox_status",
-            "sandbox_screenshot",
+            "linux_desktop_list",
+            "linux_desktop_screenshot",
             "canvas_load",
             "canvas_snapshot",
             "lsp_diagnostics",
@@ -157,7 +180,13 @@ describe("Hermes KronTerm tool parity", () => {
     });
 
     it("marks destructive lifecycle and canvas replacement operations", () => {
-        for (const name of ["sandbox_stop", "canvas_save", "canvas_update_node", "canvas_delete_node"]) {
+        for (const name of [
+            "linux_desktop_stop",
+            "canvas_save",
+            "canvas_update_node",
+            "canvas_delete_node",
+            "hud_close_island",
+        ]) {
             const annotations = toolsByName.get(name)?.annotations;
             assert.equal(annotations?.readOnlyHint, false, `${name} must be write-capable`);
             assert.equal(annotations?.destructiveHint, true, `${name} must be destructive`);
@@ -173,20 +202,75 @@ describe("Hermes KronTerm tool parity", () => {
         });
     });
 
-    it("rejects ambiguous desktop and sandbox coordinates without invoking their runtimes", async () => {
+    it("routes default delegation to KronosCode and returns its result through MCP", async () => {
+        const { setKronTermToolBridge } = await import("../src/index.ts");
+        const calls: unknown[] = [];
+        class DelegationBridge extends WshBridge {
+            async acpRunAgent(backend: string, task: string, timeoutSeconds: number): Promise<string> {
+                calls.push({ backend, task, timeoutSeconds });
+                return JSON.stringify({ backend, answer: "Repository verified", sessionId: "coding-session" });
+            }
+        }
+        setKronTermToolBridge(new DelegationBridge());
+        try {
+            const result = await client.callTool({
+                name: "acp_run_agent",
+                arguments: { task: "Inspect the repository" },
+            });
+            assert.deepEqual(calls, [{ backend: "kronoscode", task: "Inspect the repository", timeoutSeconds: 180 }]);
+            assert.equal(result.isError, undefined);
+            assert.deepEqual(JSON.parse((result.content as Array<{ text: string }>)[0].text), {
+                backend: "kronoscode",
+                answer: "Repository verified",
+                sessionId: "coding-session",
+            });
+        } finally {
+            setKronTermToolBridge(new WshBridge());
+        }
+    });
+
+    it("routes HUD placement and existing background widgets without creating another block", async () => {
+        const { setKronTermToolBridge } = await import("../src/index.ts");
+        const actions: WorkspaceSurfaceControl[] = [];
+        class RecordingBridge extends WshBridge {
+            async workspaceSurfaceControl(input: WorkspaceSurfaceControl): Promise<string> {
+                actions.push(input);
+                return JSON.stringify({ success: true });
+            }
+        }
+        setKronTermToolBridge(new RecordingBridge());
+        try {
+            for (const input of [
+                { name: "hud_set_mode", arguments: { mode: "alongside" } },
+                { name: "hud_show_widget", arguments: { blockId: "browser-1" } },
+                { name: "hud_set_widget_background", arguments: { blockId: "browser-1", background: true } },
+                { name: "hud_set_widget_background", arguments: { blockId: "browser-1", background: false } },
+            ]) {
+                const result = await client.callTool(input);
+                assert.ok(!result.isError, resultText(result));
+            }
+            assert.deepEqual(actions, [
+                { action: "hud.mode", presentation: "alongside" },
+                { action: "hud.open", blockId: "browser-1" },
+                { action: "hud.background", blockId: "browser-1" },
+                { action: "hud.restore", blockId: "browser-1" },
+            ]);
+            await assertInvalidCall(client, { name: "hud_set_mode", arguments: { mode: "canvas" } });
+            await assertInvalidCall(client, { name: "hud_show_widget", arguments: { blockId: " " } });
+            await assertInvalidCall(client, { name: "hud_set_widget_background", arguments: { blockId: "browser-1" } });
+            assert.equal(actions.length, 4);
+        } finally {
+            setKronTermToolBridge(new WshBridge());
+        }
+    });
+
+    it("rejects ambiguous desktop and widget coordinates without invoking their runtimes", async () => {
         const desktop = await client.callTool({
             name: "kron_computer_click",
             arguments: { app: "Finder", x: 10 },
         });
         assert.equal(desktop.isError, true);
         assert.match(resultText(desktop), /both x and y/i);
-
-        const sandbox = await client.callTool({
-            name: "sandbox_scroll",
-            arguments: { sessionId: "default", x: 10 },
-        });
-        assert.equal(sandbox.isError, true);
-        assert.match(resultText(sandbox), /both x and y/i);
 
         const widget = await client.callTool({
             name: "widget_click",
@@ -196,10 +280,21 @@ describe("Hermes KronTerm tool parity", () => {
         assert.match(resultText(widget), /both x and y/i);
     });
 
-    it("fails closed when a destructive sandbox target runtime is unavailable", async () => {
+    it("rejects malformed fast sequences before issuing input", async () => {
+        await assertInvalidCall(client, {
+            name: "widget_sequence",
+            arguments: { blockId: "block-1", actions: [{ action: "drag", startX: 10 }] },
+        });
+        await assertInvalidCall(client, {
+            name: "kron_computer_sequence",
+            arguments: { app: "Finder", actions: [] },
+        });
+    });
+
+    it("does not expose removed legacy sandbox tools", async () => {
         const result = await client.callTool({ name: "sandbox_stop", arguments: { sessionId: "default" } });
         assert.equal(result.isError, true);
-        assert.match(resultText(result), /error|unavailable|missing|enoent/i);
+        assert.match(resultText(result), /not found/i);
     });
 });
 

@@ -1,3 +1,4 @@
+import { selectorOwnsInput, editableElement, deepActiveElement } from "@hermes/lib/keybinds/input-ownership";
 /**
  * Composer focus + external-insert bus.
  *
@@ -337,6 +338,7 @@ export const focusComposerInput = (el: HTMLElement | null) => {
   // layout) even on the active element, and during a session switch the DOM is
   // large and dirty — the redundant retries were measurably expensive there.
   const focus = () => {
+    if (selectorOwnsInput() || (deepActiveElement() !== el && editableElement(deepActiveElement()))) return
     if (document.activeElement !== el) {
       el.focus({ preventScroll: true })
     }

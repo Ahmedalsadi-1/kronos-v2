@@ -68,6 +68,7 @@ export default defineConfig({
     },
     renderer: {
         root: ".",
+        cacheDir: "node_modules/.vite/kronterm-renderer",
         build: {
             target: CHROME,
             sourcemap: ProductionSourceMaps,
@@ -118,6 +119,15 @@ export default defineConfig({
             port: 9124,
             watch: {
                 ignored: [
+                    "**/third_party/**",
+                    "**/vendor/**",
+                    "**/kronoscoder/**",
+                    "**/UI-TARS-desktop/**",
+                    "**/.local/**",
+                    "**/.git/**",
+                    "**/.hermes/**",
+                    "**/__pycache__/**",
+                    "**/.venv/**",
                     "dist/**",
                     "**/*.go",
                     "**/go.mod",

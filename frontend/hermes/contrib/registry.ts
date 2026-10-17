@@ -43,10 +43,10 @@ class ContributionRegistry {
   /** Register several at once. Returns a disposer that removes all of them.
    *  A batch touches each affected area exactly once — no per-item churn. */
   registerMany = (cs: Contribution[]): (() => void) => {
-    cs.forEach(c => this.put(c))
-    this.invalidate(cs.map(c => c.area))
+    cs.forEach((c) => this.put(c))
+    this.invalidate(cs.map((c) => c.area))
 
-    return () => this.removeMany(cs.map(c => ({ area: c.area, id: c.id })))
+    return () => this.removeMany(cs.map((c) => ({ area: c.area, id: c.id })))
   }
 
   /** Resolved, sorted, filtered entries for an area. Stable ref until mutated. */
@@ -63,13 +63,16 @@ class ContributionRegistry {
       !raw || raw.length === 0
         ? EMPTY
         : raw
-            .filter(c => c.enabled !== false && (c.when ? c.when() : true))
+            .filter((c) => c.enabled !== false && (c.when ? c.when() : true))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
     this.snapshot.set(area, resolved)
 
     return resolved
   }
+
+  getSource = (source: string): readonly Contribution[] =>
+    [...this.byArea.values()].flat().filter((item) => item.source === source && item.enabled !== false)
 
   /** Subscribe to ANY registry mutation (engines that react to every change,
    *  e.g. pane adoption). React trees should prefer `subscribeArea`. */
@@ -114,7 +117,7 @@ class ContributionRegistry {
   /** Insert/replace an entry without notifying (batchable). */
   private put(c: Contribution) {
     const list = this.byArea.get(c.area) ?? []
-    this.byArea.set(c.area, [...list.filter(e => e.id !== c.id), c])
+    this.byArea.set(c.area, [...list.filter((e) => e.id !== c.id), c])
   }
 
   /** Remove an entry without notifying (batchable). Returns whether it existed. */
@@ -125,7 +128,7 @@ class ContributionRegistry {
       return false
     }
 
-    const next = list.filter(e => e.id !== id)
+    const next = list.filter((e) => e.id !== id)
 
     if (next.length === list.length) {
       return false
@@ -149,12 +152,12 @@ class ContributionRegistry {
       const listeners = this.areaListeners.get(area)
 
       if (listeners) {
-        listeners.forEach(l => l())
+        listeners.forEach((l) => l())
       }
     }
 
     // Global listeners fire once per batch, regardless of how many areas moved.
-    this.globalListeners.forEach(l => l())
+    this.globalListeners.forEach((l) => l())
     $registryVersion.set($registryVersion.get() + 1)
   }
 }

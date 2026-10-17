@@ -419,10 +419,12 @@ function checkKeyMap<T>(waveEvent: WaveKeyboardEvent, keyMap: Map<string, T>): [
 }
 
 function appHandleKeyDown(waveEvent: WaveKeyboardEvent): boolean {
-    if (globalKeybindingsDisabled) {
+    if (globalKeybindingsDisabled || document.documentElement.hasAttribute("data-kronterm-selector-active")) {
         return false;
     }
     const nativeEvent = (waveEvent as any).nativeEvent;
+    if (nativeEvent?.composedPath?.().some((target: EventTarget) =>
+        target instanceof Element && target.closest("[data-hud-interactive=true]"))) return false;
     if (lastHandledEvent != null && nativeEvent != null && lastHandledEvent === nativeEvent) {
         return false;
     }

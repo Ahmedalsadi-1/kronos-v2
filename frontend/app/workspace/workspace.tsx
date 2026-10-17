@@ -1,7 +1,10 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { WaveAIModel } from "@/app/aipanel/waveai-model";
+import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
+import { useNativeHudMode } from "./use-native-hud-mode";
+import { useNativeNotchPreview } from "./use-native-notch-preview";
+
 import { ErrorBoundary } from "@/app/element/errorboundary";
 import { CenteredDiv } from "@/app/element/quickelems";
 import { ModalsRenderer } from "@/app/modals/modalsrenderer";
@@ -11,24 +14,23 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
-import { buildCanvasContextPrompt } from "@/app/tab/workspace-canvas-agent";
-import {
-    publishWorkspaceCanvasComposerSubmit,
-    workspaceCanvasComposerContextAtom,
-} from "@/app/tab/workspace-canvas-context";
+import { workspaceCanvasComposerContextAtom } from "@/app/tab/workspace-canvas-context";
 import { readWorkspacePresentation, subscribeWorkspacePresentation } from "@/app/tab/workspace-presentation";
+import { installAgentFollow } from "@/app/view/agent-follow";
 import { ComputerUseStreamManager } from "@/app/view/appstream/computer-use-stream-manager";
 import { HermesHudHost, HermesPanelHost } from "@/app/view/hermes/hermes-hud-host";
 import { consumeHermesHudAutoOpen } from "@/app/view/hermes/hermes-startup";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
-import { SystemCommandCenterHost } from "@/app/workspace/kronarchy-shell";
+import { WorkspacePaletteShortcuts } from "@/app/workspace/kronarchy-shell";
 import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
 import { KronTermHudControls } from "@/app/workspace/kronterm-hud-controls";
-import { launchKronTermHudIsland } from "@/app/workspace/kronterm-hud-islands";
+import { launchKronTermHudIsland, restoreKronTermHudIslands } from "@/app/workspace/kronterm-hud-islands";
 import { Widgets } from "@/app/workspace/widgets";
 import { clampHermesPanelWidth, getHermesPanelWidthBounds } from "@/app/workspace/workspace-hermes-panel";
 import { shouldRenderHermesAuxiliarySurfaces } from "@/app/workspace/workspace-hermes-surfaces";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
+import { hudTargetSessionId } from "@hermes/app/hud/handoff";
+import { $sessionsLoading } from "@hermes/store/session";
 
 import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
 import { atoms, createBlock, getApi, refocusNode } from "@/store/global";
@@ -37,259 +39,7 @@ import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-export const KronosChamberCanvasComposer = memo(
-    ({ onOpenKronosChamber }: { onOpenKronosChamber: () => Promise<void> }) => {
-        const model = WaveAIModel.getInstance();
-        const isStreaming = useAtomValue(model.isAIStreaming);
-        const currentMode = useAtomValue(model.currentAIMode);
-        const canvasContext = useAtomValue(workspaceCanvasComposerContextAtom);
-        const [opening, setOpening] = useState(false);
-        const [value, setValue] = useState("");
-        const [submitting, setSubmitting] = useState(false);
-        const currentNode = canvasContext.nodes[canvasContext.nodes.length - 1];
-        const reasoningSteps = currentNode?.reasoningsteps ?? [];
-        const outputNodes = canvasContext.nodes.filter(
-            (node) => node.blockid || node.previewimageurl || node.verificationstatus
-        );
-        const composerStyle = canvasContext.viewport
-            ? {
-                  left: canvasContext.viewport.left + canvasContext.viewport.width / 2,
-                  width: Math.max(280, Math.min(620, canvasContext.viewport.width - 360)),
-              }
-            : undefined;
-        const transformSubmit = useCallback(
-            (value: string) => buildCanvasContextPrompt(value, canvasContext.mode, canvasContext.nodes),
-            [canvasContext.mode, canvasContext.nodes]
-        );
-        const onSubmit = useCallback(
-            (prompt: string) => {
-                publishWorkspaceCanvasComposerSubmit({
-                    contextids: canvasContext.nodes.map((node) => node.id),
-                    mode: canvasContext.mode,
-                    prompt,
-                    tabid: canvasContext.tabid,
-                });
-            },
-            [canvasContext.mode, canvasContext.nodes, canvasContext.tabid]
-        );
-        const submitCanvasPrompt = useCallback(async () => {
-            const rawPrompt = value.trim();
-            if (!rawPrompt || submitting || isStreaming) {
-                return;
-            }
-            const prompt = transformSubmit(rawPrompt);
-            setSubmitting(true);
-            setValue("");
-            onSubmit(prompt);
-            try {
-                await model.sendMessage(prompt);
-            } catch (e) {
-                console.error("failed to send KronTerm Agent canvas prompt", e);
-                setValue(rawPrompt);
-            } finally {
-                setSubmitting(false);
-            }
-        }, [isStreaming, model, onSubmit, submitting, transformSubmit, value]);
-        const openKronosChamber = useCallback(async () => {
-            if (opening) {
-                return;
-            }
-            setOpening(true);
-            try {
-                await onOpenKronosChamber();
-            } catch (e) {
-                console.error("failed to open KronosChamber from the canvas composer", e);
-            } finally {
-                setOpening(false);
-            }
-        }, [onOpenKronosChamber, opening]);
-
-        return (
-            <section
-                aria-label="KronosChamber canvas chat"
-                className={cn(
-                    "pointer-events-none fixed bottom-[82px] z-[110] -translate-x-1/2",
-                    composerStyle == null && "left-1/2 w-[min(620px,calc(100vw-360px))]"
-                )}
-                style={composerStyle}
-            >
-                <div className="pointer-events-auto overflow-hidden rounded-xl border border-accent/30 bg-[#080a0df2] shadow-[0_24px_80px_rgba(0,0,0,0.62),0_0_0_1px_rgba(255,255,255,0.025)] backdrop-blur-2xl">
-                    <header className="flex min-h-11 items-center gap-3 border-b border-white/10 px-3 py-2">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10 text-accent">
-                                <i className="fa-solid fa-comments" aria-hidden="true" />
-                            </span>
-                            <span className="min-w-0">
-                                <strong className="block truncate text-xs font-semibold text-white/90">
-                                    Kronos canvas chat
-                                </strong>
-                                <small className="block truncate text-[10px] capitalize text-white/45">
-                                    {canvasContext.nodes.length > 0
-                                        ? `${canvasContext.mode} · ${canvasContext.nodes.length} selected`
-                                        : "Ready for canvas context"}
-                                </small>
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => void openKronosChamber()}
-                            disabled={opening}
-                            className="flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-white/15 bg-white/[0.05] px-3 text-[11px] font-semibold text-white/75 transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-white disabled:opacity-60"
-                            aria-label="Open the full KronosChamber chat widget"
-                        >
-                            <i
-                                className={cn(
-                                    "fa-solid",
-                                    opening ? "fa-spinner fa-spin" : "fa-up-right-and-down-left-from-center"
-                                )}
-                                aria-hidden="true"
-                            />
-                            {opening ? "Opening" : "Open KronosChamber"}
-                        </button>
-                    </header>
-
-                    {currentNode ? (
-                        <div className="max-h-48 overflow-y-auto border-b border-white/10 px-3 py-3">
-                            <div className="flex items-start gap-3">
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <strong className="text-xs font-semibold text-white/90">
-                                            {currentNode.title}
-                                        </strong>
-                                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-white/45">
-                                            {currentNode.phase.replace("-", " ")}
-                                        </span>
-                                        {currentNode.verificationstatus ? (
-                                            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-emerald-300/80">
-                                                {currentNode.verificationstatus.replace("-", " ")}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <p className="mt-1.5 text-xs leading-5 text-white/70">{currentNode.detail}</p>
-
-                                    {reasoningSteps.length > 0 ? (
-                                        <details className="mt-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-[11px] text-white/55">
-                                            <summary className="cursor-pointer select-none font-semibold text-white/65">
-                                                Reasoning summary · {reasoningSteps.length} step
-                                                {reasoningSteps.length === 1 ? "" : "s"}
-                                            </summary>
-                                            <ol className="mt-2 list-decimal space-y-1 pl-4 leading-4">
-                                                {reasoningSteps.map((step, index) => (
-                                                    <li key={`${currentNode.id}-reasoning-${index}`}>{step}</li>
-                                                ))}
-                                            </ol>
-                                        </details>
-                                    ) : null}
-
-                                    {outputNodes.length > 0 ? (
-                                        <ul
-                                            className="mt-2 flex flex-wrap gap-1.5"
-                                            aria-label="Selected canvas outputs"
-                                        >
-                                            {outputNodes.map((node) => (
-                                                <li
-                                                    key={node.id}
-                                                    className="flex max-w-full items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-white/60"
-                                                >
-                                                    <i
-                                                        className={cn(
-                                                            "fa-solid shrink-0 text-accent/75",
-                                                            node.previewimageurl
-                                                                ? "fa-image"
-                                                                : node.blockid
-                                                                  ? "fa-window-maximize"
-                                                                  : "fa-circle-check"
-                                                        )}
-                                                        aria-hidden="true"
-                                                    />
-                                                    <span className="truncate">
-                                                        {node.title}
-                                                        {node.previewimageurl
-                                                            ? " preview"
-                                                            : node.blockid
-                                                              ? " widget"
-                                                              : ` ${node.verificationstatus?.replace("-", " ")}`}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-
-                    <form
-                        className="bg-[#080a0d] p-3"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            void submitCanvasPrompt();
-                        }}
-                    >
-                        <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5 shadow-inner shadow-black/20 focus-within:border-accent/35">
-                            <textarea
-                                value={value}
-                                onChange={(event) => setValue(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter" && !event.shiftKey) {
-                                        event.preventDefault();
-                                        void submitCanvasPrompt();
-                                    }
-                                }}
-                                rows={2}
-                                placeholder="Ask KronTerm Agent or continue this task…"
-                                className="max-h-28 min-h-12 w-full resize-none bg-transparent text-xs leading-5 text-white/85 outline-none placeholder:text-white/30"
-                                aria-label="Ask KronTerm Agent about the selected canvas context"
-                            />
-                            <div className="mt-1 flex items-center gap-1.5 border-t border-white/[0.06] pt-2">
-                                <button
-                                    type="button"
-                                    className="grid h-7 w-7 cursor-pointer place-items-center rounded-lg text-white/40 hover:bg-white/[0.06] hover:text-white/70"
-                                    title="Attach task context"
-                                    aria-label="Attach task context"
-                                >
-                                    <i className="fa-solid fa-paperclip" aria-hidden="true" />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="grid h-7 w-7 cursor-pointer place-items-center rounded-lg text-white/40 hover:bg-white/[0.06] hover:text-white/70"
-                                    title="Use browser context"
-                                    aria-label="Use browser context"
-                                >
-                                    <i className="fa-solid fa-globe" aria-hidden="true" />
-                                </button>
-                                <span className="ml-auto max-w-40 truncate rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-white/45">
-                                    {currentMode || "KronTerm Agent"}
-                                </span>
-                                <button
-                                    type="submit"
-                                    disabled={!value.trim() || submitting || isStreaming}
-                                    className={cn(
-                                        "grid h-8 w-8 cursor-pointer place-items-center rounded-lg border transition-colors",
-                                        !value.trim() || submitting || isStreaming
-                                            ? "border-white/10 bg-white/[0.035] text-white/25 opacity-60"
-                                            : "border-accent/40 bg-accent/20 text-accent hover:bg-accent/30"
-                                    )}
-                                    title={isStreaming ? "KronTerm Agent is working" : "Send to KronTerm Agent"}
-                                    aria-label={isStreaming ? "KronTerm Agent is working" : "Send to KronTerm Agent"}
-                                >
-                                    <i
-                                        className={cn(
-                                            "fa-solid",
-                                            submitting || isStreaming ? "fa-spinner fa-spin" : "fa-arrow-up"
-                                        )}
-                                        aria-hidden="true"
-                                    />
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </section>
-        );
-    }
-);
-KronosChamberCanvasComposer.displayName = "KronosChamberCanvasComposer";
+import "./kronarchy-shell.scss";
 
 const WorkspaceElem = memo(() => {
     const workspaceLayoutModel = WorkspaceLayoutModel.getInstance();
@@ -307,6 +57,48 @@ const WorkspaceElem = memo(() => {
         kronTermHudController.getSnapshot,
         kronTermHudController.getSnapshot
     );
+    useEffect(() => kronTermHudController.setOwnerTab(tabId), [tabId]);
+    useNativeNotchPreview(hudMode.active);
+    useEffect(
+        () =>
+            getApi().onNativeHudSelectWidget(({ blockId, expanded }) => {
+                kronTermHudController.selectWidget(blockId, expanded);
+            }),
+        []
+    );
+    useEffect(() => getApi().onNativeHudSummon?.(() => kronTermHudController.toggle()), []);
+    useEffect(() => {
+        const shortcut = (event: KeyboardEvent) => {
+            if (
+                event.repeat ||
+                event.isComposing ||
+                event.altKey ||
+                !(event.metaKey || event.ctrlKey) ||
+                !event.shiftKey ||
+                event.code !== "KeyU"
+            )
+                return;
+            event.preventDefault();
+            kronTermHudController.toggle();
+        };
+        window.addEventListener("keydown", shortcut, { capture: true });
+        return () => window.removeEventListener("keydown", shortcut, { capture: true });
+    }, []);
+    useEffect(() => installAgentFollow(), []);
+    useEffect(() => {
+        const offContext = getApi().onHermesContext?.((text) => {
+            hermesSurfaceController.requestOpenPanel();
+            submitToHermes(text, "current");
+        });
+        const offSelection = getApi().onHermesSelection?.((payload) => {
+            hermesSurfaceController.requestOpenPanel();
+            submitToHermes(payload.text, payload.target, payload.images);
+        });
+        return () => {
+            offContext?.();
+            offSelection?.();
+        };
+    }, []);
     const [autoOpenHud] = useState(consumeHermesHudAutoOpen);
     const presentation = useSyncExternalStore(
         subscribeWorkspacePresentation,
@@ -332,6 +124,10 @@ const WorkspaceElem = memo(() => {
     const renderHermesAuxiliarySurfaces = shouldRenderHermesAuxiliarySurfaces(presentation);
 
     useEffect(() => {
+        if (presentation === "os" && surface.presentation === "panel") hermesSurfaceController.requestOpenHud();
+    }, [presentation, surface.presentation]);
+
+    useEffect(() => {
         const handleResize = () => setViewportWidth(window.innerWidth);
         window.addEventListener("resize", handleResize);
         return () => {
@@ -343,25 +139,44 @@ const WorkspaceElem = memo(() => {
         setPanelWidth((width) => clampHermesPanelWidth(width, panelBounds));
     }, [panelBounds]);
 
+    useNativeHudMode(
+        hudMode.active,
+        hudMode.keepWorkspaceVisible,
+        () => hudTargetSessionId() ?? ($sessionsLoading.get() ? undefined : "")
+    );
     useEffect(() => {
-        document.documentElement.toggleAttribute("data-kronterm-hud-mode", hudMode.active);
-        getApi().setHudWindowMode(hudMode.active);
-        return () => {
-            document.documentElement.removeAttribute("data-kronterm-hud-mode");
-            if (hudMode.active) getApi().setHudWindowMode(false);
-        };
-    }, [hudMode.active]);
+        if (hudMode.active)
+            void restoreKronTermHudIslands(tabId).catch((error) => console.error("HUD restoration failed", error));
+    }, [hudMode.active, tabId]);
 
     useEffect(() => {
-        const launchNativeHudApp = async (app: "web" | "files" | "terminal" | "widget") => {
+        const launchNativeHudApp = async (
+            app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone",
+            forceNew = false
+        ) => {
             try {
-                await launchKronTermHudIsland(app);
+                await launchKronTermHudIsland(app === "android" || app === "iphone" ? "machines" : app, {
+                    forceNew,
+                    machineKind: app === "android" || app === "iphone" ? app : "desktop",
+                    machinePicker: ["machines", "android", "iphone"].includes(app),
+                });
             } catch (error) {
                 console.error(`[native-hud] could not launch ${app} island`, error);
             }
         };
-        const unsubscribeLaunch = getApi().onNativeHudLaunch((app) => {
-            void launchNativeHudApp(app);
+        const unsubscribeLaunch = getApi().onNativeHudLaunch((app, forceNew) => {
+            void launchNativeHudApp(app, forceNew);
+        });
+        const unsubscribeAppTarget = getApi().onNativeHudAppTarget?.((name) => {
+            void (async () => {
+                const apps = await RpcApi.ListInstalledAppsCommand(TabRpcClient);
+                const matches = apps.filter((app) => app.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+                if (matches.length !== 1) throw new Error(`Could not uniquely resolve ${name} for streaming`);
+                await launchKronTermHudIsland("appstream", {
+                    appId: matches[0].bundleid || matches[0].appid,
+                    appName: matches[0].name,
+                });
+            })().catch((error) => console.error("Could not preview the selected app", error));
         });
         const unsubscribeExit = getApi().onNativeHudExit(() => {
             kronTermHudController.setActive(false);
@@ -369,6 +184,7 @@ const WorkspaceElem = memo(() => {
         });
         return () => {
             unsubscribeLaunch();
+            unsubscribeAppTarget?.();
             unsubscribeExit();
         };
     }, []);
@@ -406,12 +222,12 @@ const WorkspaceElem = memo(() => {
 
     return (
         <div className="flex flex-col w-full flex-grow overflow-hidden">
-            <SystemCommandCenterHost workspace={ws} activeTabId={tabId} />
+            <WorkspacePaletteShortcuts />
             {!isMacOS() && presentation !== "os" && <TabBar key={ws.oid} workspace={ws} noTabs />}
             <div
                 className={cn(
                     "workspace-surface-row workspace-reference-shell flex flex-row flex-grow overflow-hidden",
-                    hudMode.active && "is-kronterm-hud-mode"
+                    hudMode.active && !hudMode.keepWorkspaceVisible && "is-kronterm-hud-mode"
                 )}
                 data-workspace-presentation={presentation}
             >
@@ -433,7 +249,7 @@ const WorkspaceElem = memo(() => {
                         <ModalsRenderer />
                     </ErrorBoundary>
                 </main>
-                {renderHermesAuxiliarySurfaces && surface.presentation === "panel" && (
+                {renderHermesAuxiliarySurfaces && presentation !== "os" && surface.presentation === "panel" && (
                     <aside
                         className="workspace-hermes-dock order-last flex min-w-0 overflow-hidden border-l border-border"
                         style={{ width: panelWidth }}
@@ -492,7 +308,7 @@ const WorkspaceElem = memo(() => {
                     </div>
                 )}
             </div>
-            {renderHermesAuxiliarySurfaces && (
+            {renderHermesAuxiliarySurfaces && !(hudMode.active && hudMode.keepWorkspaceVisible) && (
                 <HermesHudHost
                     autoOpen={autoOpenHud || canvasComposerContext.active}
                     canvasContext={canvasComposerContext}
@@ -500,7 +316,7 @@ const WorkspaceElem = memo(() => {
                     tabId={tabId}
                 />
             )}
-            {hudMode.active && (
+            {hudMode.active && !hudMode.keepWorkspaceVisible && (
                 <KronTermHudControls onOpenWidgetCatalog={() => workspaceLayoutModel.setWidgetsPanelVisible(true)} />
             )}
         </div>

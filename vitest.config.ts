@@ -4,6 +4,7 @@ import electronViteConfig from "./electron.vite.config";
 export default mergeConfig(
     electronViteConfig.renderer as UserConfig,
     defineConfig({
+        cacheDir: "node_modules/.vite/kronterm-tests",
         test: {
             include: ["frontend/**/*.{test,spec}.{ts,tsx}", "emain/**/*.{test,spec}.{ts,tsx}"],
             reporters: ["verbose", "junit"],

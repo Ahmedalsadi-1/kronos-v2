@@ -7,7 +7,13 @@ import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { RpcApi } from "../../frontend/app/store/wshclientapi";
-import { AcpAgentManager, createAgentManager, listAgentManagers, removeAgentManager } from "./acp-agent-manager";
+import {
+    AcpAgentManager,
+    createAgentManager,
+    listAgentManagers,
+    normalizeAcpAgentInfo,
+    removeAgentManager,
+} from "./acp-agent-manager";
 import { NdjsonTransport } from "./acp-transport";
 
 vi.mock("../../frontend/app/store/wshclientapi", () => ({
@@ -15,6 +21,23 @@ vi.mock("../../frontend/app/store/wshclientapi", () => ({
 }));
 vi.mock("../emain-wsh", () => ({
     ElectronWshClient: {},
+}));
+vi.mock("../kronoscode-runtime", () => ({
+    withKronosCodeAttachArgs: (args: string[] | undefined, baseUrl: string) => {
+        const input = args?.length ? args : ["acp"];
+        const attachIndex = input.indexOf("--attach");
+        const withoutAttach =
+            attachIndex === -1 ? input : input.filter((_, index) => index !== attachIndex && index !== attachIndex + 1);
+        return [...withoutAttach, "--attach", baseUrl];
+    },
+}));
+vi.mock("../kronterm-tool-server", () => ({
+    availableKronTermToolNames: vi.fn().mockReturnValue([]),
+    startKronTermToolServer: vi.fn().mockResolvedValue({
+        url: "http://127.0.0.1:9100/mcp",
+        nativeUrl: "http://127.0.0.1:9100/native",
+        token: "test-native-tool-token",
+    }),
 }));
 
 function makeChild() {
@@ -36,6 +59,89 @@ function makeChild() {
 }
 
 describe("NdjsonTransport", () => {
+    it("stops keepalive after an idle child exits", () => {
+        vi.useFakeTimers();
+        try {
+            const { child, writes } = makeChild();
+            const transport = new NdjsonTransport(child);
+            transport.startKeepalive();
+            child.emit("close", 0, null);
+            vi.advanceTimersByTime(90000);
+            expect(writes).toHaveLength(0);
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("ignores malformed plugin stdout values and recovers for the next response", async () => {
+        const { child, stdout } = makeChild();
+        const transport = new NdjsonTransport(child);
+        const request = transport.sendRequest("session/new", {});
+        expect(() => stdout.emit("data", Buffer.from('null\n42\n"banner"\n[]\n{}\n'))).not.toThrow();
+        stdout.emit("data", Buffer.from('{"jsonrpc":"2.0","id":1,"result":{"sessionId":"s1"}}\n'));
+        await expect(request).resolves.toEqual({ sessionId: "s1" });
+    });
+
+    it("does not let activity in another session extend a hung prompt", async () => {
+        vi.useFakeTimers();
+        try {
+            const { child, stdout, writes } = makeChild();
+            const transport = new NdjsonTransport(child);
+            const prompt = transport.sendRequest("session/prompt", { sessionId: "hung" });
+            const rejected = expect(prompt).rejects.toThrow("LLM request timed out");
+            vi.advanceTimersByTime(299000);
+            stdout.emit(
+                "data",
+                Buffer.from(
+                    JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "session/update",
+                        params: { sessionId: "busy", update: {} },
+                    }) + "\n"
+                )
+            );
+            vi.advanceTimersByTime(1000);
+            await rejected;
+            expect(JSON.parse(writes[1]).params.sessionId).toBe("hung");
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("waits for every permission in a session and ignores unrelated replies", async () => {
+        vi.useFakeTimers();
+        try {
+            const { child, stdout, writes } = makeChild();
+            const transport = new NdjsonTransport(child);
+            const prompt = transport.sendRequest("session/prompt", { sessionId: "s1" });
+            const rejected = expect(prompt).rejects.toThrow("LLM request timed out");
+            for (const id of [7, 8]) {
+                stdout.emit(
+                    "data",
+                    Buffer.from(
+                        JSON.stringify({
+                            jsonrpc: "2.0",
+                            id,
+                            method: "session/request_permission",
+                            params: { sessionId: "s1" },
+                        }) + "\n"
+                    )
+                );
+            }
+            transport.sendResponse(99, { content: "file reply" });
+            transport.sendResponse(7, { outcome: { outcome: "cancelled" } });
+            vi.advanceTimersByTime(600000);
+            expect(writes).toHaveLength(3);
+            transport.sendError(8, -32000, "Permission unavailable");
+            vi.advanceTimersByTime(300000);
+            await rejected;
+            expect(JSON.parse(writes[4]).method).toBe("session/cancel");
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it("advertises only client methods implemented by Kronterm", async () => {
         const { child, stdout, writes } = makeChild();
         const transport = new NdjsonTransport(child);
@@ -428,15 +534,72 @@ describe("AcpAgentManager protocol requests", () => {
                     type: "stdio",
                     name: "kron-term",
                     command: process.execPath,
-                    args: [path.join(process.cwd(), "mcp-kron-term", "dist", "index.js")],
+                    args: [path.join(process.cwd(), "mcp-kron-term", "dist", "native-proxy.js")],
                     env: [
                         { name: "ELECTRON_RUN_AS_NODE", value: "1" },
                         { name: "KRONTERM_WORKSPACE", value: "/tmp/kronterm-workspace" },
+                        { name: "KRONTERM_NATIVE_TOOL_URL", value: "http://127.0.0.1:9100/native" },
+                        { name: "KRONTERM_NATIVE_TOOL_TOKEN", value: "test-native-tool-token" },
                         { name: "KRONTERM_WSH", value: path.join(process.cwd(), "wsh") },
                         { name: "WAVETERM_WSH", value: path.join(process.cwd(), "wsh") },
                     ],
                 },
             ],
+        });
+    });
+
+    it("gives KronTerm Agent the authenticated HTTP surface advertised by OpenCode ACP", async () => {
+        const manager = new AcpAgentManager({
+            conversationId: "conversation-kronterm-agent",
+            backend: "kronterm-agent",
+            workspace: "/tmp/kronterm-workspace",
+            surfaceContext: { tabId: "tab-1", blockId: "block-1" },
+        });
+        const transport = makeManagerTransport();
+        manager.transport = transport as any;
+        manager.capabilities = {
+            loadSession: true,
+            promptCapabilities: { image: true, audio: false, embeddedContext: true },
+            mcpCapabilities: { stdio: false, http: true, sse: true },
+            sessionCapabilities: { fork: {}, resume: {}, list: {}, close: {} },
+            _meta: {},
+        };
+
+        await manager.sendMessage({ conversationId: "conversation-kronterm-agent", content: "inspect the HUD" });
+
+        expect(transport.sendRequest).toHaveBeenNthCalledWith(1, "session/new", {
+            cwd: ".",
+            mcpServers: [
+                {
+                    type: "http",
+                    name: "kron-term",
+                    url: "http://127.0.0.1:9100/mcp",
+                    headers: [{ name: "Authorization", value: "Bearer test-native-tool-token" }],
+                },
+            ],
+        });
+        expect(transport.sendRequest).toHaveBeenNthCalledWith(
+            2,
+            "session/prompt",
+            expect.objectContaining({
+                prompt: [
+                    expect.objectContaining({
+                        text: expect.stringContaining("kronterm:surface"),
+                    }),
+                ],
+            })
+        );
+    });
+
+    it("keeps the OpenCode wire identity behind the KronTerm Agent product name", async () => {
+        expect(normalizeAcpAgentInfo("kronterm-agent", { name: "OpenCode", version: "1.15.10" })).toEqual({
+            name: "KronTerm Agent",
+            title: "KronTerm Agent",
+            version: "1.15.10",
+        });
+        expect(normalizeAcpAgentInfo("opencode", { name: "OpenCode", version: "1.15.10" })).toEqual({
+            name: "OpenCode",
+            version: "1.15.10",
         });
     });
 
@@ -468,10 +631,12 @@ describe("AcpAgentManager protocol requests", () => {
                     type: "stdio",
                     name: "kron-term",
                     command: process.execPath,
-                    args: [path.join(process.cwd(), "mcp-kron-term", "dist", "index.js")],
+                    args: [path.join(process.cwd(), "mcp-kron-term", "dist", "native-proxy.js")],
                     env: [
                         { name: "ELECTRON_RUN_AS_NODE", value: "1" },
                         { name: "KRONTERM_WORKSPACE", value: "/tmp/kronterm-workspace" },
+                        { name: "KRONTERM_NATIVE_TOOL_URL", value: "http://127.0.0.1:9100/native" },
+                        { name: "KRONTERM_NATIVE_TOOL_TOKEN", value: "test-native-tool-token" },
                         { name: "KRONTERM_JWT", value: "surface-token" },
                         { name: "WAVETERM_JWT", value: "surface-token" },
                         { name: "KRONTERM_TABID", value: "tab-1" },
@@ -521,10 +686,12 @@ describe("AcpAgentManager protocol requests", () => {
                         type: "stdio",
                         name: "kron-term",
                         command: process.execPath,
-                        args: [path.join(process.cwd(), "mcp-kron-term", "dist", "index.js")],
+                        args: [path.join(process.cwd(), "mcp-kron-term", "dist", "native-proxy.js")],
                         env: [
                             { name: "ELECTRON_RUN_AS_NODE", value: "1" },
                             { name: "KRONTERM_WORKSPACE", value: workspace },
+                            { name: "KRONTERM_NATIVE_TOOL_URL", value: "http://127.0.0.1:9100/native" },
+                            { name: "KRONTERM_NATIVE_TOOL_TOKEN", value: "test-native-tool-token" },
                             { name: "KRONTERM_SHARED_SKILL_DIRS", value: sharedSkills },
                             { name: "KRONTERM_JWT", value: "hermes-surface-token" },
                             { name: "WAVETERM_JWT", value: "hermes-surface-token" },
@@ -543,7 +710,7 @@ describe("AcpAgentManager protocol requests", () => {
         }
     });
 
-    it("falls back to session/new resume when session/load fails", async () => {
+    it("preserves session identity by failing when session/load fails", async () => {
         const manager = new AcpAgentManager({
             conversationId: "conversation-1",
             backend: "codex",
@@ -563,20 +730,14 @@ describe("AcpAgentManager protocol requests", () => {
             _meta: {},
         };
 
-        await (manager as any).ensureSession("session-1", "conversation-1");
-
-        expect(transport.sendRequest).toHaveBeenNthCalledWith(1, "session/load", {
+        await expect((manager as any).ensureSession("session-1", "conversation-1")).rejects.toThrow("expired");
+        expect(transport.sendRequest).toHaveBeenCalledTimes(1);
+        expect(transport.sendRequest).toHaveBeenCalledWith("session/load", {
             sessionId: "session-1",
             cwd: "/tmp/kronterm-workspace",
             mcpServers: [],
         });
-        expect(transport.sendRequest).toHaveBeenNthCalledWith(2, "session/new", {
-            cwd: "/tmp/kronterm-workspace",
-            mcpServers: [],
-            resumeSessionId: "session-1",
-            forkSession: false,
-        });
-        expect(manager.sessionId).toBe("session-2");
+        expect(manager.sessionId).toBeNull();
     });
 
     it("starts fresh when a stored session belongs to a different conversation", async () => {
@@ -790,6 +951,12 @@ describe("AcpAgentManager protocol requests", () => {
             mcpServers: [
                 {
                     type: "http",
+                    name: "kron-term",
+                    url: "http://127.0.0.1:9100/mcp",
+                    headers: [{ name: "Authorization", value: "Bearer test-native-tool-token" }],
+                },
+                {
+                    type: "http",
                     name: "configured-http",
                     url: "http://127.0.0.1:9200/mcp",
                     headers: [{ name: "Authorization", value: "Bearer token" }],
@@ -882,6 +1049,42 @@ describe("AcpAgentManager protocol requests", () => {
         });
     });
 
+    it("keeps a permission pending after an invalid choice and accepts a subsequent valid choice once", async () => {
+        const manager = new AcpAgentManager({ conversationId: "conversation-1", backend: "codex" });
+        const transport = makeManagerTransport();
+        manager.transport = transport as any;
+        const confirmation = {
+            id: "permission-1",
+            msgId: "permission-message-1",
+            requestId: 42,
+            callId: "tool-1",
+            title: "Write file",
+            options: [{ optionId: "allow-once", name: "Allow", kind: "allow_once" as const }],
+        };
+        manager.confirmations = [confirmation];
+        const request = {
+            conversationId: "conversation-1",
+            msgId: "permission-message-1",
+            callId: "tool-1",
+            optionId: "invalid-option",
+        };
+
+        await manager.confirmTool(request);
+
+        expect(manager.confirmations).toEqual([confirmation]);
+        expect(transport.sendResponse).not.toHaveBeenCalled();
+
+        request.optionId = "allow-once";
+        await manager.confirmTool(request);
+        await manager.confirmTool(request);
+
+        expect(manager.confirmations).toEqual([]);
+        expect(transport.sendResponse).toHaveBeenCalledTimes(1);
+        expect(transport.sendResponse).toHaveBeenCalledWith(42, {
+            outcome: { outcome: "selected", optionId: "allow-once" },
+        });
+    });
+
     it("cancels a running turn as a notification and settles pending permissions", async () => {
         const manager = new AcpAgentManager({ conversationId: "conversation-1", backend: "codex" });
         const transport = makeManagerTransport();
@@ -926,6 +1129,28 @@ describe("AcpAgentManager protocol requests", () => {
         await manager.stop();
 
         expect(transport.sendRequest).toHaveBeenCalledWith("session/close", { sessionId: "session-1" });
+        expect(transport.kill).toHaveBeenCalled();
+    });
+
+    it("finishes stopping when the transport disconnects during session close", async () => {
+        const manager = new AcpAgentManager({ conversationId: "conversation-1", backend: "codex" });
+        const transport = makeManagerTransport();
+        transport.sendRequest.mockReset();
+        transport.sendRequest.mockImplementationOnce(async () => {
+            manager.transport = null;
+            return {};
+        });
+        manager.transport = transport as any;
+        manager.sessionId = "session-1";
+        manager.capabilities = {
+            loadSession: false,
+            promptCapabilities: { image: false, audio: false, embeddedContext: false },
+            mcpCapabilities: { stdio: false, http: false, sse: false },
+            sessionCapabilities: { fork: null, resume: null, list: null, close: {} },
+            _meta: {},
+        };
+
+        await expect(manager.stop()).resolves.toBeUndefined();
         expect(transport.kill).toHaveBeenCalled();
     });
 

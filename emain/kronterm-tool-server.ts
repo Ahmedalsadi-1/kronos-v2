@@ -6,11 +6,26 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage, MessageExtraInfo, RequestId } from "@modelcontextprotocol/sdk/types.js";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { server as mcpServer, nativeToolManifest, setKronTermToolBridge, warmKronComputerUse } from "../mcp-kron-term/src/index";
+import {
+    createToolSessionServer,
+    server as mcpServer,
+    nativeToolManifest,
+    setComputerTargetToolBridge,
+    setKronTermToolBridge,
+    setLinuxDesktopToolBridge,
+    setProductivityToolBridge,
+    warmKronComputerUse,
+} from "../mcp-kron-term/src/index";
 import { isToolAllowedBySurfaceCapability } from "../mcp-kron-term/src/surface-policy";
 import type { SurfaceCapability } from "../mcp-kron-term/src/wsh-bridge";
+import { getComputerTargetsRuntime } from "./computer-targets-runtime";
+import { notifyDesktopPetSurfaceActivity } from "./emain-pet";
 import type { HermesSurfaceContext } from "./hermes-runtime";
-import { KronTermNativeToolBridge } from "./kronterm-native-tool-bridge";
+import { KronTermNativeToolBridge, runWithAgentActivitySource } from "./kronterm-native-tool-bridge";
+import { getLinuxDesktopsRuntime } from "./linux-desktops-runtime";
+import { commandProductivity, queryProductivity } from "./productivity-runtime";
+import { SandboxTaskRuntime } from "./sandbox-task-runtime";
+import { resolveToolRequestContext, withToolRequestContext } from "./tool-request-context";
 
 export type KronTermToolServerDescriptor = {
     url: string;
@@ -20,9 +35,7 @@ export type KronTermToolServerDescriptor = {
 
 type SurfaceContextProvider = () => HermesSurfaceContext | null;
 
-// Schemas registered on the MCP server belong to mcp-kron-term's zod (v3), not
-// this file's import graph — treat them structurally so the versions can never
-// silently diverge here.
+// Schema ownership stays with the registry because SDK-created and registered schemas use different Zod majors.
 type RegisteredToolSchema = {
     parseAsync(args: unknown): Promise<unknown>;
 };
@@ -33,7 +46,7 @@ type NativeRegisteredTool = {
     description?: string;
     inputSchema?: RegisteredToolSchema;
     annotations?: Record<string, unknown>;
-    handler: (args: Record<string, unknown>, extra: Record<string, never>) => Promise<unknown> | unknown;
+    handler: (args: Record<string, unknown>, extra: { signal?: AbortSignal }) => Promise<unknown> | unknown;
 };
 
 function registeredTools(): Record<string, NativeRegisteredTool> {
@@ -50,6 +63,7 @@ function surfaceCapability(context: HermesSurfaceContext | null): SurfaceCapabil
     }
     return {
         token: "electron-owned",
+        nativeCallerId: context.nativeCallerId,
         tabId: context.tabId,
         blockId: context.blockId,
         workspaceId: context.workspaceId,
@@ -107,7 +121,7 @@ class ScopedMcpTransport implements Transport {
         if (record.id != null && this.listRequestIds.delete(requestKey(record.id as RequestId))) {
             const result = record.result as { tools?: Array<{ name?: string }> } | undefined;
             if (Array.isArray(result?.tools)) {
-                const capability = surfaceCapability(this.contextProvider());
+                const capability = surfaceCapability(resolveToolRequestContext(this.contextProvider));
                 message = {
                     ...record,
                     result: {
@@ -132,7 +146,13 @@ class ScopedMcpTransport implements Transport {
         if (method === "tools/call" && record.id != null) {
             const params = record.params as { name?: unknown } | undefined;
             const name = typeof params?.name === "string" ? params.name : "";
-            if (!name || !isToolAllowedBySurfaceCapability(name, surfaceCapability(this.contextProvider()))) {
+            if (
+                !name ||
+                !isToolAllowedBySurfaceCapability(
+                    name,
+                    surfaceCapability(resolveToolRequestContext(this.contextProvider))
+                )
+            ) {
                 void this.inner.send({
                     jsonrpc: "2.0",
                     id: record.id as RequestId,
@@ -141,7 +161,9 @@ class ScopedMcpTransport implements Transport {
                 return;
             }
         }
-        this.messageHandler?.(message, extra);
+        withToolRequestContext(resolveToolRequestContext(this.contextProvider), () =>
+            this.messageHandler?.(message, extra)
+        );
     }
 }
 
@@ -159,23 +181,54 @@ function writeError(response: ServerResponse, status: number, message: string): 
         return;
     }
     response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
-    response.end(JSON.stringify({ error: message }));
+    response.end(
+        JSON.stringify({
+            error: message,
+            code:
+                status === 400
+                    ? "INVALID_ARGUMENT"
+                    : status === 401
+                      ? "UNAUTHORIZED"
+                      : status === 404
+                        ? "UNAVAILABLE"
+                        : "TRANSPORT_FAILED",
+            retryable: false,
+        })
+    );
 }
 
-class KronTermToolServer {
+export function availableKronTermToolNames(context: HermesSurfaceContext): string[] {
+    const capability = surfaceCapability(context);
+    return nativeToolManifest((name) => isToolAllowedBySurfaceCapability(name, capability)).map((tool) => tool.name);
+}
+
+export class KronTermToolServer {
     private contextProvider: SurfaceContextProvider;
     private server: Server | null = null;
     private startPromise: Promise<KronTermToolServerDescriptor> | null = null;
     private token = randomBytes(32).toString("base64url");
+    private callers = new Map<string, SurfaceContextProvider>();
+    private callerTokens = new Map<string, string>();
+    private callerIdentities = new Map<string, string>();
+    private sessions = new Map<string, { transport: StreamableHTTPServerTransport; token: string }>();
     private transport: StreamableHTTPServerTransport | null = null;
     private scopedTransport: ScopedMcpTransport | null = null;
 
     constructor(contextProvider: SurfaceContextProvider) {
         this.contextProvider = contextProvider;
+        const identity = randomBytes(24).toString("hex");
+        this.callers.set(this.token, () => ({ ...this.contextProvider(), nativeCallerId: identity }));
     }
 
-    // Every runtime (Hermes, ACP sessions, KronosChamber) tracks the same focused
-    // surface, so the last caller to start/ensure the server wins the provider.
+    registerCaller(owner: string, provider: SurfaceContextProvider): string {
+        const token = this.callerTokens.get(owner) ?? randomBytes(32).toString("base64url");
+        this.callerTokens.set(owner, token);
+        const identity = this.callerIdentities.get(owner) ?? randomBytes(24).toString("hex");
+        this.callerIdentities.set(owner, identity);
+        this.callers.set(token, () => ({ ...provider(), nativeCallerId: identity }));
+        return token;
+    }
+
     setContextProvider(contextProvider: SurfaceContextProvider): void {
         this.contextProvider = contextProvider;
     }
@@ -188,7 +241,67 @@ class KronTermToolServer {
     }
 
     private async startInternal(): Promise<KronTermToolServerDescriptor> {
-        setKronTermToolBridge(new KronTermNativeToolBridge(this.contextProvider));
+        const linux = getLinuxDesktopsRuntime();
+        const feedbackPositions = new Map<string, { x: number; y: number }>();
+        const withFeedback = async <T>(
+            surfaceId: string,
+            surface: "desktop" | "sandbox",
+            input: { action: string; x?: number; y?: number; endX?: number; endY?: number },
+            operation: () => Promise<T>
+        ) => {
+            const action =
+                input.action === "tap"
+                    ? "click"
+                    : input.action === "swipe"
+                      ? "drag"
+                      : input.action === "key"
+                        ? "press"
+                        : input.action;
+            if (!["click", "drag", "type", "press", "scroll"].includes(action)) return operation();
+            const point =
+                Number.isFinite(input.x) && Number.isFinite(input.y)
+                    ? { x: input.x, y: input.y }
+                    : feedbackPositions.get(surfaceId);
+            if (point) feedbackPositions.set(surfaceId, point);
+            const runid = randomUUID();
+            const emit = (phase: "running" | "succeeded" | "failed") =>
+                notifyDesktopPetSurfaceActivity({
+                    source: "acp",
+                    runid,
+                    surface,
+                    surfaceid: surfaceId,
+                    action: action as "click" | "drag" | "type" | "press" | "scroll",
+                    phase,
+                    point,
+                });
+            emit("running");
+            try {
+                const result = await operation();
+                emit("succeeded");
+                return result;
+            } catch (error) {
+                emit("failed");
+                throw error;
+            }
+        };
+        const sandboxTasks = new SandboxTaskRuntime(linux);
+        setLinuxDesktopToolBridge({
+            list: () => linux.list(),
+            perform: (action) =>
+                withFeedback(`vm:${action.desktopId}`, "sandbox", action, () => linux.performAgent(action)),
+            startTask: (args) => sandboxTasks.start(args),
+            finishTask: (sessionId) => sandboxTasks.finish(sessionId),
+        });
+        const computers = getComputerTargetsRuntime();
+        setProductivityToolBridge({ query: queryProductivity, command: commandProductivity });
+        setComputerTargetToolBridge({
+            list: () => computers.list(),
+            perform: (action) =>
+                withFeedback(`device:${action.targetId}`, "desktop", action, () => computers.performAgent(action)),
+        });
+        setKronTermToolBridge(
+            new KronTermNativeToolBridge(() => resolveToolRequestContext(() => this.contextProvider()))
+        );
         void warmKronComputerUse().catch((error) =>
             console.log("[kronterm-tools] Native computer-use warmup unavailable", error)
         );
@@ -219,22 +332,28 @@ class KronTermToolServer {
         };
     }
 
-    private async createTransport(): Promise<void> {
+    private async createTransport(token: string = this.token): Promise<StreamableHTTPServerTransport> {
         const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: randomUUID,
-            onsessioninitialized: (sessionId) => console.log(`[kronterm-tools] MCP session ${sessionId} connected`),
+            onsessioninitialized: (sessionId) => {
+                this.sessions.set(sessionId, { transport, token });
+            },
         });
-        const scoped = new ScopedMcpTransport(transport, this.contextProvider);
+        const scoped = new ScopedMcpTransport(transport, () =>
+            resolveToolRequestContext(this.callers.get(token) ?? (() => null))
+        );
         transport.onclose = () => {
+            if (transport.sessionId) this.sessions.delete(transport.sessionId);
             if (this.transport === transport) {
                 this.transport = null;
                 this.scopedTransport = null;
             }
         };
         transport.onerror = (error) => console.log("[kronterm-tools] MCP transport error", error);
-        await mcpServer.connect(scoped);
+        await createToolSessionServer().connect(scoped);
         this.transport = transport;
         this.scopedTransport = scoped;
+        return transport;
     }
 
     private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -242,7 +361,8 @@ class KronTermToolServer {
             writeError(response, 404, "Not found");
             return;
         }
-        if (!isAuthorized(request, this.token)) {
+        const callerToken = [...this.callers.keys()].find((token) => isAuthorized(request, token));
+        if (!callerToken) {
             response.setHeader("www-authenticate", 'Bearer realm="KronTerm tools"');
             writeError(response, 401, "Unauthorized");
             return;
@@ -253,18 +373,26 @@ class KronTermToolServer {
             return;
         }
         if (request.url === "/native") {
-            await this.handleNativeRequest(request, response);
+            await withToolRequestContext(this.callers.get(callerToken)(), () =>
+                this.handleNativeRequest(request, response)
+            );
             return;
         }
-        if (!request.headers["mcp-session-id"] && (!this.transport || this.transport.sessionId != null)) {
-            await this.createTransport();
-        }
-        if (!this.transport || !["GET", "POST", "DELETE"].includes(request.method ?? "")) {
+        if (!["GET", "POST", "DELETE"].includes(request.method ?? "")) {
             writeError(response, 405, "Method not allowed");
             return;
         }
+        const sessionId = request.headers["mcp-session-id"];
+        const session = typeof sessionId === "string" ? this.sessions.get(sessionId) : undefined;
+        if (sessionId && (!session || session.token !== callerToken)) {
+            writeError(response, 404, "MCP session is unavailable for this caller");
+            return;
+        }
+        const transport = session?.transport ?? (await this.createTransport(callerToken));
         try {
-            await this.transport.handleRequest(request, response);
+            await withToolRequestContext(this.callers.get(callerToken)(), () =>
+                transport.handleRequest(request, response)
+            );
         } catch (error) {
             console.log("[kronterm-tools] MCP request failed", error);
             writeError(response, 500, error instanceof Error ? error.message : String(error));
@@ -293,7 +421,7 @@ class KronTermToolServer {
                 name?: string;
                 arguments?: Record<string, unknown>;
             };
-            const capability = surfaceCapability(this.contextProvider());
+            const capability = surfaceCapability(resolveToolRequestContext(this.contextProvider));
             const tools = registeredTools();
             if (payload.method === "manifest" || payload.method === "list") {
                 const manifest = nativeToolManifest((name) =>
@@ -311,7 +439,19 @@ class KronTermToolServer {
             const args = tool.inputSchema
                 ? await tool.inputSchema.parseAsync(payload.arguments ?? {})
                 : (payload.arguments ?? {});
-            this.writeNativeResponse(response, await tool.handler(args as Record<string, unknown>, {}));
+            const controller = new AbortController();
+            const onClose = () => {
+                if (!response.writableEnded) controller.abort();
+            };
+            response.once("close", onClose);
+            try {
+                const result = await runWithAgentActivitySource("hermes", () =>
+                    Promise.resolve(tool.handler(args as Record<string, unknown>, { signal: controller.signal }))
+                );
+                if (!response.destroyed) this.writeNativeResponse(response, result);
+            } finally {
+                response.removeListener("close", onClose);
+            }
         } catch (error) {
             writeError(response, 400, error instanceof Error ? error.message : String(error));
         }
@@ -326,12 +466,12 @@ class KronTermToolServer {
 let toolServer: KronTermToolServer | null = null;
 
 export function startKronTermToolServer(
-    contextProvider: SurfaceContextProvider
+    contextProvider: SurfaceContextProvider,
+    owner: string = "desktop"
 ): Promise<KronTermToolServerDescriptor> {
     if (!toolServer) {
         toolServer = new KronTermToolServer(contextProvider);
-    } else {
-        toolServer.setContextProvider(contextProvider);
     }
-    return toolServer.start();
+    const token = toolServer.registerCaller(owner, contextProvider);
+    return toolServer.start().then((descriptor) => ({ ...descriptor, token }));
 }

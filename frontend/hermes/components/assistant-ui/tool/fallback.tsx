@@ -458,7 +458,7 @@ function ToolEntry({ part }: ToolEntryProps) {
   const searchResultsLabel = part.toolName === 'web_search' ? 'Search results' : view.detailLabel
 
   const hasExpandableContent = Boolean(
-    view.imageUrl ||
+    view.imageUrls?.length ||
     view.inlineDiff ||
     showDetail ||
     hasSearchHits ||
@@ -611,11 +611,14 @@ function ToolEntry({ part }: ToolEntryProps) {
           {part.toolName === 'terminal' && toolViewMode !== 'technical' && (
             <TerminalTranscript command={view.terminalCommand} exitCode={view.terminalExitCode} />
           )}
-          {view.imageUrl && (
-            <div className="max-w-72 overflow-hidden rounded-[0.25rem] border border-(--ui-stroke-tertiary)">
-              <ZoomableImage alt={copy.outputAlt} className="h-auto w-full object-cover" src={view.imageUrl} />
+          {view.imageUrls?.map(src => (
+            <div
+              className="max-w-72 overflow-hidden rounded-[0.25rem] border border-(--ui-stroke-tertiary)"
+              key={`${src.slice(0, 48)}-${src.length}`}
+            >
+              <ZoomableImage alt={copy.outputAlt} className="h-auto w-full object-cover" src={src} />
             </div>
-          )}
+          ))}
           {hasSearchHits && view.searchHits && (
             <div className="max-w-full text-xs leading-relaxed text-(--ui-text-secondary)">
               {view.searchQuery && (

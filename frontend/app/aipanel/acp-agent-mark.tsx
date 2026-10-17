@@ -1,35 +1,15 @@
 import { cn } from "@/util/util";
 import { memo } from "react";
-import codebuddyLogo from "./agent-logos/codebuddy.svg?url";
-import codexLogo from "./agent-logos/codex.svg?url";
-import droidLogo from "./agent-logos/droid.svg?url";
-import geminiLogo from "./agent-logos/gemini.png";
-import hermesLogo from "./agent-logos/hermes.svg?url";
-import kiroLogo from "./agent-logos/kiro.ico";
-import kronoscodeLogo from "./agent-logos/kronoscode.svg?url";
-import opencodeLogo from "./agent-logos/opencode.svg?url";
-import qwenLogo from "./agent-logos/qwen.svg?url";
+import { acpAgentLogo } from "./acp-agent-logos";
 
 type AcpAgentMarkProps = {
     backend: string;
     className?: string;
 };
 
-const agentLogos: Record<string, string> = {
-    codebuddy: codebuddyLogo,
-    codex: codexLogo,
-    droid: droidLogo,
-    gemini: geminiLogo,
-    hermes: hermesLogo,
-    kiro: kiroLogo,
-    kronoscode: kronoscodeLogo,
-    opencode: opencodeLogo,
-    qwen: qwenLogo,
-};
-
 export const AcpAgentMark = memo(({ backend, className }: AcpAgentMarkProps) => {
     const normalizedBackend = backend.toLowerCase();
-    const logo = agentLogos[normalizedBackend];
+    const logo = acpAgentLogo(normalizedBackend);
     if (logo) {
         return (
             <img

@@ -38,7 +38,7 @@ import {
     Trash2,
     X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 type OSSystemCenter = "activity" | "control";
 type OSActivityView = "attention" | "timeline" | "artifacts";
@@ -358,7 +358,7 @@ function OSWorktreesSection({ root }: { root: string }) {
         }
         void RpcApi.OSWorktreeListCommand(TabRpcClient, root)
             .then((result) => {
-                setWorktrees(result);
+                setWorktrees(result ?? []);
                 setError("");
             })
             .catch(() => setError("Could not read worktrees for this root"));
@@ -473,40 +473,68 @@ function osChangeAbsolutePath(root: string, path: string): string {
     return root.endsWith("/") ? root + path : root + "/" + path;
 }
 
-function OSWorktreeChangesSection({ root }: { root: string }) {
+export function OSWorktreeChangesSection({ root }: { root: string }) {
     const [changes, setChanges] = useState<OSWorktreeChange[]>([]);
     const [openPath, setOpenPath] = useState("");
     const [diff, setDiff] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
 
+    const [loading, setLoading] = useState(true);
+    const changesRequest = useRef(0);
+    const diffRequest = useRef(0);
+
     const refresh = useCallback(() => {
+        const request = ++changesRequest.current;
         if (!root) {
             setChanges([]);
+            setLoading(false);
             return;
         }
+        setLoading(true);
+        setError("");
         void RpcApi.OSWorktreeChangesCommand(TabRpcClient, root)
             .then((result) => {
-                setChanges(result);
-                setError("");
+                if (request !== changesRequest.current) return;
+                setChanges(result ?? []);
             })
-            .catch(() => setError("Could not read changes for this root"));
+            .catch(() => {
+                if (request !== changesRequest.current) return;
+                setError("Could not read changes for this root. Retry with Refresh changes.");
+            })
+            .finally(() => {
+                if (request === changesRequest.current) setLoading(false);
+            });
     }, [root]);
 
-    useEffect(refresh, [refresh]);
+    useEffect(() => {
+        setChanges([]);
+        setOpenPath("");
+        setDiff("");
+        refresh();
+        return () => {
+            changesRequest.current++;
+            diffRequest.current++;
+        };
+    }, [refresh]);
 
     const toggleDiff = useCallback(
         (path: string) => {
+            const request = ++diffRequest.current;
             if (openPath === path) {
                 setOpenPath("");
                 setDiff("");
                 return;
             }
             setOpenPath(path);
-            setDiff("loading…");
+            setDiff("Loading diff…");
             void RpcApi.OSWorktreeFileDiffCommand(TabRpcClient, { repopath: root, path })
-                .then((result) => setDiff(result || "no diff"))
-                .catch(() => setDiff("could not load diff"));
+                .then((result) => {
+                    if (request === diffRequest.current) setDiff(result || "No diff");
+                })
+                .catch(() => {
+                    if (request === diffRequest.current) setDiff("Could not load diff. Close and reopen this file to retry.");
+                });
         },
         [root, openPath]
     );
@@ -515,10 +543,12 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
         (action: "revert" | "stage", path: string) => {
             if (!root || busy) return;
             setBusy(true);
+            const selectedDiffRequest = diffRequest.current;
             const call = action === "revert" ? RpcApi.OSWorktreeFileRevertCommand : RpcApi.OSWorktreeFileStageCommand;
             void call(TabRpcClient, { repopath: root, path })
                 .then(() => {
-                    if (openPath === path) {
+                    if (openPath === path && selectedDiffRequest === diffRequest.current) {
+                        diffRequest.current++;
                         setOpenPath("");
                         setDiff("");
                     }
@@ -561,15 +591,20 @@ function OSWorktreeChangesSection({ root }: { root: string }) {
             <header>
                 <div>
                     <strong>Changes</strong>
-                    <span>{changes.length} uncommitted · {root.split("/").pop()}</span>
+                    <span>
+                        {loading ? "Reading changes" : error ? "Changes unavailable" : `${changes.length} uncommitted`} · {root.split("/").pop()}
+                    </span>
                 </div>
                 <SystemButton type="button" size="small" onClick={refresh} aria-label="Refresh changes">
                     <RefreshCw aria-hidden="true" />
                 </SystemButton>
             </header>
             {error && <p className="os-control-error" role="alert">{error}</p>}
-            <div className="os-grant-list">
-                {changes.length === 0 && <p>No uncommitted changes. Agent edits appear here for review.</p>}
+            <div className="os-grant-list" aria-busy={loading}>
+                {loading && <p role="status">Reading uncommitted changes…</p>}
+                {!loading && !error && changes.length === 0 && (
+                    <p>No uncommitted changes. Agent edits appear here for review.</p>
+                )}
                 {changes.map((change) => (
                     <div key={change.path} onContextMenu={(event) => showChangeMenu(event, change)}>
                         <button
@@ -624,7 +659,7 @@ function OSAutomationsSection({ spaceId }: { spaceId: string }) {
         }
         void RpcApi.OSAutomationListCommand(TabRpcClient, spaceId)
             .then((result) => {
-                setAutomations(result);
+                setAutomations(result ?? []);
                 setError("");
             })
             .catch(() => setError("Could not read automations for this space"));
@@ -638,7 +673,7 @@ function OSAutomationsSection({ spaceId }: { spaceId: string }) {
             setBusy(true);
             void RpcApi.OSAutomationSaveCommand(TabRpcClient, { spaceid: spaceId, automations: next })
                 .then((result) => {
-                    setAutomations(result);
+                    setAutomations(result ?? []);
                     setError("");
                 })
                 .catch((e) => setError(String(e)))
@@ -767,7 +802,7 @@ function OSWorkspaceScriptsSection({ spaceId }: { spaceId: string }) {
         }
         void RpcApi.OSWorkspaceScriptListCommand(TabRpcClient, spaceId)
             .then((result) => {
-                setScripts(result);
+                setScripts(result ?? []);
                 setError("");
             })
             .catch(() => setError("Could not read lifecycle scripts"));
@@ -781,7 +816,7 @@ function OSWorkspaceScriptsSection({ spaceId }: { spaceId: string }) {
             setBusy(true);
             void RpcApi.OSWorkspaceScriptSaveCommand(TabRpcClient, { spaceid: spaceId, scripts: next })
                 .then((result) => {
-                    setScripts(result);
+                    setScripts(result ?? []);
                     setError("");
                 })
                 .catch((e) => setError(String(e)))
@@ -1122,8 +1157,36 @@ export function OSSystemCenterPanel({
     onFocusBlock: (blockId: string) => void;
     onPinResource: (resource: OSResourceReference) => void;
 }) {
+    const panelRef = useRef<HTMLElement>(null);
+    const closeRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        const launcher = document.activeElement as HTMLElement;
+        return () => {
+            const active = document.activeElement;
+            if (launcher?.isConnected && (active === document.body || panelRef.current?.contains(active))) {
+                launcher.focus();
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        closeRef.current?.focus();
+    }, [center]);
+
     return (
-        <SystemPopover className={cn("os-system-center", `is-${center}`)} aria-label={`${center} center`}>
+        <SystemPopover
+            ref={panelRef}
+            className={cn("os-system-center", `is-${center}`)}
+            role="dialog"
+            aria-label={`${center === "activity" ? "Activity" : "Control"} Center`}
+            onKeyDown={(event) => {
+                if (event.key !== "Escape" || event.defaultPrevented) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onClose();
+            }}
+        >
             <header className="os-system-center-header">
                 <div>
                     {center === "activity" ? <Bell aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
@@ -1134,7 +1197,7 @@ export function OSSystemCenterPanel({
                         </small>
                     </span>
                 </div>
-                <SystemButton type="button" size="small" onClick={onClose} aria-label={`Close ${center} center`}>
+                <SystemButton ref={closeRef} type="button" size="small" onClick={onClose} aria-label={`Close ${center} center`}>
                     <X aria-hidden="true" />
                 </SystemButton>
             </header>

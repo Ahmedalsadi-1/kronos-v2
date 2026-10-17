@@ -17,8 +17,8 @@ Phase 1 is implemented in the tab-level workspace canvas:
 - agent activity becomes persistent, movable semantic cards;
 - low-level browser gestures update one evolving surface card instead of flooding the canvas;
 - explicit and inferred lineage renders as visible graph edges;
-- the real KronosChamber composer is embedded as a compact canvas console and anchors to the live canvas viewport;
-- project context, file/agent mentions, commands, shell mode, model selection, and native KronosChamber submission remain
+- the real Hermes composer is embedded as a compact canvas console and anchors to the live canvas viewport;
+- project context, file/agent mentions, commands, shell mode, model selection, and native Hermes submission remain
   available without duplicating their UI in KronTerm;
 - Follow and Quote selections are included in the submitted prompt;
 - submitted prompts appear immediately as queued request cards;
@@ -34,7 +34,7 @@ The durable `CanvasDocument` RPC mirror, checkpoint restart, and cross-canvas re
 - Edges show which request or result supplied context to a later action.
 - **Follow** selects one card and continues its lineage.
 - **Quote** selects several cards and combines them as explicit context.
-- The canvas uses KronosChamber's real composer as its only primary prompt entrance; the generic quick composer remains
+- The canvas uses Hermes's real composer as its only primary prompt entrance; the generic quick composer remains
   available outside the canvas.
 - Follow and Quote transform the outgoing prompt at the iframe boundary, so the user-facing text stays concise while
   the runtime receives readable canvas context.

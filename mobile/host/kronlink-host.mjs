@@ -4,14 +4,13 @@ import { createServer } from "node:http";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
+import { pairingHostAddress, renderPairingPage } from "./pairing-page.mjs";
 import { PhoneAgentBridge, PhoneControlError } from "./phoneagent-adapter.mjs";
 
 const DefaultPort = 4119;
-const DefaultUpstream = "http://127.0.0.1:3107";
 const PairingWindowMs = 60_000;
 const PairingCodeTtlMs = 15 * 60_000;
 const TokenTtlMs = 30 * 24 * 60 * 60_000;
-const UiTicketTtlMs = 12 * 60 * 60_000;
 const MaxBodyBytes = 50 * 1024 * 1024;
 const AllowedOrigins = new Set([
   "capacitor://localhost",
@@ -30,7 +29,7 @@ const hasFlag = (flag) => args.includes(flag);
 const listenHost = hasFlag("--lan") ? "0.0.0.0" : "127.0.0.1";
 const developmentOpen = hasFlag("--dev-open");
 const listenPort = Number.parseInt(valueAfter("--port", process.env.KRONLINK_PORT ?? String(DefaultPort)), 10);
-const upstreamOrigin = valueAfter("--upstream", process.env.KRONTERM_CHAMBER_URL ?? DefaultUpstream).replace(/\/$/, "");
+const upstreamOrigin = valueAfter("--upstream", process.env.KRONTERM_AGENT_URL ?? "").replace(/\/$/, "");
 const phoneAgentHost = valueAfter("--phoneagent-host", process.env.PHONEAGENT_HOST ?? "127.0.0.1");
 const phoneAgentPort = Number.parseInt(valueAfter("--phoneagent-port", process.env.PHONEAGENT_PORT ?? "45678"), 10);
 const phoneAgentEnabled = !hasFlag("--disable-phoneagent");
@@ -77,7 +76,6 @@ const readTokenHashes = () => {
 const tokenHashes = readTokenHashes();
 const pairAttempts = new Map();
 const gatewayTargets = new Map();
-const uiTickets = new Map();
 const phoneAgent = phoneAgentEnabled ? new PhoneAgentBridge({ host: phoneAgentHost, port: phoneAgentPort }) : null;
 const hash = (value) => createHash("sha256").update(value).digest();
 const safeEqual = (left, right) => timingSafeEqual(hash(left), hash(right));
@@ -146,22 +144,6 @@ const issueToken = () => {
   return token;
 };
 
-const issueUiTicket = () => {
-  const ticket = randomBytes(24).toString("base64url");
-  const expiresAt = Date.now() + UiTicketTtlMs;
-  uiTickets.set(ticket, expiresAt);
-  return { ticket, expiresAt };
-};
-
-const isValidUiTicket = (ticket) => {
-  const expiresAt = uiTickets.get(ticket);
-  if (!expiresAt || expiresAt < Date.now()) {
-    uiTickets.delete(ticket);
-    return false;
-  }
-  return true;
-};
-
 const isAuthorized = (request) => {
   if (developmentOpen && ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress)) {
     return true;
@@ -184,8 +166,7 @@ const isAuthorized = (request) => {
   return true;
 };
 
-const isLoopbackRequest = (request) =>
-  ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress);
+const isLoopbackRequest = (request) => ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress);
 
 const hostCapabilities = async () => {
   const capabilities = ["kronoscode", "browser", "sandbox", "terminal", "files", "apps"];
@@ -212,12 +193,13 @@ const upstreamHeaders = (request, body) => ({
           typeof request.headers["content-type"] === "string" ? request.headers["content-type"] : "application/json",
       }
     : {}),
-  ...(process.env.KRONTERM_CHAMBER_AUTH ? { Authorization: process.env.KRONTERM_CHAMBER_AUTH } : {}),
-  ...(process.env.KRONTERM_CHAMBER_COOKIE ? { Cookie: process.env.KRONTERM_CHAMBER_COOKIE } : {}),
-  ...(process.env.KRONTERM_CHAMBER_X_AUTHKEY ? { "x-authkey": process.env.KRONTERM_CHAMBER_X_AUTHKEY } : {}),
+  ...(process.env.KRONTERM_AGENT_AUTH ? { Authorization: process.env.KRONTERM_AGENT_AUTH } : {}),
+  ...(process.env.KRONTERM_AGENT_COOKIE ? { Cookie: process.env.KRONTERM_AGENT_COOKIE } : {}),
+  ...(process.env.KRONTERM_AGENT_X_AUTHKEY ? { "x-authkey": process.env.KRONTERM_AGENT_X_AUTHKEY } : {}),
 });
 
-const proxyHttp = async (request, response, pathname, routePrefix = "") => {
+const proxyHttp = async (request, response, pathname) => {
+  if (!upstreamOrigin) throw new Error("Configure --upstream or KRONTERM_AGENT_URL with a compatible agent API host");
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
   const upstreamResponse = await fetch(`${upstreamOrigin}${pathname}`, {
     method: request.method,
@@ -253,7 +235,7 @@ const proxyHttp = async (request, response, pathname, routePrefix = "") => {
           expiresAt: Number(ticket.expiresAt) || Date.now() + 60_000,
         });
       }
-      ticket.wsUrl = `${routePrefix}${upstreamWebSocketUrl.pathname}${upstreamWebSocketUrl.search}`;
+      ticket.wsUrl = `${upstreamWebSocketUrl.pathname}${upstreamWebSocketUrl.search}`;
       responseBody = Buffer.from(JSON.stringify(ticket));
     }
   }
@@ -266,6 +248,7 @@ const proxyHttp = async (request, response, pathname, routePrefix = "") => {
 };
 
 const checkUpstream = async () => {
+  if (!upstreamOrigin) return false;
   try {
     const response = await fetch(`${upstreamOrigin}/health`, {
       headers: upstreamHeaders({ headers: {} }, undefined),
@@ -300,15 +283,26 @@ const server = createServer(async (request, response) => {
         service: "KronLink Host",
         hostName: hostname(),
         detail: connected
-          ? "KronosChamber is ready"
+          ? "KronosCode is ready"
           : phoneControl.available
-            ? "Phone control is ready; KronosChamber is unavailable"
-            : "KronosChamber is unavailable",
+            ? "Phone control is ready; KronosCode is unavailable"
+            : "KronosCode is unavailable",
         capabilities: await hostCapabilities(),
         phoneControl,
       });
     }
 
+    if (request.method === "GET" && url.pathname === "/pair") {
+      if (!isLoopbackRequest(request)) return json(response, 403, { error: "Open pairing on this Mac" });
+      if (Date.now() > pairingExpiresAt) return json(response, 410, { error: "Restart connector to pair again" });
+      const page = await renderPairingPage({
+        baseUrl: pairingHostAddress(listenPort),
+        code: pairingCode,
+        expiresAt: pairingExpiresAt,
+      });
+      response.writeHead(200, { ...responseHeaders, "Content-Type": "text/html; charset=utf-8" });
+      return response.end(page);
+    }
     if (request.method === "POST" && url.pathname === "/v1/pair") {
       if (!canAttemptPair(request)) {
         return json(response, 429, { error: "Too many pairing attempts" });
@@ -375,54 +369,6 @@ const server = createServer(async (request, response) => {
       return json(response, 404, { error: "Phone control route not found" });
     }
 
-    if (request.method === "POST" && url.pathname === "/v1/ui-ticket") {
-      if (!isAuthorized(request)) {
-        return json(response, 401, { error: "Pair this computer again" });
-      }
-      const body = await readJson(request);
-      const { ticket, expiresAt } = issueUiTicket();
-      const routePrefix = `/mobile/${ticket}`;
-      const params = new URLSearchParams({
-        apiBaseUrl: `${routePrefix}/api`,
-        embeddedHost: "kronterm",
-        mobileShell: "iphone",
-        route: "chat",
-        surface: "page",
-        layoutMode: "full-page",
-        profile: "chat-shell",
-      });
-      if (typeof body.sessionId === "string" && body.sessionId.trim()) {
-        params.set("currentSessionId", body.sessionId.trim());
-      }
-      if (typeof body.surfaceId === "string" && body.surfaceId.trim()) {
-        params.set("surfaceId", body.surfaceId.trim());
-      }
-      return json(response, 200, {
-        url: `${routePrefix}/?${params.toString()}`,
-        expiresAt,
-      });
-    }
-
-    const mobileRoute = url.pathname.match(/^\/mobile\/([A-Za-z0-9_-]+)(\/.*)?$/);
-    if (mobileRoute) {
-      const [, ticket, requestedPath = "/"] = mobileRoute;
-      if (!isValidUiTicket(ticket)) {
-        return json(response, 401, { error: "Mobile UI session expired" });
-      }
-      const routePrefix = `/mobile/${ticket}`;
-      await proxyHttp(request, response, `${requestedPath}${url.search}`, routePrefix);
-      return;
-    }
-
-    const publicUiAsset =
-      (request.method === "GET" || request.method === "HEAD") &&
-      (/^\/(?:assets|branding)\//.test(url.pathname) ||
-        /^\/(?:apple-touch-icon|favicon|logo-|pwa-|site\.webmanifest|manifest\.webmanifest|sw\.js)/.test(url.pathname));
-    if (publicUiAsset) {
-      await proxyHttp(request, response, `${url.pathname}${url.search}`);
-      return;
-    }
-
     if (!url.pathname.startsWith("/api/")) {
       return json(response, 404, { error: "Route not found" });
     }
@@ -450,13 +396,7 @@ const safeCloseCode = (code, fallback) =>
 
 server.on("upgrade", (request, socket, head) => {
   const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-  const mobileRoute = requestUrl.pathname.match(
-    /^\/mobile\/([A-Za-z0-9_-]+)(\/(?:global\/gateway|api\/kronoscode\/gateway))$/
-  );
-  const mobileTicketValid = mobileRoute ? isValidUiTicket(mobileRoute[1]) : false;
-  const gatewayPath = mobileRoute
-    ? mobileTicketValid
-    : requestUrl.pathname === "/global/gateway" || requestUrl.pathname === "/api/kronoscode/gateway";
+  const gatewayPath = requestUrl.pathname === "/global/gateway" || requestUrl.pathname === "/api/kronoscode/gateway";
   const gatewayTicket = requestUrl.searchParams.get("ticket");
   const target = gatewayTicket ? gatewayTargets.get(gatewayTicket) : undefined;
   if (!gatewayPath || !target || target.expiresAt < Date.now()) {
@@ -509,13 +449,12 @@ server.on("upgrade", (request, socket, head) => {
 server.listen(listenPort, listenHost, () => {
   const displayHost = listenHost === "0.0.0.0" ? "<this-computer-ip>" : listenHost;
   console.log(`KronLink Host: http://${displayHost}:${listenPort}`);
+  if (listenHost === "0.0.0.0") console.log(`Pair by QR: http://127.0.0.1:${listenPort}/pair`);
   console.log(
-    developmentOpen ? "Authorization: loopback development mode" : `Pairing code: ${pairingCode} (expires in 15 minutes)`
+    developmentOpen
+      ? "Authorization: loopback development mode"
+      : `Pairing code: ${pairingCode} (expires in 15 minutes)`
   );
-  console.log(`KronosChamber: ${upstreamOrigin}`);
-  console.log(
-    phoneAgent
-      ? `PhoneAgent: auto-detecting ${phoneAgentHost}:${phoneAgentPort}`
-      : "PhoneAgent: disabled"
-  );
+  console.log(`KronosCode: ${upstreamOrigin}`);
+  console.log(phoneAgent ? `PhoneAgent: auto-detecting ${phoneAgentHost}:${phoneAgentPort}` : "PhoneAgent: disabled");
 });

@@ -33,7 +33,6 @@ export function PreviewTilePane({ tabId }: PreviewTilePaneProps) {
 
   return (
     <PreviewPane
-      embedded
       onRestartServer={target.kind === 'url' ? (restartPreviewServer ?? undefined) : undefined}
       reloadRequest={previewReloadRequest}
       tabId={tabId}

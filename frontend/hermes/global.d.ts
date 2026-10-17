@@ -36,13 +36,84 @@ declare global {
             // and bounded split/promote actions; plugins never receive the ambient Electron API.
             krontermSurfaces?: {
                 list: () => Promise<HermesKronTermSurface[]>;
+                toggleChatLayout?: () => void;
+                openMachines?: (
+                    kind?: "desktop" | "android" | "iphone",
+                    settings?: boolean
+                ) => Promise<{ ok: boolean; error?: string }>;
+                launchWorkspace?: (
+                    action:
+                        | "terminal"
+                        | "browser"
+                        | "files"
+                        | "connections"
+                        | "scratchpad"
+                        | "activity"
+                        | "control"
+                        | "widgets"
+                        | "tabs"
+                        | "canvas"
+                        | "os"
+                ) => Promise<void>;
+                launchApp?: (id: string) => Promise<void>;
+                spaces?: () => Promise<Array<{ id: string; name: string }>>;
+                openSpace?: (id: string) => Promise<void>;
+                searchResources?: (
+                    query: string
+                ) => Promise<Array<{ kind: string; name: string; path: string; detail: string }>>;
+                openResource?: (path: string) => Promise<void>;
+                apps?: () => Promise<Array<{ id: string; name: string }>>;
+                targetApp?: (id: string) => Promise<void>;
                 focus: (blockId: string) => Promise<{ ok: boolean; error?: string }>;
                 openSplit: (blockId: string) => Promise<{ ok: boolean; error?: string }>;
                 promote: (blockId: string) => Promise<{ ok: boolean; error?: string }>;
                 preview: (blockId: string) => Promise<string>;
+                select?: (blockId: string, expanded: boolean) => Promise<boolean>;
+                onDisplay?: (listener: (value: { blockId: string; expanded: boolean }) => void) => () => void;
+                control?: (
+                    blockId: string,
+                    input: {
+                        action: "click" | "scroll" | "type" | "press";
+                        x?: number;
+                        y?: number;
+                        amount?: number;
+                        text?: string;
+                        keys?: string[];
+                    }
+                ) => Promise<void>;
                 snapshot: (blockId: string) => Promise<HermesKronTermInspectableSnapshot>;
                 inspect: (blockId: string, enabled: boolean) => Promise<{ ok: boolean; error?: string }>;
                 onSelection: (listener: (selection: HermesKronTermDesignSelection) => void) => () => void;
+            };
+            // Display-only tool activity so KronTerm can draw the agent cursor, window frames,
+            // and task cards. Never carries tool output or arguments beyond short targets.
+            krontermActivity?: {
+                report: (activity: {
+                    phase: "running" | "succeeded" | "failed";
+                    toolId?: string;
+                    name: string;
+                    args?: Record<string, unknown>;
+                    sessionId?: string;
+                    context?: string;
+                    agent?: "hermes" | "kronoscode";
+                }) => void;
+                // The user pressed "Take over" on a window the agent is driving.
+                onTakeover?: (listener: (sessionId?: string) => void) => () => void;
+            };
+            // Agent engines selectable in the chat. "hermes" uses the Hermes backend socket;
+            // other engines (KronosCode) answer gateway requests for their own sessions.
+            agentBackends?: {
+                list: () => Promise<
+                    Array<{ id: string; label: string; description: string; available: boolean; logo?: string }>
+                >;
+                getActive: () => string;
+                getSessionBackend?: (sessionId: string) => string | undefined;
+                setActive: (id: string) => void;
+                onActiveChange: (listener: (id: string) => void) => () => void;
+                route: (method: string, params: Record<string, unknown>) => Promise<unknown> | undefined;
+                onEvent: (
+                    listener: (event: { type: string; session_id: string; payload?: Record<string, unknown> }) => void
+                ) => () => void;
             };
             // Reconnect-after-wake recovery: liveness-probe the cached PRIMARY backend
             // and drop it if a remote one has gone unreachable, so the next
@@ -1074,6 +1145,7 @@ export interface HermesKronTermSurface {
     action?: string;
     detail?: string;
     previewImageUrl?: string;
+    location?: string;
     surfaceKind?: "widget";
     browserTabs?: Array<{
         id: string;

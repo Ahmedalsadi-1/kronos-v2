@@ -18,6 +18,26 @@ const config = {
     npmRebuild: false,
     nodeGypRebuild: false,
     electronCompile: false,
+    beforePack: async (context) => {
+        if (context.electronPlatformName !== "darwin") return;
+        const { execFile } = require("node:child_process");
+        const { promisify } = require("node:util");
+        await promisify(execFile)(process.execPath, ["scripts/build-desktop-picker.mjs", Arch[context.arch]], {
+            cwd: context.packager.projectDir,
+        });
+        await promisify(execFile)(
+            process.execPath,
+            ["scripts/build-desktop-picker.mjs", Arch[context.arch], "background-computer"],
+            {
+                cwd: context.packager.projectDir,
+            }
+        );
+        await promisify(execFile)(
+            process.execPath,
+            ["scripts/build-desktop-picker.mjs", Arch[context.arch], "background-display"],
+            { cwd: context.packager.projectDir }
+        );
+    },
     files: [
         {
             from: "./dist",
@@ -28,7 +48,6 @@ const config = {
                 "bin/wavesrv.${arch}*",
                 "bin/wsh*",
                 "!tsunamiscaffold/**/*",
-                "!kronoschamber-web/**/*",
                 "!mcp-kron-term/**/*",
             ],
         },
@@ -40,6 +59,32 @@ const config = {
         "!node_modules", // We don't need electron-builder to package in Node modules as Vite has already bundled any code that our program is using.
     ],
     extraResources: [
+        { from: "scripts/import-workflow-pack.py", to: "workflow-packs/import-workflow-pack.py" },
+        {
+            from: "emain/linux-desktop/upstream",
+            to: "licenses/linux-desktop",
+            filter: ["**/LICENSE*", "**/SOURCE.md", "**/NOTICE.md"],
+        },
+        {
+            from: "emain/device-simulator",
+            to: "licenses/device-simulator",
+            filter: ["**/LICENSE", "**/SOURCE.md", "**/NOTICE.md"],
+        },
+        {
+            from: "node_modules/serve-sim",
+            to: "serve-sim",
+            filter: ["dist/**/*", "bin/**/*", "package.json", "LICENSE*"],
+        },
+        {
+            from: "dist/native",
+            to: "native",
+            filter: ["desktop-picker", "background-computer", "background-display"],
+        },
+        {
+            from: "native",
+            to: "native",
+            filter: ["desktop-picker.swift", "desktop-picker"],
+        },
         {
             from: "dist/tsunamiscaffold",
             to: "tsunamiscaffold",
@@ -60,13 +105,13 @@ const config = {
             filter: ["bin/kronoscode", "LICENSE", "README.md"],
         },
         {
-            from: ".agents/skills",
-            to: "kronterm-skills",
-            filter: ["**/*"],
+            from: "agents/kronterm-agent",
+            to: "agents/kronterm-agent",
+            filter: ["bin/kronterm-agent", "README.md"],
         },
         {
-            from: "dist/kronoschamber-web",
-            to: "kronoschamber-web",
+            from: ".agents/skills",
+            to: "kronterm-skills",
             filter: ["**/*"],
         },
     ],

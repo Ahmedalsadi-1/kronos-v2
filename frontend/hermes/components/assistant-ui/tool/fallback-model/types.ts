@@ -35,7 +35,8 @@ export interface ToolView {
   detailLabel: string
   durationLabel?: string
   icon?: string
-  imageUrl?: string
+  /** Every screenshot/image the payload carries, in payload order. */
+  imageUrls?: string[]
   inlineDiff: string
   previewTarget?: string
   /** Set for tools whose output naturally contains ANSI escape codes

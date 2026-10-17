@@ -12,7 +12,6 @@ export interface HostProfile {
     kind: HostKind;
     color: string;
     capabilities: string[];
-    uiBaseUrl?: string;
     token?: string;
     createdAt: number;
     lastConnectedAt?: number;
@@ -203,6 +202,8 @@ export interface PhoneAuditEvent {
 }
 
 export interface Surface {
+    localLinux?: boolean;
+    localWidget?: "browser" | "desktop";
     id: string;
     kind: SurfaceKind;
     hostId: string;
@@ -219,6 +220,7 @@ export interface Surface {
     sandboxId?: string;
     url?: string;
     previewUrl?: string;
+    previewText?: string;
     streamUrl?: string;
     terminalUrl?: string;
     terminalSessionId?: string;
@@ -266,11 +268,6 @@ export interface PairingResult {
     token: string;
     hostName: string;
     capabilities?: string[];
-}
-
-export interface MobileUiSession {
-    url: string;
-    expiresAt?: number;
 }
 
 export interface BrowserSnapshotItem {

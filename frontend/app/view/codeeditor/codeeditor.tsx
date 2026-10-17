@@ -1,10 +1,11 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { startLspClient, stopLspClient } from "@/app/lsp/lsp-client-manager";
 import { LspService } from "@/app/lsp/lsp-service";
 import { MonacoCodeEditor } from "@/app/monaco/monaco-react";
 import { useOverrideConfigAtom } from "@/app/store/global";
+import { useCoucouWorkbenchAppearance } from "@/app/workspace/coucou-workbench-appearance";
 import { boundNumber } from "@/util/util";
 import type * as MonacoTypes from "monaco-editor";
 import * as MonacoModule from "monaco-editor";
@@ -42,6 +43,7 @@ interface CodeEditorProps {
 }
 
 export function CodeEditor({ blockId, text, language, fileName, readonly, onChange, onMount }: CodeEditorProps) {
+    const appearance = useCoucouWorkbenchAppearance();
     const divRef = useRef<HTMLDivElement>(null);
     const unmountRef = useRef<() => void>(null);
     const lspLanguageRef = useRef<string | undefined>(undefined);
@@ -50,6 +52,21 @@ export function CodeEditor({ blockId, text, language, fileName, readonly, onChan
     const wordWrap = useOverrideConfigAtom(blockId, "editor:wordwrap") ?? false;
     const fontSize = boundNumber(useOverrideConfigAtom(blockId, "editor:fontsize"), 6, 64);
     const uuidRef = useRef(crypto.randomUUID()).current;
+    useEffect(() => {
+        MonacoModule.editor.defineTheme("kronterm-coucou-editor", {
+            base: appearance["--coucou-surface"] === "#000000" ? "vs-dark" : "vs",
+            inherit: true,
+            rules: [],
+            colors: {
+                "editor.background": String(appearance["--coucou-surface"]),
+                "editor.foreground": String(appearance["--coucou-label"]),
+                "editorCursor.foreground": String(appearance["--coucou-accent"]),
+                "editorLineNumber.foreground": String(appearance["--coucou-secondary"]),
+                "editorLineNumber.activeForeground": String(appearance["--coucou-label"]),
+            },
+        });
+        MonacoModule.editor.setTheme("kronterm-coucou-editor");
+    }, [appearance]);
     let editorPath: string;
     if (fileName) {
         const separator = fileName.startsWith("/") ? "" : "/";

@@ -1,6 +1,8 @@
 import { type CSSProperties, useState } from "react";
 
+import { useHermesShellMode } from "@hermes/lib/kronterm-host";
 import { capitalize, normalize } from "@hermes/lib/text";
+import { cn } from "@hermes/lib/utils";
 
 import introCopyJsonl from "./intro-copy.jsonl?raw";
 
@@ -157,6 +159,7 @@ function resolveCopy(personality?: string, seed?: number): IntroCopy {
 }
 
 export function Intro({ personality, seed }: IntroProps) {
+    const { panelMode } = useHermesShellMode();
     const [mountSeed] = useState(() => Math.floor(Math.random() * 100000));
     const copy = resolveCopy(personality, mountSeed + (seed ?? 0));
 
@@ -167,14 +170,25 @@ export function Intro({ personality, seed }: IntroProps) {
         >
             <div className="w-full min-w-0">
                 <p
-                    aria-label={WORDMARK}
-                    className="fit-text mx-auto mb-1 w-[calc(100%-1rem)] font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
-                    style={{ "--fit-min": "2.75rem" } as CSSProperties}
+                    aria-label={panelMode ? "KronTerm Agent" : WORDMARK}
+                    className={cn(
+                        "mx-auto mb-2 w-[calc(100%-1rem)] text-midground dark:text-foreground/90",
+                        panelMode
+                            ? "text-[clamp(1.5rem,7cqi,2rem)] font-semibold leading-tight tracking-tight"
+                            : "fit-text font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] mix-blend-plus-lighter"
+                    )}
+                    style={panelMode ? undefined : ({ "--fit-min": "2.75rem" } as CSSProperties)}
                 >
-                    <span>
-                        <span>{WORDMARK}</span>
-                    </span>
-                    <span aria-hidden="true">{WORDMARK}</span>
+                    {panelMode ? (
+                        "KronTerm Agent"
+                    ) : (
+                        <>
+                            <span>
+                                <span>{WORDMARK}</span>
+                            </span>
+                            <span aria-hidden="true">{WORDMARK}</span>
+                        </>
+                    )}
                 </p>
 
                 <p className="m-0 text-center leading-normal tracking-tight">{copy.body}</p>

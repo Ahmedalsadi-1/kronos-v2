@@ -72,7 +72,6 @@ const developmentHost = (): HostProfile | null => {
         id: DevelopmentHostId,
         label: "This KronTerm",
         baseUrl: `${window.location.origin}/_kronhost`,
-        uiBaseUrl: import.meta.env.VITE_KRONTERM_LOCAL_URL?.trim() || "http://127.0.0.1:3107",
         kind: "computer",
         color: HostColors[1],
         capabilities: hostCapabilitiesForKind("computer"),

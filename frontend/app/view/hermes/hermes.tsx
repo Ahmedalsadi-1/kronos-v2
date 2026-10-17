@@ -57,7 +57,13 @@ export function HermesView({ blockId, contentRef, model }: HermesViewProps) {
 
     useEffect(() => {
         const handler = (e: Event) => {
-            const view = (e as CustomEvent).detail?.view;
+            const detail = (e as CustomEvent).detail;
+            const meta = detail?.meta;
+            if (meta && typeof meta === "object" && typeof meta.view === "string" && meta.view) {
+                createBlock({ meta }, false);
+                return;
+            }
+            const view = detail?.view;
             if (typeof view === "string" && view) {
                 createBlock({ meta: { view } }, false);
             }

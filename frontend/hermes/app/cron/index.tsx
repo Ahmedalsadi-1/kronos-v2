@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import type * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 
 import { PageLoader } from '@hermes/components/page-loader'
 import { Button } from '@hermes/components/ui/button'
@@ -177,7 +178,7 @@ function isIntegerToken(value: string): boolean {
 
 function scheduleOptionForExpr(expr: string): ScheduleOption {
   const normalized = expr.trim().replace(/\s+/g, ' ')
-  const exactMatch = SCHEDULE_OPTIONS.find(option => option.expr === normalized)
+  const exactMatch = SCHEDULE_OPTIONS.find((option) => option.expr === normalized)
 
   if (exactMatch) {
     return exactMatch
@@ -192,11 +193,11 @@ function scheduleOptionForExpr(expr: string): ScheduleOption {
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
 
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*' && isIntegerToken(minute) && isIntegerToken(hour)) {
-    return SCHEDULE_OPTIONS.find(option => option.value === 'daily') ?? SCHEDULE_OPTIONS[0]
+    return SCHEDULE_OPTIONS.find((option) => option.value === 'daily') ?? SCHEDULE_OPTIONS[0]
   }
 
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '1-5' && isIntegerToken(minute) && isIntegerToken(hour)) {
-    return SCHEDULE_OPTIONS.find(option => option.value === 'weekdays') ?? SCHEDULE_OPTIONS[0]
+    return SCHEDULE_OPTIONS.find((option) => option.value === 'weekdays') ?? SCHEDULE_OPTIONS[0]
   }
 
   if (
@@ -206,7 +207,7 @@ function scheduleOptionForExpr(expr: string): ScheduleOption {
     isIntegerToken(minute) &&
     isIntegerToken(hour)
   ) {
-    return SCHEDULE_OPTIONS.find(option => option.value === 'weekly') ?? SCHEDULE_OPTIONS[0]
+    return SCHEDULE_OPTIONS.find((option) => option.value === 'weekly') ?? SCHEDULE_OPTIONS[0]
   }
 
   if (
@@ -216,15 +217,15 @@ function scheduleOptionForExpr(expr: string): ScheduleOption {
     isIntegerToken(minute) &&
     isIntegerToken(hour)
   ) {
-    return SCHEDULE_OPTIONS.find(option => option.value === 'monthly') ?? SCHEDULE_OPTIONS[0]
+    return SCHEDULE_OPTIONS.find((option) => option.value === 'monthly') ?? SCHEDULE_OPTIONS[0]
   }
 
   if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*' && isIntegerToken(minute)) {
-    return SCHEDULE_OPTIONS.find(option => option.value === 'hourly') ?? SCHEDULE_OPTIONS[0]
+    return SCHEDULE_OPTIONS.find((option) => option.value === 'hourly') ?? SCHEDULE_OPTIONS[0]
   }
 
   if (normalized === '*/15 * * * *') {
-    return SCHEDULE_OPTIONS.find(option => option.value === 'every-15-minutes') ?? SCHEDULE_OPTIONS[0]
+    return SCHEDULE_OPTIONS.find((option) => option.value === 'every-15-minutes') ?? SCHEDULE_OPTIONS[0]
   }
 
   return SCHEDULE_OPTIONS[SCHEDULE_OPTIONS.length - 1]
@@ -283,7 +284,7 @@ function matchesQuery(job: CronJob, q: string): boolean {
 
   const needle = q.toLowerCase()
 
-  return [jobTitle(job), jobPrompt(job), jobScheduleDisplay(job), jobScheduleExpr(job), jobDeliver(job)].some(value =>
+  return [jobTitle(job), jobPrompt(job), jobScheduleDisplay(job), jobScheduleExpr(job), jobDeliver(job)].some((value) =>
     value.toLowerCase().includes(needle)
   )
 }
@@ -295,6 +296,7 @@ interface CronViewProps extends React.ComponentProps<'section'> {
 }
 
 export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setStatusbarItemGroup }: CronViewProps) {
+  const navigate = useNavigate()
   const { t } = useI18n()
   const c = t.cron
   // Source of truth is the shared atom (also fed by the controller poll), so the
@@ -314,7 +316,7 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
         return
       }
 
-      setTriggeringJobKeys(current => {
+      setTriggeringJobKeys((current) => {
         const next = new Set(current)
 
         if (running) {
@@ -384,7 +386,7 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
       return
     }
 
-    const match = jobs.find(job => job.id === focusJobId || jobName(job) === focusJobId)
+    const match = jobs.find((job) => job.id === focusJobId || jobName(job) === focusJobId)
 
     if (match) {
       setSelectedJobId(match.id)
@@ -395,7 +397,7 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
   }, [focusJobId, jobs])
 
   const visibleJobs = useMemo(
-    () => jobs.filter(job => matchesQuery(job, query.trim())).sort((a, b) => jobTitle(a).localeCompare(jobTitle(b))),
+    () => jobs.filter((job) => matchesQuery(job, query.trim())).sort((a, b) => jobTitle(a).localeCompare(jobTitle(b))),
     [jobs, query]
   )
 
@@ -411,13 +413,13 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
     const list = blueprintsQuery.data ?? []
     const needle = query.trim().toLowerCase()
 
-    return needle ? list.filter(item => `${item.title} ${item.description}`.toLowerCase().includes(needle)) : list
+    return needle ? list.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(needle)) : list
   }, [blueprintsQuery.data, query])
 
   // Detail always reflects a concrete job: the explicitly selected one, else the
   // first visible row, so the right pane is never empty while jobs exist.
   const selectedJob = useMemo(
-    () => visibleJobs.find(job => job.id === selectedJobId) ?? visibleJobs[0] ?? null,
+    () => visibleJobs.find((job) => job.id === selectedJobId) ?? visibleJobs[0] ?? null,
     [visibleJobs, selectedJobId]
   )
 
@@ -441,13 +443,13 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
   function beginJobBusy(jobId: string): symbol {
     const token = Symbol(jobId)
 
-    setBusyJobTokens(current => new Map(current).set(jobId, token))
+    setBusyJobTokens((current) => new Map(current).set(jobId, token))
 
     return token
   }
 
   function endJobBusy(jobId: string, token: symbol): void {
-    setBusyJobTokens(current => {
+    setBusyJobTokens((current) => {
       if (current.get(jobId) !== token) {
         return current
       }
@@ -634,13 +636,22 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
       notifyError(refreshError, c.failedLoad)
     }
 
-    notify({ kind: 'success', title: c.blueprints.scheduled, message: asText(job.schedule_display) || blueprint.title })
+    notify({
+      kind: 'success',
+      title: c.blueprints.scheduled,
+      message: asText(job.schedule_display) || blueprint.title
+    })
     setEditor({ mode: 'closed' })
   }
 
   return (
     <Panel closeLabel={c.close} onClose={onClose}>
       <PanelHeader subtitle={c.count(totalCount)} title={c.title} />
+      <div className="px-4 py-2">
+        <Button className="cursor-pointer" onClick={() => navigate('/workflows')} size="sm" variant="outline">
+          Workspace workflows
+        </Button>
+      </div>
 
       {loading && jobs.length === 0 ? (
         <PageLoader label={c.loading} />
@@ -663,19 +674,24 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
               .map(jobTitle)
               .filter(Boolean)
               .slice(0, 5)
-              .map(title => t.common.tryHint(title))}
+              .map((title) => t.common.tryHint(title))}
             searchLabel={c.search}
             searchPlaceholder={c.search}
             searchValue={query}
           >
-            {visibleJobs.map(job => (
+            {visibleJobs.map((job) => (
               <CronJobListRow
                 active={selectedJob?.id === job.id}
                 job={job}
                 key={job.id}
                 menuItems={[
                   { icon: 'edit', label: c.edit, onSelect: () => setEditor({ mode: 'edit', job }) },
-                  { icon: 'trash', label: t.common.delete, onSelect: () => setPendingDelete(job), tone: 'danger' }
+                  {
+                    icon: 'trash',
+                    label: t.common.delete,
+                    onSelect: () => setPendingDelete(job),
+                    tone: 'danger'
+                  }
                 ]}
                 menuLabel={c.manage}
                 onSelect={() => setSelectedJobId(job.id)}
@@ -688,7 +704,7 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
             {visibleBlueprints.length > 0 && (
               <>
                 <PanelSectionLabel className="mt-3 px-2">{c.blueprints.tab}</PanelSectionLabel>
-                {visibleBlueprints.map(item => (
+                {visibleBlueprints.map((item) => (
                   <PanelListRow
                     active={false}
                     icon="rocket"
@@ -724,7 +740,7 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
         onSave={handleEditorSave}
       />
 
-      <Dialog onOpenChange={open => !open && !deleting && setPendingDelete(null)} open={pendingDelete !== null}>
+      <Dialog onOpenChange={(open) => !open && !deleting && setPendingDelete(null)} open={pendingDelete !== null}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{c.deleteTitle}</DialogTitle>
@@ -884,14 +900,14 @@ function CronJobRuns({
 
     const load = () =>
       getCronJobRuns(jobId)
-        .then(result => {
+        .then((result) => {
           if (!cancelled) {
             setRuns(result)
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setRuns(prev => prev ?? [])
+            setRuns((prev) => prev ?? [])
           }
         })
 
@@ -936,7 +952,7 @@ function CronJobRuns({
         <div className="py-1 text-xs text-muted-foreground">{c.noRuns}</div>
       ) : (
         <div className="flex flex-col gap-px">
-          {runs.map(run => (
+          {runs.map((run) => (
             <button
               className="row-hover flex items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               key={run.id}
@@ -982,13 +998,13 @@ export function DeliverCheckboxes({
   value: string
 }) {
   const selected = parseCronDeliveryTargets(value)
-  const knownIds = new Set(targets.map(target => target.id))
+  const knownIds = new Set(targets.map((target) => target.id))
 
   const options = [
     ...targets,
     ...selected
-      .filter(target => !knownIds.has(target))
-      .map(target => ({ home_env_var: null, home_target_set: true, id: target, name: target }))
+      .filter((target) => !knownIds.has(target))
+      .map((target) => ({ home_env_var: null, home_target_set: true, id: target, name: target }))
   ]
 
   return (
@@ -1007,7 +1023,7 @@ export function DeliverCheckboxes({
             <Checkbox
               checked={checked}
               id={checkboxId}
-              onCheckedChange={next => onChange(toggleCronDeliveryTarget(value, target.id, next === true))}
+              onCheckedChange={(next) => onChange(toggleCronDeliveryTarget(value, target.id, next === true))}
             />
             <span>{deliverTargetLabel(target, c)}</span>
           </label>
@@ -1064,7 +1080,7 @@ function CronEditorDialog({
   const blueprintList = blueprintsQuery.data ?? []
 
   const blueprint =
-    templateChoice === CUSTOM_TEMPLATE ? null : (blueprintList.find(item => item.key === templateChoice) ?? null)
+    templateChoice === CUSTOM_TEMPLATE ? null : (blueprintList.find((item) => item.key === templateChoice) ?? null)
 
   const isBlueprint = blueprint !== null
 
@@ -1111,13 +1127,13 @@ function CronEditorDialog({
   }, [blueprint])
 
   const selectedScheduleOption =
-    SCHEDULE_OPTIONS.find(candidate => candidate.value === schedulePreset) ?? SCHEDULE_OPTIONS[0]
+    SCHEDULE_OPTIONS.find((candidate) => candidate.value === schedulePreset) ?? SCHEDULE_OPTIONS[0]
 
   function handleSchedulePresetChange(nextPreset: string) {
     setSchedulePreset(nextPreset)
     setError(null)
 
-    const option = SCHEDULE_OPTIONS.find(candidate => candidate.value === nextPreset)
+    const option = SCHEDULE_OPTIONS.find((candidate) => candidate.value === nextPreset)
 
     if (option?.expr) {
       setSchedule(option.expr)
@@ -1131,7 +1147,7 @@ function CronEditorDialog({
   // Configured providers with at least one available model — mirrors the chat
   // model picker's gate so only actually-selectable models are offered.
   const modelProviders = (modelOptions.data?.providers ?? []).filter(
-    provider => provider.authenticated !== false && (provider.models ?? []).length > 0
+    (provider) => provider.authenticated !== false && (provider.models ?? []).length > 0
   )
 
   // A previously pinned model that has since left the catalog (provider
@@ -1139,7 +1155,9 @@ function CronEditorDialog({
   // stored pin visible and re-selectable rather than silently dropping it.
   const modelChoiceKnown =
     modelChoice === MODEL_DEFAULT_VALUE ||
-    modelProviders.some(provider => (provider.models ?? []).some(model => `${provider.slug}:${model}` === modelChoice))
+    modelProviders.some((provider) =>
+      (provider.models ?? []).some((model) => `${provider.slug}:${model}` === modelChoice)
+    )
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -1208,7 +1226,7 @@ function CronEditorDialog({
   }
 
   return (
-    <Dialog onOpenChange={value => !value && !saving && onClose()} open={open}>
+    <Dialog onOpenChange={(value) => !value && !saving && onClose()} open={open}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? c.editTitle : c.createTitle}</DialogTitle>
@@ -1223,7 +1241,7 @@ function CronEditorDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={CUSTOM_TEMPLATE}>{c.blueprints.custom}</SelectItem>
-                {blueprintList.map(item => (
+                {blueprintList.map((item) => (
                   <SelectItem key={item.key} value={item.key}>
                     {item.title}
                   </SelectItem>
@@ -1236,7 +1254,7 @@ function CronEditorDialog({
 
         {isBlueprint && blueprint ? (
           <form className="grid gap-4" onSubmit={handleBlueprintSubmit}>
-            {blueprint.fields.map(field => {
+            {blueprint.fields.map((field) => {
               const fieldId = `blueprint-${blueprint.key}-${field.name}`
               const help = blueprintSlotHelp(field)
 
@@ -1249,7 +1267,7 @@ function CronEditorDialog({
                     <DeliverCheckboxes
                       c={c}
                       id={fieldId}
-                      onChange={next => setSlotValues(prev => ({ ...prev, [field.name]: next }))}
+                      onChange={(next) => setSlotValues((prev) => ({ ...prev, [field.name]: next }))}
                       targets={deliveryTargets.data ?? []}
                       value={slotValues[field.name] ?? DEFAULT_DELIVER}
                     />
@@ -1257,7 +1275,7 @@ function CronEditorDialog({
                     <BlueprintSlotControl
                       field={field}
                       id={fieldId}
-                      onChange={next => setSlotValues(prev => ({ ...prev, [field.name]: next }))}
+                      onChange={(next) => setSlotValues((prev) => ({ ...prev, [field.name]: next }))}
                       value={slotValues[field.name] ?? ''}
                     />
                   )}
@@ -1294,7 +1312,7 @@ function CronEditorDialog({
               <Input
                 autoFocus
                 id="cron-name"
-                onChange={event => setName(event.target.value)}
+                onChange={(event) => setName(event.target.value)}
                 placeholder={c.namePlaceholder}
                 value={name}
               />
@@ -1304,7 +1322,7 @@ function CronEditorDialog({
               <Textarea
                 className="min-h-24 font-mono"
                 id="cron-prompt"
-                onChange={event => setPrompt(event.target.value)}
+                onChange={(event) => setPrompt(event.target.value)}
                 placeholder={c.promptPlaceholder}
                 value={prompt}
               />
@@ -1317,7 +1335,7 @@ function CronEditorDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SCHEDULE_OPTIONS.map(option => (
+                    {SCHEDULE_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {c.scheduleLabels[option.value]}
                       </SelectItem>
@@ -1350,10 +1368,10 @@ function CronEditorDialog({
                         {modelChoice.slice(modelChoice.indexOf(':') + 1)}
                       </SelectItem>
                     )}
-                    {modelProviders.map(provider => (
+                    {modelProviders.map((provider) => (
                       <SelectGroup key={provider.slug}>
                         <SelectLabel>{provider.name}</SelectLabel>
-                        {(provider.models ?? []).map(model => (
+                        {(provider.models ?? []).map((model) => (
                           <SelectItem
                             className="font-mono"
                             key={`${provider.slug}:${model}`}
@@ -1374,7 +1392,7 @@ function CronEditorDialog({
                 <Input
                   className="font-mono"
                   id="cron-schedule"
-                  onChange={event => setSchedule(event.target.value)}
+                  onChange={(event) => setSchedule(event.target.value)}
                   placeholder={c.customPlaceholder}
                   value={schedule}
                 />

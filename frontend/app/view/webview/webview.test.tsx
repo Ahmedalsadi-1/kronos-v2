@@ -3,12 +3,46 @@
 
 import { globalStore } from "@/app/store/jotaiStore";
 import { makeMockWaveEnv } from "@/preview/mock/mockwaveenv";
+import type { WebviewTag } from "electron";
 import { atom } from "jotai";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { getWebPreviewDisplayUrl, WebViewModel, WebViewPreviewFallback } from "./webview";
+import { describe, expect, it, vi } from "vitest";
+import {
+    getWebPreviewDisplayUrl,
+    isWebviewReadyForElectronCall,
+    WebViewModel,
+    WebViewPreviewFallback,
+} from "./webview";
 
 describe("webview preview fallback", () => {
+    it("preserves address editing when the workspace requests browser focus", () => {
+        const model = new WebViewModel({
+            blockId: "address-focus",
+            nodeModel: { isFocused: atom(true), focusNode: () => {} } as any,
+            tabModel: {} as any,
+            waveEnv: makeMockWaveEnv({}),
+        });
+        const guestFocus = vi.fn();
+        model.webviewRef.current = { focus: guestFocus } as unknown as WebviewTag;
+        const staleInput = { focus: vi.fn() } as unknown as HTMLInputElement;
+        const clickedInput = { select: vi.fn() } as unknown as HTMLInputElement;
+        model.urlInputRef.current = staleInput;
+
+        model.handleFocus({ currentTarget: clickedInput } as React.FocusEvent<HTMLInputElement>);
+        expect(model.urlInputRef.current).toBe(clickedInput);
+        expect(clickedInput.select).toHaveBeenCalledOnce();
+        expect(staleInput.focus).not.toHaveBeenCalled();
+        expect(model.giveFocus()).toBe(true);
+        expect(guestFocus).not.toHaveBeenCalled();
+
+        model.handleUrlChange({ target: { value: "https://next.example" } } as React.ChangeEvent<HTMLInputElement>);
+        expect(globalStore.get(model.url)).toBe("https://next.example");
+        model.handleNavigate("https://background-navigation.example");
+        expect(globalStore.get(model.url)).toBe("https://next.example");
+        model.handleBlur({} as React.FocusEvent<HTMLInputElement>);
+        model.giveFocus();
+        expect(guestFocus).toHaveBeenCalledOnce();
+    });
     it("shows the requested URL", () => {
         const markup = renderToStaticMarkup(<WebViewPreviewFallback url="https://kronterm.dev/docs" />);
 
@@ -19,6 +53,17 @@ describe("webview preview fallback", () => {
     it("falls back to about:blank when no URL is available", () => {
         expect(getWebPreviewDisplayUrl("")).toBe("about:blank");
         expect(getWebPreviewDisplayUrl(null)).toBe("about:blank");
+    });
+
+    it("rejects stale or detached webviews during presentation remounts", () => {
+        const attached = { isConnected: true } as WebviewTag;
+        const replacement = { isConnected: true } as WebviewTag;
+        const detached = { isConnected: false } as WebviewTag;
+
+        expect(isWebviewReadyForElectronCall(attached, attached, true)).toBe(true);
+        expect(isWebviewReadyForElectronCall(replacement, attached, true)).toBe(false);
+        expect(isWebviewReadyForElectronCall(detached, detached, true)).toBe(false);
+        expect(isWebviewReadyForElectronCall(attached, attached, false)).toBe(false);
     });
 
     it("uses the supplied env for homepage atoms and config updates", async () => {
@@ -139,6 +184,10 @@ describe("webview preview fallback", () => {
         const markup = renderToStaticMarkup(<>{globalStore.get(model.headerTop)}</>);
 
         expect(markup).toContain("webview-navigation");
+        expect(markup).toContain('aria-label="Find in page"');
+        expect(markup).toContain('aria-label="Open browser DevTools"');
+        expect(markup).toContain('aria-label="Browser menu"');
+        expect(markup).toContain("Viewport profile");
         expect(markup).not.toContain("webview-tab-strip");
         expect(markup).not.toContain('role="tablist"');
         expect(markup).not.toContain('role="tab"');

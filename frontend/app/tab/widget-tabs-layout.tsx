@@ -1,20 +1,23 @@
+import { resolveBlockView } from "@/app/block/retired-chat-view";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Block as BlockView } from "@/app/block/block";
+import { BlockChromeProvider } from "@/app/block/block-chrome-context";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
+import { PersistentBlock as BlockView } from "@/app/block/persistent-block";
 import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { ProjectEnvironmentLauncher } from "@/app/workspace/project-environment-launcher";
 import { LayoutModel } from "@/layout/lib/layoutModel";
 import { useNodeModel, useTileLayout } from "@/layout/lib/layoutModelHooks";
 import { DropDirection, LayoutNode, NodeModel, TileLayoutContents } from "@/layout/lib/types";
-import { getApi, refocusNode } from "@/store/global";
+import { atoms, getApi, refocusNode } from "@/store/global";
 import * as WOS from "@/store/wos";
 import { makeIconClass } from "@/util/util";
 import { Atom, atom, useAtomValue, useSetAtom } from "jotai";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
     isAgentActivityActive,
     subscribeAgentActivityStream,
@@ -27,6 +30,15 @@ import {
     type TabsAgentCompanionRequest,
 } from "./tabs-agent-workspace";
 import { WidgetPickerPopover } from "./widget-picker-popover";
+import {
+    clampWidgetSidebarWidth,
+    groupWidgetSidebarEntries,
+    WidgetSidebarDefaultWidth,
+    WidgetSidebarMaxWidth,
+    WidgetSidebarMinWidth,
+    WidgetSidebarWidthKey,
+    widgetSidebarWidthPatch,
+} from "./widget-sidebar-model";
 import {
     computeWidgetTabStripScrollMetrics,
     getVisibleWidgetPaneIds,
@@ -89,6 +101,18 @@ function readNodeView(node?: LayoutNode): string {
     return String(block?.meta?.view ?? "term");
 }
 
+function readNodeEnvironment(node?: LayoutNode): { root: string; connection: string } {
+    const blockId = node?.data?.blockId;
+    if (!blockId) {
+        return { root: "~", connection: "" };
+    }
+    const meta = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)))?.meta;
+    return {
+        root: String(meta?.["environment:root"] || meta?.["cmd:cwd"] || "~"),
+        connection: String(meta?.["environment:connection"] || meta?.connection || ""),
+    };
+}
+
 function readNodePinned(node?: LayoutNode): boolean {
     const blockId = node?.data?.blockId;
     if (!blockId) {
@@ -142,10 +166,10 @@ const WidgetTab = memo(
         const blockId = node.data?.blockId;
         const blockAtom = useMemo(() => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)), [blockId]);
         const blockData = useAtomValue(blockAtom);
-        const viewType = String(blockData?.meta?.view ?? "term");
+        const viewType = resolveBlockView(String(blockData?.meta?.view ?? "term"));
         const viewName = blockViewToName(viewType);
         const title = String(blockData?.meta?.["frame:title"] ?? "").trim() || viewName;
-        const displayTitle = viewType === "chathubv2" ? "Chamber V2" : title;
+        const displayTitle = viewType === "hermes" ? "KronTerm Agent" : title;
         const icon = resolveBlockIcon(viewType, blockData?.meta);
         const closeAccessibility = getWidgetTabCloseAccessibility(active);
         const [isEditing, setIsEditing] = useState(false);
@@ -178,7 +202,7 @@ const WidgetTab = memo(
 
         return (
             <div
-                className={`widget-surface-tab ${active ? "is-active" : ""} ${pinned ? "is-pinned" : ""} ${isEditing ? "is-editing" : ""} ${viewType === "chathubv2" ? "is-chamber" : ""} ${dropSide ? `is-drop-${dropSide}` : ""}`}
+                className={`widget-surface-tab ${active ? "is-active" : ""} ${pinned ? "is-pinned" : ""} ${isEditing ? "is-editing" : ""} ${viewType === "hermes" ? "is-agent" : ""} ${dropSide ? `is-drop-${dropSide}` : ""}`}
                 draggable={!isEditing}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
@@ -314,6 +338,7 @@ const WidgetTabPane = memo(
         recentActivity: LiveAgentSurfaceActivity[];
         workbenchRole: WorkbenchPaneRole;
     }) => {
+        const [toolbarHost, setToolbarHost] = useState<HTMLElement>(null);
         const baseNodeModel = useNodeModel(layoutModel, node);
         const nodeModel = useMemo<NodeModel>(
             () => ({
@@ -333,7 +358,7 @@ const WidgetTabPane = memo(
         const blockId = node.data?.blockId;
         const blockAtom = useMemo(() => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)), [blockId]);
         const blockData = useAtomValue(blockAtom);
-        const viewType = String(blockData?.meta?.view ?? "term");
+        const viewType = resolveBlockView(String(blockData?.meta?.view ?? "term"));
         const title = String(blockData?.meta?.["frame:title"] ?? "").trim() || blockViewToName(viewType);
         const latestActivity = recentActivity.at(-1);
         const visible = active || workbenchRole != null;
@@ -368,8 +393,11 @@ const WidgetTabPane = memo(
                         </div>
                     </div>
                 )}
+                <div className="widget-pane-toolbar" ref={setToolbarHost} />
                 <div className="widget-agent-workbench-content">
-                    <BlockView key={blockId} nodeModel={nodeModel} preview={false} />
+                    <BlockChromeProvider mode="integrated" toolbarHost={toolbarHost}>
+                        <BlockView key={blockId} nodeModel={nodeModel} preview={false} />
+                    </BlockChromeProvider>
                 </div>
                 {workbenchRole === "companion" && recentActivity.length > 0 && (
                     <div className="widget-agent-workbench-timeline" aria-label="Recent agent tool activity">
@@ -394,9 +422,60 @@ const WidgetTabPane = memo(
 );
 WidgetTabPane.displayName = "WidgetTabPane";
 
+const WidgetSidebarRow = memo(
+    ({
+        node,
+        active,
+        pinned,
+        onSelect,
+        onClose,
+        onTogglePin,
+    }: {
+        node: LayoutNode;
+        active: boolean;
+        pinned: boolean;
+        onSelect: () => void;
+        onClose: () => void;
+        onTogglePin: () => void;
+    }) => {
+        const blockAtom = useMemo(
+            () => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", node.data?.blockId)),
+            [node.data?.blockId]
+        );
+        const block = useAtomValue(blockAtom);
+        const view = resolveBlockView(String(block?.meta?.view ?? "term"));
+        const title = String(block?.meta?.["frame:title"] ?? "").trim() || blockViewToName(view);
+        return (
+            <li className={`widget-sidebar-row ${active ? "is-active" : ""}`}>
+                <button
+                    type="button"
+                    className="widget-sidebar-select"
+                    onClick={onSelect}
+                    aria-current={active ? "true" : undefined}
+                    title={title}
+                >
+                    <i className={makeIconClass(resolveBlockIcon(view, block?.meta), true)} aria-hidden="true" />
+                    <span>{title}</span>
+                </button>
+                <button
+                    type="button"
+                    className="widget-sidebar-action"
+                    aria-label={`${pinned ? "Unpin" : "Close"} ${title}`}
+                    onClick={pinned ? onTogglePin : onClose}
+                >
+                    <i className={`fa-solid ${pinned ? "fa-thumbtack" : "fa-xmark"}`} aria-hidden="true" />
+                </button>
+            </li>
+        );
+    }
+);
+WidgetSidebarRow.displayName = "WidgetSidebarRow";
+
 const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => {
     const layoutModel = useTileLayout(tabAtom, contents);
     const leafs = useAtomValue(layoutModel.leafs);
+    const fullConfig = useAtomValue(atoms.fullConfigAtom);
+    const workspaceTab = useAtomValue(tabAtom);
     const leafOrder = useAtomValue(layoutModel.leafOrder);
     const focusedNode = useAtomValue(layoutModel.focusedNode);
     const setReady = useSetAtom(layoutModel.ready);
@@ -413,6 +492,30 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
     const firstSplitTargetRef = useRef<HTMLButtonElement>(null);
     const dragScrollTimerRef = useRef<number>(null);
     const [widgetPickerOpen, setWidgetPickerOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const sidebarId = useId();
+    const [sidebarWidth, setSidebarWidth] = useState(() =>
+        clampWidgetSidebarWidth(workspaceTab.meta?.[WidgetSidebarWidthKey])
+    );
+    const sidebarDrag = useRef<{ x: number; width: number }>(null);
+    const sidebarWidthRef = useRef(sidebarWidth);
+    sidebarWidthRef.current = sidebarWidth;
+    useEffect(() => {
+        if (!sidebarDrag.current) {
+            setSidebarWidth(clampWidgetSidebarWidth(workspaceTab.meta?.[WidgetSidebarWidthKey]));
+        }
+    }, [workspaceTab.oid, workspaceTab.meta?.[WidgetSidebarWidthKey]]);
+    const persistSidebarWidth = useCallback(
+        (width: number) => {
+            const next = clampWidgetSidebarWidth(width);
+            setSidebarWidth(next);
+            void RpcApi.SetMetaCommand(TabRpcClient, {
+                oref: WOS.makeORef("tab", workspaceTab.oid),
+                meta: widgetSidebarWidthPatch(next) as MetaType,
+            });
+        },
+        [workspaceTab.oid]
+    );
     const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
     const [keyboardSplitNodeId, setKeyboardSplitNodeId] = useState<string | null>(null);
     const [dropDirection, setDropDirection] = useState<DropDirection | null>(null);
@@ -487,6 +590,19 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
             ),
         [orderedNodes, pinnedNodeIds, workbenchPair]
     );
+    const sidebarGroupsAtom = useMemo(
+        () =>
+            atom((get) =>
+                groupWidgetSidebarEntries(
+                    visibleTabNodes.map((node) => ({
+                        node,
+                        meta: get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", node.data?.blockId)))?.meta,
+                    }))
+                )
+            ),
+        [visibleTabNodes]
+    );
+    const sidebarGroups = useAtomValue(sidebarGroupsAtom);
     const visibleTabNodesRef = useRef(visibleTabNodes);
     visibleTabNodesRef.current = visibleTabNodes;
     const selectedTabNodeId = workbenchPair?.agentNodeId ?? activeNode?.id;
@@ -854,8 +970,22 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
     );
 
     return (
-        <div className="widget-tabs-layout">
+        <div
+            className={`widget-tabs-layout ${sidebarOpen ? "has-widget-sidebar" : ""}`}
+            style={{ "--widget-sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+        >
             <header className="widget-surface-tabbar" aria-label="Widget tabs">
+                <button
+                    type="button"
+                    className="widget-sidebar-toggle"
+                    aria-label={sidebarOpen ? "Hide widget sidebar" : "Show widget sidebar"}
+                    aria-expanded={sidebarOpen}
+                    aria-controls={sidebarId}
+                    onClick={() => setSidebarOpen((open) => !open)}
+                    title={sidebarOpen ? "Hide widget sidebar" : "Show widget sidebar"}
+                >
+                    <i className="fa-solid fa-table-columns" aria-hidden="true" />
+                </button>
                 <div className="widget-surface-tabstrip-shell">
                     {tabStripScroll.hasOverflow && (
                         <button
@@ -994,6 +1124,135 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
                 )}
                 <div className="widget-surface-tabbar-spacer" />
             </header>
+            {sidebarOpen && (
+                <aside
+                    id={sidebarId}
+                    className="widget-sidebar"
+                    aria-label="Workspace widgets"
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                            setSidebarOpen(false);
+                            event.currentTarget.parentElement
+                                ?.querySelector<HTMLButtonElement>(".widget-sidebar-toggle")
+                                ?.focus();
+                        }
+                    }}
+                >
+                    <div className="widget-sidebar-heading">
+                        Widgets <span>{visibleTabNodes.length}</span>
+                    </div>
+                    {sidebarGroups.map((group) => (
+                        <section key={group.key} aria-label={group.detail || group.title}>
+                            <h3 className="widget-sidebar-group-title" title={group.detail}>
+                                {group.title}
+                            </h3>
+                            {group.detail && (
+                                <p className="widget-sidebar-group-detail" title={group.detail}>
+                                    {group.detail}
+                                </p>
+                            )}
+                            <ul>
+                                {group.entries.map(({ node }) => (
+                                    <WidgetSidebarRow
+                                        key={node.id}
+                                        node={node}
+                                        active={node.id === selectedTabNodeId}
+                                        pinned={pinnedNodeIds.has(node.id)}
+                                        onSelect={() => focusNode(node)}
+                                        onClose={() => closeNode(node.id)}
+                                        onTogglePin={() => togglePinnedNode(node)}
+                                    />
+                                ))}
+                            </ul>
+                        </section>
+                    ))}
+                    {visibleTabNodes.length === 0 && (
+                        <p className="widget-sidebar-empty">Open a widget with the + button above.</p>
+                    )}
+                    <ProjectEnvironmentLauncher
+                        initialRoot={readNodeEnvironment(activeNode).root}
+                        initialConnection={readNodeEnvironment(activeNode).connection}
+                        connections={Object.keys(fullConfig?.connections ?? {}).filter(
+                            (name) => name !== "local" && !name.startsWith("wsl://")
+                        )}
+                        adapter={{
+                            create: async (blockDef) => {
+                                const oref = await RpcApi.CreateBlockCommand(TabRpcClient, {
+                                    tabid: workspaceTab.oid,
+                                    blockdef: blockDef,
+                                    focused: false,
+                                });
+                                return WOS.splitORef(oref)[1];
+                            },
+                            ensureConnection: (connection) =>
+                                RpcApi.ConnEnsureCommand(TabRpcClient, { connname: connection }),
+                            findExisting: (key, role) => {
+                                const node = globalStore.get(layoutModel.leafs).find((entry) => {
+                                    const block = globalStore.get(
+                                        WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", entry.data?.blockId))
+                                    );
+                                    return (
+                                        block?.meta?.["environment:key"] === key &&
+                                        block?.meta?.["environment:role"] === role
+                                    );
+                                });
+                                return node?.data?.blockId;
+                            },
+                            remove: (blockId) => RpcApi.DeleteBlockCommand(TabRpcClient, { blockid: blockId }),
+                        }}
+                    />
+                </aside>
+            )}
+            {sidebarOpen && (
+                <div
+                    className="widget-sidebar-resizer"
+                    role="separator"
+                    tabIndex={0}
+                    aria-label="Resize widget sidebar"
+                    aria-orientation="vertical"
+                    aria-valuemin={WidgetSidebarMinWidth}
+                    aria-valuemax={WidgetSidebarMaxWidth}
+                    aria-valuenow={sidebarWidth}
+                    onDoubleClick={() => persistSidebarWidth(WidgetSidebarDefaultWidth)}
+                    onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        sidebarDrag.current = { x: event.clientX, width: sidebarWidth };
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        event.preventDefault();
+                    }}
+                    onPointerMove={(event) => {
+                        if (!sidebarDrag.current) return;
+                        setSidebarWidth(
+                            clampWidgetSidebarWidth(sidebarDrag.current.width + event.clientX - sidebarDrag.current.x)
+                        );
+                    }}
+                    onPointerUp={(event) => {
+                        if (!sidebarDrag.current) return;
+                        sidebarDrag.current = null;
+                        persistSidebarWidth(sidebarWidthRef.current);
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                    }}
+                    onLostPointerCapture={() => {
+                        sidebarDrag.current = null;
+                    }}
+                    onKeyDown={(event) => {
+                        const step = event.shiftKey ? 40 : 10;
+                        const next =
+                            event.key === "ArrowLeft"
+                                ? sidebarWidth - step
+                                : event.key === "ArrowRight"
+                                  ? sidebarWidth + step
+                                  : event.key === "Home"
+                                    ? WidgetSidebarMinWidth
+                                    : event.key === "End"
+                                      ? WidgetSidebarMaxWidth
+                                      : null;
+                        if (next == null) return;
+                        event.preventDefault();
+                        persistSidebarWidth(next);
+                    }}
+                />
+            )}
             <div
                 ref={layoutModel.displayContainerRef}
                 className={`widget-surface-content ${workbenchPair ? "is-agent-workbench" : ""}`}
@@ -1114,4 +1373,4 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
 });
 WidgetTabsLayout.displayName = "WidgetTabsLayout";
 
-export { WidgetTab, WidgetTabsLayout };
+export { WidgetTab, WidgetTabPane, WidgetTabsLayout };

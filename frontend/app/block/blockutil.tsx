@@ -8,6 +8,7 @@ import { MenuButton } from "@/element/menubutton";
 import * as util from "@/util/util";
 import clsx from "clsx";
 import * as React from "react";
+import { resolveBlockView } from "./retired-chat-view";
 
 export const colorRegex = /^((#[0-9a-f]{6,8})|([a-z]+))$/;
 export const NumActiveConnColors = 8;
@@ -15,14 +16,23 @@ export const NumActiveConnColors = 8;
 const ViewIconMap: Record<string, string> = {
     aifilediff: "file-lines",
     appstream: "desktop",
-    chathubv2: "sparkles",
+    computers: "desktop",
+    "linux-vms": "desktop",
+    review: "code-compare",
     cpuplot: "chart-line",
+    videostudio: "film",
+    audiostudio: "headphones",
+    documentstudio: "file-lines",
+    datastudio: "table",
+    blenderproject: "cube",
+    medialibrary: "photo-film",
+    imagestudio: "image",
+    gamestudio: "gamepad",
+    personal: "list-check",
     help: "circle-question",
     hermes: "robot",
     installedapps: "desktop",
     kronoscanvas: "diagram-project",
-    kronoschamber: "sliders",
-    kronoschat: "sparkles",
     kronsettings: "sliders",
     launcher: "shapes",
     preview: "file",
@@ -38,7 +48,7 @@ const ViewIconMap: Record<string, string> = {
 };
 
 export function blockViewToIcon(view: string): string {
-    return ViewIconMap[view] ?? "square";
+    return ViewIconMap[resolveBlockView(view)] ?? "square";
 }
 
 export function resolveBlockIcon(view: string, meta?: Record<string, any>): string {
@@ -47,9 +57,19 @@ export function resolveBlockIcon(view: string, meta?: Record<string, any>): stri
 }
 
 export function blockViewToName(view: string): string {
+    view = resolveBlockView(view);
     if (util.isBlank(view)) {
         return "(No View)";
     }
+    if (view == "videostudio") return "Video Studio";
+    if (view == "audiostudio") return "Audio Studio";
+    if (view == "documentstudio") return "Document Studio";
+    if (view == "datastudio") return "Data Studio";
+    if (view == "blenderproject") return "Blender Project";
+    if (view == "medialibrary") return "Media Library";
+    if (view == "imagestudio") return "Image Studio";
+    if (view == "gamestudio") return "Game Studio";
+    if (view == "personal") return "Tasks & Focus";
     if (view == "term") {
         return "Terminal";
     }
@@ -59,8 +79,8 @@ export function blockViewToName(view: string): string {
     if (view == "web") {
         return "Web";
     }
-    if (view == "waveai" || view == "kronoschat" || view == "chathubv2") {
-        return "Chamber V2";
+    if (view == "waveai") {
+        return "KronTerm Agent";
     }
     if (view == "help") {
         return "Help";
@@ -74,11 +94,17 @@ export function blockViewToName(view: string): string {
     if (view == "installedapps") {
         return "Installed Apps";
     }
+    if (view == "review") {
+        return "Review";
+    }
+    if (view == "linux-vms") {
+        return "Devices";
+    }
+    if (view == "computers") {
+        return "Computers & Devices";
+    }
     if (view == "kronsettings") {
         return "Settings";
-    }
-    if (view == "kronoschamber") {
-        return "KronosChamber";
     }
     if (view == "kronoscanvas") {
         return "Canvas";

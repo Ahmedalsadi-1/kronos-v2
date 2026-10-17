@@ -81,7 +81,7 @@ export function createSpawnConfig(
         spawnCommand = `chcp 65001 >nul && "${cliPath}"`;
         spawnArgs = effectiveAcpArgs;
     } else {
-        const parts = cliPath.split(/\s+/);
+        const parts = path.isAbsolute(cliPath) ? [cliPath] : cliPath.split(/\s+/);
         spawnCommand = parts[0];
         spawnArgs = [...parts.slice(1), ...effectiveAcpArgs];
     }

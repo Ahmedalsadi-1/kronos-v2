@@ -52,6 +52,7 @@ export type DesktopActionId =
     | "hatch"
     | "help"
     | "journey"
+    | "krontermAgent"
     | "new"
     | "pet"
     | "preview"
@@ -206,6 +207,12 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
         surface: action("journey"),
     },
     { name: "/files", description: "Toggle the files panel", surface: action("files") },
+    {
+        name: "/kronterm-agent",
+        description: "Delegate a task to the OpenCode ACP agent inside this chat",
+        surface: action("krontermAgent"),
+        argumentMode: "text",
+    },
     { name: "/terminal", description: "Toggle the terminal panel", surface: action("terminal") },
     { name: "/preview", description: "Open the browser preview panel", surface: action("preview") },
 

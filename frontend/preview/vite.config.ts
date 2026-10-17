@@ -7,6 +7,7 @@ import path from "path";
 import { defineConfig } from "vite";
 import svgr from "vite-plugin-svgr";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { liveDevicePreview } from "./devices-live-preview";
 
 export default defineConfig({
     root: __dirname,
@@ -15,7 +16,8 @@ export default defineConfig({
     // static assets (served by Electron in the real app) are available here too.
     publicDir: path.resolve(__dirname, "../../public"),
     plugins: [
-        tsconfigPaths(),
+        liveDevicePreview(),
+        tsconfigPaths({ projects: [path.resolve(__dirname, "../../tsconfig.json")] }),
         svgr({
             svgrOptions: { exportType: "default", ref: true, svgo: false, titleProp: true },
             include: "**/*.svg",
@@ -23,6 +25,11 @@ export default defineConfig({
         react(),
         tailwindcss(),
     ],
+    resolve: {
+        alias: {
+            "@hermes/plugin-sdk": path.resolve(__dirname, "../hermes/sdk/index.ts"),
+        },
+    },
     build: {
         minify: false,
         // novnc (imported via the sandbox preview) uses top-level await,

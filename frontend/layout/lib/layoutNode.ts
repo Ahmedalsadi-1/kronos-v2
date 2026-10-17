@@ -188,14 +188,14 @@ export function balanceNode(
         node,
         (node) => {
             if (!validateNode(node)) throw new Error("Invalid node");
-            node.children = node.children?.flatMap((child) => {
+            node.children = node.children?.filter(Boolean).flatMap((child) => {
                 if (child.flexDirection === node.flexDirection) {
                     child.flexDirection = reverseFlexDirection(node.flexDirection);
                 }
                 if (child.children?.length == 1 && child.children[0].children) {
                     return child.children[0].children;
                 }
-                if (child.children?.length === 0) return;
+                if (child.children?.length === 0) return [];
                 return child;
             });
             beforeWalkCallback?.(node);

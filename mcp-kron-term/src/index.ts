@@ -6,6 +6,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { z as z4 } from "zod/v4";
+import {
+    assertBackgroundWorkspaceToolAllowed,
+    registerBackgroundWorkspaceTools,
+} from "./background-workspace-tools.js";
+import { registerComputerTargetTools } from "./computer-target-tools.js";
 import { DeveloperActionRegistry, DeveloperMemoryStore } from "./developer-memory.js";
 import { runInteraction, type InteractionAction, type InteractionResult } from "./interaction-contract.js";
 import {
@@ -14,8 +20,17 @@ import {
     type KronComputerUseCall,
     type KronComputerUseToolResult,
 } from "./kron-computer-use.js";
+import { registerLinuxDesktopTools } from "./linux-desktop-tools.js";
+import { registerProductivityTools } from "./productivity-tools.js";
 import { SharedSkillCatalog } from "./shared-skills.js";
+import { isToolAllowedBySurfaceCapability } from "./surface-policy.js";
+import { appWorkflow, searchTools } from "./tool-discovery.js";
+import { executeTool, toolExecutionDiagnostics } from "./tool-execution.js";
+import { WorkflowCommandShape } from "./workflow-command-schema.js";
 import { WshBridge } from "./wsh-bridge.js";
+export { setComputerTargetToolBridge } from "./computer-target-tools.js";
+export { setLinuxDesktopToolBridge } from "./linux-desktop-tools.js";
+export { setProductivityToolBridge } from "./productivity-tools.js";
 
 let wsh = new WshBridge();
 const kronComputerUse = new KronComputerUseClient();
@@ -29,8 +44,120 @@ export const server = new McpServer({
         "Provides AI agents with block manipulation, widget interaction, terminal/file management, and more.",
 });
 
+registerComputerTargetTools(server);
+registerBackgroundWorkspaceTools(
+    server,
+    async () => {
+        const capability = await wsh.getDiscoverySurfaceCapability();
+        if (process.versions.electron && !capability?.nativeCallerId)
+            throw new Error("Trusted native caller identity is required.");
+        return capability?.nativeCallerId
+            ? JSON.stringify([capability.nativeCallerId, capability.tabId])
+            : (capability?.tabId ?? "local-process");
+    },
+    async () => (await wsh.getDiscoverySurfaceCapability())?.tabId ?? "local-process"
+);
+registerLinuxDesktopTools(server);
+registerProductivityTools(server);
+
+server.tool(
+    "kron_computer_annotate",
+    "Create prompted desktop drawings, labels, spotlight regions or captions. Coordinates are desktop logical points. add replaces matching IDs; expiresAt is Unix milliseconds. No automatic captions or system audio transcription. begin starts explicit manual drawing; done restores click-through. Annotations are transient.",
+    {
+        action: z.enum(["add", "remove", "clear", "undo", "begin", "done"]),
+        id: z.string().max(128).optional(),
+        tool: z.enum(["pen", "arrow", "rectangle", "text", "spotlight"]).optional(),
+        annotation: z
+            .object({
+                id: z.string().min(1).max(128),
+                kind: z.enum(["pen", "arrow", "rectangle", "text", "spotlight", "caption"]),
+                points: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).max(5000),
+                text: z.string().max(2000).optional(),
+                color: z
+                    .string()
+                    .regex(/^#[\da-f]{6}$/i)
+                    .optional(),
+                expiresAt: z.number().finite().optional(),
+            })
+            .optional(),
+    },
+    async (input) => {
+        try {
+            return { content: [{ type: "text" as const, text: await wsh.desktopAnnotation(input) }] };
+        } catch (error) {
+            return {
+                isError: true,
+                content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+            };
+        }
+    }
+);
+
+server.tool(
+    "kron_computer_window",
+    "Inspect, launch and arrange native desktop apps using yabai in Coucou desktop HUD mode only. Query native IDs before actions. split sets the insertion direction for the next app. Use os.* actions for KronTerm OS widgets. Existing keyboard commands remain available; no control panel is created.",
+    {
+        action: z.enum(["list", "launch", "focus", "move", "resize", "split", "swap", "balance", "float"]),
+        windowId: z.number().int().positive().optional(),
+        targetWindowId: z.number().int().positive().optional(),
+        app: z.string().max(200).optional(),
+        x: z.number().finite().optional(),
+        y: z.number().finite().optional(),
+        width: z.number().min(100).max(20000).optional(),
+        height: z.number().min(100).max(20000).optional(),
+        direction: z.enum(["east", "west", "north", "south"]).optional(),
+    },
+    async (input) => {
+        try {
+            return { content: [{ type: "text" as const, text: await wsh.desktopWindowAction(input) }] };
+        } catch (error) {
+            return {
+                isError: true,
+                content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+            };
+        }
+    }
+);
+
 export function setKronTermToolBridge(bridge: WshBridge): void {
     wsh = bridge;
+}
+
+export function createToolSessionServer(): McpServer {
+    const session = new McpServer({ name: "kron-term", version: "2.0.0" });
+    const registry = server as any;
+    for (const [name, tool] of Object.entries(registry._registeredTools) as Array<[string, any]>) {
+        if (!tool.enabled) continue;
+        session.registerTool(
+            name,
+            {
+                title: tool.title,
+                description: tool.description,
+                inputSchema: tool.inputSchema,
+                outputSchema: tool.outputSchema,
+                annotations: tool.annotations,
+            },
+            tool.handler
+        );
+    }
+    for (const [name, prompt] of Object.entries(registry._registeredPrompts) as Array<[string, any]>) {
+        if (!prompt.enabled) continue;
+        session.registerPrompt(
+            name,
+            { title: prompt.title, description: prompt.description, argsSchema: prompt.argsSchema },
+            prompt.callback
+        );
+    }
+    for (const [uri, resource] of Object.entries(registry._registeredResources) as Array<[string, any]>) {
+        if (!resource.enabled) continue;
+        session.registerResource(
+            resource.name,
+            uri,
+            { ...resource.metadata, title: resource.title },
+            resource.readCallback
+        );
+    }
+    return session;
 }
 
 export async function warmKronComputerUse(): Promise<void> {
@@ -53,12 +180,23 @@ type NativeRegisteredToolLike = {
     annotations?: Record<string, unknown>;
 };
 
-// The SDK stores each tool's params either as a raw shape or as a ZodObject,
-// and every schema belongs to THIS package's zod (v3). Converting them with a
-// different zod major (e.g. emain's z.toJSONSchema on v4) throws, so the
-// JSON-schema conversion must live here where the versions always match.
+// SDK-created empty schemas use Zod 4; explicitly registered schemas use Zod 3.
+// Converting or extending with the wrong major produces invalid native manifests.
 function isZodSchema(value: z.ZodRawShape | z.ZodType): value is z.ZodType {
     return (value as { _def?: unknown })._def != null;
+}
+
+const NativeSchemaCache = new WeakMap<object, Record<string, unknown>>();
+
+function nativeInputSchema(schema?: z.ZodRawShape | z.ZodType): Record<string, unknown> {
+    if (!schema) return { type: "object" };
+    const cached = NativeSchemaCache.get(schema);
+    if (cached) return cached;
+    const converted = (schema as any)._zod
+        ? (z4.toJSONSchema(schema as any) as Record<string, unknown>)
+        : (zodToJsonSchema(isZodSchema(schema) ? schema : z.object(schema)) as Record<string, unknown>);
+    NativeSchemaCache.set(schema, converted);
+    return converted;
 }
 
 export function nativeToolManifest(toolAllowed: (name: string) => boolean): NativeToolManifestEntry[] {
@@ -70,9 +208,7 @@ export function nativeToolManifest(toolAllowed: (name: string) => boolean): Nati
             name,
             title: tool.title,
             description: tool.description,
-            inputSchema: (tool.inputSchema
-                ? zodToJsonSchema(isZodSchema(tool.inputSchema) ? tool.inputSchema : z.object(tool.inputSchema))
-                : { type: "object" }) as Record<string, unknown>,
+            inputSchema: nativeInputSchema(tool.inputSchema),
             annotations: tool.annotations,
         }));
 }
@@ -157,6 +293,10 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
         detail: `${a.collapsed ? "Collapsing" : "Restoring"} ${a.blockId}`,
     }),
     workspace_show_overview: () => ({ action: "focus", detail: "Showing all workspace applications" }),
+    workspace_os_action: (a) => ({
+        action: a.action === "os.window.focus" || a.action === "os.space.switch" ? "focus" : "execute",
+        detail: `KronTerm OS ${String(a.action).replace(/^os\./, "")}${a.blockId ? ` · ${a.blockId}` : ""}`,
+    }),
     workspace_switch_workspace: (a) => ({ action: "focus", detail: `Switching to workspace ${a.workspaceId}` }),
     workspace_swap_widgets: (a) => ({
         action: "execute",
@@ -172,27 +312,19 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
         action: "execute",
         detail: `Connecting canvas objects ${a.fromObjectId} and ${a.toObjectId}`,
     }),
+    hud_list_islands: () => ({ action: "inspect", detail: "Inspecting native HUD islands" }),
+    hud_open_island: (a) => ({ action: "open", detail: `Opening ${a.app} as a native HUD island` }),
+    hud_focus_island: (a) => ({ action: "focus", detail: `Focusing HUD island ${a.blockId}` }),
+    hud_move_island: (a) => ({ action: "move", detail: `Moving HUD island ${a.blockId}` }),
+    hud_resize_island: (a) => ({ action: "execute", detail: `Resizing HUD island ${a.blockId}` }),
+    hud_arrange_islands: (a) => ({ action: "execute", detail: `Arranging HUD islands as ${a.layout}` }),
+    hud_close_island: (a) => ({ action: "execute", detail: `Closing HUD island ${a.blockId}` }),
+    acp_list_agents: () => ({ action: "inspect", detail: "Discovering installed ACP specialists" }),
+    acp_run_agent: (a) => ({ action: "execute", detail: `Delegating to ${a.backend}` }),
     browser_open: () => ({ action: "open", detail: "Opening browser" }),
     browser_open_tab: (a) => ({ action: "open", detail: `Opening browser tab for ${a.url ?? ""}` }),
     browser_navigate: (a) => ({ action: "focus", detail: `Navigating to ${a.url ?? ""}` }),
     browser_get_html: (a) => ({ action: "inspect", detail: `Getting HTML: ${a.selector ?? ""}` }),
-    sandbox_start: () => ({ action: "open", detail: "Starting sandbox" }),
-    sandbox_status: () => ({ action: "inspect", detail: "Getting sandbox status" }),
-    sandbox_stop: () => ({ action: "focus", detail: "Stopping sandbox" }),
-    sandbox_screenshot: () => ({ action: "screenshot", detail: "Taking sandbox screenshot" }),
-    sandbox_mouse_move: (a) => ({ action: "move", detail: `Moving sandbox cursor to (${a.x},${a.y})` }),
-    sandbox_click: (a) => ({
-        action: "click",
-        detail: `Clicking sandbox at (${a.x ?? "current"},${a.y ?? "current"})`,
-    }),
-    sandbox_type: () => ({ action: "type", detail: "Typing in sandbox" }),
-    sandbox_paste: () => ({ action: "type", detail: "Pasting in sandbox" }),
-    sandbox_press: (a) => ({ action: "press", detail: `Pressing ${(a.keys ?? []).join("+")} in sandbox` }),
-    sandbox_scroll: (a) => ({ action: "scroll", detail: `Scrolling ${a.direction ?? "down"} in sandbox` }),
-    sandbox_drag: (a) => ({
-        action: "drag",
-        detail: `Dragging sandbox (${a.startX},${a.startY}) → (${a.endX},${a.endY})`,
-    }),
     canvas_load: () => ({ action: "inspect", detail: "Loading canvas graph" }),
     canvas_snapshot: () => ({ action: "inspect", detail: "Snapshotting canvas graph" }),
     canvas_save: () => ({ action: "execute", detail: "Saving canvas graph" }),
@@ -247,6 +379,8 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
 
 function inferSurface(toolName: string, args: Record<string, unknown>): string {
     if (toolName.startsWith("workspace_")) return "panel";
+    if (toolName.startsWith("hud_")) return "panel";
+    if (toolName.startsWith("acp_")) return "panel";
     if (toolName.startsWith("terminal_") || toolName === "block_run_command") return "terminal";
     if (toolName.startsWith("file_")) return "file";
     if (toolName.startsWith("lsp_")) return "editor";
@@ -382,7 +516,7 @@ function wrapActivity(toolName: string, blockIdArg?: string) {
                             action: actionMap[activity?.action ?? "inspect"] ?? "inspect",
                             point: pointFromArgs(rawArgs),
                             targetRef: typeof rawArgs.elementRef === "string" ? rawArgs.elementRef : undefined,
-                            maxAttempts: activity?.action === "inspect" || activity?.action === "screenshot" ? 2 : 1,
+                            maxAttempts: 1,
                         },
                         async () => {
                             const value = await fn(args);
@@ -403,24 +537,50 @@ function wrapActivity(toolName: string, blockIdArg?: string) {
                                     await wsh.sandboxStatus(surfaceId);
                             },
                             verify: async () => {
-                                if (surface !== "kronterm" || !WidgetFocusActions.has(toolName)) {
+                                const readonly =
+                                    (server as any)._registeredTools[toolName]?.annotations?.readOnlyHint === true;
+                                if (readonly)
                                     return {
                                         observedBefore: true,
                                         verifiedAfter: true,
-                                        summary: `${toolName} completed on ${surfaceId}`,
+                                        status: "verified",
+                                        summary: `${toolName} returned an observation of ${surfaceId}`,
+                                    };
+                                if (surface === "sandbox") {
+                                    const state = JSON.parse(await wsh.sandboxStatus(surfaceId));
+                                    const expected =
+                                        toolName === "sandbox_start"
+                                            ? "running"
+                                            : toolName === "sandbox_stop"
+                                              ? "stopped"
+                                              : undefined;
+                                    return {
+                                        observedBefore: toolName !== "sandbox_start",
+                                        verifiedAfter: expected != null && state.status === expected,
+                                        status: expected ? undefined : "observed",
+                                        summary: expected
+                                            ? `Sandbox status is ${state.status}; expected ${expected}`
+                                            : `${toolName} acknowledged; sandbox status observed. Desktop effect needs a fresh screenshot.`,
                                     };
                                 }
-                                const state = JSON.parse(await wsh.widgetGetState(surfaceId)) as {
-                                    focused?: boolean;
-                                    isfocused?: boolean;
-                                };
-                                const focused = state.focused ?? state.isfocused ?? false;
+                                const state = JSON.parse(await wsh.widgetGetState(surfaceId));
+                                if (
+                                    ["widget_set_value", "widget_clear"].includes(toolName) &&
+                                    typeof rawArgs.elementRef === "string"
+                                ) {
+                                    const current = JSON.parse(await wsh.widgetGetValue(surfaceId, rawArgs.elementRef));
+                                    const expected = toolName === "widget_clear" ? "" : String(rawArgs.value ?? "");
+                                    return {
+                                        observedBefore: true,
+                                        verifiedAfter: String(current.value ?? "") === expected,
+                                        summary: "Observed the target field value after mutation.",
+                                    };
+                                }
                                 return {
                                     observedBefore: true,
-                                    verifiedAfter: focused,
-                                    summary: focused
-                                        ? `${toolName} completed with widget ${surfaceId} focused`
-                                        : `${toolName} completed but widget ${surfaceId} did not report focus`,
+                                    verifiedAfter: false,
+                                    status: "observed",
+                                    summary: `${toolName} acknowledged; widget state observed (focused: ${Boolean(state.focused ?? state.isfocused)}). Verify the intended content change before claiming completion.`,
                                 };
                             },
                         }
@@ -475,7 +635,7 @@ function publishKronComputerUseActivity(
         previewimageurl: result ? kronComputerUsePreviewImageUrl(result) : undefined,
         appname: typeof args.app === "string" ? args.app : undefined,
         surfaceid: typeof args.app === "string" ? `desktop:${args.app}` : "desktop",
-        verificationstatus: phase === "finish" ? "verified" : phase === "error" ? "failed" : "unverified",
+        verificationstatus: phase === "error" ? "failed" : "unverified",
     }).catch(() => undefined);
 }
 
@@ -515,9 +675,10 @@ async function callKronComputerUse(
             },
             verify: async (result) => ({
                 observedBefore: observedBefore || toolName !== "click",
-                verifiedAfter: true,
+                verifiedAfter: toolName === "get_app_state" || toolName === "list_apps",
+                status: toolName === "get_app_state" || toolName === "list_apps" ? "verified" : "acknowledged",
                 previewImageUrl: kronComputerUsePreviewImageUrl(result),
-                summary: `${toolName} completed for ${app}`,
+                summary: `${toolName} acknowledged for ${app}; observe the app state to verify any mutation.`,
             }),
         }
     );
@@ -538,7 +699,7 @@ async function callKronComputerUse(
 
 const kronTermGuide = `# KronTerm Surface Capability
 
-You are operating as Kronos, KronTerm's built-in persistent agent. Use the complete live kron-term MCP manifest to inspect and control KronTerm; this guide routes the tool families but does not narrow the advertised toolset.
+You have KronTerm workspace tools available through this MCP connection. Hermes and KronosCode use the same live surface contracts. Use the complete live kron-term MCP manifest to inspect and control KronTerm; this guide routes the tool families but does not narrow the advertised toolset.
 
 ## Tool usage policy
 
@@ -547,18 +708,24 @@ You are operating as Kronos, KronTerm's built-in persistent agent. Use the compl
 - Prefer file tools (file_read, file_list, file_info) over running cat/ls in a terminal. Use terminal tools for interactive sessions or command execution, not for reading files.
 - Batch independent read-only calls (for example surface_status, workspace_snapshot, and a scoped widget_snapshot) in a single message instead of sequential round trips.
 - Never use sandbox_* tools to control the host, and never use kron_computer_* tools to control KronTerm blocks. Each pointer family targets exactly one surface.
-- For browser tasks, reuse the focused open browser widget first, then another open browser widget. Use browser_open_tab when the current page must remain available. Create a separate browser widget only when no browser exists or simultaneous visibility is required.
+- For browser tasks, reuse the focused open browser widget first, then another open browser widget. Each widget holds one page: browser_open_tab is a navigation alias and replaces that page. To preserve it when another page is required, create a separate browser widget with browser_open(newSurface=true).
+- For assigned native background work, use only the kron_computer_background_workspace_* lifecycle, observation and action tools with the retained sessionId. New windows require human approval. These assignments override the general native app routing below; never fall back to global computer input, native tiling or a shell workaround when a group refuses an action.
 
 ## Surface decision table
+
+For a managed sandbox task, call sandbox_task_start with the exact user-assigned reservation, observed generation and stable taskId. Save sessionId and explicitly call sandbox_task_finish after success, failure or cancellation. This stops only desktops started by the task while ownership remains valid; it never silently reclaims human control or stops a pre-existing desktop. These are lifecycle tools, not an automatic task scheduler. For phones, use device_list, device_screenshot and the generation-fenced device_* tools; physical devices need their existing ADB/Appium connection, and device_shutdown is for emulators/simulators only.
+For managed Linux CUA desktops, use linux_desktop_list and operate only on the desktop explicitly assigned to your agent ID. Use its current controlGeneration for screenshots and actions. If the user takes control, wait for explicit reassignment/resume in the UI; never forge an assigned agent ID. Capture after each interaction.
+For iOS Simulator or configured Appium phone sessions, use device_list then device_screenshot, followed by device_* controls with the observed controlGeneration. Never substitute host or sandbox pointer tools for a device. When automationPaused is true, wait for explicit user resume in Computers & Devices; refreshing discovery does not authorize resuming mutations. Capture again to verify each interaction.
 
 | Target | Tool family | First call |
 | --- | --- | --- |
 | Workspace presentation, widget order/appearance/geometry, layout, tabs | \`workspace_snapshot\`, \`workspace_screenshot\`, \`workspace_*\` controls | \`workspace_snapshot\` |
+| Coucou HUD, background widgets, native islands | \`hud_set_mode\`, \`hud_show_widget\`, \`hud_set_widget_background\`, \`hud_*_island\` | \`workspace_snapshot\` and \`hud_list_islands\` |
 | Block membership, metadata, connections, secrets | workspace data tools (\`list_blocks\`, \`get_block_info\`, \`connection_*\`, \`secret_*\`) | \`list_blocks\` |
 | Content inside a KronTerm block (forms, canvas, browser page) | \`widget_*\` | \`widget_snapshot\` |
-| In-app browser navigation | \`browser_open\`, \`browser_open_tab\`, \`browser_navigate\`, \`browser_get_html\` | \`workspace_snapshot\`, then reuse, tab, or create in that order |
+| In-app browser navigation | \`browser_open\`, \`browser_open_tab\`, \`browser_navigate\`, \`browser_get_html\` | \`workspace_snapshot\`, then reuse the one-page widget or explicitly create a separate surface |
 | Terminal session or one-shot shell command | \`terminal_open\`, \`terminal_scrollback\`, \`block_run_command\` | \`terminal_open\` (interactive) or \`block_run_command\` (one-shot) |
-| Isolated Linux sandbox desktop | \`sandbox_*\` | \`sandbox_status\`, then \`sandbox_screenshot\` |
+| Managed Linux desktop | \`linux_desktop_*\` | \`linux_desktop_list\`, then \`linux_desktop_screenshot\` with assigned agent and generation |
 | Native macOS app outside KronTerm | \`kron_computer_*\` | \`kron_computer_list_apps\`, then \`kron_computer_get_app_state\` |
 | Files and directories | \`file_open\`, \`file_list\`, \`file_read\`, \`file_info\` | \`file_list\` or \`file_read\` |
 | Persistent memory, sessions, action items | memory tools (\`get_memories\`, \`search_memories\`, \`get_workspace_sessions\`, \`get_action_items\`, ...) | \`get_memories\` or \`search_memories\` |
@@ -567,23 +734,26 @@ You are operating as Kronos, KronTerm's built-in persistent agent. Use the compl
 ## Workflow
 
 1. Call \`surface_status\` if a tool fails or before the first operation.
-2. Call \`workspace_snapshot\` to learn whether the active surface is widgets, tabs, or canvas and obtain ordered live block IDs, focus, visibility, and geometry.
+2. Call \`workspace_snapshot\` to learn whether the active surface is widgets, tabs, canvas, or OS, whether HUD is enabled, and obtain ordered live block IDs, focus, visibility, and geometry.
 3. Call \`workspace_screenshot\` when the overall visual arrangement matters; call \`widget_screenshot\` for one widget.
-4. Use the control advertised for the active presentation: split actions in widgets, sequential focus/order in tabs, and world-space geometry/fit/arrange in canvas.
+4. Use the control advertised for the active presentation: split actions in widgets, sequential focus/order in tabs, world-space geometry/fit/arrange in canvas, and typed \`workspace_os_action\` in OS. Native HUD island bounds use desktop pixels from \`hud_list_islands\`.
 5. For content interaction, call \`widget_snapshot\` before using element refs.
 6. Re-run \`widget_snapshot\` after navigation or DOM changes because refs become stale.
-7. After acting, verify with \`workspace_snapshot\`, content snapshot, scrollback, or state before reporting success.
+7. Preserve the user's viewing context: inspect workspace_inventory for the visible workspace and workspace_snapshot for rendered bounds. Hidden or unmounted widgets are not what the user sees. Explicit targetWorkspaceId/targetTabId can activate another tab when interaction needs mounted UI.
+8. For layout changes, use viewport and visualassessment: keep useful content readable, avoid clipping and unintended overlap, preserve the user's primary widget, and use workspace_screenshot to verify appearance before claiming it looks good. Model bounds alone do not prove visual quality.
+9. After acting, verify with \`workspace_snapshot\`, content snapshot, scrollback, or state before reporting success.
 
 ## Functional paths
 
 - Presentation context: \`workspace_snapshot\` is authoritative for mode, order, focus, visibility, bounds, split tree, canvas camera, and supported controls.
 - Presentation control: \`workspace_set_presentation\`, \`workspace_focus_widget\`, \`workspace_move_widget\`, \`workspace_resize_widget\`, \`workspace_swap_widgets\`, \`workspace_toggle_magnify\`, \`workspace_navigate\`, and \`workspace_canvas_view\`.
+- HUD: \`hud_set_mode\` changes HUD placement without changing the canonical workspace presentation. \`hud_show_widget\` selects and expands an existing browser, terminal, editor, diff, preview, or sandbox by block ID inside the HUD. \`hud_set_widget_background\` folds it away or restores it without deleting its session. Use \`hud_open_island\` for a new detached widget and \`hud_move_island\`/\`hud_resize_island\` for its native window geometry. Do not recreate an existing background browser to reveal it.
 - Canvas whiteboard: \`workspace_canvas_add_note\`, \`workspace_canvas_update_object\`, \`workspace_canvas_delete_object\`, and \`workspace_canvas_connect\`. Read \`workspace_snapshot\` first and use its world-space object IDs and geometry; placements are automatically moved clear of occupied widgets and objects.
 - Blocks: \`list_blocks\`, \`create_block\`, \`close_block\`, \`focus_block\`, \`get_block_info\`, and \`set_block_meta\`.
 - Widgets: \`widget_*\` operations inspect or interact with content in an existing block, including clipboard control.
-- Browser blocks: reuse an existing widget with \`browser_navigate\` or widget interactions; use \`browser_open_tab\` to preserve its current page; use \`browser_open\` only when a browser widget does not exist, followed by \`widget_snapshot\`, \`widget_click\`, and related widget actions.
+- Browser blocks: reuse an existing widget with \`browser_navigate\` or widget interactions. \`browser_open_tab\` navigates in place and does not preserve its current page. Use \`browser_open\` when no browser exists, or with newSurface=true when another page must remain available, then inspect with \`widget_snapshot\` before interacting.
 - Widget pointer control: \`widget_mouse_move\`, \`widget_click\`, \`widget_drag\`, \`widget_long_press\`, \`widget_scroll_to\`, \`widget_type\`, and \`widget_press\`.
-- Sandbox VM: \`sandbox_start\`, \`sandbox_status\`, \`sandbox_screenshot\`, \`sandbox_mouse_move\`, \`sandbox_click\`, \`sandbox_type\`, \`sandbox_paste\`, \`sandbox_press\`, \`sandbox_scroll\`, \`sandbox_drag\`, and \`sandbox_stop\`.
+- Managed Linux desktop: use \`linux_desktop_list\`, then the generation-fenced \`linux_desktop_*\` tools after the user assigns agent access.
 - Terminals: \`terminal_open\`, \`terminal_scrollback\`. Use \`block_run_command\` to execute commands in new blocks.
 - Preview/file blocks: \`file_open\`, \`file_list\`, \`file_read\`, and \`file_info\`.
 - Badges: \`tab_set_badge\` and \`tab_clear_badge\` for block indicators.
@@ -723,7 +893,7 @@ server.tool(
 
 server.tool(
     "kron_computer_click",
-    "Click a native desktop app element by accessibility index or screenshot coordinates. When to use: native macOS apps outside KronTerm only; call kron_computer_get_app_state first and prefer elementIndex over coordinates. When NOT to use: KronTerm blocks (use widget_click) or the sandbox VM (use sandbox_click).",
+    "Click a native desktop app element by accessibility index or screenshot coordinates. When to use: native macOS apps outside KronTerm only; call kron_computer_get_app_state first and prefer elementIndex over coordinates. When NOT to use: KronTerm blocks (use widget_click) or the sandbox VM (use linux_desktop_click).",
     {
         app: z.string().min(1).describe("App name or bundle identifier"),
         elementIndex: z.string().optional().describe("Element index from kron_computer_get_app_state"),
@@ -759,7 +929,7 @@ server.tool(
 
 server.tool(
     "kron_computer_type_text",
-    "Type literal text into the focused field of a native desktop app. When to use: native macOS apps outside KronTerm only. When NOT to use: KronTerm blocks (use widget_type) or the sandbox VM (use sandbox_type).",
+    "Type literal text into the focused field of a native desktop app. When to use: native macOS apps outside KronTerm only. When NOT to use: KronTerm blocks (use widget_type) or the sandbox VM (use linux_desktop_type).",
     {
         app: z.string().min(1).describe("App name or bundle identifier"),
         text: z.string().describe("Text to type"),
@@ -1016,7 +1186,7 @@ const workspaceDirectionSchema = z.enum(["up", "right", "down", "left"]);
 
 server.tool(
     "workspace_snapshot",
-    "Read the authoritative active KronTerm presentation before operating. Returns widgets/tabs/canvas/OS mode, ordered live identities, focus and visibility, on-screen and world bounds, camera, OS scene/groups, split tree, and supported actions.",
+    "Read the authoritative active KronTerm presentation before operating. Returns widgets/tabs/canvas/OS mode, ordered live identities, focus and visibility, on-screen and world bounds, camera, OS scene/groups, split tree, supported actions, userview, and visualassessment. Read uservisible and clipping/occlusion hints to understand the human view; use screenshots to verify appearance.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_snapshot")(async () => {
@@ -1082,7 +1252,7 @@ server.tool(
 
 server.tool(
     "workspace_move_widget",
-    "Move a widget using the active presentation's semantics. In widgets/tabs provide targetBlockId plus before/after or a direction. In canvas provide world-space x/y from workspace_snapshot.",
+    "Move a widget using the active presentation's semantics. In widgets/tabs provide targetBlockId plus before/after or a direction. In canvas/OS provide world-space x/y from workspace_snapshot. For native HUD desktop windows use hud_move_island.",
     {
         blockId: z.string().min(1),
         targetBlockId: z.string().min(1).optional(),
@@ -1118,7 +1288,7 @@ server.tool(
 
 server.tool(
     "workspace_resize_widget",
-    "Resize a widget using the active presentation's semantics. In widgets provide proportional size 10-90. In canvas provide width/height and optionally x/y world coordinates. Tabs intentionally have no resize operation.",
+    "Resize a widget using the active presentation's semantics. In widgets provide proportional size 10-90. In canvas/OS provide width/height and optionally x/y world coordinates. Tabs intentionally have no resize operation; change presentation first. For native HUD desktop windows use hud_resize_island.",
     {
         blockId: z.string().min(1),
         size: z.number().min(10).max(90).optional(),
@@ -1226,6 +1396,79 @@ server.tool(
                     {
                         type: "text",
                         text: await wsh.workspaceSurfaceControl({ action: "os.view.set", presentation: view }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+const OSActionNames = [
+    "os.tabs.group",
+    "os.tabs.detach",
+    "os.tabs.reorder",
+    "os.app.launch",
+    "os.space.switch",
+    "os.resource.open",
+    "os.window.focus",
+    "os.window.move",
+    "os.window.resize",
+    "os.window.snap",
+    "os.window.minimize",
+    "os.window.restore",
+    "os.window.maximize",
+    "os.window.close",
+    "os.window.overview",
+    "os.window.place",
+    "os.window.arrange",
+    "os.view.set",
+] as const;
+
+server.tool(
+    "workspace_os_action",
+    [
+        "Run one typed KronTerm OS action on the live desktop (requires OS presentation; call workspace_snapshot first for block IDs and bounds).",
+        "os.app.launch: view (term|web|preview|hermes|...) or appId+appName for a native app.",
+        "os.window.focus|minimize|restore|maximize|close|overview: blockId.",
+        "os.window.move: blockId,x,y. os.window.resize: blockId,width,height.",
+        "os.window.snap: blockId,targetBlockId,side. os.space.switch: workspaceId.",
+        "os.resource.open: file. os.view.set: view=canvas|file.",
+        "os.window.place: blockId + position=left|right|top|bottom|fill|center (screen halves beside the desktop widgets).",
+        "os.window.arrange: position=tile|cascade for every open window.",
+        "os.window.close deletes the live session; confirm intent first.",
+    ].join(" "),
+    {
+        action: z.enum(OSActionNames),
+        index: z.number().int().nonnegative().optional(),
+        blockId: z.string().min(1).optional(),
+        targetBlockId: z.string().min(1).optional(),
+        side: z.enum(["left", "right"]).optional(),
+        position: z.enum(["left", "right", "top", "bottom", "fill", "center", "tile", "cascade"]).optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        width: z.number().positive().optional(),
+        height: z.number().positive().optional(),
+        view: z.string().min(1).optional(),
+        appId: z.string().min(1).optional(),
+        appName: z.string().min(1).optional(),
+        workspaceId: z.string().min(1).optional(),
+        file: z.string().min(1).optional(),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_os_action")(async (args) => {
+        try {
+            const presentation = args.action === "os.view.set" ? args.view : undefined;
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({
+                            ...args,
+                            view: args.action === "os.view.set" ? undefined : args.view,
+                            presentation,
+                        }),
                     },
                 ],
             };
@@ -1363,6 +1606,24 @@ server.tool(
                     },
                 ],
             };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_organize",
+    "Create a named persisted KronTerm workspace or rename an existing workspace. Use workspace_inventory to resolve workspaceId; use the layout and widget tools to organize its contents. Creation preserves the user's current workspace.",
+    {
+        action: z.enum(["create", "rename"]),
+        workspaceId: z.string().min(1).optional(),
+        name: z.string().trim().min(1).max(80),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_organize")(async (input) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.organizeWorkspace(input) }] };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }
@@ -1557,6 +1818,223 @@ server.tool(
                     },
                 ],
             };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+// ══════════════════════════════════════════════════════════════════════════
+// NATIVE HUD ISLANDS
+// ══════════════════════════════════════════════════════════════════════════
+
+server.tool(
+    "hud_set_mode",
+    "Set Coucou HUD placement while preserving the open workspace widgets and their sessions. hud hides the workspace behind Coucou, alongside keeps the workspace visible beside chat, and workspace exits HUD. Inspect workspace_snapshot afterward.",
+    { mode: z.enum(["hud", "alongside", "workspace"]) },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_set_mode")(async ({ mode }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({ action: "hud.mode", presentation: mode }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_show_widget",
+    "Select and expand an existing live or background widget inside the Dynamic Island HUD using its blockId from workspace_snapshot. Reuses its browser, terminal, native app stream, preview, or sandbox session. Does not create a second browser or restart a task.",
+    { blockId: z.string().trim().min(1) },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_show_widget")(async ({ blockId }) => {
+        try {
+            return {
+                content: [{ type: "text", text: await wsh.workspaceSurfaceControl({ action: "hud.open", blockId }) }],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_set_widget_background",
+    "Background or restore an existing widget without deleting its block or stopping its running task. background=true hides/folds the widget; false reveals it beside Coucou. Resolve the exact blockId from workspace_snapshot or hud_list_islands first.",
+    { blockId: z.string().trim().min(1), background: z.boolean() },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_set_widget_background")(async ({ blockId, background }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({
+                            action: background ? "hud.background" : "hud.restore",
+                            blockId,
+                        }),
+                    },
+                ],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_list_islands",
+    "Read the shared HUD widget inventory for the active KronTerm tab, including each live block identity, view, location, selection, owner route, readiness, and visibility. Detached islands also include desktop pixel bounds. Call this before moving, resizing, focusing, arranging, or closing islands.",
+    {},
+    workspaceReadAnnotations,
+    wrapActivity("hud_list_islands")(async () => {
+        try {
+            return { content: [{ type: "text", text: await wsh.hudListIslands() }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_open_island",
+    "Launch a browser, files, terminal, editor, existing file-change diff, sandbox, or system widget in HUD. Diff requires file, chatId and toolCallId from its existing change. Browser accepts an HTTP(S) URL.",
+    {
+        app: z.enum(["browser", "files", "terminal", "widget", "editor", "diff", "sandbox"]),
+        url: z.string().url().optional(),
+        file: z.string().optional(),
+        chatId: z.string().optional(),
+        toolCallId: z.string().optional(),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_open_island")(async ({ app, url, file, chatId, toolCallId }) => {
+        try {
+            if (url && app !== "browser") {
+                return {
+                    content: [{ type: "text", text: "Error: url is supported only for browser islands" }],
+                    isError: true,
+                };
+            }
+            return {
+                content: [{ type: "text", text: await wsh.hudOpenIsland(app, url, { file, chatId, toolCallId }) }],
+            };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_focus_island",
+    "Bring one native HUD island to the front and focus its live widget without revealing the hidden KronTerm window.",
+    { blockId: z.string().min(1) },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_focus_island")(async ({ blockId }) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.hudFocusIsland(blockId) }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_move_island",
+    "Move a native HUD island to absolute desktop work-area coordinates. Inspect hud_list_islands first and verify afterward.",
+    { blockId: z.string().min(1), x: z.number(), y: z.number() },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_move_island")(async ({ blockId, x, y }) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.hudMoveIsland(blockId, x, y) }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_resize_island",
+    "Resize a native HUD island in desktop pixels while preserving the live block session. Dimensions are clamped to the current display work area.",
+    {
+        blockId: z.string().min(1),
+        width: z.number().min(320).max(10_000),
+        height: z.number().min(220).max(10_000),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_resize_island")(async ({ blockId, width, height }) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.hudResizeIsland(blockId, width, height) }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_arrange_islands",
+    "Arrange every open HUD widget island on the current display as a cascade, fitted grid, horizontal strip, or vertical stack.",
+    { layout: z.enum(["cascade", "grid", "horizontal", "vertical"]) },
+    workspaceWriteAnnotations,
+    wrapActivity("hud_arrange_islands")(async ({ layout }) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.hudArrangeIslands(layout) }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "hud_close_island",
+    "Close a native HUD island and delete its detached live block. This is destructive; use hud_list_islands to resolve the exact block first.",
+    { blockId: z.string().min(1) },
+    workspaceDeleteAnnotations,
+    wrapActivity("hud_close_island")(async ({ blockId }) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.hudCloseIsland(blockId) }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+// ══════════════════════════════════════════════════════════════════════════
+// ACP SPECIALISTS
+// ══════════════════════════════════════════════════════════════════════════
+
+server.tool(
+    "acp_list_agents",
+    "List installed ACP specialist agents that KronTerm Agent can invoke. Prefer kronoscode for coding and repository work.",
+    {},
+    workspaceReadAnnotations,
+    wrapActivity("acp_list_agents")(async () => {
+        try {
+            return { content: [{ type: "text", text: await wsh.acpListAgents() }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "acp_run_agent",
+    "Run one bounded task with an installed ACP specialist. The child receives the active tab's scoped KronTerm MCP tools and shared skills. The parent Hermes agent keeps its built-in tools and must verify the child's self-reported result. Approval-required child actions fail closed instead of silently escalating privileges.",
+    {
+        backend: z.string().min(1).default("kronoscode"),
+        task: z.string().min(1).max(40_000),
+        timeoutSeconds: z.number().int().min(15).max(600).default(180),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("acp_run_agent")(async ({ backend, task, timeoutSeconds }) => {
+        try {
+            return { content: [{ type: "text", text: await wsh.acpRunAgent(backend, task, timeoutSeconds) }] };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }
@@ -1828,203 +2306,6 @@ server.tool(
         try {
             const result = await wsh.browserGetHtml(blockId, selector, inner, all);
             return { content: [{ type: "text", text: result }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-// ══════════════════════════════════════════════════════════════════════════
-// SANDBOX VM TOOLS
-// ══════════════════════════════════════════════════════════════════════════
-
-server.tool(
-    "sandbox_start",
-    "Start an isolated KronTerm sandbox desktop session.",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        mode: z.enum(["desktop", "background"]).optional().describe("Presentation mode (default: desktop)"),
-        browserUrl: z.string().url().optional().describe("Browser URL associated with background mode"),
-    },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    wrapActivity("sandbox_start")(async ({ sessionId, mode, browserUrl }) => {
-        try {
-            const result = await wsh.sandboxStart(sessionId, mode, browserUrl);
-            return { content: [{ type: "text", text: result }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_status",
-    "Get the status of an isolated KronTerm sandbox desktop session.",
-    { sessionId: z.string().optional().describe("Sandbox session ID (default: default)") },
-    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    wrapActivity("sandbox_status")(async ({ sessionId }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxStatus(sessionId) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_stop",
-    "Stop an isolated KronTerm sandbox desktop session.",
-    { sessionId: z.string().optional().describe("Sandbox session ID (default: default)") },
-    { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-    wrapActivity("sandbox_stop")(async ({ sessionId }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxStop(sessionId) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_screenshot",
-    "Capture the current isolated KronTerm sandbox desktop as a screenshot.",
-    { sessionId: z.string().optional().describe("Sandbox session ID (default: default)") },
-    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    wrapActivity("sandbox_screenshot")(async ({ sessionId }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxScreenshot(sessionId) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_mouse_move",
-    "Move the mouse pointer in the isolated KronTerm sandbox desktop. When to use: the sandbox VM desktop only. When NOT to use: KronTerm blocks (use widget_mouse_move) or native macOS apps (use kron_computer pointer tools).",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        x: z.number().int().describe("X coordinate"),
-        y: z.number().int().describe("Y coordinate"),
-    },
-    wrapActivity("sandbox_mouse_move")(async ({ sessionId = "default", x, y }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxMouseMove(sessionId, x, y) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_click",
-    "Click at sandbox coordinates or at the current sandbox pointer inside the isolated KronTerm sandbox desktop. When to use: the sandbox VM desktop only. Call sandbox_screenshot first and use coordinates from it. When NOT to use: KronTerm blocks (use widget_click) or native macOS apps (use kron_computer_click). Never reaches the host desktop.",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        x: z.number().int().optional().describe("Optional X coordinate"),
-        y: z.number().int().optional().describe("Optional Y coordinate"),
-        button: z.enum(["left", "middle", "right"]).optional().describe("Mouse button (default: left)"),
-        count: z.number().int().min(1).max(3).optional().describe("Click count (default: 1)"),
-    },
-    wrapActivity("sandbox_click")(async ({ sessionId = "default", x, y, button, count }) => {
-        if ((x == null) !== (y == null)) {
-            return { content: [{ type: "text", text: "Provide both x and y, or neither." }], isError: true };
-        }
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxClick(sessionId, x, y, button, count) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_type",
-    "Type text into the focused field of the isolated KronTerm sandbox desktop. When to use: the sandbox VM desktop only. When NOT to use: KronTerm blocks (use widget_type) or native macOS apps (use kron_computer_type_text).",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        text: z.string().describe("Text to type"),
-        delayMs: z.number().int().min(0).optional().describe("Delay between characters in milliseconds"),
-    },
-    wrapActivity("sandbox_type")(async ({ sessionId = "default", text, delayMs }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxType(sessionId, text, delayMs) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_paste",
-    "Paste text into an isolated KronTerm sandbox desktop.",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        text: z.string().describe("Text to paste"),
-    },
-    wrapActivity("sandbox_paste")(async ({ sessionId = "default", text }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxPaste(sessionId, text) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_press",
-    "Press one or more keys in an isolated KronTerm sandbox desktop.",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        keys: z.array(z.string().min(1)).min(1).describe("Keys or key combinations to press"),
-    },
-    wrapActivity("sandbox_press")(async ({ sessionId = "default", keys }) => {
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxPress(sessionId, keys) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_scroll",
-    "Scroll in an isolated KronTerm sandbox desktop.",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        direction: z.enum(["up", "down", "left", "right"]).optional().describe("Scroll direction (default: down)"),
-        count: z.number().int().min(1).optional().describe("Wheel increments (default: 1)"),
-        x: z.number().int().optional().describe("Optional X coordinate"),
-        y: z.number().int().optional().describe("Optional Y coordinate"),
-    },
-    wrapActivity("sandbox_scroll")(async ({ sessionId = "default", direction, count, x, y }) => {
-        if ((x == null) !== (y == null)) {
-            return { content: [{ type: "text", text: "Provide both x and y, or neither." }], isError: true };
-        }
-        try {
-            return { content: [{ type: "text", text: await wsh.sandboxScroll(sessionId, direction, count, x, y) }] };
-        } catch (err: any) {
-            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
-        }
-    })
-);
-
-server.tool(
-    "sandbox_drag",
-    "Drag between coordinates in an isolated KronTerm sandbox desktop.",
-    {
-        sessionId: z.string().optional().describe("Sandbox session ID (default: default)"),
-        startX: z.number().int().describe("Start X coordinate"),
-        startY: z.number().int().describe("Start Y coordinate"),
-        endX: z.number().int().describe("End X coordinate"),
-        endY: z.number().int().describe("End Y coordinate"),
-        button: z.enum(["left", "middle", "right"]).optional().describe("Mouse button (default: left)"),
-    },
-    wrapActivity("sandbox_drag")(async ({ sessionId = "default", startX, startY, endX, endY, button }) => {
-        try {
-            return {
-                content: [{ type: "text", text: await wsh.sandboxDrag(sessionId, startX, startY, endX, endY, button) }],
-            };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }
@@ -2749,7 +3030,7 @@ server.tool(
 
 server.tool(
     "widget_click",
-    "Click an element by ref (@e3) or at coordinates (x, y) within a KronTerm block. When to use: content inside a KronTerm block (forms, canvas, browser page). Prefer elementRef from widget_snapshot over coordinates. When NOT to use: the isolated sandbox VM (use sandbox_click) or native macOS apps (use kron_computer_click).",
+    "Click an element by ref (@e3) or at coordinates (x, y) within a KronTerm block. When to use: content inside a KronTerm block (forms, canvas, browser page). Prefer elementRef from widget_snapshot over coordinates. When NOT to use: the isolated sandbox VM (use linux_desktop_click) or native macOS apps (use kron_computer_click).",
     {
         blockId: z.string().describe("Block ID"),
         elementRef: z.string().optional().describe("Element ref from snapshot, e.g. @e3 (provide OR x/y)"),
@@ -2804,7 +3085,7 @@ server.tool(
 
 server.tool(
     "widget_mouse_move",
-    "Move the mouse over an element by ref (@e3) or to coordinates (x, y) within a KronTerm block. When to use: KronTerm block content only. When NOT to use: the sandbox VM (use sandbox_mouse_move) or native macOS apps (use kron_computer pointer tools). Alias for hover semantics, useful before click/drag.",
+    "Move the mouse over an element by ref (@e3) or to coordinates (x, y) within a KronTerm block. When to use: KronTerm block content only. When NOT to use: the sandbox VM (use linux_desktop_click) or native macOS apps (use kron_computer pointer tools). Alias for hover semantics, useful before click/drag.",
     {
         blockId: z.string().describe("Block ID"),
         elementRef: z.string().optional().describe("Element ref to move over"),
@@ -2838,7 +3119,7 @@ server.tool(
 
 server.tool(
     "widget_type",
-    "Type text into a focused KronTerm block. When to use: text entry inside a block. When NOT to use: the sandbox VM (use sandbox_type) or native macOS apps (use kron_computer_type_text). For special keys (Enter, Tab, etc.), use widget_press instead.",
+    "Type text into a focused KronTerm block. When to use: text entry inside a block. When NOT to use: the sandbox VM (use linux_desktop_type) or native macOS apps (use kron_computer_type_text). For special keys (Enter, Tab, etc.), use widget_press instead.",
     {
         blockId: z.string().describe("Block ID"),
         text: z.string().describe("Text to type"),
@@ -3955,6 +4236,127 @@ server.tool(
         }
     }
 );
+
+server.tool(
+    "workspace_inventory",
+    "Discover all workspace/tab/widget owners and the user's current viewing context. Use exact IDs to target background surfaces; geometry is only authoritative in a mounted workspace_snapshot.",
+    {},
+    workspaceReadAnnotations,
+    async () => jsonText(JSON.parse(await wsh.workspaceInventory()))
+);
+
+server.tool(
+    "tool_diagnostics",
+    "Read recent tool latency and outcomes without private widget content or credentials.",
+    {},
+    workspaceReadAnnotations,
+    async () => jsonText(toolExecutionDiagnostics())
+);
+
+async function discoverableManifest(): Promise<NativeToolManifestEntry[]> {
+    const capability = await wsh.getDiscoverySurfaceCapability();
+    return nativeToolManifest((name) => isToolAllowedBySurfaceCapability(name, capability));
+}
+
+server.tool(
+    "tool_search",
+    "Search enabled tools by name and description, with optional input schemas and read-only filtering. Discovery does not grant execution authority.",
+    {
+        query: z.string().max(500).default(""),
+        limit: z.number().int().min(1).max(100).default(20),
+        readOnly: z.boolean().optional(),
+        includeSchemas: z.boolean().default(false),
+    },
+    workspaceReadAnnotations,
+    async ({ query, limit, readOnly, includeSchemas }) =>
+        jsonText(searchTools(await discoverableManifest(), query, { limit, readOnly, includeSchemas }))
+);
+
+server.tool(
+    "app_workflow",
+    "Get a capability-checked recipe for inspecting apps, preparing drafts, or publishing authorized social content. Returns instructions only; performs no app actions.",
+    {
+        workflow: z.enum(["inspect", "draft", "publish"]),
+        surface: z.enum(["browser", "native"]).default("browser"),
+    },
+    workspaceReadAnnotations,
+    async ({ workflow, surface }) =>
+        jsonText(appWorkflow(workflow, surface, new Set((await discoverableManifest()).map((tool) => tool.name))))
+);
+
+server.tool(
+    "workflow_runs",
+    "Inspect durable workflow runs, immutable targets, progress, questions, evidence and saved workflows.",
+    {},
+    workspaceReadAnnotations,
+    async () => jsonText(JSON.parse(await wsh.workflowCommand({ action: "list" })))
+);
+server.tool(
+    "workflow_run",
+    "Create, inspect or manage a durable local workflow. Use save-definition to save an editable graph draft without running it or scheduling it. Graph nodes bind explicit widgets/computers; text ports preserve output dependencies. Engine values are KronosCode execution profiles, not separate Vy engines. Browser/code requires a repository and browser block; computer/VM requires an exact computer ID. Start/resume runs only when authorized. Upsert-schedule requires a saved workflow, conversation, timezone, interval, millisecond start timestamp and missed-run policy; the host must be running. Reconcile interrupted effects with the current question ID before retrying. Save verified successful runs for reuse, or instantiate a saved workflow with parameters. Updating/deleting/restoring definitions requires expectedVersion. Execution retains evidence.",
+    WorkflowCommandShape,
+    workspaceWriteAnnotations,
+    async (input) => jsonText(JSON.parse(await wsh.workflowCommand(input)))
+);
+
+// Apply one execution contract to the shared registry used by Hermes and MCP sessions.
+const executionRegistry = (server as any)._registeredTools;
+for (const [name, tool] of Object.entries(executionRegistry) as Array<[string, any]>) {
+    const handler = tool.handler;
+    const targetable =
+        /^(workspace_|widget_|block_|terminal_|browser_|file_|hud_)/.test(name) ||
+        ["trigger_widget", "list_widgets", "list_blocks"].includes(name);
+    if (targetable) {
+        const fields = {
+            targetWorkspaceId: z
+                .string()
+                .min(1)
+                .optional()
+                .describe("Explicit owning workspace; omitted uses the caller or widget owner."),
+            targetTabId: z
+                .string()
+                .min(1)
+                .optional()
+                .describe("Explicit owning tab; omitted resolves the widget owner or workspace active tab."),
+        };
+        if (tool.inputSchema?._zod) {
+            tool.inputSchema = z4.object({
+                ...tool.inputSchema.shape,
+                targetWorkspaceId: z4
+                    .string()
+                    .min(1)
+                    .optional()
+                    .describe(fields.targetWorkspaceId.description ?? "Owning workspace"),
+                targetTabId: z4
+                    .string()
+                    .min(1)
+                    .optional()
+                    .describe(fields.targetTabId.description ?? "Owning tab"),
+            });
+        } else {
+            tool.inputSchema = tool.inputSchema
+                ? isZodSchema(tool.inputSchema)
+                    ? tool.inputSchema.extend(fields)
+                    : z.object({ ...tool.inputSchema, ...fields })
+                : z.object(fields);
+        }
+    }
+    tool.handler = (args: Record<string, unknown>, extra: any) =>
+        executeTool(
+            name,
+            args,
+            tool.annotations?.readOnlyHint === true,
+            async () => {
+                await assertBackgroundWorkspaceToolAllowed(name, args);
+                return wsh.withWorkflowRun(name, args, () =>
+                    targetable
+                        ? wsh.withToolTarget(args, () => Promise.resolve(handler(args, extra)))
+                        : Promise.resolve(handler(args, extra))
+                );
+            },
+            extra?.signal
+        );
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // START SERVER

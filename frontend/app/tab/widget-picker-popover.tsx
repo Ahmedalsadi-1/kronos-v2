@@ -16,7 +16,7 @@ import {
     useInteractions,
 } from "@floating-ui/react";
 import { useAtomValue } from "jotai";
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 interface WidgetPickerPopoverProps {
     anchorElement: HTMLElement;
@@ -28,6 +28,8 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
     const env = useWaveEnv<WidgetsEnv>();
     const fullConfig = useAtomValue(env.atoms.fullConfigAtom);
     const workspaceId = useAtomValue(env.atoms.workspaceId);
+    const searchRef = useRef<HTMLInputElement>(null);
+    const [query, setQuery] = useState("");
     const widgets = useMemo(() => {
         const widgetsMap = fullConfig?.widgets ?? {};
         return Object.entries(widgetsMap)
@@ -40,6 +42,17 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
             .map(([key, widget]) => ({ key, widget }))
             .sort((a, b) => (a.widget["display:order"] ?? 0) - (b.widget["display:order"] ?? 0));
     }, [fullConfig?.widgets, workspaceId]);
+    const visibleWidgets = useMemo(() => {
+        const normalizedQuery = query.trim().toLowerCase();
+        if (!normalizedQuery) {
+            return widgets;
+        }
+        return widgets.filter(({ key, widget }) => {
+            const label = String(widget.label ?? "Widget");
+            const description = String(widget.description ?? "");
+            return `${key} ${label} ${description}`.toLowerCase().includes(normalizedQuery);
+        });
+    }, [query, widgets]);
     const { refs, floatingStyles, context } = useFloating({
         open,
         onOpenChange: (nextOpen) => {
@@ -57,6 +70,15 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
     const dismiss = useDismiss(context);
     const { getFloatingProps } = useInteractions([dismiss]);
 
+    useEffect(() => {
+        if (!open) {
+            setQuery("");
+            return;
+        }
+        const frame = window.requestAnimationFrame(() => searchRef.current?.focus());
+        return () => window.cancelAnimationFrame(frame);
+    }, [open]);
+
     if (!open) {
         return null;
     }
@@ -73,13 +95,30 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
             >
                 <div className="widget-picker-popover-header">
                     <span>Add widget</span>
-                    <span>{widgets.length} types</span>
+                    <span>
+                        {visibleWidgets.length === widgets.length
+                            ? `${widgets.length} types`
+                            : `${visibleWidgets.length} matches`}
+                    </span>
                 </div>
+                <label className="widget-picker-popover-search">
+                    <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                    <input
+                        ref={searchRef}
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Search widgets"
+                        aria-label="Search widgets"
+                    />
+                    {query && <kbd>Esc</kbd>}
+                </label>
                 {widgets.length === 0 ? (
                     <div className="widget-picker-popover-empty">No widgets are available for this workspace.</div>
+                ) : visibleWidgets.length === 0 ? (
+                    <div className="widget-picker-popover-empty">No matching widgets.</div>
                 ) : (
                     <div className="widget-picker-popover-grid">
-                        {widgets.map(({ key, widget }) => {
+                        {visibleWidgets.map(({ key, widget }) => {
                             const label = String(widget.label ?? "Widget");
                             return (
                                 <button

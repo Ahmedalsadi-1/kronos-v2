@@ -45,7 +45,8 @@ func (ws *WshServer) AppStreamStartCommand(ctx context.Context, data wshrpc.AppS
 			Error:  fmt.Sprintf("session %s is already running", data.SessionId),
 		}, fmt.Errorf("session %s already running", data.SessionId)
 	}
-	launchCmd := exec.CommandContext(ctx, "open", "-a", appName)
+	// -g keeps the streamed app in the background so KronTerm stays frontmost
+	launchCmd := exec.CommandContext(ctx, "open", "-g", "-a", appName)
 	if err := launchCmd.Start(); err != nil {
 		return wshrpc.AppStreamStartResponse{
 			Status: "error",

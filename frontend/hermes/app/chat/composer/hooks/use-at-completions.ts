@@ -10,8 +10,8 @@ import { normalize } from "@hermes/lib/text";
 import type { CompletionEntry, CompletionPayload } from "./use-live-completion-adapter";
 import { useLiveCompletionAdapter } from "./use-live-completion-adapter";
 
-const KIND_RE = /^@(file|folder|url|image|tool|git|widget):(.*)$/;
-const REF_STARTERS = new Set(["file", "folder", "url", "image", "tool", "git", "widget"]);
+const KIND_RE = /^@(file|folder|url|image|tool|git|widget|app):(.*)$/;
+const REF_STARTERS = new Set(["file", "folder", "url", "image", "tool", "git", "widget", "app"]);
 
 const STARTER_META: Record<string, string> = {
     file: "Attach a file reference",
@@ -21,6 +21,7 @@ const STARTER_META: Record<string, string> = {
     tool: "Attach a tool reference",
     git: "Attach git context",
     widget: "Mention a live KronTerm widget",
+    app: "Choose an app for Kron Computer Use",
 };
 
 function starterEntries(query: string): CompletionEntry[] {
@@ -52,6 +53,17 @@ export function liveSurfaceEntries(surfaces: HermesKronTermSurface[], query: str
             (entry) => !filter || normalize(`${entry.display} ${entry.meta} ${entry.text}`).includes(filter)
         );
     });
+}
+
+export function nativeAppEntries(apps: Array<{ id: string; name: string }>, query: string): CompletionEntry[] {
+    const filter = normalize(query.startsWith("app:") ? query.slice(4) : query);
+    return apps
+        .filter((app) => !filter || normalize(app.name).includes(filter))
+        .map((app) => ({
+            text: `@app:${encodeURIComponent(app.id)}|${encodeURIComponent(app.name)}`,
+            display: app.name,
+            meta: "Kron Computer Use · native app",
+        }));
 }
 
 function uniqueEntries(entries: CompletionEntry[]): CompletionEntry[] {
@@ -147,7 +159,13 @@ export function useAtCompletions(options: {
                 return { items, query };
             }
 
-            const surfaceItems = query.includes(":") ? [] : liveSurfaceEntries(surfaces ?? [], query);
+            const apps =
+                !query.includes(":") || query.startsWith("app:")
+                    ? await window.hermesDesktop?.krontermSurfaces?.apps?.().catch(() => [])
+                    : [];
+            const appItems = nativeAppEntries(apps ?? [], query);
+            if (query.startsWith("app:")) return { items: appItems, query };
+            const surfaceItems = query.includes(":") ? [] : [...appItems, ...liveSurfaceEntries(surfaces ?? [], query)];
 
             if (!gateway) {
                 return { items: uniqueEntries([...surfaceItems, ...starters]), query };
@@ -212,7 +230,10 @@ export function useAtCompletions(options: {
     // nothing when the answer is already in hand.
     const isCached = useCallback(
         (query: string) =>
-            query.includes(":") && !query.startsWith("widget:") && hasCachedPathCompletion(cacheKey(query)),
+            query.includes(":") &&
+            !query.startsWith("widget:") &&
+            !query.startsWith("app:") &&
+            hasCachedPathCompletion(cacheKey(query)),
         [cacheKey]
     );
 

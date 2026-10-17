@@ -34,7 +34,9 @@ export const workspaceCanvasComposerContextAtom = atom<WorkspaceCanvasComposerCo
 
 export function publishWorkspaceCanvasComposerSubmit(detail: WorkspaceCanvasComposerSubmit) {
     window.dispatchEvent(
-        new CustomEvent<WorkspaceCanvasComposerSubmit>(WorkspaceCanvasComposerSubmitEvent, { detail })
+        new CustomEvent<WorkspaceCanvasComposerSubmit>(WorkspaceCanvasComposerSubmitEvent, {
+            detail: { ...detail, contextids: [...detail.contextids] },
+        })
     );
 }
 

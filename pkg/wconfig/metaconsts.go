@@ -8,6 +8,7 @@ package wconfig
 const (
 	ConfigKey_AppClear                       = "app:*"
 	ConfigKey_AppGlobalHotkey                = "app:globalhotkey"
+	ConfigKey_AppNotchHotkey                 = "app:notchhotkey"
 	ConfigKey_AppDismissArchitectureWarning  = "app:dismissarchitecturewarning"
 	ConfigKey_AppDefaultNewBlock             = "app:defaultnewblock"
 	ConfigKey_AppShowOverlayBlockNums        = "app:showoverlayblocknums"
@@ -23,6 +24,9 @@ const (
 	ConfigKey_AppMinimalUi                   = "app:minimalui"
 
 	ConfigKey_FeatureWaveAppBuilder          = "feature:waveappbuilder"
+	ConfigKey_FeatureSystemLayer             = "feature:systemlayer"
+	ConfigKey_FeatureNativeSurfaceV2         = "feature:nativesurfacev2"
+	ConfigKey_FeatureAmbientOS               = "feature:ambientos"
 
 	ConfigKey_MCPClear                       = "mcp:*"
 	ConfigKey_MCPEnabled                     = "mcp:enabled"

@@ -161,6 +161,52 @@ export class PreviewModel implements ViewModel {
     markdownShowToc: PrimitiveAtom<boolean>;
 
     monacoRef: React.RefObject<MonacoTypes.editor.IStandaloneCodeEditor>;
+    fileDrafts = new Map<string, string>();
+    savedFileBuffers = new Map<string, string>();
+    navigationPending = false;
+    savePending: Promise<void>;
+
+    fileBufferKey(path: string, connection = globalStore.get(this.connectionImmediate)): string {
+        return JSON.stringify([connection, path]);
+    }
+
+    getFileDraft(path: string): string {
+        if (path === globalStore.get(this.metaFilePath)) return globalStore.get(this.newFileContent);
+        return this.fileDrafts.get(this.fileBufferKey(path));
+    }
+
+    hasFileDraft(path: string): boolean {
+        return this.getFileDraft(path) != null;
+    }
+
+    discardFileDraft(path: string) {
+        this.fileDrafts.delete(this.fileBufferKey(path));
+        if (path === globalStore.get(this.metaFilePath)) globalStore.set(this.newFileContent, null);
+    }
+
+    async navigateFile(updateMeta: MetaType) {
+        if (this.navigationPending) throw new Error("File navigation is already in progress");
+        const previousKey = this.fileBufferKey(globalStore.get(this.metaFilePath));
+        const draft = globalStore.get(this.newFileContent);
+        if (draft != null) this.fileDrafts.set(previousKey, draft);
+        else this.fileDrafts.delete(previousKey);
+        this.navigationPending = true;
+        const unsubscribe = globalStore.sub(this.newFileContent, () => {
+            if (this.fileBufferKey(globalStore.get(this.metaFilePath)) !== previousKey) return;
+            const latest = globalStore.get(this.newFileContent);
+            if (latest != null) this.fileDrafts.set(previousKey, latest);
+            else this.fileDrafts.delete(previousKey);
+        });
+        try {
+            await this.env.services.object.UpdateObjectMeta(WOS.makeORef("block", this.blockId), updateMeta);
+            const nextKey = this.fileBufferKey(updateMeta.file as string);
+            globalStore.set(this.fileContentSaved, this.savedFileBuffers.get(nextKey) ?? null);
+            globalStore.set(this.newFileContent, this.fileDrafts.get(nextKey) ?? null);
+        } finally {
+            unsubscribe();
+            this.navigationPending = false;
+        }
+    }
 
     showHiddenFiles: PrimitiveAtom<boolean>;
     refreshVersion: PrimitiveAtom<number>;
@@ -591,12 +637,7 @@ export class PreviewModel implements ViewModel {
         if (updateMeta == null) {
             return;
         }
-        const blockOref = WOS.makeORef("block", this.blockId);
-        await this.env.services.object.UpdateObjectMeta(blockOref, updateMeta);
-
-        // Clear the saved file buffers
-        globalStore.set(this.fileContentSaved, null);
-        globalStore.set(this.newFileContent, null);
+        await this.navigateFile(updateMeta);
     }
 
     async goParentDirectory({ fileInfo = null }: { fileInfo?: FileInfo | null }) {
@@ -627,8 +668,7 @@ export class PreviewModel implements ViewModel {
             return;
         }
         updateMeta.edit = false;
-        const blockOref = WOS.makeORef("block", this.blockId);
-        await this.env.services.object.UpdateObjectMeta(blockOref, updateMeta);
+        await this.navigateFile(updateMeta);
     }
 
     async goHistoryForward() {
@@ -639,8 +679,7 @@ export class PreviewModel implements ViewModel {
             return;
         }
         updateMeta.edit = false;
-        const blockOref = WOS.makeORef("block", this.blockId);
-        await this.env.services.object.UpdateObjectMeta(blockOref, updateMeta);
+        await this.navigateFile(updateMeta);
     }
 
     async setEditMode(edit: boolean) {
@@ -649,32 +688,35 @@ export class PreviewModel implements ViewModel {
         await this.env.services.object.UpdateObjectMeta(blockOref, { ...blockMeta, edit });
     }
 
-    async handleFileSave() {
+    handleFileSave(): Promise<void> {
+        if (this.savePending) return this.savePending;
+        this.savePending = this.saveCurrentFile().finally(() => {
+            this.savePending = null;
+        });
+        return this.savePending;
+    }
+
+    async saveCurrentFile() {
+        const requestedPath = globalStore.get(this.metaFilePath);
+        const connection = globalStore.get(this.connectionImmediate);
+        const key = this.fileBufferKey(requestedPath, connection);
+        const content = globalStore.get(this.newFileContent);
+        if (content == null) return;
         const filePath = await globalStore.get(this.statFilePath);
-        if (filePath == null) {
-            return;
-        }
-        const newFileContent = globalStore.get(this.newFileContent);
-        if (newFileContent == null) {
-            console.log("not saving file, newFileContent is null");
-            return;
-        }
+        if (filePath == null) return;
         try {
             await this.env.rpc.FileWriteCommand(TabRpcClient, {
-                info: {
-                    path: await this.formatRemoteUri(filePath, globalStore.get),
-                },
-                data64: stringToBase64(newFileContent),
+                info: { path: formatRemoteUri(filePath, connection) },
+                data64: stringToBase64(content),
             });
-            globalStore.set(this.fileContent, newFileContent);
-            globalStore.set(this.newFileContent, null);
-            console.log("saved file", filePath);
+            this.savedFileBuffers.set(key, content);
+            if (this.fileDrafts.get(key) === content) this.fileDrafts.delete(key);
+            if (this.fileBufferKey(globalStore.get(this.metaFilePath)) === key) {
+                globalStore.set(this.fileContentSaved, content);
+                if (globalStore.get(this.newFileContent) === content) globalStore.set(this.newFileContent, null);
+            }
         } catch (e) {
-            const errorStatus: ErrorMsg = {
-                status: "Save Failed",
-                text: `${e}`,
-            };
-            globalStore.set(this.errorMsgAtom, errorStatus);
+            globalStore.set(this.errorMsgAtom, { status: "Save Failed", text: `${e}` });
         }
     }
 
@@ -691,7 +733,7 @@ export class PreviewModel implements ViewModel {
             return true;
         }
         try {
-            this.goHistory(filePath);
+            await this.goHistory(filePath);
             refocusNode(this.blockId);
         } catch (e) {
             globalStore.set(this.openFileError, e.message);

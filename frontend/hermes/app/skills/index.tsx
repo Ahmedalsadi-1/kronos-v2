@@ -59,6 +59,7 @@ import { ToolsetConfigPanel } from '../settings/toolset-config-panel'
 import type { SetStatusbarItemGroup } from '../shell/statusbar-controls'
 
 import { EmbeddedHubPicker } from './embedded-hub-picker'
+import { WorkflowPacksPicker } from './workflow-packs'
 import { McpTab } from './mcp-tab'
 import { $skillsSortDesc, $toolsetsSortDesc } from './store'
 
@@ -745,6 +746,7 @@ export function SkillsView({
                   </MasterDetail>
                 )}
               </div>
+              <WorkflowPacksPicker installedNames={installedSkillNames} profile={scopeProfile} key={`workflow-packs-${scopeKey}`} />
               <EmbeddedHubPicker
                 installedNames={installedSkillNames}
                 key={`picker-${scopeKey}`}

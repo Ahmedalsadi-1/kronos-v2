@@ -2,7 +2,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { createInterface, type Interface } from "node:readline";
+import { ComputerUseLatency } from "./computer-use-latency.js";
 
 type JsonRpcResponse = {
     id?: number;
@@ -13,9 +15,7 @@ type JsonRpcResponse = {
     };
 };
 
-export type KronComputerUseContent =
-    | { type: "text"; text: string }
-    | { type: "image"; data: string; mimeType: string };
+export type KronComputerUseContent = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
 
 export type KronComputerUseToolResult = {
     content: KronComputerUseContent[];
@@ -28,7 +28,36 @@ type PendingRequest = {
     timer: NodeJS.Timeout;
 };
 
-const RequestTimeoutMs = 30_000;
+export type KronComputerUseCall = {
+    name: string;
+    args?: Record<string, unknown>;
+};
+
+const RequestTimeoutMs = 120_000;
+const SequenceActions = new Set([
+    "click",
+    "type_text",
+    "press_key",
+    "scroll",
+    "drag",
+    "set_value",
+    "perform_secondary_action",
+]);
+
+export function validateComputerUseSequence(calls: KronComputerUseCall[]): void {
+    if (!Array.isArray(calls) || calls.length < 1 || calls.length > 13)
+        throw new Error("Use between 1 and 12 app actions and an optional final observation");
+    const app = calls[0]?.args?.app;
+    if (typeof app !== "string" || !app.trim()) throw new Error("A sequence requires an explicit app target");
+    let actions = 0;
+    for (const [index, call] of calls.entries()) {
+        if (!call || call.args?.app !== app) throw new Error("Every sequence action must target the same app");
+        if (call.name === "get_app_state" && index === calls.length - 1) continue;
+        if (!SequenceActions.has(call.name)) throw new Error("Unsupported sequence action");
+        actions++;
+    }
+    if (!actions || actions > 12) throw new Error("Use between 1 and 12 app actions");
+}
 
 export class KronComputerUseClient {
     private child: ChildProcessWithoutNullStreams | null = null;
@@ -37,6 +66,9 @@ export class KronComputerUseClient {
     private pending = new Map<number, PendingRequest>();
     private startPromise: Promise<void> | null = null;
     private stderrTail = "";
+    private operations: Promise<void> = Promise.resolve();
+    private latency = new ComputerUseLatency();
+    private generation = 0;
 
     diagnostics(): Record<string, unknown> {
         return {
@@ -45,13 +77,105 @@ export class KronComputerUseClient {
             running: this.child != null && !this.child.killed,
             visualCursor: process.env.OPEN_COMPUTER_USE_VISUAL_CURSOR !== "0",
             platform: process.platform,
+            latency: this.latency.snapshot(),
         };
     }
 
     async callTool(name: string, args: Record<string, unknown> = {}): Promise<KronComputerUseToolResult> {
-        await this.ensureStarted();
-        const result = await this.request("tools/call", { name, arguments: args });
-        return result as KronComputerUseToolResult;
+        const boundArgs = structuredClone(args);
+        const generation = this.generation;
+        return this.serialize(async () => {
+            const phase = this.child && !this.child.killed && !this.startPromise ? "call:warm" : "call:cold";
+            const started = performance.now();
+            let failed = false;
+            try {
+                await this.ensureStarted();
+                this.assertGeneration(generation);
+                const result = (await this.request("tools/call", {
+                    name,
+                    arguments: args,
+                })) as KronComputerUseToolResult;
+                failed = result.isError === true;
+                return result;
+            } catch (error) {
+                failed = true;
+                throw error;
+            } finally {
+                this.latency.record(phase, performance.now() - started, failed ? "error" : "success");
+            }
+        });
+    }
+
+    async warm(): Promise<void> {
+        const started = performance.now();
+        try {
+            await this.ensureStarted();
+            this.latency.record("warm", performance.now() - started);
+        } catch (error) {
+            this.latency.record("warm", performance.now() - started, "error");
+            throw error;
+        }
+    }
+
+    async callSequence(calls: KronComputerUseCall[]): Promise<KronComputerUseToolResult[]> {
+        validateComputerUseSequence(calls);
+        const boundCalls = structuredClone(calls);
+        const generation = this.generation;
+        return this.serialize(async () => {
+            const started = performance.now();
+            let failed = false;
+            try {
+                await this.ensureStarted();
+                const results: KronComputerUseToolResult[] = [];
+                for (const call of boundCalls) {
+                    this.assertGeneration(generation);
+                    const result = (await this.request("tools/call", {
+                        name: call.name,
+                        arguments: call.args ?? {},
+                    })) as KronComputerUseToolResult;
+                    results.push(result);
+                    if (result.isError) {
+                        failed = true;
+                        const observation = boundCalls.at(-1);
+                        if (call !== observation && observation?.name === "get_app_state") {
+                            this.assertGeneration(generation);
+                            results.push(
+                                (await this.request("tools/call", {
+                                    name: observation.name,
+                                    arguments: observation.args ?? {},
+                                })) as KronComputerUseToolResult
+                            );
+                        }
+                        break;
+                    }
+                }
+                return results;
+            } catch (error) {
+                failed = true;
+                throw error;
+            } finally {
+                this.latency.record("sequence", performance.now() - started, failed ? "error" : "success");
+            }
+        });
+    }
+
+    private assertGeneration(generation: number): void {
+        if (generation !== this.generation) throw new Error("kron-computer-use runtime stopped");
+    }
+
+    private serialize<T>(operation: () => Promise<T>): Promise<T> {
+        const generation = this.generation;
+        const queuedAt = performance.now();
+        const result = this.operations.then(() => {
+            this.assertGeneration(generation);
+            this.latency.record("queue", performance.now() - queuedAt);
+            return operation();
+        });
+        this.operations = result.then(
+            () => undefined,
+            () => undefined
+        );
+        return result;
     }
 
     async turnEnded(): Promise<void> {
@@ -62,6 +186,7 @@ export class KronComputerUseClient {
     }
 
     close(): void {
+        this.generation++;
         this.stdout?.close();
         this.stdout = null;
         this.child?.kill();
@@ -71,16 +196,26 @@ export class KronComputerUseClient {
     }
 
     private async ensureStarted(): Promise<void> {
-        if (this.child && !this.child.killed) {
+        if (!this.startPromise && this.child && !this.child.killed) {
             return;
         }
         if (!this.startPromise) {
-            this.startPromise = this.start();
+            const started = performance.now();
+            this.startPromise = this.start().then(
+                () => {
+                    this.latency.record("startup", performance.now() - started);
+                },
+                (error) => {
+                    this.latency.record("startup", performance.now() - started, "error");
+                    throw error;
+                }
+            );
         }
+        const startup = this.startPromise;
         try {
-            await this.startPromise;
+            await startup;
         } finally {
-            this.startPromise = null;
+            if (this.startPromise === startup) this.startPromise = null;
         }
     }
 
@@ -95,31 +230,44 @@ export class KronComputerUseClient {
             stdio: ["pipe", "pipe", "pipe"],
         });
         this.child = child;
+        child.stdin.on("error", (error) => {
+            if (this.child !== child) return;
+            child.kill();
+            this.handleExit(error);
+        });
         this.stdout = createInterface({ input: child.stdout });
         this.stdout.on("line", (line) => this.handleLine(line));
         child.stderr.on("data", (chunk: Buffer) => {
+            if (this.child !== child) return;
             this.stderrTail = (this.stderrTail + chunk.toString("utf8")).slice(-4000);
         });
         child.once("error", (error) => {
-            this.handleExit(new Error(`unable to start kron-computer-use: ${error.message}`));
+            if (this.child === child) this.handleExit(new Error(`unable to start kron-computer-use: ${error.message}`));
         });
         child.once("exit", (code, signal) => {
+            if (this.child !== child) return;
             const detail = this.stderrTail.trim();
             this.handleExit(
-                new Error(
-                    `kron-computer-use exited (${signal ?? code ?? "unknown"})${detail ? `: ${detail}` : ""}`
-                )
+                new Error(`kron-computer-use exited (${signal ?? code ?? "unknown"})${detail ? `: ${detail}` : ""}`)
             );
         });
-        await this.request("initialize", {
-            protocolVersion: "2025-03-26",
-            capabilities: {},
-            clientInfo: {
-                name: "kron-term",
-                version: "1.0.0",
-            },
-        });
-        this.notify("notifications/initialized", {});
+        try {
+            await this.request("initialize", {
+                protocolVersion: "2025-03-26",
+                capabilities: {},
+                clientInfo: {
+                    name: "kron-term",
+                    version: "1.0.0",
+                },
+            });
+            this.notify("notifications/initialized", {});
+        } catch (error) {
+            if (this.child === child) {
+                child.kill();
+                this.handleExit(error instanceof Error ? error : new Error(String(error)));
+            }
+            throw error;
+        }
     }
 
     private resolveBinary(): string {
@@ -141,13 +289,41 @@ export class KronComputerUseClient {
             return Promise.reject(new Error("kron-computer-use runtime is not running"));
         }
         const id = this.nextRequestId++;
+        const started = performance.now();
+        const operation = method === "tools/call" && typeof params.name === "string" ? params.name : method;
+
         return new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (outcome: "success" | "error" | "timeout") => {
+                if (settled) return false;
+                settled = true;
+                this.latency.record(operation, performance.now() - started, outcome);
+                return true;
+            };
             const timer = setTimeout(() => {
                 this.pending.delete(id);
-                reject(new Error(`kron-computer-use ${method} timed out`));
+                if (finish("timeout")) reject(new Error(`kron-computer-use ${method} timed out`));
             }, RequestTimeoutMs);
-            this.pending.set(id, { resolve, reject, timer });
-            child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+            const failure = (error: Error) => {
+                clearTimeout(timer);
+                this.pending.delete(id);
+                if (finish("error")) reject(error);
+            };
+            this.pending.set(id, {
+                resolve: (value) => {
+                    const isError = (value as KronComputerUseToolResult)?.isError === true;
+                    if (finish(isError ? "error" : "success")) resolve(value);
+                },
+                reject: failure,
+                timer,
+            });
+            try {
+                child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`, (error) => {
+                    if (error) failure(error);
+                });
+            } catch (error) {
+                failure(error instanceof Error ? error : new Error(String(error)));
+            }
         });
     }
 

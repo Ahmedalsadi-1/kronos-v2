@@ -5,18 +5,23 @@ import {
     publishWorkspaceCanvasComposerSubmit,
     type WorkspaceCanvasComposerContext,
 } from "@/app/tab/workspace-canvas-context";
-import { getApi } from "@/store/global";
+import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
 import {
     HermesComposerSubmittedEvent,
     type HermesComposerSubmitted,
 } from "@hermes/app/chat/composer/hooks/use-composer-submit";
 import { markKronTermWidgetHost } from "@hermes/lib/kronterm-host";
 import { ComposerAttachmentUserRemovedEvent, mainComposerScope, type ComposerAttachment } from "@hermes/store/composer";
-import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { makeCanvasAttachments, mergeCanvasAttachments } from "./hermes-canvas-context";
-import { configureHermesDesktopShim, installHermesDesktopShim } from "./hermes-desktop-shim";
+import { installHermesDesktopShim } from "./hermes-desktop-shim";
+import { HermesHudOverlay } from "./hermes-hud-overlay";
 import { HermesHudStreamCard } from "./hermes-hud-stream-card";
 import { hermesSurfaceController } from "./hermes-surface-controller";
+import { useKrontermHudMode } from "./kronterm-hud-mode";
+import { KrontermHudModeCard } from "./kronterm-hud-mode-card";
+import { KrontermVoiceHudCard } from "./kronterm-voice-hud-card";
+import { HermesConnectionState, useHermesConnection } from "./use-hermes-connection";
 
 const LazyHermesApp = lazy(async () => ({ default: (await import("./hermes-app")).HermesApp }));
 
@@ -29,6 +34,10 @@ function ensureShim(): void {
     }
     shimInstalled = true;
     installHermesDesktopShim({ baseUrl: "http://127.0.0.1:9119" });
+}
+
+function requestPreferredKronosSurface(): void {
+    hermesSurfaceController.requestOpenHud();
 }
 
 export function HermesHudHost({
@@ -47,7 +56,8 @@ export function HermesHudHost({
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
-    const [connectionReady, setConnectionReady] = useState(false);
+    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, surface.presentation === "hud");
+    const krontermHudMode = useKrontermHudMode();
     const previousAutoOpenRef = useRef(false);
     const managedAttachmentsRef = useRef<ComposerAttachment[]>([]);
     const dismissedIdsRef = useRef(new Set<string>());
@@ -62,7 +72,7 @@ export function HermesHudHost({
             !previousAutoOpenRef.current &&
             hermesSurfaceController.getSnapshot().presentation === "closed"
         ) {
-            hermesSurfaceController.requestOpenHud();
+            requestPreferredKronosSurface();
         }
         previousAutoOpenRef.current = autoOpen;
     }, [autoOpen, surface.presentation]);
@@ -135,43 +145,33 @@ export function HermesHudHost({
     }, []);
 
     useEffect(() => {
+        if (surface.presentation !== "hud") {
+            return;
+        }
+        const exitHud = (event: KeyboardEvent) => {
+            if (event.key !== "Escape" || event.defaultPrevented) {
+                return;
+            }
+            kronTermHudController.setActive(false);
+            hermesSurfaceController.dismiss();
+        };
+        window.addEventListener("keydown", exitHud);
+        return () => window.removeEventListener("keydown", exitHud);
+    }, [surface.presentation]);
+
+    useEffect(() => {
         const toggleFromShortcut = (event: KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "h") {
                 event.preventDefault();
                 event.stopPropagation();
-                const presentation = hermesSurfaceController.getSnapshot().presentation;
-                if (presentation === "hud") {
-                    void hermesSurfaceController
-                        .expandToWidget()
-                        .catch((error) => console.warn("Kronos HUD could not expand", error));
-                } else {
-                    hermesSurfaceController.requestOpenHud();
-                }
+                const active = kronTermHudController.toggle();
+                if (active) hermesSurfaceController.requestOpenHud();
+                else hermesSurfaceController.dismiss();
             }
         };
         window.addEventListener("keydown", toggleFromShortcut, true);
         return () => window.removeEventListener("keydown", toggleFromShortcut, true);
     }, []);
-
-    useEffect(() => {
-        if (surface.presentation !== "hud" || !tabId) {
-            setConnectionReady(false);
-            return;
-        }
-        let active = true;
-        const applyConnection = (connection: HermesConnectionDescriptor) => {
-            if (active) {
-                configureHermesDesktopShim({ baseUrl: connection.baseUrl, token: connection.token });
-                setConnectionReady(true);
-            }
-        };
-        const unsubscribe = getApi().onHermesConnection(applyConnection);
-        void getApi().hermesGetConnection({ tabId }).then(applyConnection).catch(console.warn);
-        return () => {
-            active = false;
-            unsubscribe();
-        };
-    }, [surface.presentation, tabId]);
 
     if (surface.presentation !== "hud") {
         return null;
@@ -180,10 +180,15 @@ export function HermesHudHost({
     const { x, y, width, height } = surface.geometry;
 
     return (
-        <>
-            <HermesHudStreamCard hudGeometry={{ x, y, width }} />
+        <HermesHudOverlay>
+            {krontermHudMode.active ? (
+                <KrontermHudModeCard hudGeometry={{ x, y, width }} mode={krontermHudMode} />
+            ) : (
+                <HermesHudStreamCard hudGeometry={{ x, y, width }} />
+            )}
+            <KrontermVoiceHudCard onClose={() => undefined} />
             <div
-                aria-label="Kronos HUD"
+                aria-label="KronTerm Agent HUD"
                 className="pointer-events-none fixed z-[115] overflow-visible"
                 data-kronterm-hermes-hud=""
                 style={{ left: x, top: y, width, height }}
@@ -191,7 +196,7 @@ export function HermesHudHost({
                 {connectionReady ? (
                     <Suspense
                         fallback={
-                            <div className="grid h-full place-items-center rounded-xl border border-white/10 bg-[#080a0df2] text-xs text-white/55 shadow-2xl backdrop-blur-xl">
+                            <div className="pointer-events-auto grid h-full place-items-center rounded-xl border border-white/10 bg-[#080a0df2] text-xs text-white/55 shadow-2xl backdrop-blur-xl">
                                 Loading Kronos…
                             </div>
                         }
@@ -199,12 +204,12 @@ export function HermesHudHost({
                         <LazyHermesApp hudMode />
                     </Suspense>
                 ) : (
-                    <div className="grid h-full place-items-center rounded-xl border border-white/10 bg-[#080a0df2] text-xs text-white/55 shadow-2xl backdrop-blur-xl">
-                        Starting Kronos…
+                    <div className="pointer-events-auto grid h-full place-items-center rounded-xl border border-white/10 bg-[#080a0df2] text-xs text-white/55 shadow-2xl backdrop-blur-xl">
+                        <HermesConnectionState error={error} retry={retry} />
                     </div>
                 )}
             </div>
-        </>
+        </HermesHudOverlay>
     );
 }
 
@@ -214,65 +219,32 @@ export function HermesPanelHost({ tabId }: { tabId: string }) {
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
-    const [connectionReady, setConnectionReady] = useState(false);
+    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, surface.presentation === "panel");
     ensureShim();
 
-    useEffect(() => {
-        if (surface.presentation !== "panel" || !tabId) {
-            setConnectionReady(false);
-            return;
-        }
-        let active = true;
-        const applyConnection = (connection: HermesConnectionDescriptor) => {
-            if (!active) {
-                return;
-            }
-            configureHermesDesktopShim({ baseUrl: connection.baseUrl, token: connection.token });
-            setConnectionReady(true);
-        };
-        const unsubscribe = getApi().onHermesConnection(applyConnection);
-        void getApi().hermesGetConnection({ tabId }).then(applyConnection).catch(console.warn);
-        return () => {
-            active = false;
-            unsubscribe();
-        };
-    }, [surface.presentation, tabId]);
-
     return (
-        <section className="hermes-workspace-panel" aria-label="Kronos side panel">
-            <div className="hermes-workspace-panel-actions">
+        <section
+            className="hermes-workspace-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+            aria-label="Kronos side panel"
+        >
+            <div className="hermes-workspace-panel-actions flex shrink-0 justify-end p-2">
                 <button
                     type="button"
                     onClick={() => hermesSurfaceController.requestOpenHud()}
                     aria-label="Move Kronos to HUD"
                     title="Move to HUD"
+                    className="cursor-pointer"
                 >
                     <i className="fa-solid fa-window-restore" aria-hidden="true" />
                 </button>
-                <button
-                    type="button"
-                    onClick={() => void hermesSurfaceController.expandToWidget()}
-                    aria-label="Open Kronos as a widget"
-                    title="Open as widget"
-                >
-                    <i className="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true" />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => hermesSurfaceController.dismiss()}
-                    aria-label="Close Kronos side panel"
-                    title="Close panel"
-                >
-                    <i className="fa-solid fa-xmark" aria-hidden="true" />
-                </button>
             </div>
-            <div className="hermes-workspace-panel-content">
+            <div className="hermes-workspace-panel-content min-h-0 min-w-0 flex-1 overflow-hidden">
                 {connectionReady ? (
                     <Suspense fallback={<div className="hermes-workspace-panel-state">Loading Kronos…</div>}>
                         <LazyHermesApp panelMode />
                     </Suspense>
                 ) : (
-                    <div className="hermes-workspace-panel-state">Starting Kronos…</div>
+                    <HermesConnectionState error={error} retry={retry} />
                 )}
             </div>
         </section>

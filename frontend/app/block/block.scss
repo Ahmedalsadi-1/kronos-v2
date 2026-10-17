@@ -174,50 +174,11 @@
 
         &.agent-widget-active {
             position: relative;
-            // GPU layer promotion for smooth animation
-            transform: translateZ(0);
-            will-change: box-shadow;
-            // Rainbow edge-glow: deep at perimeter, fades toward center
-            // 5 layers: inset edge line + inset depth + near/medium/far spread
-            box-shadow:
-                inset 0 0 0 1.5px hsl(0, 85%, 78%),
-                inset 0 0 28px hsla(0, 85%, 55%, 0.1),
-                0 0 6px hsla(0, 85%, 70%, 0.65),
-                0 0 28px hsla(0, 85%, 55%, 0.4),
-                0 0 80px hsla(0, 85%, 50%, 0.12);
-            animation: agent-widget-glow-pulse 4s linear infinite;
+            box-shadow: inset 0 0 0 1px rgb(from var(--accent-color) r g b / 0.72);
         }
 
         &.agent-widget-active::before {
-            content: "";
-            position: absolute;
-            inset: -2px;
-            border-radius: calc(var(--block-border-radius) + 2px);
-            will-change: background-position;
-            // Soft white highlight scan that sweeps across the rainbow glow
-            background: linear-gradient(
-                90deg,
-                transparent 0%,
-                transparent 25%,
-                rgba(255, 255, 255, 0.2) 43%,
-                rgba(255, 255, 255, 0.35) 50%,
-                rgba(255, 255, 255, 0.2) 57%,
-                transparent 75%,
-                transparent 100%
-            );
-            background-size: 200% 100%;
-            animation: agent-widget-scan 3s ease-in-out infinite;
-            z-index: -1;
-            pointer-events: none;
-            mask:
-                linear-gradient(#000 0 0) content-box,
-                linear-gradient(#000 0 0);
-            mask-composite: exclude;
-            -webkit-mask:
-                linear-gradient(#000 0 0) content-box,
-                linear-gradient(#000 0 0);
-            -webkit-mask-composite: xor;
-            padding: 1.5px;
+            content: none;
         }
 
         .agent-widget-overlay {
@@ -227,85 +188,6 @@
             overflow: hidden;
             border-radius: var(--block-border-radius);
             pointer-events: none;
-        }
-
-        .agent-pet-cursor {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 23px;
-            height: 23px;
-            border: 1px solid rgba(232, 196, 124, 0.7);
-            border-radius: 50% 50% 50% 5px;
-            background: rgba(6, 10, 20, 0.92);
-            box-shadow: 0 0 15px rgba(232, 196, 124, 0.45);
-            color: #e8c47c;
-            font-size: 11px;
-            font-weight: 700;
-            transform: translate(-5px, -5px) rotate(-22deg);
-
-            span {
-                display: block;
-                transform: rotate(22deg);
-                text-align: center;
-                line-height: 21px;
-            }
-        }
-
-        .agent-typing-indicator {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            display: flex;
-            gap: 4px;
-            padding: 7px 9px;
-            border-radius: 12px;
-            background: rgba(6, 10, 20, 0.86);
-
-            span {
-                width: 5px;
-                height: 5px;
-                border-radius: 50%;
-                background: #e8c47c;
-                animation: agent-widget-typing 0.8s ease-in-out infinite;
-            }
-
-            span:nth-child(2) {
-                animation-delay: 0.13s;
-            }
-
-            span:nth-child(3) {
-                animation-delay: 0.26s;
-            }
-        }
-
-        .agent-capture-preview {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            width: min(248px, calc(100% - 24px));
-            margin: 0;
-            overflow: hidden;
-            border: 1px solid rgba(232, 196, 124, 0.45);
-            border-radius: 11px;
-            background: rgba(6, 10, 20, 0.94);
-            box-shadow: 0 0 20px rgba(232, 196, 124, 0.25);
-
-            figcaption {
-                padding: 6px 8px;
-                color: #e8c47c;
-                font-size: 10px;
-                font-weight: 600;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-            }
-
-            img {
-                display: block;
-                width: 100%;
-                max-height: 160px;
-                object-fit: cover;
-            }
         }
 
         .block-frame-default-inner {
@@ -917,60 +799,6 @@
     }
 }
 
-@keyframes agent-widget-glow-pulse {
-    // Rainbow cycle: 8 stops (every 45deg) — smooth enough for glow, half the keyframes
-    @for $i from 0 through 7 {
-        $hue: $i * 45;
-        $pct: calc($i * 100% / 8);
-        #{$pct} {
-            box-shadow:
-                inset 0 0 0 1.5px hsl($hue, 85%, 78%),
-                inset 0 0 28px hsla($hue, 85%, 55%, 0.1),
-                0 0 6px hsla($hue, 85%, 70%, 0.65),
-                0 0 28px hsla($hue, 85%, 55%, 0.4),
-                0 0 80px hsla($hue, 85%, 50%, 0.12);
-        }
-    }
-    100% {
-        box-shadow:
-            inset 0 0 0 1.5px hsl(360, 85%, 78%),
-            inset 0 0 28px hsla(360, 85%, 55%, 0.1),
-            0 0 6px hsla(360, 85%, 70%, 0.65),
-            0 0 28px hsla(360, 85%, 55%, 0.4),
-            0 0 80px hsla(360, 85%, 50%, 0.12);
-    }
-}
-
-@keyframes agent-widget-scan {
-    0% {
-        background-position: 200% 0;
-        opacity: 0.15;
-    }
-    25% {
-        opacity: 0.7;
-    }
-    50% {
-        background-position: -200% 0;
-        opacity: 0.15;
-    }
-    100% {
-        background-position: -200% 0;
-        opacity: 0;
-    }
-}
-
-@keyframes agent-widget-typing {
-    0%,
-    100% {
-        opacity: 0.4;
-        transform: translateY(0);
-    }
-    40% {
-        opacity: 1;
-        transform: translateY(-3px);
-    }
-}
-
 // KronosCode context ribbon
 .kron-context-ribbon {
     font-family: var(--font-default);
@@ -981,18 +809,8 @@
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: var(--color-saturn, rgb(232, 196, 124));
-    animation: kron-pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes kron-pulse {
-    0%,
-    100% {
-        opacity: 0.3;
-    }
-    50% {
-        opacity: 1;
-    }
+    background: var(--accent-color);
+    opacity: 0.8;
 }
 
 // Agent action button

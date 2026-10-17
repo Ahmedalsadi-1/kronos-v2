@@ -1020,3 +1020,22 @@ input:checked + .pet-switch-slider::before {
         transition-duration: 0.01ms !important;
     }
 }
+
+.voice-speaking #pet-sprite {
+    animation: pet-speech-pulse 220ms ease-in-out infinite alternate;
+    transform-origin: bottom center;
+}
+
+.voice-listening .sprite-shell::after {
+    opacity: 0.25;
+    transform: scale(calc(1 + var(--voice-level, 0) * 0.12));
+}
+
+@keyframes pet-speech-pulse {
+    from { transform: scale(1); }
+    to { transform: scale(0.985, 1.018); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .voice-speaking #pet-sprite { animation: none; }
+}

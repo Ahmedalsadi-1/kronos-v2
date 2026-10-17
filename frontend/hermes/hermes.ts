@@ -244,6 +244,23 @@ export class HermesGateway extends JsonRpcGatewayClient {
       requestTimeoutMs: DEFAULT_GATEWAY_REQUEST_TIMEOUT_MS
     })
   }
+
+  // A host-provided agent backend (KronosCode inside KronTerm) owns its own sessions;
+  // everything else still goes to the Hermes backend socket.
+  override request<T>(
+    method: string,
+    params: Record<string, unknown> = {},
+    timeoutMs?: number,
+    signal?: AbortSignal
+  ): Promise<T> {
+    const routed = window.hermesDesktop?.agentBackends?.route(method, params)
+
+    if (routed) {
+      return routed as Promise<T>
+    }
+
+    return super.request<T>(method, params, timeoutMs, signal)
+  }
 }
 
 // Profile that profile-scoped REST settings (config/env/skills/tools/model/…)

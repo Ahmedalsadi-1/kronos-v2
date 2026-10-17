@@ -419,30 +419,6 @@ type KronosAgentInstallResult struct {
 	Agent   KronosCatalogAgentSnapshot `json:"agent,omitempty"`
 }
 
-const defaultKrontermDesktopAPIURL = "http://localhost:9990"
-const defaultKrontermDesktopVNCURL = "http://localhost:9990/novnc/vnc_lite.html?scale=true"
-
-func checkHTTPReady(ctx context.Context, target string) (string, string) {
-	if strings.TrimSpace(target) == "" {
-		return "missing", "missing URL"
-	}
-	ctx, cancel := context.WithTimeout(ctx, 3_000_000_000)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return "error", err.Error()
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "error", err.Error()
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
-		return "connected", ""
-	}
-	return "error", resp.Status
-}
-
 func GetKronosChatHubSnapshot(ctx context.Context, aiMode string) (*KronosChatHubSnapshot, error) {
 	if strings.TrimSpace(aiMode) == "" {
 		return nil, fmt.Errorf("mode parameter is required")
@@ -457,22 +433,12 @@ func GetKronosChatHubSnapshot(ctx context.Context, aiMode string) (*KronosChatHu
 	apiToken, _, tokenErr := resolveConfiguredAPIToken(*config, false)
 	client, clientErr := aiutil.MakeHTTPClient(config.ProxyURL)
 
-	apiStatus, apiErr := checkHTTPReady(ctx, defaultKrontermDesktopAPIURL)
-	desktopStatus, desktopErr := checkHTTPReady(ctx, defaultKrontermDesktopVNCURL)
 	snapshot := &KronosChatHubSnapshot{
 		Mode: aiMode,
 		KrontermDesktop: KrontermDesktopStatusSnapshot{
-			APIURL:        defaultKrontermDesktopAPIURL,
-			DesktopURL:    defaultKrontermDesktopVNCURL,
-			APIStatus:     apiStatus,
-			DesktopStatus: desktopStatus,
+			APIStatus:     "retired",
+			DesktopStatus: "retired",
 		},
-	}
-	if apiErr != "" {
-		snapshot.KrontermDesktop.Error = apiErr
-	}
-	if snapshot.KrontermDesktop.Error == "" && desktopErr != "" {
-		snapshot.KrontermDesktop.Error = desktopErr
 	}
 	if tokenErr != nil {
 		snapshot.Errors = append(snapshot.Errors, tokenErr.Error())

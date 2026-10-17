@@ -22,29 +22,35 @@ const (
 )
 
 const (
-	OType_Client      = "client"
-	OType_Window      = "window"
-	OType_Workspace   = "workspace"
-	OType_Tab         = "tab"
-	OType_LayoutState = "layout"
-	OType_Block       = "block"
-	OType_MainServer  = "mainserver"
-	OType_Job         = "job"
-	OType_Temp        = "temp"
-	OType_AcpSession  = "acpsession"
+	OType_Client            = "client"
+	OType_Window            = "window"
+	OType_Workspace         = "workspace"
+	OType_Tab               = "tab"
+	OType_LayoutState       = "layout"
+	OType_Block             = "block"
+	OType_MainServer        = "mainserver"
+	OType_Job               = "job"
+	OType_Temp              = "temp"
+	OType_AcpSession        = "acpsession"
+	OType_OSSystemEvent     = "ossystemevent"
+	OType_OSCapabilityGrant = "oscapabilitygrant"
+	OType_OSCheckpoint      = "oscheckpoint"
 )
 
 var ValidOTypes = map[string]bool{
-	OType_Client:      true,
-	OType_Window:      true,
-	OType_Workspace:   true,
-	OType_Tab:         true,
-	OType_LayoutState: true,
-	OType_Block:       true,
-	OType_MainServer:  true,
-	OType_Job:         true,
-	OType_Temp:        true,
-	OType_AcpSession:  true,
+	OType_Client:            true,
+	OType_Window:            true,
+	OType_Workspace:         true,
+	OType_Tab:               true,
+	OType_LayoutState:       true,
+	OType_Block:             true,
+	OType_MainServer:        true,
+	OType_Job:               true,
+	OType_Temp:              true,
+	OType_AcpSession:        true,
+	OType_OSSystemEvent:     true,
+	OType_OSCapabilityGrant: true,
+	OType_OSCheckpoint:      true,
 }
 
 type WaveObjUpdate struct {
@@ -386,6 +392,58 @@ func (*AcpSession) GetOType() string {
 	return OType_AcpSession
 }
 
+type OSSystemEvent struct {
+	OID       string      `json:"oid"`
+	Version   int         `json:"version"`
+	SpaceId   string      `json:"spaceid"`
+	Kind      string      `json:"kind"`
+	Status    string      `json:"status"`
+	Title     string      `json:"title"`
+	Source    string      `json:"source,omitempty"`
+	BlockId   string      `json:"blockid,omitempty"`
+	CreatedTs int64       `json:"createdts"`
+	ReadTs    int64       `json:"readts,omitempty"`
+	Actions   []string    `json:"actions,omitempty"`
+	Meta      MetaMapType `json:"meta"`
+}
+
+func (*OSSystemEvent) GetOType() string {
+	return OType_OSSystemEvent
+}
+
+type OSCapabilityGrant struct {
+	OID            string      `json:"oid"`
+	Version        int         `json:"version"`
+	SpaceId        string      `json:"spaceid"`
+	Capability     string      `json:"capability"`
+	Scope          string      `json:"scope"`
+	Resource       string      `json:"resource,omitempty"`
+	AgentSessionId string      `json:"agentsessionid"`
+	CreatedTs      int64       `json:"createdts"`
+	ExpiresTs      int64       `json:"expirests,omitempty"`
+	RevokedTs      int64       `json:"revokedts,omitempty"`
+	Meta           MetaMapType `json:"meta"`
+}
+
+func (*OSCapabilityGrant) GetOType() string {
+	return OType_OSCapabilityGrant
+}
+
+type OSRecoveryCheckpoint struct {
+	OID          string      `json:"oid"`
+	Version      int         `json:"version"`
+	SpaceId      string      `json:"spaceid"`
+	TabId        string      `json:"tabid"`
+	Reason       string      `json:"reason"`
+	SnapshotJson string      `json:"snapshotjson"`
+	CreatedTs    int64       `json:"createdts"`
+	Meta         MetaMapType `json:"meta"`
+}
+
+func (*OSRecoveryCheckpoint) GetOType() string {
+	return OType_OSCheckpoint
+}
+
 func AllWaveObjTypes() []reflect.Type {
 	return []reflect.Type{
 		reflect.TypeOf(&Client{}),
@@ -397,6 +455,9 @@ func AllWaveObjTypes() []reflect.Type {
 		reflect.TypeOf(&MainServer{}),
 		reflect.TypeOf(&Job{}),
 		reflect.TypeOf(&AcpSession{}),
+		reflect.TypeOf(&OSSystemEvent{}),
+		reflect.TypeOf(&OSCapabilityGrant{}),
+		reflect.TypeOf(&OSRecoveryCheckpoint{}),
 	}
 }
 

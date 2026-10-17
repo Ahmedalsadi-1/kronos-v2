@@ -1,6 +1,9 @@
+import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     getKronosCodeBinaryCandidates,
     isKronosCodeLoopbackUrl,
@@ -11,6 +14,7 @@ import {
 
 const servers: http.Server[] = [];
 const managers: KronosCodeRuntimeManager[] = [];
+const runtimeFixtures: string[] = [];
 
 function healthPayload(protocolVersion = "1.0") {
     return {
@@ -44,8 +48,13 @@ async function startHealthServer(
 }
 
 afterEach(async () => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
     for (const manager of managers.splice(0)) {
         manager.stop();
+    }
+    for (const directory of runtimeFixtures.splice(0)) {
+        fs.rmSync(directory, { recursive: true, force: true });
     }
     await Promise.all(
         servers.splice(0).map(
@@ -58,6 +67,104 @@ afterEach(async () => {
 });
 
 describe("KronosCode runtime manager", () => {
+    it.skipIf(process.platform === "win32")("reports spawn failures and removes the startup directory", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "kronterm-runtime-test-"));
+        runtimeFixtures.push(directory);
+        const binary = path.join(directory, "kronoscode");
+        fs.writeFileSync(binary, "#!/nonexistent/kronterm-test-interpreter\n", { mode: 0o700 });
+        const directories = vi.spyOn(fs.promises, "mkdtemp");
+        vi.stubEnv("KRONOSCODE_SERVER_URL", "");
+        const manager = new KronosCodeRuntimeManager();
+        managers.push(manager);
+        await expect(manager.ensure({ settings: { "kronoscode:binary": binary } } as FullConfigType)).rejects.toThrow(
+            "ENOENT"
+        );
+        expect(manager.progress.phase).toBe("error");
+        expect(manager.descriptor).toBeNull();
+        const runtimeDir = await directories.mock.results[0].value;
+        expect(fs.existsSync(runtimeDir)).toBe(false);
+    });
+
+    it("does not restore a connection when shutdown happens during validation", async () => {
+        const manager = new KronosCodeRuntimeManager();
+        managers.push(manager);
+        let release: (response: Response) => void;
+        const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+            () =>
+                new Promise<Response>((resolve) => {
+                    release = resolve;
+                })
+        );
+        vi.stubEnv("KRONOSCODE_SERVER_URL", "http://127.0.0.1:9999");
+        try {
+            const pending = manager.ensure({ settings: {} } as FullConfigType);
+            await Promise.resolve();
+            manager.stop();
+            release(
+                new Response(JSON.stringify(healthPayload()), {
+                    headers: { "content-type": "application/json" },
+                })
+            );
+            await expect(pending).rejects.toThrow("startup was cancelled");
+            expect(manager.descriptor).toBeNull();
+            expect(manager.progress.phase).not.toBe("ready");
+        } finally {
+            fetchSpy.mockRestore();
+        }
+    });
+
+    it.skipIf(process.platform === "win32")(
+        "starts a cold managed server and waits for its assigned port and health",
+        async () => {
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), "kronterm-runtime-test-"));
+            runtimeFixtures.push(directory);
+            const binary = path.join(directory, "kronoscode");
+            fs.writeFileSync(
+                binary,
+                `#!${process.execPath}
+const http = require("node:http");
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const port = Number(args[args.indexOf("--port") + 1]);
+const readyFile = args[args.indexOf("--ready-file") + 1];
+const health = ${JSON.stringify(healthPayload())};
+const server = http.createServer((request, response) => {
+    const expected = "Basic " + Buffer.from(process.env.KRONOSCODE_SERVER_USERNAME + ":" + process.env.KRONOSCODE_SERVER_PASSWORD).toString("base64");
+    response.writeHead(request.headers.authorization === expected ? 200 : 401, { "content-type": "application/json" });
+    response.end(JSON.stringify(health));
+});
+setTimeout(() => server.listen(port, "127.0.0.1", () => {
+    fs.writeFileSync(readyFile, JSON.stringify({ type: "KRONOSCODE_BACKEND_READY", url: "http://127.0.0.1:" + server.address().port, protocolVersion: "1.0" }));
+}), 100);
+`,
+                { mode: 0o700 }
+            );
+            vi.stubEnv("KRONOSCODE_SERVER_URL", "");
+            const manager = new KronosCodeRuntimeManager();
+            managers.push(manager);
+            const directories = vi.spyOn(fs.promises, "mkdtemp");
+            const startup = manager.ensure({ settings: { "kronoscode:binary": binary } } as FullConfigType);
+            expect(manager.descriptor).toBeNull();
+            const connection = await startup;
+            expect(connection.managed).toBe(true);
+            expect(Number(new URL(connection.baseUrl).port)).toBeGreaterThan(0);
+            expect(manager.progress.phase).toBe("ready");
+            expect(await manager.revalidate()).toEqual(connection);
+            const runtimeDir = await directories.mock.results[0].value;
+            expect(fs.existsSync(runtimeDir)).toBe(false);
+        }
+    );
+
+    it("rejects a cached external connection whose server has stopped", async () => {
+        const endpoint = await startHealthServer();
+        const manager = new KronosCodeRuntimeManager();
+        managers.push(manager);
+        await manager.applyConnection({ endpoint });
+        const server = servers.pop();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await expect(manager.revalidate()).rejects.toThrow("KronosCode validation failed");
+    });
+
     it("enforces endpoint transport policy", () => {
         expect(validateKronosCodeEndpoint("http://127.0.0.1:4096").hostname).toBe("127.0.0.1");
         expect(validateKronosCodeEndpoint("https://backend.example.com").protocol).toBe("https:");
@@ -80,6 +187,15 @@ describe("KronosCode runtime manager", () => {
             "--verbose",
             "--attach",
             "http://new",
+        ]);
+    });
+
+    it("honors the documented bundled binary override for Hermes delegation too", () => {
+        vi.stubEnv("KRONTERM_KRONOSCODE_BIN", "/custom/kronoscode");
+        expect(getKronosCodeBinaryCandidates()[0]).toBe("/custom/kronoscode");
+        expect(getKronosCodeBinaryCandidates("/explicit/kronoscode").slice(0, 2)).toEqual([
+            "/explicit/kronoscode",
+            "/custom/kronoscode",
         ]);
     });
 

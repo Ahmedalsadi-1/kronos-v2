@@ -1,32 +1,34 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Block } from "@/app/block/block";
+import { PersistentBlock as Block, PersistentBlockProvider } from "@/app/block/persistent-block";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { WebModeView } from "@/app/workspace/web-mode";
 import { Widgets } from "@/app/workspace/widgets";
-import { CenteredDiv } from "@/element/quickelems";
+import { WorkspaceTabManager } from "@/app/workspace/workspace-tab-manager";
 import { TileLayout } from "@/layout/lib/TileLayout";
 import { ContentRenderer, NodeModel, PreviewRenderer, TileLayoutContents } from "@/layout/lib/types";
-import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
+import { atoms, createTab, getApi, getSettingsKeyAtom, setActiveTab } from "@/store/global";
 import * as services from "@/store/services";
 import * as WOS from "@/store/wos";
 import { atom, useAtomValue } from "jotai";
 import * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { OSModeView } from "./os-workspace";
+import "./tabcontent.scss";
 import { WidgetTabsLayout } from "./widget-tabs-layout";
 import { WorkspaceCanvas } from "./workspace-canvas";
-import { isWorkspacePresentation, type WorkspacePresentation } from "./workspace-presentation";
+import {
+    normalizeWorkspacePresentation,
+    readWorkspacePresentation,
+    subscribeWorkspacePresentation,
+} from "./workspace-presentation";
 
 const tileGapSizeAtom = atom((get) => {
     const settings = get(atoms.settingsAtom);
     return settings["window:tilegapsize"];
 });
-
-const LayoutModeStorageKey = "kronterm:layoutmode";
-const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
 
 type CanvasRect = {
     x: number;
@@ -414,50 +416,16 @@ const TabContent = React.memo(
         const tabAtom = useMemo(() => WOS.getWaveObjectAtom<Tab>(oref), [oref]);
         const tabData = useAtomValue(tabAtom);
         const tileGapSize = useAtomValue(tileGapSizeAtom);
+        const workspace = useAtomValue(atoms.workspace);
         const settingsLayoutModeValue = useAtomValue(getSettingsKeyAtom("app:layoutmode" as keyof SettingsType)) as
             string | null;
-        const settingsLayoutMode: WorkspacePresentation = isWorkspacePresentation(settingsLayoutModeValue)
-            ? settingsLayoutModeValue
-            : "widgets";
-        const [layoutModeOverride, setLayoutModeOverride] = useState<WorkspacePresentation | null>(() => {
-            try {
-                const storedMode = window.localStorage.getItem(LayoutModeStorageKey);
-                console.info("[KronTabContent] init: storedMode =", storedMode, "isValid =", isWorkspacePresentation(storedMode), "settingsLayoutMode =", settingsLayoutMode);
-                return isWorkspacePresentation(storedMode) ? storedMode : null;
-            } catch {
-                return null;
-            }
-        });
-        const layoutMode = layoutModeOverride ?? settingsLayoutMode;
-
-        useEffect(() => {
-            (window as any).__krontermLayoutMode = layoutMode;
-        }, [layoutMode]);
-
-        useEffect(() => {
-            const handleLayoutModeChanged = (event: Event) => {
-                const mode = (event as CustomEvent<{ mode?: string }>).detail?.mode;
-                console.info("[KronTabContent] RECEIVED LayoutModeChangedEvent →", mode, "isValid=", isWorkspacePresentation(mode));
-                if (isWorkspacePresentation(mode)) {
-                    setLayoutModeOverride(mode);
-                }
-            };
-            const handleLayoutModeStorage = (event: StorageEvent) => {
-                if (event.key !== LayoutModeStorageKey) {
-                    return;
-                }
-                console.info("[KronTabContent] RECEIVED storage event →", event.newValue);
-                if (isWorkspacePresentation(event.newValue)) {
-                    setLayoutModeOverride(event.newValue);
-                }
-            };
-            window.addEventListener(LayoutModeChangedEvent, handleLayoutModeChanged);
-            window.addEventListener("storage", handleLayoutModeStorage);
-            return () => {
-                window.removeEventListener(LayoutModeChangedEvent, handleLayoutModeChanged);
-                window.removeEventListener("storage", handleLayoutModeStorage);
-            };
-        }, []);
+        const settingsLayoutMode = normalizeWorkspacePresentation(settingsLayoutModeValue) ?? "os";
+        const layoutMode = useSyncExternalStore(
+            subscribeWorkspacePresentation,
+            () => readWorkspacePresentation(settingsLayoutMode),
+            () => settingsLayoutMode
+        );
+        const fallbackTabId = workspace?.tabids?.find((workspaceTabId) => workspaceTabId !== tabId);
 
         const tileLayoutContents = useMemo(() => {
             const renderContent: ContentRenderer = (nodeModel: NodeModel) => {
@@ -483,22 +451,51 @@ const TabContent = React.memo(
 
         let innerContent;
 
-        console.info("[KronTabContent] rendering: layoutMode =", layoutMode, "blockCount =", tabData?.blockids?.length);
-
         if (tabLoading) {
-            innerContent = <CenteredDiv>Tab Loading</CenteredDiv>;
+            innerContent = (
+                <div className="workspace-tab-state" role="status">
+                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
+                    <strong>Loading workspace tab</strong>
+                    <span>Your widgets will appear when the tab is ready.</span>
+                </div>
+            );
         } else if (!tabData) {
-            innerContent = <CenteredDiv>Tab Not Found</CenteredDiv>;
+            innerContent = (
+                <div className="workspace-tab-state is-error" role="alert">
+                    <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+                    <strong>Workspace tab not found</strong>
+                    <span>It may have been closed in another window.</span>
+                    <button type="button" onClick={() => (fallbackTabId ? setActiveTab(fallbackTabId) : createTab())}>
+                        {fallbackTabId ? "Return to workspace" : "Create a tab"}
+                    </button>
+                </div>
+            );
         } else if (layoutMode === "web") {
-            innerContent = <WebModeView key={`web-${tabId}`} />;
-        } else if (layoutMode === "browsermode") {
-            innerContent = <WebModeView key={`browser-${tabId}`} />;
+            innerContent = (
+                <WebModeView
+                    key={`web-${tabId}`}
+                    tabId={tabId}
+                    workspaceId={workspace?.oid ?? tabId}
+                    initialCapabilities={
+                        (workspace?.meta as Record<string, unknown>)?.["hermes:webcapabilities"] as never
+                    }
+                />
+            );
         } else if (layoutMode === "canvas") {
             innerContent = <WorkspaceCanvas key={`canvas-${tabId}`} tabId={tabId} tabData={tabData} />;
         } else if (layoutMode === "os") {
             innerContent = <OSModeView key={`os-${tabId}`} tabId={tabId} tabData={tabData} />;
         } else if (tabData?.blockids?.length == 0) {
-            innerContent = null;
+            innerContent = (
+                <div className="workspace-tab-empty">
+                    <div className="workspace-tab-state">
+                        <i className="fa-solid fa-window-restore" aria-hidden="true" />
+                        <strong>This tab is empty</strong>
+                        <span>Choose a widget to start working.</span>
+                    </div>
+                    <Widgets catalog />
+                </div>
+            );
         } else if (layoutMode === "tabs") {
             innerContent = <WidgetTabsLayout key={`tabs-${tabId}`} contents={tileLayoutContents} tabAtom={tabAtom} />;
         } else {
@@ -518,7 +515,13 @@ const TabContent = React.memo(
             <div
                 className={`flex flex-col flex-grow min-h-0 w-full items-center justify-center overflow-hidden relative ${noTopPadding ? "" : "pt-[3px]"} pr-[3px]`}
             >
-                {innerContent}
+                <PersistentBlockProvider blockIds={tabData?.blockids ?? []}>
+                    {layoutMode === "widgets" ? (
+                        <WorkspaceTabManager>{innerContent}</WorkspaceTabManager>
+                    ) : (
+                        innerContent
+                    )}
+                </PersistentBlockProvider>
                 {showWidgetLauncher && (
                     <div className="workspace-collapsed-widget-launcher">
                         <Widgets compact />

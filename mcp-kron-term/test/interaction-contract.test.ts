@@ -36,3 +36,32 @@ test("classifies actionable failures", () => {
     assert.equal(classifyInteractionError(new Error("Accessibility permission denied")), "permission");
     assert.equal(classifyInteractionError(new Error("element ref is stale")), "stale-target");
 });
+
+test("does not report an unverified mutation as successful", async () => {
+    let clicks = 0;
+    const result = await runInteraction(
+        { surface: "kronterm", surfaceId: "block-1", action: "click", maxAttempts: 3 },
+        async () => {
+            clicks++;
+            return "acknowledged";
+        },
+        {
+            verify: async () => ({
+                observedBefore: true,
+                verifiedAfter: false,
+                summary: "widget did not retain focus",
+            }),
+        }
+    );
+
+    assert.equal(result.result.ok, false);
+    assert.equal(result.result.error, "widget did not retain focus");
+    assert.equal(clicks, 1);
+});
+
+test("distinguishes acknowledged mutations from verified effects", async () => {
+    const result = await runInteraction({ surface: "kronterm", surfaceId: "block", action: "click" }, async () => "sent");
+    assert.equal(result.result.ok, true);
+    assert.equal(result.result.evidence.verifiedAfter, false);
+    assert.equal(result.result.evidence.status, "acknowledged");
+});

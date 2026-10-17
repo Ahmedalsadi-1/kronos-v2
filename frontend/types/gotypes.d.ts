@@ -598,6 +598,7 @@ declare global {
     // wshrpc.CommandCaptureBlockScreenshotData
     type CommandCaptureBlockScreenshotData = {
         blockid: string;
+        passive?: boolean;
     };
 
     // wshrpc.CommandConnServerInitData
@@ -2095,6 +2096,8 @@ declare global {
         mode?: string;
         browserUrl?: string;
         ensureBrowser?: boolean;
+        runtime?: string;
+        image?: string;
     };
 
     // wshrpc.SandboxStartResponse
@@ -2148,6 +2151,7 @@ declare global {
     type SettingsType = {
         "app:*"?: boolean;
         "app:globalhotkey"?: string;
+        "app:notchhotkey"?: string;
         "app:dismissarchitecturewarning"?: boolean;
         "app:defaultnewblock"?: string;
         "app:showoverlayblocknums"?: boolean;

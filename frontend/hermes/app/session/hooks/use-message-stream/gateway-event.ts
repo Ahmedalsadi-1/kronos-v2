@@ -4,6 +4,7 @@ import type { HermesSkin } from '@hermes/shared/skin'
 import type { QueryClient } from '@tanstack/react-query'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 
+import { actOnActivePreview } from '@hermes/app/chat/right-rail/preview-driver'
 import { readActivePreview } from '@hermes/app/chat/right-rail/preview-reader'
 import { writeAgentTerminalChunk } from '@hermes/app/right-sidebar/terminal/agent-terminal-stream'
 import { readActiveTerminal } from '@hermes/app/right-sidebar/terminal/buffer'
@@ -22,7 +23,12 @@ import { triggerHaptic } from '@hermes/lib/haptics'
 import { modelOptionsQueryKey } from '@hermes/lib/model-options'
 import { isProviderSetupErrorMessage } from '@hermes/lib/provider-setup-errors'
 import { invalidateSlashCompletions } from '@hermes/lib/slash-completion-cache'
-import { type AgentNoticePayload, clearAgentNotice, nativeNoticeInput, showAgentNotice } from '@hermes/store/agent-notices'
+import {
+  type AgentNoticePayload,
+  clearAgentNotice,
+  nativeNoticeInput,
+  showAgentNotice
+} from '@hermes/store/agent-notices'
 import { reconcileApprovalModeForProfile } from '@hermes/store/approval-mode'
 import { billingCtaLabel, clearBillingBlock, runBillingRecovery, setBillingBlock } from '@hermes/store/billing-block'
 import { clearClarifyRequest, normalizeChoices, setClarifyRequest, warnDroppedChoices } from '@hermes/store/clarify'
@@ -97,6 +103,33 @@ import { finalizeInterruptedMessages } from '../use-prompt-actions/rewind'
 
 import { hasSessionInfoStatePatch, sessionInfoStatePatch, SUBAGENT_EVENT_TYPES, toTodoPayload } from './utils'
 
+// KronTerm draws the agent cursor and window frames from this; absent outside KronTerm.
+function reportHostToolActivity(
+  phase: 'failed' | 'running' | 'succeeded',
+  sessionId: string,
+  payload: Record<string, unknown> | undefined
+): void {
+  const name = typeof payload?.name === 'string' ? payload.name : ''
+
+  if (!name) {
+    return
+  }
+
+  try {
+    window.hermesDesktop?.krontermActivity?.report({
+      phase,
+      toolId: typeof payload?.tool_id === 'string' ? payload.tool_id : undefined,
+      name,
+      args: payload?.args && typeof payload.args === 'object' ? (payload.args as Record<string, unknown>) : undefined,
+      sessionId,
+      context: typeof payload?.context === 'string' ? payload.context : undefined,
+      agent: payload?.agent === 'kronoscode' ? 'kronoscode' : 'hermes'
+    })
+  } catch {
+    // Activity is decorative; never let it break the transcript.
+  }
+}
+
 function firstBillingLine(text: string): string {
   return (text || '').split('\n')[0]?.trim() ?? ''
 }
@@ -134,7 +167,9 @@ function sessionInfoDescribesSelectedSession(storedSessionId: string | undefined
   // answers to both rather than assuming which side rotated.
   return $sessions
     .get()
-    .some(session => sessionMatchesStoredId(session, infoStoredSessionId) && sessionMatchesStoredId(session, selected))
+    .some(
+      (session) => sessionMatchesStoredId(session, infoStoredSessionId) && sessionMatchesStoredId(session, selected)
+    )
 }
 
 /**
@@ -576,7 +611,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         if (sessionId && hasStatePatch) {
           updateSessionState(
             sessionId,
-            state => ({
+            (state) => ({
               ...state,
               ...statePatch,
               branch: statePatch.branch ?? state.branch,
@@ -603,7 +638,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
 
           const nextState = updateSessionState(
             sessionId,
-            state => {
+            (state) => {
               const busy = Boolean(payload!.running)
 
               if (state.busy === busy && (busy || !state.awaitingResponse)) {
@@ -708,7 +743,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         }
 
         if (payload?.usage && (!explicitSid || isActiveEvent)) {
-          setCurrentUsage(current => ({ ...current, ...payload.usage }))
+          setCurrentUsage((current) => ({ ...current, ...payload.usage }))
         }
 
         requestDesktopOnboardingForCredentialWarning(payload?.credential_warning)
@@ -735,13 +770,13 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         if (payload?.usage && sessionId) {
           // Per-session twin first: a focused secondary tile reads this cache,
           // while the primary-only global mirrors the active session.
-          updateSessionState(sessionId, state => ({
+          updateSessionState(sessionId, (state) => ({
             ...state,
             usage: { calls: 0, input: 0, output: 0, total: 0, ...state.usage, ...payload.usage }
           }))
 
           if (isActiveEvent) {
-            setCurrentUsage(current => ({ ...current, ...payload.usage }))
+            setCurrentUsage((current) => ({ ...current, ...payload.usage }))
           }
         }
       } else if (event.type === 'message.start') {
@@ -772,7 +807,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           console.debug('[turn-accept-latency]', { sessionId, ms: Date.now() - seededAt })
         }
 
-        updateSessionState(sessionId, state => {
+        updateSessionState(sessionId, (state) => {
           // If the user clicked Stop (cancelRun set interrupted=true), don't
           // let a stale message.start from a chained turn (goal follow-up,
           // completion drain) or an in-flight LLM response re-arm busy.
@@ -996,13 +1031,13 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           // Per-session twin FIRST (the statusbar reads it for focused tiles);
           // the primary-only global mirrors the ACTIVE session — ungated it
           // let a background tile's turn overwrite the primary's count.
-          updateSessionState(sessionId, state => ({
+          updateSessionState(sessionId, (state) => ({
             ...state,
             usage: { calls: 0, input: 0, output: 0, total: 0, ...state.usage, ...payload.usage }
           }))
 
           if (isActiveEvent) {
-            setCurrentUsage(current => ({ ...current, ...payload.usage }))
+            setCurrentUsage((current) => ({ ...current, ...payload.usage }))
           }
         }
       } else if (event.type === 'session.title') {
@@ -1011,7 +1046,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         const nextTitle = typeof payload?.title === 'string' ? payload.title.trim() : ''
 
         if (storedId && nextTitle) {
-          setSessions(prev => prev.map(s => (sessionMatchesStoredId(s, storedId) ? { ...s, title: nextTitle } : s)))
+          setSessions((prev) => prev.map((s) => (sessionMatchesStoredId(s, storedId) ? { ...s, title: nextTitle } : s)))
         }
       } else if (event.type === 'tool.generating') {
         // Announced while the model is still emitting the call's JSON, so it
@@ -1040,6 +1075,10 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         flushQueuedDeltas(sessionId)
         upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'running', event.type, occurredAt)
 
+        if (event.type === 'tool.start') {
+          reportHostToolActivity('running', sessionId, payload)
+        }
+
         if (isActiveEvent) {
           setPetActivity({ reasoning: false, toolRunning: true })
         }
@@ -1047,6 +1086,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         if (sessionId) {
           flushQueuedDeltas(sessionId)
           upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'complete', event.type, occurredAt)
+          reportHostToolActivity(payload?.error ? 'failed' : 'succeeded', sessionId, payload)
 
           if (isActiveEvent) {
             setPetActivity({ toolRunning: false })
@@ -1063,7 +1103,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           // one is the clarify resolving — drop the "needs input" flag here so
           // the sidebar indicator clears as soon as it's answered, not only at
           // message.complete.
-          updateSessionState(sessionId, state => (state.needsInput ? { ...state, needsInput: false } : state))
+          updateSessionState(sessionId, (state) => (state.needsInput ? { ...state, needsInput: false } : state))
 
           // terminal/process tool calls are the only things that spawn or reap
           // background processes — sync the composer status stack right after.
@@ -1089,7 +1129,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
             sessionId,
             payload.name,
             Boolean(payload.error),
-            [payload.error, payload.result].filter(part => typeof part === 'string').join(' ')
+            [payload.error, payload.result].filter((part) => typeof part === 'string').join(' ')
           )
         }
 
@@ -1172,7 +1212,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
             // it's working). Flag the session so the sidebar shows a persistent
             // "needs input" indicator on its row — works for the active session
             // too, and survives alt-tab / window blur (unlike a toast).
-            updateSessionState(sessionId, state => ({ ...state, needsInput: true }))
+            updateSessionState(sessionId, (state) => ({ ...state, needsInput: true }))
 
             if (sessionId === activeSessionIdRef.current) {
               requestScrollToBottom()
@@ -1207,7 +1247,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
               { args: { action, reason, server }, name: 'setup_mcp', tool_id: requestId },
               'running'
             )
-            updateSessionState(sessionId, state => ({ ...state, needsInput: true }))
+            updateSessionState(sessionId, (state) => ({ ...state, needsInput: true }))
           }
 
           dispatchNativeNotification({
@@ -1231,7 +1271,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           // false only when a tirith warning forbids it; backend omits the field otherwise.
           allowPermanent: payload?.allow_permanent !== false,
           choices: Array.isArray(payload?.choices)
-            ? payload.choices.filter(choice => typeof choice === 'string')
+            ? payload.choices.filter((choice) => typeof choice === 'string')
             : undefined,
           command,
           description,
@@ -1241,7 +1281,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         }).catch(() => undefined)
 
         if (sessionId) {
-          updateSessionState(sessionId, state => ({ ...state, needsInput: true }))
+          updateSessionState(sessionId, (state) => ({ ...state, needsInput: true }))
         }
 
         dispatchNativeNotification({
@@ -1263,7 +1303,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           setSudoRequest({ requestId, sessionId: sessionId ?? null })
 
           if (sessionId) {
-            updateSessionState(sessionId, state => ({ ...state, needsInput: true }))
+            updateSessionState(sessionId, (state) => ({ ...state, needsInput: true }))
           }
 
           dispatchNativeNotification({
@@ -1290,7 +1330,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           })
 
           if (sessionId) {
-            updateSessionState(sessionId, state => ({ ...state, needsInput: true }))
+            updateSessionState(sessionId, (state) => ({ ...state, needsInput: true }))
           }
 
           dispatchNativeNotification({
@@ -1324,12 +1364,52 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           const start = typeof payload?.start === 'number' ? payload.start : undefined
           const count = typeof payload?.count === 'number' ? payload.count : undefined
 
-          void readActivePreview({ count, start }).then(result => {
+          void readActivePreview({ count, start }).then((result) => {
             void $gateway.get()?.request('preview.read.respond', {
               request_id: requestId,
               text: result ? JSON.stringify(result) : ''
             })
           })
+        }
+      } else if (event.type === 'preview.act.request') {
+        const requestId = typeof payload?.request_id === 'string' ? payload.request_id : ''
+        const actionPayload = payload as GatewayEventPayload & {
+          amount?: number
+          key?: string
+          max?: number
+          ref?: string
+          selector?: string
+          submit?: boolean
+          to?: string
+        }
+
+        if (requestId) {
+          const answer = (result: unknown) =>
+            $gateway.get()?.request('preview.act.respond', {
+              request_id: requestId,
+              text: result ? JSON.stringify(result) : ''
+            })
+
+          if (!isActiveEvent) {
+            void answer({
+              error: 'The built-in browser only takes actions in the session the user is viewing.',
+              success: false
+            })
+          } else {
+            void actOnActivePreview({
+              amount: actionPayload.amount,
+              key: actionPayload.key,
+              kind: payload?.action ?? '',
+              max: actionPayload.max,
+              ref: actionPayload.ref,
+              selector: actionPayload.selector,
+              submit: actionPayload.submit,
+              text: payload?.text,
+              to: actionPayload.to
+            }).then(answer, (error) =>
+              answer({ error: error instanceof Error ? error.message : String(error), success: false })
+            )
+          }
         }
       } else if (event.type === 'window.read.request') {
         // read_window_below tool: main owns native window enumeration, so ask
@@ -1378,17 +1458,17 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           const nextReactions = Array.isArray(payload?.reactions) ? payload.reactions : []
           const reactedRole = payload?.role === 'assistant' ? 'assistant' : 'user'
 
-          setMessages(messages => {
+          setMessages((messages) => {
             // Preferred leg: the message already knows its durable row id
             // (rehydrated transcript, or a live row that has round-tripped).
-            const byRowId = messages.find(message => message.rowId === reactedRowId)
+            const byRowId = messages.find((message) => message.rowId === reactedRowId)
 
             if (byRowId) {
               // Overlay survives the end-of-turn resume, which rebuilds from
               // in-memory history that doesn't carry this mid-turn DB write.
               recordAgentReaction(reactedRowId, nextReactions)
 
-              return messages.map(message =>
+              return messages.map((message) =>
                 message.rowId === reactedRowId ? { ...message, reactions: nextReactions } : message
               )
             }
@@ -1399,7 +1479,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
             // AND the now-known row id onto it. Without this the event matches
             // nothing and the reaction only appears after a reload.
             const lastIndex = messages.findLastIndex(
-              message => message.role === reactedRole && message.rowId === undefined
+              (message) => message.role === reactedRole && message.rowId === undefined
             )
 
             if (lastIndex === -1) {
@@ -1447,7 +1527,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
 
         if (text && sessionId) {
           flushQueuedDeltas(sessionId)
-          updateSessionState(sessionId, state => ({
+          updateSessionState(sessionId, (state) => ({
             ...state,
             messages: [
               ...state.messages,

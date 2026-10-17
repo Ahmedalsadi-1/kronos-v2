@@ -23,7 +23,17 @@ export type AcpHarnessProfile = {
 };
 
 export type KronTermToolsetId =
-    "workspace" | "widget" | "browser" | "terminal" | "sandbox" | "desktop" | "file" | "memory" | "skills";
+    | "workspace"
+    | "hud"
+    | "widget"
+    | "browser"
+    | "terminal"
+    | "sandbox"
+    | "desktop"
+    | "file"
+    | "memory"
+    | "skills"
+    | "agents";
 
 export type KronTermToolset = {
     id: KronTermToolsetId;
@@ -67,7 +77,7 @@ const CommonPatterns: AcpHarnessPattern[] = [
     {
         id: "durable-session",
         label: "Durable session",
-        description: "Keep task state resumable and report lifecycle changes to KronosChamber.",
+        description: "Keep task state resumable and report lifecycle changes to KronTerm.",
     },
 ];
 
@@ -79,6 +89,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
             "Inspect and rearrange the KronTerm workspace: tabs, blocks, layout, badges, notifications, connections, secrets.",
         tools: [
             "surface_status",
+            "workspace_inventory",
             "workspace_snapshot",
             "workspace_screenshot",
             "workspace_set_presentation",
@@ -112,6 +123,20 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
             "secret_set",
             "secret_delete",
             "ai_append",
+        ],
+    },
+    hud: {
+        id: "hud",
+        label: "Native HUD islands",
+        description: "Inspect, open, focus, move, resize, arrange, and close live native HUD widget islands.",
+        tools: [
+            "hud_list_islands",
+            "hud_open_island",
+            "hud_focus_island",
+            "hud_move_island",
+            "hud_resize_island",
+            "hud_arrange_islands",
+            "hud_close_island",
         ],
     },
     widget: {
@@ -156,19 +181,32 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         id: "sandbox",
         label: "Isolated Linux sandbox desktop",
         description:
-            "Start/stop the sandbox VM and control its desktop (screenshot, mouse, click, type, press, scroll, drag). Never used for host interactions.",
+            "Start/stop the managed Linux desktop after user assignment and control it with generation-fenced screenshot, input, and guest command tools.",
         tools: [
-            "sandbox_start",
-            "sandbox_status",
-            "sandbox_stop",
-            "sandbox_screenshot",
-            "sandbox_mouse_move",
-            "sandbox_click",
-            "sandbox_type",
-            "sandbox_paste",
-            "sandbox_press",
-            "sandbox_scroll",
-            "sandbox_drag",
+            "sandbox_task_start",
+            "sandbox_task_finish",
+            "device_list",
+            "device_boot",
+            "device_shutdown",
+            "device_open",
+            "device_screenshot",
+            "device_tap",
+            "device_type",
+            "device_back",
+            "device_home",
+            "device_swipe",
+            "device_rotate",
+            "linux_desktop_list",
+            "linux_desktop_start",
+            "linux_desktop_stop",
+            "linux_desktop_screenshot",
+            "linux_desktop_click",
+            "linux_desktop_type",
+            "linux_desktop_key",
+            "linux_desktop_scroll",
+            "linux_desktop_exec",
+            "linux_desktop_apps",
+            "linux_desktop_launch_app",
         ],
     },
     desktop: {
@@ -178,6 +216,15 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
             "Control native desktop applications via the kron-computer-use accessibility runtime. Only for apps outside KronTerm.",
         tools: [
             "kron_computer_status",
+            "kron_computer_background_workspace_start",
+            "kron_computer_background_workspace_list",
+            "kron_computer_background_workspace_launch",
+            "kron_computer_background_workspace_open_file",
+            "kron_computer_background_workspace_observe",
+            "kron_computer_background_workspace_action",
+            "kron_computer_background_workspace_reveal",
+            "kron_computer_background_workspace_resume",
+            "kron_computer_background_workspace_finish",
             "kron_computer_list_apps",
             "kron_computer_get_app_state",
             "kron_computer_click",
@@ -222,10 +269,17 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         description: "Discover and load allowlisted project skills shared with KronTerm ACP agents.",
         tools: ["shared_skill_list", "shared_skill_read"],
     },
+    agents: {
+        id: "agents",
+        label: "ACP specialists",
+        description:
+            "Discover installed ACP specialists and run one bounded task with the active tab's scoped KronTerm tools.",
+        tools: ["acp_list_agents", "acp_run_agent"],
+    },
 };
 
 const TaskClassToolsets: Record<AcpHarnessTaskClass, KronTermToolsetId[]> = {
-    "workspace-control": ["workspace", "widget", "sandbox", "desktop"],
+    "workspace-control": ["workspace", "hud", "widget", "sandbox", "desktop"],
     automation: ["sandbox", "desktop", "widget", "terminal"],
     coding: ["file", "terminal", "widget", "workspace"],
     debugging: ["terminal", "widget", "file", "workspace"],
@@ -329,6 +383,20 @@ const Profiles: Record<string, Omit<AcpHarnessProfile, "backend">> = {
         patterns: [...CommonPatterns],
         source: "reference",
     },
+    "kronterm-agent": {
+        summary:
+            "KronTerm's OpenCode-compatible ACP specialist for bounded implementation and repository investigation with tab-scoped tools.",
+        specialties: ["coding", "debugging", "review", "workspace-control"],
+        patterns: [
+            ...CommonPatterns,
+            {
+                id: "native-surface-tools",
+                label: "Native surface tools",
+                description: "Use the same scoped KronTerm MCP surface as the invoking Hermes session.",
+            },
+        ],
+        source: "builtin",
+    },
     goose: {
         summary: "Open-source task specialist for extensible development and automation workflows.",
         specialties: ["coding", "automation"],
@@ -353,7 +421,7 @@ export function classifyHarnessTask(content: string): { taskClass: AcpHarnessTas
     const candidates: Array<{ taskClass: AcpHarnessTaskClass; pattern: RegExp; reason: string }> = [
         {
             taskClass: "workspace-control",
-            pattern: /\b(kronterm|kronoschamber|workspace|widget|block|canvas|desktop|browser tab)\b/,
+            pattern: /\b(kronterm|workspace|widget|block|canvas|desktop|browser tab|sandbox|vm|emulator|simulator|phone|iphone|android)\b/,
             reason: "The request targets a live KronTerm or desktop workspace surface.",
         },
         {
@@ -414,7 +482,10 @@ export function makeAcpCapabilityLease(input: {
     const now = Date.now();
     const classification = classifyHarnessTask(input.content);
     const profile = getAcpHarnessProfile(input.backend);
-    const toolsets = TaskClassToolsets[classification.taskClass];
+    const toolsets = [...TaskClassToolsets[classification.taskClass]];
+    if (input.backend === "hermes" || input.backend === "kronoscode") {
+        toolsets.push("agents");
+    }
     const capabilities = [
         `task:${classification.taskClass}`,
         "filesystem:workspace",
@@ -449,11 +520,11 @@ export function makeAcpCapabilityLease(input: {
     };
 }
 
-export function formatAcpCapabilityLease(lease: AcpCapabilityLease): string {
+export function formatAcpCapabilityLease(lease: AcpCapabilityLease, availableTools?: string[]): string {
     const toolsetLines = lease.toolsets
         .map((id) => {
             const toolset = KronTermToolsets[id];
-            return `- ${toolset.label}: ${toolset.description} Tools: ${toolset.tools.join(", ")}`;
+            return `- ${toolset.label}: ${toolset.description} Tools: ${toolset.tools.filter((name) => availableTools == null || availableTools.includes(name)).join(", ")}`;
         })
         .join("\n");
     return `[KronTerm Specialist Capability Lease]
@@ -467,5 +538,7 @@ ${toolsetLines}
 Constraints: filesystem=${lease.constraints.filesystem}; writes=${lease.constraints.writes}; destructive=${lease.constraints.destructiveActions}; external-side-effects=${lease.constraints.externalSideEffects}; credentials=${lease.constraints.credentialAccess}; surface=${lease.constraints.surface}
 Expires: ${new Date(lease.expiresAt).toISOString()}
 
-Stay inside this task and workspace. Treat the lease as an upper bound, not a requirement to use every capability. Request explicit approval through ACP before writes, destructive actions, credential access, or external side effects. Return concise evidence, verification, and any fallback reason to KronosCode/KronosChamber.`;
+For workspace control: discover with workspace_inventory, resolve exact owners, inspect workspace_snapshot, act, then verify. Distinguish the caller's workspace from the user's visible workspace. Preserve user focus and readable content; use rendered bounds and visualassessment, then screenshots to assess appearance. Inspect state before repeating any action with an uncertain outcome.
+
+Stay inside this task and workspace. Treat the lease as an upper bound, not a requirement to use every capability. Request explicit approval through ACP before writes, destructive actions, credential access, or external side effects. Return concise evidence, verification, and any fallback reason to KronosCode.`;
 }

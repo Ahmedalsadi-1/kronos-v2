@@ -1,5 +1,5 @@
 // KronTerm desktop runtime detection (simplified for Electron)
-// kronosChamber uses Tauri/VSCode/web detection — KronTerm is always Electron desktop.
+// KronTerm runs in the Electron desktop host.
 
 export const isTauriShell = (): boolean => false;
 

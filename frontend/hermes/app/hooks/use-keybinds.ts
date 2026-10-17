@@ -1,3 +1,4 @@
+import { eventOwnsInput, selectorOwnsInput, deepActiveElement } from "@hermes/lib/keybinds/input-ownership";
 import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
@@ -293,7 +294,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     () =>
       onReleaseTypingFocus(() =>
         requestAnimationFrame(() => {
-          if (!isEditableTarget(document.activeElement)) {
+          if (!selectorOwnsInput() && !isEditableTarget(deepActiveElement())) {
             requestComposerFocus('active')
           }
         })
@@ -309,7 +310,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
       // navigated away mid-word — unmounting the composer and destroying the
       // unsent draft (#41079). The draft stash below makes navigation safe;
       // this makes the IME keystroke not navigate at all.
-      if (event.isComposing) {
+      if (event.isComposing || selectorOwnsInput()) {
         return
       }
 
@@ -379,7 +380,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
         return
       }
 
-      if (isEditableTarget(event.target) && !actionAllowedInInput(actionId, combo)) {
+      if (eventOwnsInput(event) && !actionAllowedInInput(actionId, combo)) {
         return
       }
 

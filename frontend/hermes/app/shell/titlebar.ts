@@ -4,8 +4,8 @@ export const TITLEBAR_HEIGHT = 34
 export const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
 /** Titlebar tool hit target (both axes). */
 export const TITLEBAR_CONTROL_SIZE = 24
-/** Codicon glyph box in titlebar clusters — optical match to traffic-light row. */
-export const TITLEBAR_ICON_SIZE = 13.9
+/** Codicon glyph box in titlebar clusters — kept slim so the row reads light. */
+export const TITLEBAR_ICON_SIZE = 11
 export const TITLEBAR_ICON_BADGE_SCALE = 0.65
 export const TITLEBAR_CONTROL_OFFSET_X = 74
 export const TITLEBAR_CONTROL_HEIGHT = TITLEBAR_CONTROL_SIZE

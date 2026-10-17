@@ -175,7 +175,16 @@ const fallbackAgents: AcpBackendInfo[] = [
         acpArgs: ["acp"],
         skillsDirs: [".kronoscode/skills"],
     },
-    { backend: "opencode", name: "OpenCode", cliPath: "opencode", available: false, avatar: "O", acpArgs: ["acp"] },
+    {
+        backend: "kronterm-agent",
+        name: "KronTerm Agent",
+        cliPath: "opencode",
+        available: false,
+        avatar: "◆",
+        description: "OpenCode-compatible KronTerm ACP specialist",
+        acpArgs: ["acp"],
+        skillsDirs: [".agents/skills", ".kronoscode/skills", ".hermes/skills", ".opencode/skills"],
+    },
     { backend: "codex", name: "Codex", cliPath: "npx @zed-industries/codex-acp@0.9.5", available: false, avatar: "C" },
     {
         backend: "gemini",

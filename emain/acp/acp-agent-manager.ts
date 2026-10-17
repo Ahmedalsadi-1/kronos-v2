@@ -8,8 +8,8 @@ import { v4 as uuidv4 } from "uuid";
 import { RpcApi } from "../../frontend/app/store/wshclientapi";
 import { ElectronWshClient } from "../emain-wsh";
 import { withKronosCodeAttachArgs } from "../kronoscode-runtime";
-import { startKronTermToolServer } from "../kronterm-tool-server";
 import { KronTermSurfaceSystemPrompt } from "../kronterm-surface-prompt";
+import { availableKronTermToolNames, startKronTermToolServer } from "../kronterm-tool-server";
 import { detectInstalledAgents, spawnAcpAgent } from "./acp-connector";
 import {
     AcpCapabilityLease,
@@ -21,6 +21,7 @@ import { AcpFailureEvidence, makeAcpTraceEnvelope } from "./acp-observability";
 import { NdjsonTransport } from "./acp-transport";
 import {
     AcpAgentCapabilities,
+    AcpAgentInfo,
     AcpAgentStatus,
     AcpDetectedAgent,
     AcpEvent,
@@ -37,6 +38,13 @@ import {
     AcpSessionUpdate,
 } from "./acp-types";
 
+export function normalizeAcpAgentInfo(backend: string, agentInfo: AcpAgentInfo | null): AcpAgentInfo | null {
+    if (backend !== "kronterm-agent" || !agentInfo) {
+        return agentInfo;
+    }
+    return { ...agentInfo, name: "KronTerm Agent", title: "KronTerm Agent" };
+}
+
 interface AcpAgentManagerOptions {
     conversationId: string;
     backend: string;
@@ -49,6 +57,8 @@ interface AcpAgentManagerOptions {
     surfaceContext?: {
         tabId: string;
         blockId?: string;
+        workspaceId?: string;
+        workflowRunId?: string;
     };
     mcpServers?: AcpSessionMcpServer[];
     maxReconnectAttempts?: number;
@@ -108,8 +118,10 @@ export class AcpAgentManager extends EventEmitter {
     private surfaceMcpAvailable = false;
     private surfaceInstructionsInjected = false;
     private hasReceivedUsageUpdate = false;
-    private readonly hostSurfaceContext: { tabId: string; blockId?: string } | undefined;
-    private surfaceContext: { tabId: string; blockId?: string } | undefined;
+    private readonly hostSurfaceContext:
+        { tabId: string; blockId?: string; workspaceId?: string; workflowRunId?: string } | undefined;
+    private surfaceContext:
+        { tabId: string; blockId?: string; workspaceId?: string; workflowRunId?: string } | undefined;
     private requestedMcpServers: AcpSessionMcpServer[] = [];
     private savedOpts: AcpAgentManagerOptions | null = null;
     private reconnectAttempts = 0;
@@ -154,7 +166,7 @@ export class AcpAgentManager extends EventEmitter {
             this.capabilities = initResult.capabilities;
             this.modes = initResult.modes;
             this.currentMode = initResult.modes?.currentModeId ?? initResult.modes?.availableModes?.[0]?.id ?? null;
-            this.agentInfo = initResult.agentInfo;
+            this.agentInfo = normalizeAcpAgentInfo(this.backend, initResult.agentInfo);
             this.emitEvent("harness_profile", {
                 profile: this.harnessProfile,
                 advertisedCapabilities: this.capabilities,
@@ -499,8 +511,9 @@ export class AcpAgentManager extends EventEmitter {
                 { name: "KRONTERM_WORKSPACE", value: this.workspace },
             ];
             if (spawnTarget.native) {
-                const toolServer = await startKronTermToolServer(() =>
-                    this.surfaceContext ? { tabId: this.surfaceContext.tabId, blockId: this.surfaceContext.blockId } : null
+                const toolServer = await startKronTermToolServer(
+                    () => (this.surfaceContext ? { ...this.surfaceContext } : null),
+                    `acp:${this.conversationId}`
                 );
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_URL", value: toolServer.nativeUrl });
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_TOKEN", value: toolServer.token });
@@ -543,6 +556,18 @@ export class AcpAgentManager extends EventEmitter {
                 env: surfaceEnv,
             });
             this.surfaceMcpAvailable = true;
+        } else if (this.supportsMcpType("http")) {
+            const toolServer = await startKronTermToolServer(
+                () => (this.surfaceContext ? { ...this.surfaceContext } : null),
+                `acp:${this.conversationId}`
+            );
+            mcpServers.push({
+                type: "http",
+                name: "kron-term",
+                url: toolServer.url,
+                headers: [{ name: "Authorization", value: `Bearer ${toolServer.token}` }],
+            });
+            this.surfaceMcpAvailable = true;
         } else {
             this.surfaceMcpAvailable = false;
         }
@@ -581,20 +606,15 @@ export class AcpAgentManager extends EventEmitter {
             usableResumeSessionId = undefined;
         }
 
-        if (usableResumeSessionId && this.capabilities?.loadSession) {
-            try {
-                sessionResult = await this.transport.sendRequest("session/load", {
-                    sessionId: usableResumeSessionId,
-                    cwd: this.normalizeCwdForAgent(this.workspace),
-                    mcpServers,
-                });
-            } catch (err) {
-                console.warn(
-                    `[acp:${this.backend}] session/load failed, falling back to session/new resume: ${
-                        err instanceof Error ? err.message : String(err)
-                    }`
-                );
+        if (usableResumeSessionId) {
+            if (!this.capabilities?.loadSession) {
+                throw new Error("This agent cannot restore its saved session. Start a new chat.");
             }
+            sessionResult = await this.transport.sendRequest("session/load", {
+                sessionId: usableResumeSessionId,
+                cwd: this.normalizeCwdForAgent(this.workspace),
+                mcpServers,
+            });
         }
         if (!sessionResult) {
             sessionResult = await this.transport.sendRequest(
@@ -654,7 +674,10 @@ export class AcpAgentManager extends EventEmitter {
         });
 
         let content = opts.content;
-        const leaseInstructions = formatAcpCapabilityLease(this.capabilityLease);
+        const leaseInstructions = formatAcpCapabilityLease(
+            this.capabilityLease,
+            this.surfaceMcpAvailable ? availableKronTermToolNames(this.surfaceContext) : []
+        );
         if (this.surfaceMcpAvailable && !this.surfaceInstructionsInjected) {
             content = `${waveSurfaceBootstrap}\n\n${leaseInstructions}\n\n[User Request]\n${content}`;
             this.surfaceInstructionsInjected = true;
@@ -752,18 +775,30 @@ export class AcpAgentManager extends EventEmitter {
         }
 
         const confirmation = this.confirmations[confirmationIndex];
-        this.confirmations.splice(confirmationIndex, 1);
-
         const selectedOption = confirmation.options.find((o) => o.optionId === opts.optionId);
-        if (!selectedOption) {
+        if (!selectedOption || !this.transport) {
             return;
         }
 
-        if (this.transport) {
-            this.transport.sendResponse(confirmation.requestId, {
-                outcome: { outcome: "selected", optionId: opts.optionId },
-            });
+        this.transport.sendResponse(confirmation.requestId, {
+            outcome: { outcome: "selected", optionId: opts.optionId },
+        });
+        this.confirmations.splice(confirmationIndex, 1);
+    }
+
+    /** Ends the current turn but keeps the agent process and session alive for the next prompt. */
+    cancelTurn(): void {
+        const transport = this.transport;
+        if (!transport || !this.sessionId) {
+            return;
         }
+        if (this.status === "running" || this.confirmations.length > 0) {
+            transport.sendNotification("session/cancel", { sessionId: this.sessionId });
+        }
+        for (const confirmation of this.confirmations) {
+            transport.sendResponse(confirmation.requestId, { outcome: { outcome: "cancelled" } });
+        }
+        this.confirmations = [];
     }
 
     async stop(): Promise<void> {
@@ -772,19 +807,20 @@ export class AcpAgentManager extends EventEmitter {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
-        if (this.transport) {
+        const transport = this.transport;
+        if (transport) {
             if (this.sessionId && (this.status === "running" || this.confirmations.length > 0)) {
-                this.transport.sendNotification("session/cancel", {
+                transport.sendNotification("session/cancel", {
                     sessionId: this.sessionId,
                 });
             }
             for (const confirmation of this.confirmations) {
-                this.transport.sendResponse(confirmation.requestId, {
+                transport.sendResponse(confirmation.requestId, {
                     outcome: { outcome: "cancelled" },
                 });
             }
             if (this.sessionId && this.capabilities?.sessionCapabilities?.close) {
-                const closeRequest = this.transport
+                const closeRequest = transport
                     .sendRequest("session/close", { sessionId: this.sessionId })
                     .catch(() => undefined);
                 await Promise.race([
@@ -794,8 +830,10 @@ export class AcpAgentManager extends EventEmitter {
                     }),
                 ]);
             }
-            this.transport.kill();
-            this.transport = null;
+            transport.kill();
+            if (this.transport === transport) {
+                this.transport = null;
+            }
         }
         this.sessionId = null;
         this.surfaceMcpAvailable = false;

@@ -77,10 +77,36 @@ describe("Hermes surface controller", () => {
 });
 
 describe("Hermes HUD geometry", () => {
-    it("defaults bottom-center and clamps saved bounds inside the workspace", () => {
+    it("reclamps saved geometry when HUD opens after the OS work area has changed", () => {
+        const surface = document.createElement("div");
+        surface.className = "workspace-surface-row";
+        surface.dataset.workspacePresentation = "os";
+        surface.getBoundingClientRect = () => new DOMRect(40, 100, 1000, 480);
+        document.body.append(surface);
+        try {
+            hermesSurfaceController.requestOpenHud();
+            const geometry = hermesSurfaceController.getSnapshot().geometry;
+            expect(geometry.y).toBeGreaterThanOrEqual(188);
+            expect(geometry.y + geometry.height).toBeLessThanOrEqual(502);
+            expect(geometry.x).toBeGreaterThanOrEqual(52);
+            expect(geometry.x + geometry.width).toBeLessThanOrEqual(1028);
+        } finally {
+            surface.remove();
+        }
+    });
+
+    it("fits narrow displays without forcing its minimum width", () => {
+        expect(clampHermesHudGeometry({}, new DOMRect(0, 0, 280, 500))).toEqual({
+            x: 12,
+            y: 12,
+            width: 256,
+            height: 410,
+        });
+    });
+    it("defaults to a tall sidepanel and clamps saved bounds inside the workspace", () => {
         const bounds = new DOMRect(100, 50, 1000, 700);
         const initial = clampHermesHudGeometry({}, bounds);
-        expect(initial).toMatchObject({ x: 290, y: 352, width: 620, height: 320 });
+        expect(initial).toMatchObject({ x: 112, y: 62, width: 360, height: 610 });
 
         expect(clampHermesHudGeometry({ x: -500, y: 2000, width: 2000, height: 20 }, bounds)).toEqual({
             x: 112,

@@ -7,7 +7,7 @@ import { atoms, getApi, getSettingsKeyAtom } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
 import { useTabModelMaybe } from "@/app/store/tab-model";
 import { isBuilderWindow } from "@/app/store/windowtype";
-import { ChatHubV2Frame } from "@/app/view/chathubv2/chathubv2";
+import { HermesRuntimeChat } from "@/app/view/hermes/hermes-runtime-chat";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { getWebServerEndpoint } from "@/util/endpoints";
 import { checkKeyPressed, keydownWrapper } from "@/util/keyutil";
@@ -854,7 +854,7 @@ const AIPanelComponentInner = memo(
                 {!isWidget && <AIPanelHeader onFloatingIsland={onFloatingIsland} />}
                 {!isWidget && <SiriVoiceOverlay />}
                 <div key="main-content" className="flex-1 flex flex-col min-h-0">
-                    <ChatHubV2Frame blockId={isWidget ? "widget" : "side-panel"} tabId={tabModel?.tabId} />
+                    <HermesRuntimeChat tabId={tabModel?.tabId} />
                 </div>
             </div>
         );

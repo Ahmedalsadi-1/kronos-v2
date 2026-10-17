@@ -69,54 +69,6 @@ const previewRuntimes = new Map<
     { conversationId: string; backend: string; workspace?: string; status: string; sessionId: string }
 >();
 
-function getPreviewChatHubV2Data(url: string, ready: boolean) {
-    return {
-        url,
-        port: 3107,
-        serverPath: "",
-        distPath: "",
-        ready,
-    };
-}
-
-async function isPreviewChatHubV2Reachable(url: string) {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 700);
-    try {
-        const response = await fetch(`${url}/health`, { mode: "no-cors", signal: controller.signal });
-        return response.ok || response.type === "opaque";
-    } catch (_err) {
-        return false;
-    } finally {
-        window.clearTimeout(timeoutId);
-    }
-}
-
-async function getPreviewChatHubV2Status() {
-    const url = "http://127.0.0.1:3107";
-    if (await isPreviewChatHubV2Reachable(url)) {
-        return {
-            success: true,
-            data: getPreviewChatHubV2Data(url, true),
-        };
-    }
-    return { success: true, data: null };
-}
-
-async function startPreviewChatHubV2() {
-    const url = "http://127.0.0.1:3107";
-    if (await isPreviewChatHubV2Reachable(url)) {
-        return {
-            success: true,
-            data: getPreviewChatHubV2Data(url, true),
-        };
-    }
-    return {
-        success: false,
-        error: "ChatHub V2 can only be started by the Electron app. Open the ChatHub V2 widget in KronTerm to launch KronosChamber.",
-    };
-}
-
 const previewElectronApi: ElectronApi = {
     getAuthKey: () => "",
     getIsDev: () => false,
@@ -131,6 +83,74 @@ const previewElectronApi: ElectronApi = {
     getWebviewPreload: () => "",
     getAboutModalDetails: () => ({}) as AboutModalDetails,
     getZoomFactor: () => 1.0,
+    setHudWindowMode: (_active: boolean, _sessionId?: string, _options?: { keepWorkspaceVisible?: boolean }) => {},
+    setWindowIgnoreMouse: (_ignore: boolean) => {},
+    openNativeHudIsland: (_input: { blockId: string; title?: string; view?: string }) => Promise.resolve(false),
+    setNativeHudIslandVisibility: (_blockId: string, _visible: boolean) => Promise.resolve(false),
+    requestNativeHudLaunch: (_app: "web" | "files" | "terminal" | "widget" | "apps") => {},
+    comfyUiRequest: async () => {
+        throw new Error("Image Studio requires a local ComfyUI server and the desktop runtime.");
+    },
+    workflowCommand: async () => ({ runs: [], workflows: [] }),
+    workflowContext: async () => ({ workspaceId: "preview-workspace", tabId: "preview-tab", blocks: [] }),
+    workflowOpen: async () => true,
+    onWorkflowChanged: () => () => {},
+    syncNativeNotch: (_state: unknown) => {},
+    getNowPlaying: async () => undefined,
+    controlNowPlaying: async () => undefined,
+    getProductivityState: async () => (await import("../../types/productivity")).emptyProductivityState(),
+    updateProductivity: async () => (await import("../../types/productivity")).emptyProductivityState(),
+    isProductivityAppAllowed: async () => true,
+    onProductivityState: () => () => {},
+    updateDesktopPetVoice: () => {},
+    desktopGrab: async () => {
+        throw new Error("Native desktop required");
+    },
+    cancelDesktopGrab: async () => {},
+    browserNavigationHistory: async () => null,
+    browserGrab: async (input) => ({ opId: input.opId, kind: "error", reason: "Native browser required" }),
+    browserCancelGrab: async () => {},
+    browserAccessibilitySnapshot: async () => {
+        throw new Error("Native browser required");
+    },
+    captureBrowserPage: async () => {
+        throw new Error("Native browser required");
+    },
+    copyBrowserImage: async () => false,
+    importBrowserCookies: async () => {
+        throw new Error("Native browser required");
+    },
+    onNativeHudVoiceControl: () => () => {},
+    onNativeNotchAvailability: (callback) => {
+        callback(false);
+        return () => {};
+    },
+    onNativeNotchNavigate: (_callback: (route: string) => void) => () => {},
+    onNativeNotchExplorer: (_callback: (path: string) => void) => () => {},
+    onNativeNotchBrowserAction: (_callback: (input: { action: string; url?: string }) => void) => () => {},
+    onNativeNotchFocus: (_callback: (blockId: string) => void) => () => {},
+    requestNativeHudExit: () => {},
+    moveNativeHudBy: (_delta: { x: number; y: number }) => {},
+    getHudWidgetRoute: async () => "",
+    getNativeHudIslandPresentation: async () => "detached",
+    toggleNativeHudIslandExpanded: async () => "detached",
+    onNativeHudIslandPresentation: () => () => {},
+    resizeCurrentNativeHudIsland: async () => false,
+    selectNativeHudWidget: async () => false,
+    captureNativeHudBlock: async () => "",
+    onNativeHudSelectWidget: () => () => {},
+    onNativeHudSummon: () => () => {},
+    closeNativeHudSurface: () => {},
+    onNativeHudLaunch: (_callback: (app: "web" | "files" | "terminal" | "widget" | "apps") => void) => () => {},
+    onNativeHudAppTarget: (_callback) => () => {},
+    onNativeHudExit: (_callback: () => void) => () => {},
+    getSystemAppearance: () => ({
+        colorScheme: "light",
+        contrast: "normal",
+        reducedTransparency: false,
+        reducedMotion: false,
+    }),
+    onSystemAppearanceChange: (_callback: (appearance: SystemAppearanceSnapshot) => void) => () => {},
     showWorkspaceAppMenu: (_workspaceId: string) => {},
     showBuilderAppMenu: (_builderId: string) => {},
     showContextMenu: (_workspaceId: string, _menu: ElectronContextMenuItem[]) => {},
@@ -164,6 +184,12 @@ const previewElectronApi: ElectronApi = {
     onQuicklook: (_filePath: string) => {},
     openNativePath: (_filePath: string) => {},
     captureScreenshot: (_rect: Electron.Rectangle) => Promise.resolve(""),
+    sendInputEvent: (
+        _inputEvent: Electron.KeyboardInputEvent | Electron.MouseInputEvent | Electron.MouseWheelInputEvent
+    ) => Promise.resolve(),
+    insertText: (_text: string) => Promise.resolve(),
+    readClipboard: () => Promise.resolve(""),
+    writeClipboard: (_text: string) => Promise.resolve(),
     setKeyboardChordMode: () => {},
     clearWebviewStorage: (_webContentsId: number) => Promise.resolve(),
     setWaveAIOpen: (_isOpen: boolean) => {},
@@ -180,14 +206,84 @@ const previewElectronApi: ElectronApi = {
             "/Users/albsheralsadi/kronterm/frontend/app/aipanel/acp-chat-panel.tsx",
             "/Users/albsheralsadi/kronterm/frontend/app/aipanel/use-acp-session.ts",
         ]),
+    selectWallpaper: () => Promise.resolve(null),
+    revealNativePath: (_filePath: string) => {},
     searchSystemItems: (_query: string) => Promise.resolve([]),
+    getNativeAppIcons: (_appPaths: string[]) => Promise.resolve({}),
+    getHostPermissionStatus: () =>
+        Promise.resolve({
+            screenCapture: "granted",
+            accessibility: "granted",
+            microphone: "not-determined",
+        }),
+    requestHostPermission: (_permission: "screen-capture" | "accessibility" | "microphone") =>
+        Promise.resolve({
+            screenCapture: "granted",
+            accessibility: "granted",
+            microphone: "granted",
+        }),
+    prepareNativeSurfaceCapture: (input: { appId: string; appName: string }) =>
+        Promise.resolve({ sourceId: `preview:${input.appId}`, title: input.appName }),
     acpApplyGitIdentity: (_opts: { workspace: string; userName: string; userEmail: string }) =>
         Promise.resolve({ success: true }),
     setIsActive: async () => {},
+    reportAgentCursor: (_point, _owner) => {},
     setDesktopPetActivity: (_notification) => {},
     onDesktopPetChat: (_callback) => () => {},
     onDesktopPetResume: (_callback) => () => {},
     onDesktopPetSurfaceActivity: (_callback) => () => {},
+    publishAgentSurfaceActivity: (_activity) => {},
+    sendHermesContext: async () => {
+        throw new Error("Hermes is unavailable in component preview");
+    },
+    onHermesContext: () => () => {},
+    sendHermesSelection: async () => {
+        throw new Error("Hermes is unavailable in component preview");
+    },
+    onHermesSelection: () => () => {},
+    requestAgentTakeover: () => {},
+    onOSOverviewGesture: () => () => {},
+    manageNativeTaskGroups: async () => ({ success: true as const, data: { workspaces: [] } }),
+    listLinuxDesktops: async () => ({ success: true as const, data: [] }),
+    performLinuxDesktopAction: async () => ({
+        success: false as const,
+        error: { code: "unavailable", message: "Enable the local Linux desktop runtime." },
+    }),
+    assignLinuxDesktop: async () => ({
+        success: false as const,
+        error: { code: "unavailable", message: "Enable the local Linux desktop runtime." },
+    }),
+    takeOverLinuxDesktop: async () => ({
+        success: false as const,
+        error: { code: "unavailable", message: "Enable the local Linux desktop runtime." },
+    }),
+    resumeLinuxDesktop: async () => ({
+        success: false as const,
+        error: { code: "unavailable", message: "Enable the local Linux desktop runtime." },
+    }),
+    listComputerTargets: async () => ({ success: true as const, data: [] }),
+    startComputerTargetSession: async () => ({
+        success: false as const,
+        error: { code: "preview", message: "Open the Computers preview to use its explicitly mocked device" },
+    }),
+    readComputerTargetFrame: async () => ({
+        success: false as const,
+        error: { code: "preview", message: "Live devices require the desktop app" },
+    }),
+    stopComputerTargetSession: async () => ({ success: true as const, data: undefined }),
+    performComputerTargetAction: async () => ({
+        success: false as const,
+        error: { code: "preview", message: "Simulator actions require the desktop app" },
+    }),
+    takeOverComputerTarget: async () => ({
+        success: false as const,
+        error: { code: "preview", message: "Simulator actions require the desktop app" },
+    }),
+    resumeComputerTarget: async () => ({
+        success: false as const,
+        error: { code: "preview", message: "Simulator actions require the desktop app" },
+    }),
+    onAgentTakeover: (_callback) => () => {},
     acpDetectAgents: () => Promise.resolve(previewAcpAgents),
     acpInitialize: (opts: {
         conversationId: string;
@@ -270,6 +366,7 @@ const previewElectronApi: ElectronApi = {
     },
     acpConfirmTool: (_opts: { conversationId: string; msgId: string; callId: string; optionId: string }) =>
         Promise.resolve({ success: false, error: "ACP is not available in preview" }),
+    acpCancel: (_opts: { conversationId: string }) => Promise.resolve({ success: true }),
     acpStop: (_opts: { conversationId: string }) => {
         previewRuntimes.delete(_opts.conversationId);
         return Promise.resolve({ success: true });
@@ -339,16 +436,11 @@ const previewElectronApi: ElectronApi = {
     lspSend: (_sessionId: string, _content: string) => {},
     lspStop: (_sessionId: string) => {},
     onLspMessage: (_callback: (msg: { sessionId: string; content: string }) => void) => () => {},
-    krondesignStatus: () => Promise.resolve({ running: false, url: "", pid: null }),
-    krondesignStart: () => Promise.resolve({ success: false, error: "Krondesign is not available in preview" }),
-    // ── ChatHub V2 / KronosChamber ──────────────────────────
-    chathubv2Start: startPreviewChatHubV2,
-    chathubv2Status: getPreviewChatHubV2Status,
-    chathubv2Stop: () => Promise.resolve({ success: true }),
-    hermesGetConnection: (_context?: { tabId?: string; blockId?: string }) =>
+    hermesGetConnection: (_context?: HermesSurfaceContext) =>
         Promise.reject(new Error("Hermes is only available in the Electron app")),
     hermesApi: () => Promise.reject(new Error("Hermes is only available in the Electron app")),
     onHermesConnection: () => () => {},
+    onHermesRuntimeFailure: () => () => {},
     kronoscodeGetConnection: () =>
         Promise.resolve({
             mode: "managed" as const,
@@ -370,6 +462,9 @@ const previewElectronApi: ElectronApi = {
     onKronosCodeExit: () => () => {},
     onKronosCodePowerResume: () => () => {},
     onKronosCodeConnectionApplied: () => () => {},
+    audioTranscribeFile: async () => {
+        throw new Error("File transcription requires the desktop audio engine and a cached speech model.");
+    },
     audioStart: () => Promise.resolve(false),
     audioShutdown: () => {},
     audioStartListening: () => {},
@@ -397,6 +492,47 @@ const previewElectronApi: ElectronApi = {
 };
 
 function installPreviewElectronApi() {
+    if ((window as any).__krontermLiveDevices === true) {
+        const call = async (method: string, args: Record<string, unknown> = {}) => {
+            try {
+                const response = await fetch("/__kronterm_devices", {
+                    method: "POST",
+                    headers: {
+                        "content-type": "application/json",
+                        "x-kronterm-device-preview": (window as any).__krontermDevicePreviewToken,
+                    },
+                    body: JSON.stringify({ method, ...args }),
+                });
+                return await response.json();
+            } catch (error) {
+                return {
+                    success: false,
+                    error: {
+                        code: "preview-disconnected",
+                        message: error instanceof Error ? error.message : "Live preview disconnected",
+                    },
+                };
+            }
+        };
+        Object.assign(previewElectronApi, {
+            listLinuxDesktops: () => call("linux-list"),
+            performLinuxDesktopAction: (action) => call("linux-action", { action }),
+            assignLinuxDesktop: (desktopId, agentId, expectedGeneration) =>
+                call("linux-assign", { desktopId, agentId, expectedGeneration }),
+            takeOverLinuxDesktop: (desktopId) => call("linux-takeover", { desktopId }),
+            resumeLinuxDesktop: (desktopId, expectedGeneration) =>
+                call("linux-resume", { desktopId, expectedGeneration }),
+            listComputerTargets: () => call("list"),
+            performComputerTargetAction: (action: unknown) => call("action", { action }),
+            takeOverComputerTarget: (targetId: string) => call("takeover", { targetId }),
+            resumeComputerTarget: (targetId: string, expectedGeneration: number) =>
+                call("resume", { targetId, expectedGeneration }),
+            startComputerTargetSession: (targetId: string, expectedGeneration: number) =>
+                call("connect", { targetId, expectedGeneration }),
+            readComputerTargetFrame: (sessionId: string) => call("frame", { sessionId }),
+            stopComputerTargetSession: (sessionId: string) => call("disconnect", { sessionId }),
+        });
+    }
     (window as any).api = previewElectronApi;
 }
 

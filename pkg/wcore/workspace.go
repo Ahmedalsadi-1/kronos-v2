@@ -388,6 +388,14 @@ func UpdateWorkspaceTabIds(ctx context.Context, workspaceId string, tabIds []str
 }
 
 func ListWorkspaces(ctx context.Context) (waveobj.WorkspaceList, error) {
+	return listWorkspaces(ctx, false)
+}
+
+func ListAllWorkspaces(ctx context.Context) (waveobj.WorkspaceList, error) {
+	return listWorkspaces(ctx, true)
+}
+
+func listWorkspaces(ctx context.Context, includeUnnamed bool) (waveobj.WorkspaceList, error) {
 	workspaces, err := wstore.DBGetAllObjsByType[*waveobj.Workspace](ctx, waveobj.OType_Workspace)
 	if err != nil {
 		return nil, err
@@ -403,7 +411,7 @@ func ListWorkspaces(ctx context.Context) (waveobj.WorkspaceList, error) {
 
 	var wl waveobj.WorkspaceList
 	for _, workspace := range workspaces {
-		if workspace.Name == "" || workspace.Icon == "" || workspace.Color == "" {
+		if !includeUnnamed && (workspace.Name == "" || workspace.Icon == "" || workspace.Color == "") {
 			continue
 		}
 		windowId, ok := workspaceToWindow[workspace.OID]

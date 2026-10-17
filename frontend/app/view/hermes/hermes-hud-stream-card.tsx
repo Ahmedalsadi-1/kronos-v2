@@ -1,15 +1,15 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ComputerUseControlEvent } from "@/app/components/computer-use-status-card";
+import { dispatchComputerUseControl } from "@/app/components/computer-use-status-card";
 import { focusOSSession } from "@/app/workspace/command-center-events";
+import { useEffect, useRef, useState } from "react";
 import {
     isAgentActivityActive,
     subscribeAgentActivityStream,
     type AgentActivitySurface,
     type LiveAgentSurfaceActivity,
 } from "../../../types/agent-activity";
-import { useEffect, useRef, useState } from "react";
 
 const HudStreamHistoryLimit = 6;
 const HudStreamVisibleSteps = 4;
@@ -133,13 +133,7 @@ export function HermesHudStreamCard({ hudGeometry }: { hudGeometry: { x: number;
                 <button
                     type="button"
                     className="cursor-pointer rounded-lg bg-accent/80 px-2.5 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-accent"
-                    onClick={() =>
-                        window.dispatchEvent(
-                            new CustomEvent(ComputerUseControlEvent, {
-                                detail: { action: "takeover", activity: latest },
-                            })
-                        )
-                    }
+                    onClick={() => dispatchComputerUseControl("takeover", latest)}
                 >
                     Take control
                 </button>

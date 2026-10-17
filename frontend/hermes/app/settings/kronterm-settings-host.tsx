@@ -6,11 +6,14 @@ export interface KronTermSettingsSectionDescriptor {
 }
 
 export interface KronTermSettingsHost {
+    appearance?: { reducedMotion: boolean };
     renderSection: (sectionId: string) => ReactNode;
     sections: readonly KronTermSettingsSectionDescriptor[];
 }
 
 const KronTermSettingsPrefix = "kronterm:";
+const KronTermSettingsRequestEvent = "kronterm:open-settings";
+let pendingKronTermSettingsSection: string | null = null;
 
 export function makeKronTermSettingsViewId(sectionId: string): `kronterm:${string}` {
     return `${KronTermSettingsPrefix}${sectionId}`;
@@ -19,6 +22,19 @@ export function makeKronTermSettingsViewId(sectionId: string): `kronterm:${strin
 export function getKronTermSettingsSectionId(viewId: string): string | null {
     return viewId.startsWith(KronTermSettingsPrefix) ? viewId.slice(KronTermSettingsPrefix.length) : null;
 }
+
+export function requestKronTermSettings(sectionId: string): void {
+    pendingKronTermSettingsSection = sectionId;
+    window.dispatchEvent(new CustomEvent(KronTermSettingsRequestEvent, { detail: { sectionId } }));
+}
+
+export function consumeKronTermSettingsRequest(): string | null {
+    const sectionId = pendingKronTermSettingsSection;
+    pendingKronTermSettingsSection = null;
+    return sectionId;
+}
+
+export { KronTermSettingsRequestEvent };
 
 const KronTermSettingsHostContext = createContext<KronTermSettingsHost | null>(null);
 

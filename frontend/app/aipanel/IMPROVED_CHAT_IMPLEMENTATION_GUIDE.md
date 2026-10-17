@@ -21,7 +21,7 @@ When adding the rich composer to another KronTerm chat surface:
 ## Do not duplicate
 
 - ACP protocol state from `use-acp-session.ts`.
-- KronosChamber runtime health logic from `emain/chathubv2-*.ts`.
+- Hermes runtime health logic from `emain/hermes-runtime.ts`.
 - file encoding or base64 helpers from `@/util/util` and `ai-utils.ts`.
 - canvas agent identifiers with display-only labels.
 - provider compatibility settings stored under `waveai:*`.

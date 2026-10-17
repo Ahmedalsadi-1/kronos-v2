@@ -4,3 +4,13 @@ Portions of the KronosCode JSON-RPC gateway client are adapted from
 Nous Research's Hermes Agent, licensed under the MIT License.
 Copyright 2025 Nous Research.
 https://github.com/NousResearch/hermes-agent
+
+The Hermes agent CLI provider catalog is adapted from CleanCode,
+licensed under the MIT License.
+Copyright (c) 2026 chen-985211.
+https://github.com/chen-985211/cleancode
+
+The KronTerm tabs-mode visual treatment and browser element picker are adapted from Orca,
+licensed under the MIT License.
+Copyright (c) 2026 Lovecast Inc.
+https://github.com/stablyai/orca

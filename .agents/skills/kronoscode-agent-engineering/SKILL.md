@@ -22,7 +22,7 @@ Build predictable agent behavior with explicit state, bounded authority, durable
 - `agents/kronoscode/`: packaged ACP boundary
 - `emain/acp/`: protocol and agent management
 - `emain/kronoscode-runtime.ts`: managed process lifecycle
-- `emain/chathubv2-*.ts`: chamber transport and session services
-- `frontend/app/view/chathubv2/`: user-facing projection
+- `emain/hermes-runtime.ts`: Hermes transport and session services
+- `frontend/app/view/hermes/`: user-facing projection
 
 Prefer boring, inspectable state machines over implicit orchestration. Keep compatibility identifiers unchanged unless migration is the task.

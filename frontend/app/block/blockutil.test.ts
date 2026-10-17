@@ -9,7 +9,7 @@ describe("blockViewToIcon", () => {
         ["term", "terminal"],
         ["preview", "file"],
         ["web", "globe"],
-        ["chathubv2", "sparkles"],
+        ["chathubv2", "robot"],
         ["sysinfo", "chart-line"],
         ["sandbox", "desktop"],
         ["appstream", "desktop"],

@@ -105,8 +105,15 @@ const g = gatewayState();
 // to. (A fresh `atom()` per reload would orphan existing subscriptions.)
 export const $gateway = g.$gateway;
 
+let removeHostAgentEvents: (() => void) | undefined;
+
 export function configureGatewayRegistry(cfg: RegistryConfig): void {
     g.config = cfg;
+    // Host agent backends (KronosCode in KronTerm) stream through the same fan-out as sockets.
+    removeHostAgentEvents?.();
+    removeHostAgentEvents = window.hermesDesktop?.agentBackends?.onEvent((event) => {
+        g.config?.onEvent(event as GatewayEvent);
+    });
 }
 
 /**

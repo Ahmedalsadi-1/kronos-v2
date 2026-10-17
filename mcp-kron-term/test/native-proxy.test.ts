@@ -1,13 +1,13 @@
 // The native proxy keeps the stdio MCP contract for ACP sessions and the
-// KronosChamber gateway, but must land every manifest/call on the in-process
+// KronTerm gateway, but must land every manifest/call on the in-process
 // /native endpoint. These tests spawn the built proxy against a mock bridge.
 
-import assert from "node:assert/strict";
-import test, { after, before } from "node:test";
-import http from "node:http";
-import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import assert from "node:assert/strict";
+import http from "node:http";
+import path from "node:path";
+import test, { after, before } from "node:test";
 
 const proxyPath = path.join(import.meta.dirname, "..", "dist", "native-proxy.js");
 const NATIVE_TOKEN = "test-proxy-token";

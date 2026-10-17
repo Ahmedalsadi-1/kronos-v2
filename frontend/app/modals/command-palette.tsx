@@ -7,6 +7,7 @@ import { getBuiltinViewDescriptors, useInstalledAppDescriptors } from "@/app/sto
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { createBlock, getApi } from "@/store/global";
 import type { LucideIcon } from "lucide-react";
@@ -50,14 +51,13 @@ const CommandActions: CommandPaletteAction[] = [
         group: "commands",
         icon: LayoutGrid,
         run: () => {
-            window.localStorage.setItem("kronterm:layoutmode", "os");
-            window.dispatchEvent(new CustomEvent("kronterm:layoutmode-changed", { detail: { mode: "os" } }));
+            publishWorkspacePresentation("os");
             void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": "os" });
         },
     },
 ];
 
-const ApplicationViews = ["term", "web", "chathubv2", "preview", "sysinfo", "sandbox"];
+const ApplicationViews = ["term", "web", "hermes", "preview", "sysinfo", "sandbox"];
 
 function makeApplicationResults(): CommandPaletteAction[] {
     const byView = new Map(getBuiltinViewDescriptors([]).map((descriptor) => [descriptor.view, descriptor]));
@@ -214,7 +214,9 @@ function CommandPaletteModal() {
                             const previous = index > 0 ? actions[index - 1] : undefined;
                             const showHeader = previous == null || previous.group !== action.group;
                             const headerLabel =
-                                showHeader && index === 0 && query.trim() !== "" ? "Top Results" : GroupLabels[action.group];
+                                showHeader && index === 0 && query.trim() !== ""
+                                    ? "Top Results"
+                                    : GroupLabels[action.group];
                             const Icon = action.icon;
                             const selected = index === selectedIndex;
                             return (

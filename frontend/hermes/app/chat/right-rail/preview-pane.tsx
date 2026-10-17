@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@hermes/components/ui/button'
@@ -12,7 +12,7 @@ import { openPreviewTargetInBrowser, remoteHtmlPreviewDocument } from '@hermes/l
 import { rafCoalesce } from '@hermes/lib/raf-coalesce'
 import { cn } from '@hermes/lib/utils'
 import { notify, notifyError } from '@hermes/store/notifications'
-import { $previewServerRestart, failPreviewServerRestart, type PreviewTarget } from '@hermes/store/preview'
+import { $previewServerRestart, failPreviewServerRestart, openPreview, type PreviewTarget } from '@hermes/store/preview'
 
 import { ArtifactPreview } from './preview-artifact'
 import {
@@ -23,7 +23,9 @@ import {
   PreviewConsolePanel
 } from './preview-console'
 import { type ConsoleEntry } from './preview-console-state'
+import { registerPreviewDriver } from './preview-driver'
 import { LocalFilePreview, PreviewEmptyState } from './preview-file'
+import { normalizePreviewNavigationInput } from './preview-navigation'
 import { registerPreviewPageReader } from './preview-reader'
 import { previewConsoleState, registerPreviewDevTools } from './preview-strip-tools'
 
@@ -41,7 +43,6 @@ type PreviewWebview = HTMLElement & {
 }
 
 interface PreviewPaneProps {
-  embedded?: boolean
   onRestartServer?: (url: string, context?: string) => Promise<string>
   reloadRequest?: number
   /** The preview tab this pane renders. Keys the per-tab console store and the
@@ -102,7 +103,7 @@ function PreviewLoadError({
           <a
             className="pointer-events-auto block font-mono text-muted-foreground/90 underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground"
             href={error.url}
-            onClick={event => {
+            onClick={(event) => {
               event.preventDefault()
               void window.hermesDesktop?.openExternal(error.url)
             }}
@@ -129,7 +130,7 @@ function PreviewLoadError({
   )
 }
 
-export function PreviewPane({ embedded = false, onRestartServer, reloadRequest = 0, tabId, target }: PreviewPaneProps) {
+export function PreviewPane({ onRestartServer, reloadRequest = 0, tabId, target }: PreviewPaneProps) {
   const { t } = useI18n()
   const copy = t.preview.web
   // The console store belongs to the TAB, not this render: the toggles live on
@@ -146,6 +147,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
   const consoleHeight = useStore(consoleState.$height)
   const consoleOpen = useStore(consoleState.$open)
   const [currentUrl, setCurrentUrl] = useState(target.url)
+  const [navigationValue, setNavigationValue] = useState(target.url)
   const [devtoolsOpen, setDevtoolsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<PreviewLoadErrorState | null>(null)
@@ -166,11 +168,6 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
     () => (isRemoteHtml ? remoteHtmlPreviewDocument(target.dataUrl!) : null),
     [isRemoteHtml, target.dataUrl]
   )
-
-  const currentLabel = compactUrl(currentUrl)
-
-  const previewLabel =
-    target.label && target.label.replace(/\/$/, '') !== currentLabel.replace(/\/$/, '') ? target.label : currentLabel
 
   const restartingServer =
     previewServerRestart?.status === 'running' &&
@@ -238,7 +235,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
     setLoadError(null)
 
     if (!isWebPreview) {
-      setLocalReloadKey(key => key + 1)
+      setLocalReloadKey((key) => key + 1)
 
       return
     }
@@ -249,6 +246,18 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
       webviewRef.current?.reload?.()
     }
   }, [isWebPreview])
+
+  const navigatePreview = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      const url = normalizePreviewNavigationInput(navigationValue)
+      if (!url || target.kind !== 'url') {
+        return
+      }
+      openPreview({ ...target, label: 'Browser', source: 'manual', url }, 'manual')
+    },
+    [navigationValue, target]
+  )
 
   const appendConsoleEntry = useCallback(
     (entry: Omit<ConsoleEntry, 'id'>) => {
@@ -353,6 +362,23 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
       }
     })
   }, [isWebPreview, tabId])
+
+  useEffect(() => {
+    if (!isWebPreview || isRemoteHtml || !tabId) {
+      return
+    }
+    return registerPreviewDriver(tabId, {
+      back: () => webviewRef.current?.goBack?.(),
+      execute: async (code) => {
+        if (!webviewRef.current?.executeJavaScript) {
+          throw new Error('preview webview is not ready')
+        }
+        return webviewRef.current.executeJavaScript(code)
+      },
+      forward: () => webviewRef.current?.goForward?.(),
+      reload: reloadPreview
+    })
+  }, [isRemoteHtml, isWebPreview, reloadPreview, tabId])
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
@@ -486,7 +512,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
       reloadPreview()
     }
 
-    const unsubscribe = window.hermesDesktop.onPreviewFileChanged(payload => {
+    const unsubscribe = window.hermesDesktop.onPreviewFileChanged((payload) => {
       if (!active || payload.id !== watchId) {
         return
       }
@@ -506,7 +532,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
 
     void window.hermesDesktop
       .watchPreviewFile(target.url)
-      .then(watch => {
+      .then((watch) => {
         if (!active) {
           void window.hermesDesktop?.stopPreviewFileWatch?.(watch.id)
 
@@ -515,7 +541,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
 
         watchId = watch.id
       })
-      .catch(error => {
+      .catch((error) => {
         appendConsoleEntry({
           level: 2,
           message: copy.watchFailed(error instanceof Error ? error.message : String(error))
@@ -547,6 +573,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
     host.replaceChildren()
     webviewRef.current = null
     setCurrentUrl(target.url)
+    setNavigationValue(target.url)
     setDevtoolsOpen(false)
     setLoadError(null)
     consoleState.reset()
@@ -596,6 +623,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
       if (detail.url) {
         setLoadError(null)
         setCurrentUrl(detail.url)
+        setNavigationValue(detail.url)
       }
     }
 
@@ -659,7 +687,7 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
   return (
     <aside className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent text-muted-foreground">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {!embedded && (
+        {target.kind === 'url' && (
           <div className="pointer-events-none flex min-h-(--titlebar-height) items-center gap-1.5 border-b border-border/60 bg-background px-2 py-1">
             <div className="pointer-events-auto flex items-center gap-1">
               <Tip label="Back">
@@ -696,24 +724,27 @@ export function PreviewPane({ embedded = false, onRestartServer, reloadRequest =
                 </Button>
               </Tip>
             </div>
-            <div className="min-w-0 flex-1">
-              <Tip label={copy.openTarget(currentUrl)}>
-                <a
-                  className="pointer-events-auto inline max-w-full truncate text-left text-xs font-medium text-foreground underline-offset-4 decoration-current/20 transition-colors hover:text-primary hover:underline"
-                  href={isRemoteHtmlTarget ? undefined : currentUrl}
-                  onClick={event => {
-                    if (isRemoteHtmlTarget) {
-                      event.preventDefault()
-                      void openPreviewTargetInBrowser(target).catch(error => notifyError(error, t.preview.unavailable))
-                    }
-                  }}
-                  rel="noreferrer"
-                  target={isRemoteHtmlTarget ? undefined : '_blank'}
-                >
-                  {previewLabel || copy.fallbackTitle}
-                </a>
-              </Tip>
-            </div>
+            <form className="pointer-events-auto min-w-0 flex-1" onSubmit={navigatePreview}>
+              <input
+                aria-label="Browser address"
+                className="h-6 w-full rounded-md border border-border/60 bg-muted/30 px-2 font-mono text-[0.6875rem] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50 focus:bg-background"
+                onChange={(event) => setNavigationValue(event.target.value)}
+                spellCheck={false}
+                value={navigationValue}
+              />
+            </form>
+            <Tip label={copy.openTarget(currentUrl)}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="pointer-events-auto h-5 w-5"
+                onClick={() =>
+                  void openPreviewTargetInBrowser(target).catch((error) => notifyError(error, t.preview.unavailable))
+                }
+              >
+                <Codicon name="link-external" size="0.75rem" />
+              </Button>
+            </Tip>
           </div>
         )}
 

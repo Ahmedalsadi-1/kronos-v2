@@ -53,13 +53,14 @@ kronoscode/*.bun-build
 __pycache__/
 *.py[cod]
 
+# Deepwork
+.slim/deepwork/
+
 # Embedded repositories
 kronoscoder/
 packages/kronbotd/
 .reference-repos/
 UI-TARS-desktop/
-krondesign/
-open-design/
 flux/
 memory-connectors-test/
 .hermes/
@@ -67,3 +68,6 @@ third_party/upstream/hermes-agent/
 
 # Build output
 website/.next/
+
+# Personal Coucou build (restricted upstream character and sound assets).
+/.local/coucou-hud/

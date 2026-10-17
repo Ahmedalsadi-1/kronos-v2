@@ -4,44 +4,18 @@
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import {
-    KronarchyEnabledChangedEvent,
-    KronarchyEnabledStorageKey,
-    publishKronarchyEnabled,
-} from "@/app/workspace/kronarchy-shell";
+    normalizeWorkspacePresentation,
+    publishWorkspacePresentation,
+    readWorkspacePresentation,
+    subscribeWorkspacePresentation,
+} from "@/app/tab/workspace-presentation";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useSyncExternalStore } from "react";
 import type { KronSettingsViewModel } from "./kronsettings-model";
 import { SectionHeader, SelectSetting, SettingsCard, ToggleSetting } from "./kronsettings-shared";
 
 interface KronSettingsVisualContentProps {
     model: KronSettingsViewModel;
-}
-
-const LayoutModeStorageKey = "kronterm:layoutmode";
-const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
-
-function publishLayoutMode(mode: string) {
-    try {
-        window.localStorage.setItem(LayoutModeStorageKey, mode);
-        window.dispatchEvent(new CustomEvent(LayoutModeChangedEvent, { detail: { mode } }));
-    } catch {}
-}
-
-function getStoredLayoutMode() {
-    try {
-        const mode = window.localStorage.getItem(LayoutModeStorageKey);
-        return mode === "canvas" || mode === "tabs" || mode === "web" || mode === "os" ? mode : "widgets";
-    } catch {
-        return "widgets";
-    }
-}
-
-function getStoredKronarchyMode() {
-    try {
-        return window.localStorage.getItem(KronarchyEnabledStorageKey) === "true";
-    } catch {
-        return false;
-    }
 }
 
 const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProps) => {
@@ -61,33 +35,14 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
     const confirmTabClose = settings["tab:confirmclose"] ?? false;
     const hideAIButton = settings["app:hideaibutton"] ?? false;
     const focusFollowsCursor = settings["app:focusfollowscursor"] ?? "off";
-    const settingsLayoutMode =
-        settings["app:layoutmode"] === "canvas" ||
-        settings["app:layoutmode"] === "tabs" ||
-        settings["app:layoutmode"] === "web" ||
-        settings["app:layoutmode"] === "os"
-            ? settings["app:layoutmode"]
-            : "widgets";
-    const [layoutMode, setLayoutMode] = useState(() => getStoredLayoutMode());
-    const [kronarchyMode, setKronarchyMode] = useState(() => getStoredKronarchyMode());
-    const quickComposer = settings["app:quickcomposer"] ?? false;
+    const settingsLayoutMode = normalizeWorkspacePresentation(settings["app:layoutmode"]) ?? "os";
+    const layoutMode = useSyncExternalStore(
+        subscribeWorkspacePresentation,
+        () => readWorkspacePresentation(settingsLayoutMode),
+        () => settingsLayoutMode
+    );
     const minimalUi = settings["app:minimalui"] ?? false;
     const telemetryEnabled = settings["telemetry:enabled"] ?? false;
-
-    useEffect(() => {
-        setLayoutMode(settingsLayoutMode);
-    }, [settingsLayoutMode]);
-
-    useEffect(() => {
-        const handleModeChanged = (event: Event) => {
-            const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
-            if (typeof enabled === "boolean") {
-                setKronarchyMode(enabled);
-            }
-        };
-        window.addEventListener(KronarchyEnabledChangedEvent, handleModeChanged);
-        return () => window.removeEventListener(KronarchyEnabledChangedEvent, handleModeChanged);
-    }, []);
 
     return (
         <div>
@@ -120,15 +75,6 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
             <SettingsCard>
                 <SectionHeader title="Interface" icon="sliders" description="Interface behavior." />
                 <ToggleSetting
-                    title="Kronarchy Shell"
-                    description="Use the Omarchy-inspired top bar, Tokyo Night palette, square widget chrome, and command launcher."
-                    checked={kronarchyMode}
-                    onChange={(enabled) => {
-                        setKronarchyMode(enabled);
-                        publishKronarchyEnabled(enabled);
-                    }}
-                />
-                <ToggleSetting
                     title="Show Hidden Files"
                     description="Show dotfiles in file previews."
                     checked={showHiddenFiles}
@@ -157,22 +103,16 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
                     description="Choose tiled widgets, browser-style widget tabs, or the spatial canvas."
                     value={layoutMode}
                     onChange={(v) => {
-                        publishLayoutMode(v);
-                        setLayoutMode(v === "canvas" || v === "tabs" || v === "web" ? v : "widgets");
-                        setValues({ "app:layoutmode": v });
+                        const presentation = publishWorkspacePresentation(v);
+                        setValues({ "app:layoutmode": presentation });
                     }}
                     options={[
                         { value: "widgets", label: "Widgets" },
                         { value: "tabs", label: "Widget tabs" },
                         { value: "canvas", label: "Canvas" },
+                        { value: "os", label: "OS Mode" },
                         { value: "web", label: "Web" },
                     ]}
-                />
-                <ToggleSetting
-                    title="Floating Chat Composer"
-                    description="Show the bottom quick composer for fast KronosCode prompts."
-                    checked={quickComposer}
-                    onChange={(v) => setValues({ "app:quickcomposer": v })}
                 />
                 <SelectSetting
                     title="Focus Follows Cursor"

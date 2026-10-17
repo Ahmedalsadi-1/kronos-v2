@@ -14,6 +14,7 @@
 
 import { cn } from "@/util/util";
 import { useEffect, useState } from "react";
+import { useReducedAgentMotion } from "./use-reduced-agent-motion";
 
 interface WaterFlowOverlayProps {
     active: boolean;
@@ -35,20 +36,23 @@ interface WaterFlowOverlayProps {
 export function WaterFlowOverlay({
     active,
     className,
-    color = "30, 144, 255",
-    opacity = 0.4,
-    blur = 8,
+    color = "146, 112, 255",
+    opacity = 0.12,
+    blur = 2,
 }: WaterFlowOverlayProps) {
     const [visible, setVisible] = useState(false);
+    const reducedMotion = useReducedAgentMotion();
 
     useEffect(() => {
-        if (active) {
+        if (reducedMotion) {
+            setVisible(active);
+        } else if (active) {
             setVisible(true);
         } else {
             const timer = setTimeout(() => setVisible(false), 300);
             return () => clearTimeout(timer);
         }
-    }, [active]);
+    }, [active, reducedMotion]);
 
     if (!visible) return null;
 
@@ -63,7 +67,7 @@ export function WaterFlowOverlay({
                 className
             )}
             style={{
-                transition: "opacity 0.3s ease",
+                transition: reducedMotion ? "none" : "opacity 0.3s ease",
                 willChange: "opacity",
             }}
             aria-hidden="true"
@@ -74,7 +78,9 @@ export function WaterFlowOverlay({
                     height: "15%",
                     background: `linear-gradient(to bottom, ${edgeColor}, ${edgeClear})`,
                     filter: `blur(${blur}px)`,
-                    animation: "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                    animation: reducedMotion
+                        ? "none"
+                        : "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
                 }}
             />
             <div
@@ -83,7 +89,9 @@ export function WaterFlowOverlay({
                     height: "15%",
                     background: `linear-gradient(to top, ${edgeColor}, ${edgeClear})`,
                     filter: `blur(${blur}px)`,
-                    animation: "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                    animation: reducedMotion
+                        ? "none"
+                        : "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
                 }}
             />
             <div
@@ -92,7 +100,9 @@ export function WaterFlowOverlay({
                     width: "10%",
                     background: `linear-gradient(to right, ${edgeColor}, ${edgeClear})`,
                     filter: `blur(${blur}px)`,
-                    animation: "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                    animation: reducedMotion
+                        ? "none"
+                        : "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
                 }}
             />
             <div
@@ -101,7 +111,9 @@ export function WaterFlowOverlay({
                     width: "10%",
                     background: `linear-gradient(to left, ${edgeColor}, ${edgeClear})`,
                     filter: `blur(${blur}px)`,
-                    animation: "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                    animation: reducedMotion
+                        ? "none"
+                        : "kronos-waterflow-edge 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
                 }}
             />
         </div>

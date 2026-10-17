@@ -26,6 +26,7 @@ export type AcpBackendId =
     | "hermes"
     | "kimi"
     | "kiro"
+    | "kronterm-agent"
     | "kronoscode"
     | "opencode"
     | "qoder"
@@ -175,7 +176,19 @@ export const ACP_BACKENDS_ALL: Record<string, AcpBackendConfig> = {
         acpArgs: ["acp"],
         skillsDirs: [".opencode/skills"],
         avatar: "◇",
-        description: "Open-source AI coding agent",
+        description: "OpenCode ACP agent — runs inside the Hermes chat as /kronterm-agent",
+    },
+    "kronterm-agent": {
+        id: "kronterm-agent",
+        name: "KronTerm Agent",
+        cliCommand: "kronterm-agent",
+        authRequired: false,
+        enabled: true,
+        supportsStreaming: false,
+        acpArgs: ["acp"],
+        skillsDirs: [".agents/skills", ".kronoscode/skills", ".hermes/skills", ".opencode/skills"],
+        avatar: "◆",
+        description: "KronTerm's OpenCode-compatible ACP specialist with scoped workspace tools",
     },
     droid: {
         id: "droid",

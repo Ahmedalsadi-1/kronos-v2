@@ -1,4 +1,11 @@
-export type AgentActivitySource = "acp" | "kronoscode-tui" | "wave" | "mcp" | "plugin" | "surface-runtime";
+export type AgentActivitySource =
+    | "acp"
+    | "hermes"
+    | "kronoscode-tui"
+    | "wave"
+    | "mcp"
+    | "plugin"
+    | "surface-runtime";
 
 export type AgentActivityPhase =
     | "queued"

@@ -1,5 +1,10 @@
+import { globalStore } from "@/app/store/jotaiStore";
+import { useTabModelMaybe } from "@/app/store/tab-model";
 import { KronTermSettingsMount } from "@/app/view/hermes/kronterm-settings-mount";
-import { SETTINGS_SECTIONS, type KronSettingsViewModel } from "@/app/view/kronsettings/kronsettings-model";
+import { KronSettingsViewModel, SETTINGS_SECTIONS } from "@/app/view/kronsettings/kronsettings-model";
+import { useReducedAgentMotion } from "@/app/view/use-reduced-agent-motion";
+import { WaveEnvContext } from "@/app/waveenv/waveenv";
+import { getApi } from "@/store/global";
 import App from "@hermes/app";
 import { setTerminalTakeover } from "@hermes/app/right-sidebar/store";
 import { KronTermSettingsHostProvider } from "@hermes/app/settings/kronterm-settings-host";
@@ -17,7 +22,7 @@ import { $selectedStoredSessionId } from "@hermes/store/session";
 import "@hermes/styles.css";
 import { ThemeProvider } from "@hermes/themes/context";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { HashRouter } from "react-router";
 
 const HermesDesignWidth = 1440;
@@ -42,17 +47,39 @@ export function HermesApp({
 }: HermesAppProps) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(HermesMaximumScale);
+    const [runtimeError, setRuntimeError] = useState("");
+    const [retrying, setRetrying] = useState(false);
+    useEffect(() => {
+        const api = getApi();
+        const offFailure = api.onHermesRuntimeFailure(({ message }) => setRuntimeError(message));
+        const offConnection = api.onHermesConnection(() => setRuntimeError(""));
+        return () => {
+            offFailure();
+            offConnection();
+        };
+    }, []);
+    const waveEnv = useContext(WaveEnvContext);
+    const tabModel = useTabModelMaybe();
+    const reducedMotion = useReducedAgentMotion();
+    const hudSettingsModel = useMemo(() => {
+        if (kronSettingsModel) return kronSettingsModel;
+        if (!hudMode || !waveEnv || !tabModel) return null;
+        const blockId = globalStore.get(tabModel.tabAtom)?.blockids?.[0];
+        if (!blockId) return null;
+        return new KronSettingsViewModel({ blockId, nodeModel: null, tabModel, waveEnv });
+    }, [kronSettingsModel, hudMode, waveEnv, tabModel]);
     const kronTermSettingsHost = useMemo(
         () =>
-            kronSettingsModel
+            hudSettingsModel
                 ? ({
+                      appearance: { reducedMotion },
                       sections: SETTINGS_SECTIONS.map(({ id, label }) => ({ id, label })),
                       renderSection: (sectionId: string) => (
-                          <KronTermSettingsMount model={kronSettingsModel} sectionId={sectionId} />
+                          <KronTermSettingsMount model={hudSettingsModel} sectionId={sectionId} />
                       ),
                   } as const)
                 : null,
-        [kronSettingsModel]
+        [hudSettingsModel, reducedMotion]
     );
 
     useLayoutEffect(() => {
@@ -102,12 +129,13 @@ export function HermesApp({
         }
         resetLayoutTree();
         removeTreePane("terminal");
+        removeTreePane("review");
         setSidebarOpen(true);
         setFileBrowserOpen(true);
 
         const frame = window.requestAnimationFrame(() => {
             revealTreePane("sessions");
-            revealTreePane("review");
+
             revealTreePane("surfaces");
         });
         const retry = window.setTimeout(() => revealTreePane("surfaces"), 250);
@@ -133,7 +161,37 @@ export function HermesApp({
     }, [webMode]);
 
     return (
-        <div ref={viewportRef} data-hermes-app="" className="relative h-full w-full overflow-hidden">
+        <div
+            ref={viewportRef}
+            data-hud-mode={hudMode ? "" : undefined}
+            data-hermes-app=""
+            className="relative h-full w-full overflow-hidden"
+        >
+            {runtimeError && (
+                <div
+                    role="alert"
+                    className="absolute inset-x-2 top-2 z-50 flex items-center gap-3 rounded border border-[var(--coucou-border)] bg-[var(--coucou-card)] p-3 text-xs text-[var(--coucou-label)]"
+                >
+                    <span className="flex-1">{runtimeError}</span>
+                    <button
+                        className="cursor-pointer rounded px-2 py-1 outline-offset-2 focus-visible:outline focus-visible:outline-2"
+                        disabled={retrying}
+                        onClick={async () => {
+                            setRetrying(true);
+                            try {
+                                await getApi().hermesApi({ path: "/api/status" });
+                                setRuntimeError("");
+                            } catch (error) {
+                                setRuntimeError(`Could not restart Hermes: ${String(error)}`);
+                            } finally {
+                                setRetrying(false);
+                            }
+                        }}
+                    >
+                        {retrying ? "Restarting…" : "Retry"}
+                    </button>
+                </div>
+            )}
             <div
                 className="origin-top-left"
                 style={{

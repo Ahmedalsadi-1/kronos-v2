@@ -6,6 +6,19 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { applyWorkspaceAppearance, readWorkspaceAppearance } from "./workspace-appearance";
 
+if (window.localStorage == null) {
+    const values = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+        configurable: true,
+        value: {
+            clear: () => values.clear(),
+            getItem: (key: string) => values.get(key) ?? null,
+            removeItem: (key: string) => values.delete(key),
+            setItem: (key: string, value: string) => values.set(key, value),
+        } satisfies Pick<Storage, "clear" | "getItem" | "removeItem" | "setItem">,
+    });
+}
+
 describe("workspace appearance typography", () => {
     afterEach(() => {
         window.localStorage.clear();

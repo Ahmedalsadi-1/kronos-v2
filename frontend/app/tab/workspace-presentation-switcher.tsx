@@ -1,25 +1,23 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    KronarchyEnabledChangedEvent,
-    publishKronarchyEnabled,
-    readKronarchyEnabled,
-} from "@/app/workspace/kronarchy-shell";
 import { SidePanelMode, WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { setActiveTab } from "@/store/global";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { WorkspacePresentations, type WorkspacePresentation } from "./workspace-presentation";
+import type { WorkspacePresentation } from "./workspace-presentation";
 import "./workspace-presentation-switcher.scss";
 
 const PresentationDetails: Record<WorkspacePresentation, { icon: string; label: string; description: string }> = {
-    widgets: { icon: "fa-table-cells-large", label: "Widgets", description: "Resizable tiled splits" },
+    widgets: { icon: "fa-table-cells-large", label: "Tiles", description: "Resizable tiled splits" },
     tabs: { icon: "fa-window-restore", label: "Tabs", description: "Focused widgets with a tab strip" },
     canvas: { icon: "fa-object-group", label: "Canvas", description: "Spatial pan-and-zoom workspace" },
+    os: { icon: "fa-desktop", label: "OS Mode", description: "Spatial desktop with live windows" },
     web: { icon: "fa-globe", label: "Web", description: "Full-screen web surface" },
 };
+
+const UserFacingPresentations = ["os", "canvas", "widgets", "tabs", "web"] as const satisfies readonly WorkspacePresentation[];
 
 const SidePanelDetails: Record<SidePanelMode, { icon: string; label: string; description: string }> = {
     full: { icon: "fa-table-columns", label: "Full sidebar", description: "Names, workspace tree, and controls" },
@@ -42,18 +40,8 @@ const WorkspacePresentationSwitcher = ({
     const sidePanelMode = useAtomValue(layoutModel.sidePanelModeAtom);
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
-    const [kronarchyEnabled, setKronarchyEnabled] = useState(readKronarchyEnabled);
     const rootRef = useRef<HTMLElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        const handleKronarchyChanged = (event: Event) => {
-            const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
-            if (typeof enabled === "boolean") setKronarchyEnabled(enabled);
-        };
-        window.addEventListener(KronarchyEnabledChangedEvent, handleKronarchyChanged);
-        return () => window.removeEventListener(KronarchyEnabledChangedEvent, handleKronarchyChanged);
-    }, []);
 
     useEffect(() => {
         if (!open) {
@@ -84,7 +72,7 @@ const WorkspacePresentationSwitcher = ({
         () => (label: string, description: string) => `${label} ${description}`.toLowerCase().includes(normalizedQuery),
         [normalizedQuery]
     );
-    const visiblePresentations = WorkspacePresentations.filter((presentation) => {
+    const visiblePresentations = UserFacingPresentations.filter((presentation) => {
         const detail = PresentationDetails[presentation];
         return matches(detail.label, detail.description);
     });
@@ -92,7 +80,6 @@ const WorkspacePresentationSwitcher = ({
         const detail = SidePanelDetails[mode];
         return matches(detail.label, detail.description);
     });
-    const showKronarchy = matches("Kronarchy mode", "Omarchy-inspired keyboard-first shell");
     const visibleWorkspaceTabs = (workspace?.tabids ?? [])
         .map((tabId, index) => ({ tabId, index }))
         .filter(({ index }) => matches(`Workspace tab ${index + 1}`, "Switch open active workspace"));
@@ -213,33 +200,11 @@ const WorkspacePresentationSwitcher = ({
                                 })}
                             </div>
                         )}
-                        {showKronarchy && (
-                            <div className="workspace-layout-section">
-                                <h2>Mode</h2>
-                                <button
-                                    type="button"
-                                    className={kronarchyEnabled ? "is-selected" : ""}
-                                    onClick={() => {
-                                        publishKronarchyEnabled(!kronarchyEnabled);
-                                        if (!kronarchyEnabled) layoutModel.setSidePanelMode("compact");
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <span className="workspace-kronarchy-mark" aria-hidden="true">
-                                        K
-                                    </span>
-                                    <span>
-                                        <strong>Kronarchy mode</strong>
-                                        <small>Omarchy-inspired keyboard-first shell</small>
-                                    </span>
-                                    {kronarchyEnabled && <i className="fa-solid fa-check" aria-hidden="true" />}
-                                </button>
-                            </div>
-                        )}
                         {visibleWorkspaceTabs.length === 0 &&
                             visiblePresentations.length === 0 &&
-                            visibleSidePanels.length === 0 &&
-                            !showKronarchy && <p className="workspace-layout-empty">No matching workspace command</p>}
+                            visibleSidePanels.length === 0 && (
+                                <p className="workspace-layout-empty">No matching workspace command</p>
+                            )}
                     </div>
                 </section>
             )}
@@ -247,4 +212,4 @@ const WorkspacePresentationSwitcher = ({
     );
 };
 
-export { WorkspacePresentationSwitcher };
+export { UserFacingPresentations, WorkspacePresentationSwitcher };

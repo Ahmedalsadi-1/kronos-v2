@@ -1,6 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowLeft, ArrowRight, RotateCw, X } from "lucide-react";
+
 export interface BrowserNavigationControls {
     canGoBack: boolean;
     canGoForward: boolean;
@@ -22,7 +24,15 @@ interface ControlButtonProps {
 function BrowserNavButton({ ariaLabel, disabled, icon, onClick, title }: ControlButtonProps) {
     return (
         <button type="button" onClick={onClick} disabled={disabled} aria-label={ariaLabel} title={title}>
-            <i className={`fa-solid fa-${icon}`} aria-hidden="true" />
+            {icon === "chevron-left" ? (
+                <ArrowLeft size={12} />
+            ) : icon === "chevron-right" ? (
+                <ArrowRight size={12} />
+            ) : icon === "xmark" ? (
+                <X size={12} />
+            ) : (
+                <RotateCw size={12} />
+            )}
         </button>
     );
 }
@@ -69,7 +79,30 @@ export function BrowserNavigationRow({
                     title={reloadLabel}
                 />
             ) : null}
-            <div className="webview-omnibox">{addressSlot}</div>
+            <div
+                className="webview-omnibox"
+                onClick={(event) => {
+                    const target = event.target as HTMLElement;
+                    if (target.closest('input,button,[role="listbox"]')) return;
+                    event.currentTarget.querySelector("input")?.focus();
+                }}
+            >
+                {addressSlot}
+            </div>
+            {children}
+        </div>
+    );
+}
+
+export const BrowserNavigationControlRow = BrowserNavigationRow;
+
+export function BrowserChromeToolbar({ children }: { children: React.ReactNode }) {
+    return (
+        <div
+            className="webview-browser-chrome"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            onPointerDown={(event) => event.stopPropagation()}
+        >
             {children}
         </div>
     );

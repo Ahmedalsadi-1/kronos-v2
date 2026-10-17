@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Implements the three workspace presentations that share one block set: tiled `widgets`, browser-style `tabs`, and the spatial `canvas`. Selected via `app:layoutmode`.
+Implements the five workspace presentations: tiled `widgets`, browser-style `tabs`, spatial `canvas`, desktop `os`, and full-screen `web`. Selected via `app:layoutmode`.
 
 ## KEY FILES
 
@@ -23,11 +23,11 @@ Implements the three workspace presentations that share one block set: tiled `wi
 
 ## CONVENTIONS
 
-- All three presentations mount the same blocks — never fork block state per presentation.
+- Presentations share one persistent owner for each canonical block — never fork block state per presentation.
 - Tab/tabbar state models live here and in `../store/tab-model.ts`; components stay thin.
 - Tests colocated next to sources (`os-workspace-model.test.ts`, `tabs-agent-workspace.test.ts`).
 
 ## ANTI-PATTERNS
 
 - No block creation logic here — blocks are created via `RpcApi.createBlockCommand` (see `../block/AGENTS.md`).
-- Do not read layout geometry from the DOM — go through the layout model (`frontend/app/workspace/workspace-layout-model.ts`).
+- Use layout models for placement and control decisions. Persistent block slots may measure rendered bounds solely to align the shared live DOM layer; observers may measure on-screen bounds for agent interactions.

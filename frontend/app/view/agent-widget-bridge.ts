@@ -13,6 +13,7 @@ import {
     subscribeAgentActivityStream,
     type LiveAgentSurfaceActivity,
 } from "../../types/agent-activity";
+import type { BrowserGrabPayload } from "../../types/browser-grab";
 
 const PreviewMaxAgeMs = 15_000;
 const HiddenChatViews = new Set(["chathubv2", "hermes"]);
@@ -57,10 +58,12 @@ export type AgentWidgetDesignSelection = {
         componentName?: string;
     };
     comment?: string;
+    annotationIntent?: "fix" | "change" | "question" | "approve";
+    grabPayload?: BrowserGrabPayload;
 };
 
-export const AgentWidgetInspectModeEvent = "kronterm-open-design-inspect-mode";
-export const AgentWidgetDesignSelectionEvent = "kronterm-open-design-selection";
+export const AgentWidgetInspectModeEvent = "kronterm-browser-inspect-mode";
+export const AgentWidgetDesignSelectionEvent = "kronterm-browser-selection";
 
 const inspectedBrowserBlocks = new Set<string>();
 

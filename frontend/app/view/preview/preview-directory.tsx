@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ContextMenuModel } from "@/app/store/contextmenu";
-import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { globalStore } from "@/app/store/jotaiStore";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { useWaveEnv } from "@/app/waveenv/waveenv";
+import { launchKronTermHudIsland } from "@/app/workspace/kronterm-hud-islands";
 import { checkKeyPressed, isCharacterKeyEvent } from "@/util/keyutil";
 import { PLATFORM, PlatformMacOS } from "@/util/platformutil";
 import { addOpenMenuItems } from "@/util/previewutil";
@@ -503,6 +504,10 @@ function TableRow({ model, row, focusIndex, setFocusIndex, setSearch, idx, handl
     const dirPath = useAtomValue(model.statFilePath);
     const connection = useAtomValue(model.connection);
 
+    const dragEndPoint = useRef<{ x: number; y: number }>(null);
+    const dragCancelled = useRef(false);
+    const cancelDragListener = useRef<() => void>(() => {});
+    useEffect(() => () => cancelDragListener.current(), []);
     const dragItem: DraggedFile = {
         relName: row.getValue("name") as string,
         absParent: dirPath,
@@ -513,7 +518,42 @@ function TableRow({ model, row, focusIndex, setFocusIndex, setSearch, idx, handl
         () => ({
             type: "FILE_ITEM",
             canDrag: true,
-            item: () => dragItem,
+            item: () => {
+                dragEndPoint.current = null;
+                dragCancelled.current = false;
+                cancelDragListener.current();
+                const cancel = (event: KeyboardEvent) => {
+                    if (event.key === "Escape") dragCancelled.current = true;
+                };
+                window.addEventListener("keydown", cancel);
+                cancelDragListener.current = () => window.removeEventListener("keydown", cancel);
+                return dragItem;
+            },
+            end: (_item, monitor) => {
+                const handled = monitor.didDrop();
+                cancelDragListener.current();
+                setTimeout(() => {
+                    const point = dragEndPoint.current;
+                    if (handled || dragCancelled.current || !point || (point.x === 0 && point.y === 0)) return;
+                    if (new URLSearchParams(window.location.search).get("nativeSurface") !== "island") return;
+                    const outside =
+                        point.x < window.screenX ||
+                        point.x > window.screenX + window.innerWidth ||
+                        point.y < window.screenY ||
+                        point.y > window.screenY + window.innerHeight;
+                    if (!outside) return;
+                    void launchKronTermHudIsland("files", {
+                        file: row.getValue("path") as string,
+                        connection,
+                        forceNew: true,
+                    }).catch((error) =>
+                        globalStore.set(model.errorMsgAtom, {
+                            status: "error",
+                            text: `Could not detach file: ${String(error)}`,
+                        })
+                    );
+                }, 0);
+            },
         }),
         [dragItem]
     );
@@ -529,6 +569,9 @@ function TableRow({ model, row, focusIndex, setFocusIndex, setSearch, idx, handl
         <div
             className={clsx("dir-table-body-row", { focused: focusIndex === idx })}
             data-rowindex={idx}
+            onDragEnd={(event) => {
+                dragEndPoint.current = { x: event.screenX, y: event.screenY };
+            }}
             onDoubleClick={() => {
                 const newFileName = row.getValue("path") as string;
                 model.goHistory(newFileName);

@@ -205,9 +205,17 @@ const WebModeView = memo(
                             </span>
                             <button
                                 type="button"
-                                onClick={() =>
-                                    void RpcApi.SandboxStopCommand(TabRpcClient, { sessionId: sandboxSessionId })
-                                }
+                                onClick={async () => {
+                                    const result = await getApi().listLinuxDesktops();
+                                    if (result.success === false) return;
+                                    const desktop = result.data.find((item) => item.id == "linux-vm:ubuntu");
+                                    if (!desktop) return;
+                                    await getApi().performLinuxDesktopAction({
+                                        desktopId: desktop.id,
+                                        action: "stop",
+                                        expectedGeneration: desktop.controlGeneration,
+                                    });
+                                }}
                                 aria-label="Stop sandbox"
                                 title="Stop this workspace sandbox"
                             >

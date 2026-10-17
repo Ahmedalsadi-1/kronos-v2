@@ -46,12 +46,12 @@
     "defwidget@chat": {
         "display:order": -5.5,
         "icon": "sparkles",
-        "label": "Chamber V2",
+        "label": "KronTerm Agent",
         "color": "#e8c47c",
-        "description": "Open the canonical Kronos workspace",
+        "description": "Open the built-in KronTerm agent",
         "blockdef": {
             "meta": {
-                "view": "chathubv2"
+                "view": "hermes"
             }
         }
     },

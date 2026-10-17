@@ -1,3 +1,4 @@
+import { eventOwnsInput } from "@hermes/lib/keybinds/input-ownership";
 /**
  * Paste-to-focus: the paste twin of type-to-focus. A ⌘V/Ctrl+V landing on
  * non-editable chrome (the transcript, empty chat, the window body) routes the
@@ -57,7 +58,7 @@ export function handleWindowPaste(event: ClipboardEvent) {
   if (
     event.defaultPrevented ||
     !event.clipboardData ||
-    isEditableTarget(event.target) ||
+    eventOwnsInput(event) ||
     composerFocusBlockedBySurface()
   ) {
     return

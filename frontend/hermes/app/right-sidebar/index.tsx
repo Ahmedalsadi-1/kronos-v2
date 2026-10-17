@@ -241,7 +241,7 @@ function FileTreeBody({
   const showSkeleton = useDelayedTrue(loading && data.length === 0)
 
   if (!cwd) {
-    return <EmptyState body={r.noProjectBody} title={r.noProjectTitle} />
+    return <div className="min-h-0 flex-1" />
   }
 
   if (error) {
@@ -266,7 +266,7 @@ function FileTreeBody({
   }
 
   if (data.length === 0) {
-    return <EmptyState body={r.emptyBody} title={r.emptyTitle} />
+    return <div className="min-h-0 flex-1" />
   }
 
   return (

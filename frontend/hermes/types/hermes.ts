@@ -672,6 +672,7 @@ export interface SessionResumeResponse {
 }
 
 export interface SessionRuntimeInfo {
+  agent_backend?: 'hermes' | 'kronoscode'
   approval_mode?: 'manual' | 'off' | 'smart'
   branch?: string
   config_warning?: string

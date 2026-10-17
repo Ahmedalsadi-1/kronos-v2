@@ -9,6 +9,7 @@ import { AudioLines, Ear, EarOff, iconSize, Layers3, Loader2, Square, Volume2, V
 import { cn } from '@hermes/lib/utils'
 import { $wakeWord, toggleWakeWord } from '@hermes/store/wake-word'
 
+import { AgentEnginePill } from './agent-engine-pill'
 import type { ConversationStatus } from './hooks/use-voice-conversation'
 import { ModelPill } from './model-pill'
 import type { ChatBarState, VoiceStatus } from './types'
@@ -23,6 +24,7 @@ export const GHOST_ICON_BTN = cn(
 // match the reference composer's high-contrast CTA. Keeps the pill itself
 // neutral and lets the action visually dominate the row.
 export const PRIMARY_ICON_BTN = cn(
+  'hermes-composer-primary',
   'size-(--composer-control-primary-size,var(--composer-control-size)) shrink-0 rounded-full p-0',
   'bg-foreground text-background hover:bg-foreground/90',
   'disabled:bg-foreground/30 disabled:text-background disabled:opacity-100'
@@ -52,7 +54,7 @@ export function ComposerControls({
   voiceStatus,
   onDictate,
   onQueue,
-  onToggleAutoSpeak
+  onToggleAutoSpeak,
 }: {
   autoSpeak: boolean
   busy: boolean
@@ -83,6 +85,7 @@ export function ComposerControls({
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+      <AgentEnginePill compact={compactModelPill} disabled={disabled} />
       <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
       <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
       <AutoSpeakButton active={autoSpeak} disabled={disabled} onToggle={onToggleAutoSpeak} />
@@ -153,7 +156,7 @@ function ConversationPill({
   onEnd,
   onStopTurn,
   onToggleMute,
-  status
+  status,
 }: ConversationProps & { disabled: boolean }) {
   const { t } = useI18n()
   const c = t.composer
@@ -232,7 +235,7 @@ function ConversationPill({
 function ConversationIndicator({
   level,
   listening,
-  speaking
+  speaking,
 }: {
   level: number
   listening: boolean
@@ -342,7 +345,7 @@ function DictationButton({
   disabled,
   state,
   status,
-  onToggle
+  onToggle,
 }: {
   disabled: boolean
   state: ChatBarState['voice']

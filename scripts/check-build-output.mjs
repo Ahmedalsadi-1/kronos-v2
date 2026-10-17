@@ -26,19 +26,7 @@ const log = readInput();
 const failures = [];
 const notices = [];
 
-// The chamber runtime bundle is only produced when its source tree is present;
-// a missing third_party/kronoschamber-web means the webview is intentionally
-// unbundled this build, not that the build is broken.
-const chamberBundled = existsSync("third_party/kronoschamber-web/server/index.js");
-
 for (const requiredPath of [
-  ...(chamberBundled
-    ? [
-        "dist/kronoschamber-web/dist/index.html",
-        "dist/kronoschamber-web/server/index.js",
-        "dist/kronoschamber-web/node_modules/node-pty/package.json",
-      ]
-    : []),
   "dist/mcp-kron-term/dist/index.js",
   "dist/mcp-kron-term/dist/native-bridge.js",
   "dist/mcp-kron-term/dist/native-proxy.js",

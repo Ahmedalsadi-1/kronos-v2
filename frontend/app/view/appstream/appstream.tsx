@@ -1,16 +1,22 @@
 import { reportDesktopPetActivity } from "@/app/aipanel/desktop-pet-activity";
+import { getSettingsKeyAtom } from "@/app/store/global";
 import { ActionMarker } from "@/app/view/action-marker";
+import { AppStreamFrameSizeEvent, type AppStreamFrameSize } from "@/app/view/appstream/appstream-events";
 import { useAgentOverlays } from "@/app/view/use-agent-overlays";
 import { WaterFlowOverlay } from "@/app/view/waterflow-overlay";
-import { cn } from "@/util/util";
+import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeAgentActivityStream } from "../../../types/agent-activity";
+import { drawAppStreamFrame } from "./appstream-canvas";
 import { AppStreamViewModel } from "./appstream-model";
 
 type StreamFitMode = "fit" | "fill" | "actual";
 
 type CanvasPoint = { x: number; y: number };
+
+const DefaultStreamFps = 6;
+const DefaultStreamQuality = 80;
 
 function clampCanvasCoordinate(value: number, max: number): number {
     return Math.min(Math.max(0, value), Math.max(0, max - 1));
@@ -47,31 +53,45 @@ export function clientPointToCanvasPoint(
 export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>) {
     const status = useAtomValue(model.statusAtom);
     const streamUrl = useAtomValue(model.streamUrlAtom);
+    const mediaStream = useAtomValue(model.mediaStreamAtom);
+    const transport = useAtomValue(model.transportAtom);
+    const captureFallbackReason = useAtomValue(model.captureFallbackReasonAtom);
     const error = useAtomValue(model.errorAtom);
     const appName = useAtomValue(model.appNameAtom);
+    const nativeSurfaceV2Enabled = useAtomValue(getSettingsKeyAtom("feature:nativesurfacev2")) ?? false;
+    const surfaceRef = useRef<HTMLDivElement>(null);
+    const [surfaceVisible, setSurfaceVisible] = useState(!document.hidden);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const cursorPosRef = useRef({ x: -1, y: -1 });
     const dragStartRef = useRef<CanvasPoint | null>(null);
     const suppressClickRef = useRef(false);
     const streamingRef = useRef(false);
     const lastPreviewImageUrlRef = useRef<string>(undefined);
-    const [fitMode, setFitMode] = useState<StreamFitMode>("fit");
-    const [fps, setFps] = useState(6);
-    const [quality, setQuality] = useState(80);
-    const [frameInfo, setFrameInfo] = useState<{ width: number; height: number; updatedAt: number } | null>(null);
+    const fitMode = "fit" as StreamFitMode;
+    const fps = DefaultStreamFps;
+    const quality = DefaultStreamQuality;
+    const frameSizeRef = useRef<{ width: number; height: number } | undefined>(undefined);
     const { waterflowActive, markers } = useAgentOverlays("desktop");
 
-    const reportAppActivity = useCallback(
-        (detail: string, input?: Record<string, unknown>) => {
-            reportDesktopPetActivity(
-                { kind: "tool", detail, previewImageUrl: lastPreviewImageUrlRef.current },
-                model.blockId,
-                input,
-                { surface: "desktop", appname: appName }
-            );
-        },
-        [appName, model.blockId]
-    );
+    useEffect(() => {
+        let intersects = true;
+        const updateVisibility = () => setSurfaceVisible(intersects && !document.hidden);
+        const observer =
+            typeof IntersectionObserver === "function"
+                ? new IntersectionObserver(([entry]) => {
+                      intersects = entry.isIntersecting;
+                      updateVisibility();
+                  })
+                : null;
+        if (surfaceRef.current) observer?.observe(surfaceRef.current);
+        document.addEventListener("visibilitychange", updateVisibility);
+        updateVisibility();
+        return () => {
+            observer?.disconnect();
+            document.removeEventListener("visibilitychange", updateVisibility);
+        };
+    }, [status, transport]);
 
     useEffect(() => {
         return subscribeAgentActivityStream((activity) => {
@@ -99,36 +119,45 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
     }, [appName, model.blockId]);
 
     useEffect(() => {
-        model.startStream().catch(console.error);
+        model.startStream(nativeSurfaceV2Enabled).catch(console.error);
         return () => {
             model.dispose();
         };
-    }, [model]);
+    }, [model, nativeSurfaceV2Enabled]);
 
     useEffect(() => {
-        if (!streamUrl || status !== "streaming") {
+        if (!surfaceVisible || !streamUrl || status !== "streaming" || transport !== "legacy-snapshot") {
             streamingRef.current = false;
-            lastPreviewImageUrlRef.current = undefined;
+            if (transport === "legacy-snapshot") {
+                lastPreviewImageUrlRef.current = undefined;
+            }
             return;
         }
 
         streamingRef.current = true;
         let disposed = false;
+        let frameTimer: ReturnType<typeof setTimeout>;
+        const abortController = new AbortController();
+        const scheduleFrame = (delay = Math.max(80, Math.round(1000 / fps))) => {
+            if (!disposed) frameTimer = setTimeout(pollFrame, delay);
+        };
 
         const pollFrame = async () => {
             if (!streamingRef.current || disposed) return;
             try {
-                const response = await fetch(`${streamUrl}/screenshot?quality=${quality}`);
+                const response = await fetch(`${streamUrl}/screenshot?quality=${quality}`, {
+                    signal: abortController.signal,
+                });
                 if (!response.ok) throw new Error("HTTP " + response.status);
                 const data = await response.json();
-                if (disposed || !data.image) return;
+                if (disposed) return;
+                if (!data.image) {
+                    scheduleFrame(500);
+                    return;
+                }
 
                 const previewImageUrl = `data:image/png;base64,${data.image}`;
-                const shouldAnnouncePreview = lastPreviewImageUrlRef.current == null;
                 lastPreviewImageUrlRef.current = previewImageUrl;
-                if (shouldAnnouncePreview) {
-                    reportAppActivity(`${appName} app preview`);
-                }
                 const img = new Image();
                 img.onload = () => {
                     if (disposed) return;
@@ -137,10 +166,18 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
                     const ctx = canvas.getContext("2d");
                     if (!ctx) return;
 
-                    canvas.width = img.naturalWidth;
-                    canvas.height = img.naturalHeight;
-                    ctx.drawImage(img, 0, 0);
-                    setFrameInfo({ width: img.naturalWidth, height: img.naturalHeight, updatedAt: Date.now() });
+                    drawAppStreamFrame(ctx, img);
+                    if (
+                        frameSizeRef.current?.width !== img.naturalWidth ||
+                        frameSizeRef.current?.height !== img.naturalHeight
+                    ) {
+                        frameSizeRef.current = { width: img.naturalWidth, height: img.naturalHeight };
+                        window.dispatchEvent(
+                            new CustomEvent<AppStreamFrameSize>(AppStreamFrameSizeEvent, {
+                                detail: { blockId: model.blockId, width: img.naturalWidth, height: img.naturalHeight },
+                            })
+                        );
+                    }
 
                     const cursor = cursorPosRef.current;
                     if (cursor.x >= 0 && cursor.y >= 0) {
@@ -158,13 +195,14 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
                     }
 
                     if (!disposed) {
-                        setTimeout(pollFrame, Math.max(80, Math.round(1000 / fps)));
+                        scheduleFrame();
                     }
                 };
+                img.onerror = () => scheduleFrame(500);
                 img.src = previewImageUrl;
             } catch {
                 if (!disposed) {
-                    setTimeout(pollFrame, Math.max(150, Math.round(1000 / fps)));
+                    scheduleFrame(500);
                 }
             }
         };
@@ -173,119 +211,186 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
 
         return () => {
             disposed = true;
+            clearTimeout(frameTimer);
+            abortController.abort();
             streamingRef.current = false;
         };
-    }, [appName, fps, quality, reportAppActivity, status, streamUrl]);
+    }, [appName, fps, model.blockId, quality, status, streamUrl, surfaceVisible, transport]);
+
+    useEffect(() => {
+        if (mediaStream == null) return;
+        for (const track of mediaStream.getVideoTracks()) track.enabled = surfaceVisible;
+        return () => {
+            for (const track of mediaStream.getVideoTracks()) track.enabled = true;
+        };
+    }, [mediaStream, surfaceVisible]);
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (
+            !surfaceVisible ||
+            video == null ||
+            mediaStream == null ||
+            transport !== "native-media" ||
+            status !== "streaming"
+        ) {
+            return;
+        }
+        video.srcObject = mediaStream;
+        let disposed = false;
+        let previewTimer: number | undefined;
+
+        const publishFrameSize = () => {
+            if (disposed || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+            if (
+                frameSizeRef.current?.width === video.videoWidth &&
+                frameSizeRef.current?.height === video.videoHeight
+            ) {
+                return;
+            }
+            frameSizeRef.current = { width: video.videoWidth, height: video.videoHeight };
+            window.dispatchEvent(
+                new CustomEvent<AppStreamFrameSize>(AppStreamFrameSizeEvent, {
+                    detail: { blockId: model.blockId, width: video.videoWidth, height: video.videoHeight },
+                })
+            );
+        };
+
+        const previewCanvas = document.createElement("canvas");
+        const capturePreview = () => {
+            if (disposed || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+
+            const scale = Math.min(1, 960 / video.videoWidth);
+            const width = Math.max(1, Math.round(video.videoWidth * scale));
+            const height = Math.max(1, Math.round(video.videoHeight * scale));
+            if (previewCanvas.width !== width) previewCanvas.width = width;
+            if (previewCanvas.height !== height) previewCanvas.height = height;
+            const context = previewCanvas.getContext("2d");
+            if (context == null) return;
+            context.drawImage(video, 0, 0, previewCanvas.width, previewCanvas.height);
+            lastPreviewImageUrlRef.current = previewCanvas.toDataURL("image/jpeg", 0.72);
+        };
+
+        const handleLoadedMetadata = () => {
+            if (previewTimer != null) window.clearInterval(previewTimer);
+            publishFrameSize();
+            void video.play().catch(() => {});
+            capturePreview();
+            previewTimer = window.setInterval(capturePreview, 1000);
+        };
+
+        video.addEventListener("loadedmetadata", handleLoadedMetadata);
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+            handleLoadedMetadata();
+        }
+
+        return () => {
+            disposed = true;
+            video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+            if (previewTimer != null) {
+                window.clearInterval(previewTimer);
+            }
+            video.pause();
+            video.srcObject = null;
+        };
+    }, [mediaStream, model.blockId, status, surfaceVisible, transport]);
+
+    const getStreamPoint = useCallback(
+        (clientX: number, clientY: number, target: HTMLElement): CanvasPoint => {
+            const frameSize = frameSizeRef.current;
+            if (frameSize == null) return { x: 0, y: 0 };
+            return clientPointToCanvasPoint(
+                clientX,
+                clientY,
+                target.getBoundingClientRect(),
+                frameSize.width,
+                frameSize.height,
+                fitMode
+            );
+        },
+        [fitMode]
+    );
 
     const handleClick = useCallback(
-        (e: React.MouseEvent<HTMLCanvasElement>) => {
+        (clientX: number, clientY: number, target: HTMLElement) => {
             if (suppressClickRef.current) {
                 suppressClickRef.current = false;
                 return;
             }
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            const point = clientPointToCanvasPoint(e.clientX, e.clientY, rect, canvas.width, canvas.height, fitMode);
+            const point = getStreamPoint(clientX, clientY, target);
             cursorPosRef.current = point;
-            reportAppActivity("desktop app click", {
-                x: Math.round(e.clientX - rect.left),
-                y: Math.round(e.clientY - rect.top),
-            });
             void model.sendClick(point.x, point.y);
         },
-        [fitMode, model, reportAppActivity]
+        [getStreamPoint, model]
     );
 
     const handlePointerDown = useCallback(
-        (e: React.PointerEvent<HTMLCanvasElement>) => {
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            dragStartRef.current = clientPointToCanvasPoint(
-                e.clientX,
-                e.clientY,
-                rect,
-                canvas.width,
-                canvas.height,
-                fitMode
-            );
+        (e: React.PointerEvent<HTMLElement>) => {
+            e.currentTarget.focus();
+            dragStartRef.current = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
             e.currentTarget.setPointerCapture(e.pointerId);
         },
-        [fitMode]
+        [getStreamPoint]
     );
 
     const handlePointerUp = useCallback(
-        (e: React.PointerEvent<HTMLCanvasElement>) => {
-            const canvas = canvasRef.current;
+        (e: React.PointerEvent<HTMLElement>) => {
             const start = dragStartRef.current;
             dragStartRef.current = null;
-            if (!canvas || !start) return;
-            const rect = canvas.getBoundingClientRect();
-            const end = clientPointToCanvasPoint(e.clientX, e.clientY, rect, canvas.width, canvas.height, fitMode);
+            if (start == null) return;
+            const end = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
             if (Math.hypot(end.x - start.x, end.y - start.y) < 6) return;
             suppressClickRef.current = true;
-            reportAppActivity("desktop app drag", {
-                x: Math.round(e.clientX - rect.left),
-                y: Math.round(e.clientY - rect.top),
-            });
             void model.sendDrag(start.x, start.y, end.x, end.y);
         },
-        [fitMode, model, reportAppActivity]
+        [getStreamPoint, model]
     );
 
     const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+        (e: React.KeyboardEvent<HTMLElement>) => {
             e.preventDefault();
             const keys = [e.metaKey && "Meta", e.ctrlKey && "Control", e.altKey && "Alt", e.shiftKey && "Shift", e.key]
                 .filter(Boolean)
                 .join("+");
-            reportAppActivity("desktop app key press");
             void model.sendKeyPress(keys);
         },
-        [model, reportAppActivity]
+        [model]
     );
 
     const handlePaste = useCallback(
-        (e: React.ClipboardEvent<HTMLCanvasElement>) => {
+        (e: React.ClipboardEvent<HTMLElement>) => {
             e.preventDefault();
-            reportAppActivity("desktop app paste");
             void model.sendPaste(e.clipboardData.getData("text"));
         },
-        [model, reportAppActivity]
+        [model]
     );
 
     const handleMouseMove = useCallback(
-        (e: React.MouseEvent<HTMLCanvasElement>) => {
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            cursorPosRef.current = clientPointToCanvasPoint(
-                e.clientX,
-                e.clientY,
-                rect,
-                canvas.width,
-                canvas.height,
-                fitMode
-            );
+        (e: React.MouseEvent<HTMLElement>) => {
+            cursorPosRef.current = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
         },
-        [fitMode]
+        [getStreamPoint]
     );
 
     const handleContextMenu = useCallback(
-        (e: React.MouseEvent<HTMLCanvasElement>) => {
+        (e: React.MouseEvent<HTMLElement>) => {
             e.preventDefault();
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            const point = clientPointToCanvasPoint(e.clientX, e.clientY, rect, canvas.width, canvas.height, fitMode);
-            reportAppActivity("desktop app right click", {
-                x: Math.round(e.clientX - rect.left),
-                y: Math.round(e.clientY - rect.top),
-            });
+            const point = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
             void model.sendClick(point.x, point.y, "right");
         },
-        [fitMode, model, reportAppActivity]
+        [getStreamPoint, model]
+    );
+
+    const handleWheel = useCallback(
+        (e: React.WheelEvent<HTMLElement>) => {
+            e.preventDefault();
+            const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+            const delta = horizontal ? e.deltaX : e.deltaY;
+            const direction = horizontal ? (delta > 0 ? "right" : "left") : delta > 0 ? "down" : "up";
+            const scrollCount = Math.min(8, Math.max(1, Math.round(Math.abs(delta) / 80)));
+            void model.sendScroll(direction, scrollCount);
+        },
+        [model]
     );
 
     if (status === "starting") {
@@ -322,85 +427,48 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
     }
 
     return (
-        <div className="relative flex h-full w-full flex-col bg-black overflow-hidden">
-            <div className="flex h-9 items-center justify-between border-b border-white/10 bg-zinc-950/90 px-2 text-[11px] text-zinc-400">
-                <div className="flex items-center gap-2 min-w-0">
-                    <span className="flex items-center gap-1.5 text-zinc-200">
-                        <span className="h-2 w-2 rounded-full bg-[#1E90FF] shadow-[0_0_10px_rgba(30,144,255,0.6)]" />
-                        {appName}
-                    </span>
-                    <span className="text-zinc-600">|</span>
-                    <span>{frameInfo ? `${frameInfo.width}x${frameInfo.height}` : "waiting for frame"}</span>
-                    <span>{fps} fps</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    {(["fit", "fill", "actual"] as StreamFitMode[]).map((mode) => (
-                        <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setFitMode(mode)}
-                            className={cn(
-                                "rounded-md border px-2 py-1 uppercase tracking-wide cursor-pointer",
-                                fitMode === mode
-                                    ? "border-accent/50 bg-accent/20 text-accent"
-                                    : "border-white/10 bg-white/[0.04] text-zinc-400 hover:text-zinc-100"
-                            )}
-                        >
-                            {mode === "actual" ? "100%" : mode}
-                        </button>
-                    ))}
-                    <label className="flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1">
-                        FPS
-                        <select
-                            value={fps}
-                            onChange={(e) => setFps(Number(e.target.value))}
-                            className="bg-transparent text-zinc-200 outline-none cursor-pointer"
-                        >
-                            {[3, 6, 10, 15].map((value) => (
-                                <option key={value} value={value}>
-                                    {value}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <label className="flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1">
-                        Q
-                        <select
-                            value={quality}
-                            onChange={(e) => setQuality(Number(e.target.value))}
-                            className="bg-transparent text-zinc-200 outline-none cursor-pointer"
-                        >
-                            {[60, 80, 95].map((value) => (
-                                <option key={value} value={value}>
-                                    {value}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-            </div>
-            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.055),transparent_60%)]">
-                <canvas
-                    ref={canvasRef}
-                    tabIndex={0}
-                    className={cn(
-                        "block cursor-none rounded-sm shadow-2xl shadow-black/60",
-                        fitMode === "fit" && "max-h-full max-w-full object-contain",
-                        fitMode === "fill" && "h-full w-full object-cover",
-                        fitMode === "actual" && "max-w-none max-h-none"
-                    )}
-                    onClick={handleClick}
-                    onMouseMove={handleMouseMove}
-                    onContextMenu={handleContextMenu}
-                    onPointerDown={handlePointerDown}
-                    onPointerUp={handlePointerUp}
-                    onKeyDown={handleKeyDown}
-                    onPaste={handlePaste}
-                />
-                <WaterFlowOverlay active={waterflowActive} />
-                {markers.map((m) => (
-                    <ActionMarker key={m.id} actionType={m.actionType} label={m.label} x={m.x} y={m.y} active={true} />
-                ))}
+        <div ref={surfaceRef} className="relative flex h-full w-full flex-col bg-black overflow-hidden">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+                {transport === "native-media" && mediaStream != null ? (
+                    <video
+                        ref={videoRef}
+                        tabIndex={0}
+                        muted
+                        playsInline
+                        autoPlay
+                        aria-label={`${appName} live application stream`}
+                        className="block max-h-full max-w-full cursor-default object-contain outline-none"
+                        onClick={(e) => handleClick(e.clientX, e.clientY, e.currentTarget)}
+                        onMouseMove={handleMouseMove}
+                        onContextMenu={handleContextMenu}
+                        onPointerDown={handlePointerDown}
+                        onPointerUp={handlePointerUp}
+                        onWheel={handleWheel}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                    />
+                ) : (
+                    <canvas
+                        ref={canvasRef}
+                        tabIndex={0}
+                        aria-label={`${appName} compatibility application stream`}
+                        className="block max-h-full max-w-full cursor-none object-contain outline-none"
+                        onClick={(e) => handleClick(e.clientX, e.clientY, e.currentTarget)}
+                        onMouseMove={handleMouseMove}
+                        onContextMenu={handleContextMenu}
+                        onPointerDown={handlePointerDown}
+                        onPointerUp={handlePointerUp}
+                        onWheel={handleWheel}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                    />
+                )}
+                {nativeSurfaceV2Enabled && captureFallbackReason ? (
+                    <div className="pointer-events-none absolute right-3 top-3 rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-[10px] text-white/70 backdrop-blur-md">
+                        Compatibility capture
+                    </div>
+                ) : null}
+                <AgentSurfaceCursor surface="desktop" blockId={model.blockId} />
             </div>
         </div>
     );

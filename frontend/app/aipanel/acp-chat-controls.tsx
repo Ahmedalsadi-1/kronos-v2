@@ -1,8 +1,4 @@
 import { Badge } from "@/app/components/hermes-ui/ui/badge";
-import {
-    KronosChamberSidebar,
-    type KronosChamberSection,
-} from "@/app/components/kronoschamber-ui/kronoschamber-sidebar";
 import { cn } from "@/util/util";
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import ReactDOM from "react-dom";
@@ -1049,7 +1045,6 @@ export const SettingsPanel = memo(
     }: SettingsPanelProps) => {
         const [activeTab, setActiveTab] = useState<SettingsTab>("kronterm");
         const [section, setSection] = useState<SettingsSection>("defaults");
-        const [chamberPreviewSection, setChamberPreviewSection] = useState<KronosChamberSection>("chat");
         const profile = profiles[selectedAgent?.backend ?? "kronoscode"] ?? {};
         const activeSession = sessions.find((session) => session.conversationId === activeConversationId);
         const liveSessions = sessions.filter((session) => session.resumeState !== "archived");
@@ -1127,7 +1122,7 @@ export const SettingsPanel = memo(
                             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[#6b6863]">
                                 <span>Configure KronTerm and agents</span>
                                 <Badge variant="outline" className="border-[#34322f] text-[#8a8580]">
-                                    KronosChamber
+                                    KronTerm
                                 </Badge>
                                 <Badge variant="outline" className="border-[#34322f] text-[#8a8580]">
                                     Kronos agent
@@ -1204,31 +1199,6 @@ export const SettingsPanel = memo(
                                     KronosCode is the primary agent. External agent values are applied only when their
                                     active ACP runtime advertises matching controls.
                                 </p>
-                                <div className="mb-5 grid gap-3 rounded-lg border border-[#2a2a2a] bg-[#101010] p-3 @lg:grid-cols-[230px_minmax(0,1fr)]">
-                                    <div className="h-56 min-h-0 overflow-hidden rounded-md border border-[#2a2a2a] bg-[#0d0d0d]">
-                                        <KronosChamberSidebar
-                                            selectedSection={chamberPreviewSection}
-                                            onSelectSection={setChamberPreviewSection}
-                                        />
-                                    </div>
-                                    <div className="min-w-0 self-center">
-                                        <div className="mb-2 flex flex-wrap gap-1.5">
-                                            <Badge variant="outline" className="border-[#34322f] text-[#8a8580]">
-                                                Direct KronosChamber copy
-                                            </Badge>
-                                            <Badge variant="outline" className="border-[#34322f] text-[#8a8580]">
-                                                ACP adapter
-                                            </Badge>
-                                        </div>
-                                        <div className="text-sm font-semibold capitalize text-[#d4d4d4]">
-                                            {chamberPreviewSection} settings surface
-                                        </div>
-                                        <p className="mt-1 leading-relaxed text-[#8a8580]">
-                                            This panel uses the copied KronosChamber navigation component inside the
-                                            KronosCoder settings runtime while keeping Kronterm Jotai and ACP writes.
-                                        </p>
-                                    </div>
-                                </div>
                                 <label htmlFor={`acp-default-model-${fieldSuffix}`} className="mb-3 block">
                                     <span className="mb-1.5 block font-medium text-[#9e9a93]">
                                         Default model for {selectedAgent?.name}
@@ -2022,8 +1992,8 @@ export const SettingsPanel = memo(
                             <section>
                                 <div className="mb-2 text-sm font-semibold text-[#d4d4d4]">KronosCode Marketplace</div>
                                 <p className="mb-5 leading-relaxed text-[#8a8580]">
-                                    Create KronosCoder configs from curated KronosChamber sections. Installed presets
-                                    are saved into the same ACP agent, command, and skill stores used by chat.
+                                    Create KronosCoder configs from curated KronTerm sections. Installed presets are
+                                    saved into the same ACP agent, command, and skill stores used by chat.
                                 </p>
                                 <div className="grid gap-3 @xl:grid-cols-2">
                                     {[

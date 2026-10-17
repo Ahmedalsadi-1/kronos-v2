@@ -7,8 +7,8 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { installHermesWorkflowPack } from "./hermes-workflow-packs";
 import { resolveAgentWsh } from "./agent-runtime-paths";
+import { installHermesWorkflowPack } from "./hermes-workflow-packs";
 import { getKronosCodeBinaryCandidates, KronosCodeRuntime, withKronosCodeAttachArgs } from "./kronoscode-runtime";
 import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
 import { startKronTermToolServer, type KronTermToolServerDescriptor } from "./kronterm-tool-server";
@@ -175,7 +175,6 @@ export function prepareHermesBundledPlugins(binary: string, target: string, adap
                     encoding: "utf8",
                     timeout: 5_000,
                     windowsHide: true,
-                    detached: process.platform !== "win32",
                 }
             );
             if (probe.status === 0) {

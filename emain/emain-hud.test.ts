@@ -185,6 +185,7 @@ import {
     forwardHermesSelection,
     getNativeHudIslandPresentation,
     listNativeHudIslands,
+    nativeDesktopHudActive,
     nativeHudWidgetRoute,
     openNativeHudIsland,
     openNativeHudIslandForTab,
@@ -209,7 +210,14 @@ describe("native KronTerm HUD windows", () => {
         mocks.controlNowPlaying.mockResolvedValue(undefined);
     });
     test("routes notch playback commands to the displayed source and refreshes its state", async () => {
-        const media = { id: "com.spotify.client", source: "Spotify", title: "Track", artist: "Artist", playing: true, canSkip: true };
+        const media = {
+            id: "com.spotify.client",
+            source: "Spotify",
+            title: "Track",
+            artist: "Artist",
+            playing: true,
+            canSkip: true,
+        };
         mocks.getNowPlaying.mockResolvedValue(media);
         mocks.controlNowPlaying.mockResolvedValue({ ...media, playing: false });
         mocks.startCoucouHud.mockReturnValue({ kill: vi.fn() });
@@ -217,7 +225,11 @@ describe("native KronTerm HUD windows", () => {
         const onEvent = mocks.startCoucouHud.mock.calls[0][1];
         onEvent({ event: "action", action: "media-toggle", route: media.id });
         await vi.waitFor(() => expect(mocks.controlNowPlaying).toHaveBeenCalledWith(media.id, "toggle"));
-        await vi.waitFor(() => expect(mocks.writeCoucouState).toHaveBeenCalledWith(expect.anything(), { media: { ...media, playing: false } }));
+        await vi.waitFor(() =>
+            expect(mocks.writeCoucouState).toHaveBeenCalledWith(expect.anything(), {
+                media: { ...media, playing: false },
+            })
+        );
     });
     test("retries suspended native loads with a bounded budget and cancels recovery on close", async () => {
         vi.useFakeTimers();
@@ -442,12 +454,15 @@ describe("native KronTerm HUD windows", () => {
         const geometry = { x: 0, y: 0, width: 1512, height: 982, inset: 32 };
         onEvent({ ...geometry, event: "ready" });
         expect(hud.isVisible()).toBe(false);
+        expect(nativeDesktopHudActive("tab-1")).toBe(true);
         onEvent({ ...geometry, event: "chat-open" });
         expect(hud.getBounds()).toEqual({ x: 576, y: 52, width: 360, height: 720 });
         expect(hud.isVisible()).toBe(true);
         onEvent({ ...geometry, event: "chat-close" });
         expect(hud.isVisible()).toBe(false);
+        expect(nativeDesktopHudActive("tab-1")).toBe(true);
         setNativeHudMode(42, false);
+        expect(nativeDesktopHudActive("tab-1")).toBe(false);
         expect(companion.kill).toHaveBeenCalledOnce();
     });
 

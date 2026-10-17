@@ -62,7 +62,7 @@ export function registerNativeHudIpc(): void {
         const { getWaveWindowByWorkspaceId } = await import("./emain-window");
         const window = getWaveWindowByWorkspaceId(run.target.workspaceId);
         if (!window) throw new Error("Workflow workspace is unavailable");
-        await window.setActiveTab(run.target.tabId);
+        await window.setActiveTab(run.target.tabId, true);
         window.show();
         window.focus();
         return true;

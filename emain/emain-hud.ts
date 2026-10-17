@@ -19,15 +19,15 @@ import {
     writeCoucouState,
     type CoucouProgress,
 } from "./coucou-hud";
-import { managedAppBlocked, productivityStore, recordProductivityAgent } from "./productivity-runtime";
 import { controlNowPlaying, getNowPlaying } from "./now-playing";
+import { managedAppBlocked, productivityStore, recordProductivityAgent } from "./productivity-runtime";
 
 import { app, BrowserWindow, screen, webContents } from "electron";
 import path from "path";
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
-import { ElectronWshClient } from "./emain-wsh";
 import { getWaveWindowByWebContentsId } from "./emain-window";
+import { ElectronWshClient } from "./emain-wsh";
 import { validateHermesSelection } from "./hermes-selection";
 
 type NotchPreviewSource = {
@@ -497,7 +497,7 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
                                 const owner = getWaveWindowByWebContentsId(ownerWebContentsId);
                                 await owner?.switchWorkspace(run.target.workspaceId);
                                 const target = getWaveWindowByWebContentsId(ownerWebContentsId);
-                                await target?.setActiveTab(run.target.tabId);
+                                await target?.setActiveTab(run.target.tabId, true);
                                 target?.show();
                             } else {
                                 surface.companionChatOpen = true;
@@ -508,12 +508,18 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
                         })
                         .catch((error) => console.warn("[workflows] HUD action failed", error));
                 } else if (["media-toggle", "media-previous", "media-next"].includes(event.action)) {
-                    void getNowPlaying().then((state) => {
-                        if (!state) return;
-                        return controlNowPlaying(event.route, event.action.slice(6) as "toggle" | "previous" | "next");
-                    }).then((media) => {
-                        if (!window.isDestroyed()) writeCoucouState(surface.companion, { media: media ?? null });
-                    }).catch((error) => console.warn("[media] Notch playback control failed", error));
+                    void getNowPlaying()
+                        .then((state) => {
+                            if (!state) return;
+                            return controlNowPlaying(
+                                event.route,
+                                event.action.slice(6) as "toggle" | "previous" | "next"
+                            );
+                        })
+                        .then((media) => {
+                            if (!window.isDestroyed()) writeCoucouState(surface.companion, { media: media ?? null });
+                        })
+                        .catch((error) => console.warn("[media] Notch playback control failed", error));
                 } else if (event.action === "theme-select") {
                     const palette = coucouPalette(event.route);
                     if (!palette) return;
@@ -1046,7 +1052,12 @@ export function nativeHudViewingContext() {
 }
 
 export function nativeDesktopHudActive(tabId: string): boolean {
-    return surfacesForTab(tabId, "hud").some((surface) => !surface.keepWorkspaceVisible && surface.window.isVisible());
+    return surfacesForTab(tabId, "hud").some(
+        (surface) =>
+            !surface.keepWorkspaceVisible &&
+            !surface.backgrounded &&
+            (surface.window.isVisible() || (surface.companionReady && !!surface.companion))
+    );
 }
 
 export function listNativeHudIslands(tabId: string): NativeHudIslandSnapshot[] {
@@ -1149,24 +1160,26 @@ async function openWorkspaceBlockInNotch(hud: NativeHudSurface, blockId: string)
     const owner = getWaveWindowByWebContentsId(hud.ownerWebContentsId);
     const workspaceId = owner?.workspaceId;
     if (tabView?.waveTabId == null || workspaceId == null) return false;
-    const entries = (await ElectronWshClient.wshRpcCall("blockslist", { workspaceid: workspaceId }, { timeout: 5000 }).catch(
-        (error) => {
-            console.warn("[native-hud] blockslist failed for agent focus", error);
-            return undefined;
-        }
-    )) as Array<{ tabId?: string; blockId?: string; meta?: { view?: string; title?: string } }> | undefined;
-    const entry = entries?.find(
-        (row) => row.blockId === blockId && (!row.tabId || row.tabId === tabView.waveTabId)
-    );
+    const entries = (await ElectronWshClient.wshRpcCall(
+        "blockslist",
+        { workspaceid: workspaceId },
+        { timeout: 5000 }
+    ).catch((error) => {
+        console.warn("[native-hud] blockslist failed for agent focus", error);
+        return undefined;
+    })) as Array<{ tabId?: string; blockId?: string; meta?: { view?: string; title?: string } }> | undefined;
+    const entry = entries?.find((row) => row.blockId === blockId && (!row.tabId || row.tabId === tabView.waveTabId));
     if (entry == null) return false;
     const view = typeof entry.meta?.view === "string" ? entry.meta.view : "term";
     hud.pendingDockView = view;
-    if (!openNativeHudIsland(hud.ownerWebContentsId, {
-        blockId,
-        view,
-        title: typeof entry.meta?.title === "string" ? entry.meta.title : undefined,
-        select: false,
-    }))
+    if (
+        !openNativeHudIsland(hud.ownerWebContentsId, {
+            blockId,
+            view,
+            title: typeof entry.meta?.title === "string" ? entry.meta.title : undefined,
+            select: false,
+        })
+    )
         return false;
     if (hud.companionReady && hud.previewBounds) dockNotchWidget(hud, blockId);
     return true;
@@ -1616,7 +1629,7 @@ export function setNativeHudIgnoreMouse(webContentsId: number, ignore: boolean):
     return true;
 }
 
-export function reportNativeAgentCursor(senderId: number, point: {x: number; y: number} | null, owner: string): void {
+export function reportNativeAgentCursor(senderId: number, point: { x: number; y: number } | null, owner: string): void {
     if (typeof owner !== "string" || owner.length > 256) return;
     const cursorOwner = `${senderId}:${owner}`;
     const source = nativeHudSurfaces.get(senderId);
@@ -1624,7 +1637,7 @@ export function reportNativeAgentCursor(senderId: number, point: {x: number; y: 
     if (!hud?.followAgent || !hud.companion) return;
     if (point == null) {
         if (hud.cursorOwner === cursorOwner) {
-            writeCoucouState(hud.companion, {agentCursor: null});
+            writeCoucouState(hud.companion, { agentCursor: null });
             hud.cursorOwner = undefined;
         }
         return;
@@ -1634,13 +1647,13 @@ export function reportNativeAgentCursor(senderId: number, point: {x: number; y: 
     const window = source?.window ?? getWaveWindowByWebContentsId(senderId);
     if (!contents || contents.isDestroyed() || !window || window.isDestroyed()) return;
     const origin = window.getContentBounds();
-    const tabBounds = source ? {x:0,y:0} : getWaveTabViewByWebContentsId(senderId)?.getBounds();
+    const tabBounds = source ? { x: 0, y: 0 } : getWaveTabViewByWebContentsId(senderId)?.getBounds();
     if (!tabBounds) return;
     const zoom = contents.getZoomFactor();
     const x = origin.x + tabBounds.x + point.x * zoom;
     const y = origin.y + tabBounds.y + point.y * zoom;
     hud.cursorOwner = cursorOwner;
-    writeCoucouState(hud.companion, {agentCursor: {x, y}});
+    writeCoucouState(hud.companion, { agentCursor: { x, y } });
 }
 
 export function publishNativeNotchActivity(activity: AgentActivityEvent): void {
@@ -1853,9 +1866,11 @@ export function syncNativeNotch(senderId: number, input: unknown): void {
 
 async function refreshNotchPreview(hud: NativeHudSurface): Promise<void> {
     if (!hud.companionReady || hud.window.isDestroyed()) return;
-    void getNowPlaying().then((media) => {
-        if (!hud.window.isDestroyed()) writeCoucouState(hud.companion, { media: media ?? null });
-    }).catch(() => {});
+    void getNowPlaying()
+        .then((media) => {
+            if (!hud.window.isDestroyed()) writeCoucouState(hud.companion, { media: media ?? null });
+        })
+        .catch(() => {});
     // Hidden guest capture can stall; inventory and selection must keep updating independently.
     if (Date.now() - (hud.workspaceRefreshAt ?? 0) > 3000) {
         hud.workspaceRefreshAt = Date.now();
@@ -1988,7 +2003,7 @@ async function refreshNotchPreview(hud: NativeHudSurface): Promise<void> {
             hud.window.isDestroyed() ||
             !hud.previewVisible ||
             hud.backgrounded ||
-            hud.widgetExpanded === false ||
+            Object.is(hud.widgetExpanded, false) ||
             hud.dockedBlockId === selected.id
         )
             return;

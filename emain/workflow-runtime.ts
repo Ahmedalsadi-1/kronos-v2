@@ -152,7 +152,7 @@ Run: ${current.id}; conversation: ${current.conversationId}.
 Bound targets: ${JSON.stringify(current.target)}.
 Assigned code worktree: ${workspace ?? "none"}. Never modify another checkout. Do not commit, reset, change branches, merge, or publish.
 User task parameters: ${JSON.stringify(current.parameters)}.
-Execution profile: ${capabilities.profile}. ${capabilities.profile === "computer" ? "Prefer semantic computer/browser tools, compact observations and verify every action on the assigned computer." : "Use project and workspace tools appropriate to this step."}
+Execution profile: ${capabilities.profile}. Use project and workspace tools appropriate to this step.
 Bound widget for this step: ${step.blockId ?? "none"}.
 Connected input data: ${JSON.stringify(inputs)}.
 Previous completed steps: ${JSON.stringify(previous)}.

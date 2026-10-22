@@ -135,10 +135,14 @@ export function useModelControls({ queryClient, requestGateway }: ModelControlsO
         // that lands while getGlobalModelInfo is in flight wins over this older
         // default — value comparisons alone miss re-selecting the same row.
         const selectionGeneration = getComposerSelectionGeneration()
-        const result = await getGlobalModelInfo()
+        const backends = window.hermesDesktop?.agentBackends
+        const engine = backends?.getActive()
+        const routed = backends?.route('model.options', {})
+        const result = routed ? await routed as ModelOptionsResponse : await getGlobalModelInfo()
 
         if (
           profileRefreshEpochRef.current !== profileRefreshEpoch ||
+          backends?.getActive() !== engine ||
           $activeSessionId.get() ||
           getComposerSelectionGeneration() !== selectionGeneration ||
           keepManualPick()

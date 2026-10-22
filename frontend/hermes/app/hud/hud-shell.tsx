@@ -1,5 +1,6 @@
 import { appViewForPath, isOverlayView } from "@hermes/app/routes";
 import { useStore } from "@nanostores/react";
+import { computed } from "nanostores";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
@@ -54,6 +55,7 @@ const HUD_SHEET_OVERHANG_PX = 12;
 /** Composer on top, transcript always hanging below it — Spotlight's shape,
  *  rather than flipping to follow the screen edge the HUD is parked against. */
 const HUD_THREAD_ALWAYS_BELOW = true;
+const $hasUserMessage = computed($messages, (messages) => messages.some((message) => message.role === "user"));
 
 const composerHasFocus = () => document.activeElement?.closest(`[data-slot="${RICH_INPUT_SLOT}"]`) != null;
 
@@ -176,9 +178,10 @@ export function HudShell() {
     const location = useLocation();
     const view = appViewForPath(location.pathname);
     const pageOpen = view !== "chat" && !isOverlayView(view);
-    const { embedded } = useHermesShellMode();
+    const { embedded, dockedChat } = useHermesShellMode();
     const { t } = useI18n();
     const [recent, holdBand] = useRecentActivity();
+    const hasUserMessage = useStore($hasUserMessage);
     const held = useHudHeld();
 
     // Clicking away to another APP is the most common way the HUD is let go of,
@@ -226,6 +229,10 @@ export function HudShell() {
             // TRYING IT: the bar stays on top and the transcript always hangs below,
             // wherever the HUD is parked. Flip the constant to re-enable the
             // edge-aware layout (the CSS for both orientations is still here).
+            if (rootRef.current?.closest('[data-chat-placement="bottom"]')) {
+                setEdge("bottom");
+                return;
+            }
             if (HUD_THREAD_ALWAYS_BELOW) {
                 setEdge("top");
 
@@ -383,7 +390,9 @@ export function HudShell() {
             data-hud-embedded={embedded ? "" : undefined}
             data-hud-edge={edge}
             data-hud-recent={recent || held ? "" : undefined}
-            data-hud-shell
+            data-hud-shell={dockedChat ? undefined : ""}
+            data-kronterm-side-chat={dockedChat ? "" : undefined}
+            data-hud-has-user-message={hasUserMessage ? "" : undefined}
             data-hud-native-notch={nativeNotch ? "" : undefined}
             data-hud-page={pageOpen ? "" : undefined}
             // Letting go of the composer re-arms the hold, so the transcript steps
@@ -403,13 +412,13 @@ export function HudShell() {
             {/* The band's sheet, on a layer of its own so it can carry the fade
           without the app's chat surface having to know about it. FIRST child so
           it paints behind the transcript. */}
-            <div aria-hidden data-hud-glass />
+            {!dockedChat && <div aria-hidden data-hud-glass />}
 
             <WiredPane part="chatRoutes" />
 
             {/* The way back — without it the only exits are ⌘⇧H and ⌘W, both
           invisible. Placed and revealed entirely from styles.css. */}
-            {!nativeNotch && (
+            {!nativeNotch && !dockedChat && (
                 <>
                     <Tip label={t.titlebar.exitHud}>
                         <Button

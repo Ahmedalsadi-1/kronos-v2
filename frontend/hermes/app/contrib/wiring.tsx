@@ -136,6 +136,7 @@ import {
 import { TitlebarControls } from "../shell/titlebar-controls";
 import { UpdatesOverlay } from "../updates-overlay";
 
+import { $krontermSidebarTarget } from "@hermes/lib/kronterm-sidebar";
 import { ContribWiringContext } from "./context";
 import {
     reconcileActiveTranscript,
@@ -146,6 +147,7 @@ import { useDesktopIntegrations } from "./hooks/use-desktop-integrations";
 import { usePetBridge } from "./hooks/use-pet-bridge";
 import { useQuickEntryBridge } from "./hooks/use-quick-entry-bridge";
 import { useSessionTileDelegate } from "./hooks/use-session-tile-delegate";
+import { KrontermSidebar } from "./kronterm-sidebar";
 import { McpInstallDeepLinkDialog } from "./mcp-install-deeplink-dialog";
 import { $restartPreviewServer, useTitlebarToolContributions } from "./panes";
 import { ChatRoutesSurface, SidebarSurface, StatusbarSurface, TerminalSurface } from "./surfaces";
@@ -177,7 +179,11 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     useEffect(() => {
         const openRequestedSettings = (sectionId?: string | null) => {
             if (!sectionId) return;
-            navigate(`${SETTINGS_ROUTE}?tab=${encodeURIComponent(makeKronTermSettingsViewId(sectionId))}`);
+            const viewId =
+                sectionId === "appearance" || sectionId === "theme"
+                    ? "config:appearance"
+                    : makeKronTermSettingsViewId(sectionId);
+            navigate(`${SETTINGS_ROUTE}?tab=${encodeURIComponent(viewId)}`);
         };
         openRequestedSettings(consumeKronTermSettingsRequest());
         const onRequest = (event: Event) => {
@@ -1003,6 +1009,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     // surface's own atom subscriptions. A wiring tick that doesn't touch a
     // node's keys leaves its element reference intact, so `WiredPane` (memoized)
     // bails on that pane subtree — panes render independently of one another.
+    const sidebarTarget = useStore($krontermSidebarTarget);
     const sidebarNode = useMemo(
         () => <SidebarSurface actions={actions} currentView={currentView} />,
         [actions, currentView]
@@ -1032,11 +1039,11 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     const api = useMemo<WiringApi>(
         () => ({
             chatRoutes: chatRoutesNode,
-            sidebar: sidebarNode,
+            sidebar: sidebarTarget ? null : sidebarNode,
             statusbar: statusbarNode,
             terminal: terminalNode,
         }),
-        [chatRoutesNode, sidebarNode, statusbarNode, terminalNode]
+        [chatRoutesNode, sidebarNode, sidebarTarget, statusbarNode, terminalNode]
     );
 
     // The REAL titlebar tool clusters (sidebar/flip toggles, haptics, keybinds,
@@ -1079,6 +1086,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
     return (
         <ContribWiringContext.Provider value={api}>
+            <KrontermSidebar preferred={hudMode || panelMode}>{sidebarNode}</KrontermSidebar>
             <div
                 className="contents"
                 style={

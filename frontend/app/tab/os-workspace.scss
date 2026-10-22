@@ -93,13 +93,14 @@
 .os-shell {
     position: absolute;
     inset: 0 0 auto;
-    z-index: 1200;
+    z-index: 4000;
     height: var(--os-shell-height);
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     padding: 0 var(--os-shell-safe);
     pointer-events: none;
+    overflow: visible;
 
     button {
         border: 0;
@@ -124,9 +125,138 @@
     height: 100%;
 }
 
+.os-shell-left {
+    position: static;
+    min-width: 0;
+}
+
+.os-shell-chat {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: clamp(320px, calc(100vw - 1080px), 580px);
+    min-width: 0;
+    height: 48px;
+    pointer-events: none;
+
+    [data-hermes-app],
+    [data-hud-shell],
+    [data-hud-shell] [data-chat-surface] {
+        overflow: visible !important;
+    }
+
+    [data-hud-shell] {
+        --hud-chip-strip: 0px;
+        --composer-control-size: 24px;
+        --composer-control-primary-size: 28px;
+    }
+
+    [data-slot="composer-root"][data-floating-hud] {
+        --composer-control-size: 24px;
+        --composer-control-primary-size: 28px;
+        --composer-surface-pad-x: 8px;
+        --composer-surface-pad-y: 4px;
+    }
+
+    [data-slot="composer-fade"] > .grid {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas: "menu input controls";
+        align-items: center;
+    }
+
+    [data-slot="composer-rich-input"] {
+        max-height: 28px;
+        min-height: 28px;
+        overflow-y: auto;
+    }
+
+    [data-slot="composer-surface"] {
+        border-radius: 78px !important;
+    }
+
+    [data-slot="composer-dock"] {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    [data-slot="composer-fade"] {
+        padding: 9px;
+        gap: 8px;
+        background: var(--color-black, #000);
+        border-radius: 78px;
+    }
+
+    [data-hud-shell][data-hud-edge] [data-slot="composer-bounds"] {
+        inset: 56px auto auto 50% !important;
+        height: min(240px, calc(100dvh - 96px)) !important;
+        width: min(460px, calc(100vw - 32px)) !important;
+        transform: translateX(-50%);
+        border-radius: 0 !important;
+        background: var(--color-black, #000) !important;
+        box-shadow: 0 12px 32px rgb(0 0 0 / 0.3);
+        --conversation-text-font-size: 13px;
+        --hud-band-inset: 0px;
+        --thread-viewport-height: 100%;
+        --thread-last-message-clearance: 8px;
+    }
+
+    [data-slot="aui_thread-viewport"] {
+        border-color: var(--color-black, #000);
+        background: var(--color-black, #000);
+    }
+
+    [data-hud-shell][data-hud-edge]:not([data-hud-has-user-message]) [data-slot="composer-bounds"] {
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    [data-hud-shell][data-hud-edge][data-hud-has-user-message] [data-slot="composer-bounds"] {
+        opacity: 1;
+        translate: none;
+        pointer-events: auto;
+    }
+
+    [data-hud-glass] {
+        display: none;
+    }
+
+    [data-hud-shell][data-hud-edge="top"] [data-slot="composer-dock"] {
+        padding-top: 0 !important;
+    }
+
+    [data-hud-exit],
+    [data-hud-dismiss],
+    [data-hud-resize] {
+        display: none;
+    }
+
+    [data-hud-shell][data-hud-embedded] [data-hud-dock] {
+        display: flex;
+        visibility: hidden;
+        top: 56px;
+        right: max(0px, calc((100% - 460px) / 2));
+        width: 32px;
+        height: 32px;
+        opacity: 1;
+        pointer-events: auto;
+        background: var(--kt-content, var(--main-bg-color));
+        color: var(--kt-label, var(--primary-text-color));
+    }
+
+    [data-hud-shell][data-hud-embedded][data-hud-has-user-message] [data-hud-dock] {
+        visibility: visible;
+    }
+
+    [data-hud-shell][data-hud-embedded]:not([data-hud-has-user-message]) [data-hud-dock] {
+        visibility: hidden;
+    }
+}
+
 // clear the macOS traffic lights on the frameless window
 .os-shell.is-macos .os-shell-left {
-    padding-left: 78px;
+    padding-left: 66px;
 }
 
 .os-shell-right {
@@ -1056,6 +1186,43 @@
     z-index: 1;
     overflow: hidden;
     transition: opacity 180ms ease;
+}
+
+.os-agent-sidebar {
+    position: absolute;
+    inset: var(--os-frame-content-top) auto var(--os-frame-border) var(--os-frame-border);
+    z-index: 3900;
+    width: min(260px, 80vw);
+    overflow: hidden;
+    border-radius: var(--os-frame-content-radius) 0 var(--os-frame-content-radius) 0;
+    background: var(--ui-sidebar-surface-background, var(--os-shell-bg));
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.has-agent-sidebar .os-mode-viewport {
+    left: calc(min(260px, 80vw) + var(--os-frame-border));
+}
+
+.os-files-inspector {
+    position: absolute;
+    inset: var(--os-frame-content-top) var(--os-frame-border) var(--os-frame-border) auto;
+    z-index: 3900;
+    width: var(--os-inspector-width);
+    overflow: hidden;
+    border-left: 1px solid var(--ui-stroke-secondary);
+    border-radius: 0 var(--os-frame-content-radius) 0 var(--os-frame-content-radius);
+    background: var(--ui-sidebar-surface-background, var(--os-shell-bg));
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.has-files-inspector .os-mode-viewport {
+    right: calc(var(--os-inspector-width) + var(--os-frame-border));
 }
 
 .os-mode-world {
@@ -3148,12 +3315,42 @@
     padding: 0 12px;
     border-width: 0 0 1px;
     border-radius: 0;
-    background: color-mix(in srgb, var(--kt-bar) 84%, transparent);
+    background: var(--color-black, #000);
     box-shadow:
         0 1px 0 rgb(255 255 255 / 0.22),
         0 10px 30px rgb(0 0 0 / 0.08);
-    backdrop-filter: blur(14px) saturate(1.18);
+    backdrop-filter: none;
     pointer-events: auto;
+    isolation: isolate;
+}
+
+.os-carousel-dots {
+    display: flex;
+    align-items: center;
+    max-width: 50vw;
+    overflow-x: auto;
+
+    button {
+        display: grid;
+        place-items: center;
+        flex: 0 0 32px;
+        height: 32px;
+        cursor: pointer;
+
+        span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.45;
+        }
+
+        &[aria-current="true"] span {
+            width: 9px;
+            height: 9px;
+            opacity: 1;
+        }
+    }
 }
 
 .kt-system-ui .os-canvas-toolbar {
@@ -3189,7 +3386,7 @@
 }
 
 .kt-system-ui .os-shell.is-macos .os-shell-left {
-    padding-left: 70px;
+    padding-left: 66px;
 }
 
 .kt-system-ui .os-brand {
@@ -3373,11 +3570,12 @@
 
 .kt-system-ui .os-window-titlebar {
     flex-basis: 44px;
-    gap: 10px;
-    padding: 0 10px 0 12px;
-    border-bottom-color: var(--kt-separator);
+    gap: 0;
+    padding: 0;
+    min-height: 0;
+    border-bottom-width: 0;
     color: var(--kt-label);
-    background: transparent;
+    background: var(--color-black, #000);
 }
 
 .kt-system-ui .os-window-title {
@@ -3400,12 +3598,24 @@
 }
 
 .kt-system-ui .os-window-lights {
-    gap: 8px;
+    order: 4;
+    gap: 0;
+    margin: 0 6px 0 4px;
 }
 
 .kt-system-ui .os-window-lights button {
-    width: 12px;
-    height: 12px;
+    width: 24px;
+    height: 24px;
+}
+
+.kt-system-ui .os-window-lights button::before {
+    width: 9px;
+    height: 9px;
+}
+
+.kt-system-ui .os-window-lights button svg {
+    width: 7px;
+    height: 7px;
 }
 
 .kt-system-ui .os-window-controls {
@@ -3858,6 +4068,7 @@
     font-size: 11px;
 }
 
+.kt-system-ui[data-reduced-transparency="true"] .os-shell,
 .kt-system-ui[data-reduced-transparency="true"] .os-window,
 .kt-system-ui[data-reduced-transparency="true"] .os-widgets-file,
 .kt-system-ui[data-reduced-transparency="true"] .os-system-center,
@@ -3866,6 +4077,10 @@
 .kt-system-ui[data-reduced-transparency="true"] .os-restore-status,
 .kt-system-ui[data-reduced-transparency="true"] .scene-overview .os-mode-viewport::after {
     backdrop-filter: none;
+}
+
+.kt-system-ui[data-reduced-transparency="true"] .os-shell {
+    background: var(--color-black, #000);
 }
 
 @media (max-width: 1560px) {
@@ -3913,18 +4128,22 @@
 
 .os-space-overview {
     position: absolute;
-    inset: 70px 24px auto;
+    inset: 68px 24px auto;
     z-index: 1100;
     display: flex;
     align-items: flex-start;
     justify-content: safe center;
-    gap: 24px;
-    padding: 12px 16px 14px;
+    gap: 12px;
+    padding: 8px 12px;
     overflow-x: auto;
-    border-bottom: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.3));
+    max-width: 720px;
+    margin-inline: auto;
+    border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.3));
+    border-radius: 14px;
+    background: var(--kt-content, var(--main-bg-color));
 
     button {
-        flex: 0 0 164px;
+        flex: 0 0 108px;
         border: 0;
         background: transparent;
         color: inherit;
@@ -3941,7 +4160,7 @@
 .os-space-overview-preview {
     position: relative;
     display: flex;
-    height: 94px;
+    height: 56px;
     align-items: center;
     justify-content: center;
     overflow: hidden;
@@ -3962,6 +4181,13 @@
     border-radius: 3px;
     background: var(--kt-content, var(--main-bg-color));
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    padding: 3px;
+    color: var(--kt-label, var(--primary-text-color));
+    font-size: 10px;
+    line-height: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .os-space-overview-name,
@@ -3986,10 +4212,261 @@
 
 .os-space-overview-add {
     display: flex;
-    min-height: 94px;
+    min-height: 90px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 8px;
     font-size: 12px;
+}
+
+/* The frame shares the shell's coordinate space so live surfaces keep their bounds. */
+.os-mode-root {
+    --os-frame-color: var(--color-black, #101113);
+    --os-frame-border: 12px;
+    --os-frame-top-border: 4px;
+    --os-frame-radius: 28px;
+    --os-frame-content-radius: 18px;
+    --os-frame-top: 56px;
+    --os-frame-content-top: max(var(--os-shell-height), calc(var(--os-frame-top) + var(--os-frame-top-border)));
+    --os-inspector-width: var(--os-inspector-dragged-width, clamp(300px, 34vw, 480px));
+    --os-inspector-compact-width: 56px;
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: var(--os-frame-top) 0 0;
+        border: var(--os-frame-border) solid var(--os-frame-color);
+        border-top-width: var(--os-frame-top-border);
+        border-radius: var(--os-frame-radius) var(--os-frame-radius) 0 0;
+        box-shadow: 0 -20px 0 0 var(--os-frame-color);
+        pointer-events: none;
+        z-index: 3500;
+    }
+
+    > .workspace-wallpaper,
+    > .os-wallpaper-fallback,
+    > .os-space-background {
+        inset: var(--os-frame-content-top) var(--os-frame-border) var(--os-frame-border);
+        width: calc(100% - var(--os-frame-border) * 2);
+        height: calc(100% - var(--os-frame-content-top) - var(--os-frame-border));
+        border-radius: var(--os-frame-content-radius);
+        overflow: hidden;
+    }
+
+    .os-mode-viewport {
+        clip-path: inset(
+            var(--os-frame-content-top) var(--os-frame-border) var(--os-frame-border) round
+                var(--os-frame-content-radius)
+        );
+    }
+
+    .os-shell {
+        background: var(--os-frame-color);
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+    }
+}
+
+.os-mode-root.has-expanded-inspector {
+    --os-inspector-width: var(--os-inspector-dragged-width, min(760px, 65vw));
+}
+
+.os-mode-root.has-compact-inspector {
+    --os-inspector-width: var(--os-inspector-compact-width);
+}
+
+.os-space-background {
+    position: absolute;
+    z-index: -3;
+    pointer-events: none;
+}
+
+.os-window {
+    animation: os-window-arrive 240ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+}
+
+@keyframes os-window-arrive {
+    from {
+        opacity: 0;
+        translate: 0 -12px;
+    }
+    to {
+        translate: 0 0;
+    }
+}
+
+.os-window-opening {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--kt-content, #fafaf8);
+    color: var(--kt-label-secondary, #555);
+    font-size: 13px;
+}
+
+/* The upstream application owns the creation dialogs and their interaction state. */
+.os-upstream-agents {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: var(--kt-label, var(--primary-text-color));
+    &::backdrop {
+        background: transparent;
+    }
+    iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: transparent;
+    }
+    &.is-app {
+        inset: 24px;
+        width: calc(100vw - 48px);
+        height: calc(100dvh - 48px);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    &.is-app iframe {
+        height: calc(100% - 36px);
+    }
+}
+.os-upstream-agents-close {
+    display: block;
+    width: 100%;
+    height: 36px;
+    border: 0;
+    background: var(--kt-content, var(--main-bg-color));
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.os-upstream-agents-state {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: min(440px, calc(100vw - 32px));
+    height: fit-content;
+    padding: 24px;
+    background: var(--kt-content, var(--main-bg-color));
+    border: 1px solid var(--kt-separator);
+    border-radius: 14px;
+    font-size: 13px;
+    button {
+        min-height: 32px;
+        margin: 12px 8px 0 0;
+        padding: 4px 12px;
+        border: 1px solid var(--kt-separator);
+        border-radius: 8px;
+        cursor: pointer;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .os-window,
+    .os-workspace-setup {
+        animation: none;
+    }
+    .os-setup-identity > span {
+        transition: none;
+    }
+}
+.os-mode-root.reduced-motion .os-window,
+[data-reduced-motion="true"] .os-window,
+[data-reduced-motion="true"] .os-workspace-setup {
+    animation: none;
+}
+[data-reduced-motion="true"] .os-setup-identity > span {
+    transition: none;
+}
+
+.kt-system-ui .os-shell-left {
+    background: var(--color-black, #000);
+}
+.kt-system-ui .os-shell-right.kt-system-toolbar {
+    color: #fafaff;
+    background: var(--color-black, #000);
+}
+
+.os-mode-root .os-shell {
+    --kt-label: #fafaff;
+    --kt-label-secondary: #fafaff;
+    --kt-fill-hover: rgb(255 255 255 / 0.12);
+    --os-text: #fafaff;
+    color: #fafaff;
+    background: var(--color-black, #000);
+}
+
+.os-mode-root.reduced-motion .os-workspace-setup {
+    animation: none;
+}
+
+.os-agent-control-edge {
+    position: absolute;
+    inset: 0;
+    z-index: 80;
+    pointer-events: none;
+    border-radius: inherit;
+}
+.os-agent-control-edge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow:
+        inset 0 0 14px rgb(169 118 255 / 0.45),
+        inset 0 0 5px rgb(69 217 255 / 0.5);
+}
+.os-agent-control-edge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 3px;
+    background: linear-gradient(115deg, #45d9ff, #6968ff, #c767ff, #ff6a9b, #ffad59, #69e6ce, #45d9ff);
+    background-size: 150% 150%;
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    animation: os-agent-edge-flow 5s ease-in-out infinite alternate;
+    filter: drop-shadow(0 0 5px #a976ff);
+}
+.os-agent-control-edge[data-awaiting-approval="true"]::after {
+    background: #ffbc58;
+    animation: none;
+    filter: none;
+}
+@keyframes os-agent-edge-flow {
+    from {
+        background-position: 0% 50%;
+    }
+    to {
+        background-position: 100% 50%;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .os-agent-control-edge::after {
+        animation: none;
+    }
+}
+.reduced-motion .os-agent-control-edge::after,
+[data-reduced-motion="true"] .os-agent-control-edge::after {
+    animation: none;
+}
+
+.os-agent-control-edge[data-awaiting-approval="true"]::before {
+    box-shadow: inset 0 0 12px rgb(255 188 88 / 0.4);
 }

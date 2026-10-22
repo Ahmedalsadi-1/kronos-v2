@@ -160,6 +160,14 @@ class HermesSurfaceController {
         this.update({ presentation: "panel", sessionId: sessionId ?? this.snapshot.sessionId, widgetBlockId: null });
     }
 
+    requestOpenChat(sessionId?: string | null): void {
+        if (this.snapshot.presentation === "panel") {
+            this.requestOpenPanel(sessionId);
+            return;
+        }
+        this.requestOpenHud(sessionId);
+    }
+
     returnToHud(sessionId?: string | null): void {
         this.update({
             presentation: "hud",
@@ -226,6 +234,15 @@ class HermesSurfaceController {
                 this.returnAfterWidgetClose = "closed";
             }
         };
+    }
+
+    disposeWidget(blockId: string): void {
+        if (this.snapshot.presentation !== "widget" || this.snapshot.widgetBlockId !== blockId) return;
+        this.update({
+            presentation: this.returnAfterWidgetClose === "closed" ? "hud" : this.returnAfterWidgetClose,
+            widgetBlockId: null,
+        });
+        this.returnAfterWidgetClose = "closed";
     }
 
     setSession(sessionId: string | null): void {

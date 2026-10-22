@@ -439,6 +439,49 @@ export function reconcileOSModeState(
     };
 }
 
+export function arrangeOSLaunchedWindows(
+    previous: OSModeState,
+    next: OSModeState,
+    viewport: { width: number; height: number; rightInset?: number }
+): OSModeState {
+    const added = Object.keys(next.windows).filter((id) => !previous.windows[id]);
+    const visible = Object.keys(next.windows).filter((id) => !next.windows[id].collapsed);
+    if (
+        added.length !== 1 ||
+        visible.length > 2 ||
+        viewport.width < 720 ||
+        next.view !== "canvas" ||
+        previous.scene.kind === "overview" ||
+        previous.scene.kind === "grouped" ||
+        (previous.scene.kind === "freeform" &&
+            Object.keys(previous.windows).length > 0 &&
+            (previous.camera.zoom !== 1 || previous.camera.x !== 0 || previous.camera.y !== 0)) ||
+        visible.some((id) => next.windows[id].maximized) ||
+        Object.keys(next.groups).length > 0
+    )
+        return next;
+    const margin = 28;
+    const available = viewport.width - margin * 2 - (viewport.rightInset ?? 0);
+    const height = Math.max(220, Math.min(720, viewport.height - 112));
+    const width = visible.length === 1 ? Math.min(960, available) : Math.floor((available - 16) / 2);
+    if (width < 320) return next;
+    const ordered = [...visible.filter((id) => !added.includes(id)), ...added];
+    const windows = { ...next.windows };
+    ordered.forEach((id, index) => {
+        windows[id] = {
+            ...windows[id],
+            provisional: undefined,
+            bounds: {
+                x: visible.length === 1 ? Math.round((viewport.width - width) / 2) : margin + index * (width + 16),
+                y: 80,
+                width,
+                height,
+            },
+        };
+    });
+    return { ...next, windows, camera: { x: 0, y: 0, zoom: 1 }, scene: { kind: "freeform" } };
+}
+
 export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): OSModeState {
     if (action.type === "os.tabs.group" || action.type === "os.tabs.detach" || action.type === "os.tabs.reorder")
         return reduceOSTabs(state, action);

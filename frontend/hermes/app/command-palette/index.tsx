@@ -1454,6 +1454,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           )}
           <CommandInput
             className={HUD_TEXT}
+            wrapperClassName="gap-[37px] bg-black px-[19px]"
             onKeyDown={(event) => {
               // Capture modifiers before cmdk's Enter fires onSelect (which
               // swipes the inviting MouseEvent and hands us nothing).
@@ -1478,7 +1479,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             right={page === 'pets' ? <PetInlineToggle /> : undefined}
             value={search}
           />
-          <CommandList className="dt-portal-scrollbar max-h-[min(26rem,60vh)]">
+          <CommandList className="dt-portal-scrollbar max-h-[176px] border-white bg-black text-[#a3a3a3]">
             {/* Server-driven pages render their own list; the rest show groups. */}
             {page === 'pets' ? (
               <PetPalettePage

@@ -246,12 +246,6 @@ export const OSDesktopLayer = memo((props: OSDesktopLayerProps) => (
         <div
             className={`os-desktop-column is-trailing${props.media?.state?.playing && !props.media.state.muted ? " has-media" : ""}`}
         >
-            <SideDock
-                pins={props.pins}
-                installedApps={props.installedApps}
-                onLaunch={props.onLaunchPin}
-                onPinsChange={props.onPinsChange}
-            />
             {props.windows.some((window) => window.minimized) && (
                 <div className="os-desktop-widget os-minimized-apps" aria-label="Minimized applications">
                     {props.windows

@@ -11,6 +11,7 @@ import { useI18n } from '@hermes/i18n'
 import { triggerHaptic } from '@hermes/lib/haptics'
 import { formatModifierToken } from '@hermes/lib/keybinds/combo'
 import { cn } from '@hermes/lib/utils'
+import { $krontermSidebarTarget } from '@hermes/lib/kronterm-sidebar'
 import { $hapticsMuted, toggleHapticsMuted } from '@hermes/store/haptics'
 import { toggleHud } from '@hermes/store/hud'
 import {
@@ -110,6 +111,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
   const hapticsMuted = useStore($hapticsMuted)
   const fileBrowserOpen = useStore($fileBrowserOpen)
   const sidebarOpen = useStore($sidebarOpen)
+  const sidebarTarget = useStore($krontermSidebarTarget)
 
   const toggleHaptics = () => {
     if (!hapticsMuted) {
@@ -136,6 +138,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
       actionId: 'view.toggleSidebar',
       icon: <TitlebarIcon name="layout-sidebar-left" />,
       id: 'sidebar',
+      hidden: Boolean(sidebarTarget),
       label: leftEdge.open ? t.titlebar.hideSidebar : t.titlebar.showSidebar,
       onSelect: () => {
         triggerHaptic('tap')

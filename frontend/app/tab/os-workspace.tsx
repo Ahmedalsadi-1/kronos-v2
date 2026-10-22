@@ -1,3 +1,5 @@
+import { WorkspaceService } from "@/app/store/services";
+import { OSSpaceIdentities, OSWorkspaceSetup } from "./os-workspace-setup";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -10,7 +12,6 @@ import {
     SystemButton,
     SystemDock,
     SystemMaterial,
-    SystemPopover,
     SystemSegmentedControl,
     SystemToolbar,
     SystemUIProvider,
@@ -47,7 +48,6 @@ import { useAgentPresences } from "@/app/view/agent-control-indicator";
 import { AppStreamFrameSizeEvent, type AppStreamFrameSize } from "@/app/view/appstream/appstream-events";
 import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
-import { requestAgentTakeover } from "@/app/view/hermes/hermes-tool-activity";
 import {
     OSSessionFocusEvent,
     SystemCenterOpenEvent,
@@ -55,7 +55,6 @@ import {
     type SystemCenterTarget,
 } from "@/app/workspace/command-center-events";
 import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
-import { DesktopGrabControl } from "@/app/workspace/kronterm-hud-controls";
 import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
 import type { NodeModel } from "@/layout/lib/types";
 import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
@@ -63,6 +62,20 @@ import * as services from "@/store/services";
 import * as WOS from "@/store/wos";
 import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
+import { requestKronTermSettings } from "@hermes/app/settings/kronterm-settings-host";
+import {
+    $krontermInspectorCompact,
+    $krontermInspectorExpanded,
+    $krontermInspectorOpen,
+    $krontermInspectorSection,
+    $krontermInspectorTarget,
+    $krontermInspectorWidth,
+    $krontermSidebarOwner,
+    $krontermSidebarTarget,
+    openKrontermFile,
+} from "@hermes/lib/kronterm-sidebar";
+import { $sidebarOpen, toggleSidebarOpen } from "@hermes/store/layout";
+import { useStore } from "@nanostores/react";
 import { atom, useAtomValue } from "jotai";
 import {
     Battery,
@@ -78,8 +91,6 @@ import {
     GitBranch,
     Grid2X2,
     Hand,
-    Image,
-    LayoutGrid,
     Link2,
     List,
     Maximize2,
@@ -89,7 +100,6 @@ import {
     PanelBottom,
     PanelLeft,
     PanelRight,
-    PanelTop,
     Plus,
     Search,
     Settings2,
@@ -97,7 +107,6 @@ import {
     Diamond as ShapeDiamond,
     Square as ShapeSquare,
     StickyNote,
-    Trash2,
     Unlink,
     Wifi,
     WifiOff,
@@ -112,6 +121,7 @@ import {
     useRef,
     useState,
     useSyncExternalStore,
+    type CSSProperties,
     type PointerEvent as ReactPointerEvent,
     type WheelEvent as ReactWheelEvent,
 } from "react";
@@ -120,7 +130,6 @@ import { assignAgentPresencesToWindows, describeAgentPresence, type OSAgentPrese
 import { OSAppDragMimeType, readOSAppDragPayload, type OSAppDragPayload } from "./os-app-stream";
 import { osDesktopInsetsForWidth, OSDesktopLayer } from "./os-desktop";
 import { OSDesktopWidgetsStorageKey, readOSDockPins, writeOSDockPins, type OSDockPin } from "./os-desktop-model";
-import { OSNativeTaskGroups } from "./os-native-task-groups";
 import { useOSNowPlaying } from "./os-now-playing";
 import { OSSpaceOverview } from "./os-space-overview";
 import { getOSNavigationTarget, placeOSCanvasObject, validateOSSurfaceControl } from "./os-surface-control";
@@ -138,6 +147,7 @@ import {
     type OSWindowPlacement,
 } from "./os-window-arrange";
 import {
+    arrangeOSLaunchedWindows,
     computeOSWindowLayout,
     findOSDockHitTarget,
     fitOSWindowToContentAspect,
@@ -419,7 +429,7 @@ const OSBlockWindow = memo(
 
         const { bounds } = layout;
         const agentWorking = agentPresence != null;
-        const transitionDuration = reducedMotion ? "0ms" : "220ms";
+        const transitionDuration = reducedMotion || interacting ? "0ms" : "240ms";
         return (
             <section
                 className={cn(
@@ -444,7 +454,7 @@ const OSBlockWindow = memo(
                     height: bounds.height,
                     opacity: layout.opacity,
                     zIndex: layout.zIndex,
-                    transition: `left ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), top ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), width ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), height ${transitionDuration} cubic-bezier(0.22, 0.61, 0.36, 1), opacity ${transitionDuration} ease`,
+                    transition: `left ${transitionDuration} cubic-bezier(0.2, 0.82, 0.2, 1), top ${transitionDuration} cubic-bezier(0.2, 0.82, 0.2, 1), width ${transitionDuration} cubic-bezier(0.2, 0.82, 0.2, 1), height ${transitionDuration} cubic-bezier(0.2, 0.82, 0.2, 1), opacity ${transitionDuration} ease`,
                     transformOrigin: layout.presentation === "edge-left" ? "left" : "right",
                 }}
                 onPointerDown={(event) => {
@@ -452,6 +462,18 @@ const OSBlockWindow = memo(
                     onFocus(descriptor.blockId);
                 }}
             >
+                {agentWorking && ["web", "sandbox", "appstream", "phone", "devices"].includes(descriptor.view) && (
+                    <div
+                        className="os-agent-control-edge"
+                        data-awaiting-approval={agentPresence.awaitingApproval ? "true" : undefined}
+                        role="status"
+                        aria-label={
+                            agentPresence.awaitingApproval
+                                ? "Agent waiting for approval"
+                                : "EGO-LITE: agent controlling this surface"
+                        }
+                    />
+                )}
                 <SystemWindowFrame
                     titlebar={
                         <header
@@ -466,32 +488,6 @@ const OSBlockWindow = memo(
                                 onTitleContextMenu(event, descriptor.blockId);
                             }}
                         >
-                            <div className={cn("os-window-lights", !isMacOS() && "is-platform-controls")}>
-                                <button
-                                    type="button"
-                                    className="is-close"
-                                    onClick={() => onClose(descriptor.blockId)}
-                                    aria-label="Close"
-                                >
-                                    <X />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="is-minimize"
-                                    onClick={() => onCollapse(descriptor.blockId)}
-                                    aria-label="Minimize"
-                                >
-                                    <Minimize2 />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="is-zoom"
-                                    onClick={() => onToggleFocus(descriptor.blockId)}
-                                    aria-label={maximized ? "Restore window" : "Maximize window"}
-                                >
-                                    <Maximize2 />
-                                </button>
-                            </div>
                             <div className="os-window-title">
                                 <AppIcon icon={descriptor.icon} />
                                 <span>{descriptor.title}</span>
@@ -502,12 +498,6 @@ const OSBlockWindow = memo(
                                 onPointerDown={(event) => event.stopPropagation()}
                                 onDoubleClick={(event) => event.stopPropagation()}
                             />
-                            {agentWorking && (
-                                <span className="os-window-agent-badge" title={describeAgentPresence(agentPresence)}>
-                                    <KronPetIcon />
-                                    {agentPresence.agent}
-                                </span>
-                            )}
                             <div className="os-window-controls">
                                 {docked ? (
                                     <button
@@ -536,6 +526,32 @@ const OSBlockWindow = memo(
                                     </>
                                 )}
                             </div>
+                            <div className={cn("os-window-lights", !isMacOS() && "is-platform-controls")}>
+                                <button
+                                    type="button"
+                                    className="is-close"
+                                    onClick={() => onClose(descriptor.blockId)}
+                                    aria-label="Close"
+                                >
+                                    <X />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="is-minimize"
+                                    onClick={() => onCollapse(descriptor.blockId)}
+                                    aria-label="Minimize"
+                                >
+                                    <Minimize2 />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="is-zoom"
+                                    onClick={() => onToggleFocus(descriptor.blockId)}
+                                    aria-label={maximized ? "Restore window" : "Maximize window"}
+                                >
+                                    <Maximize2 />
+                                </button>
+                            </div>
                         </header>
                     }
                 >
@@ -548,6 +564,12 @@ const OSBlockWindow = memo(
                     >
                         <div className="os-window-surface relative">
                             <BlockChromeProvider mode="integrated" toolbarHost={toolbarHost}>
+                                {!descriptor.resolved && (
+                                    <div className="os-window-opening" role="status">
+                                        <span className="os-restore-status-spinner" aria-hidden="true" />
+                                        Opening {descriptor.title}…
+                                    </div>
+                                )}
                                 <BlockView nodeModel={nodeModel} preview={false} />
                             </BlockChromeProvider>
                         </div>
@@ -771,32 +793,6 @@ const OSShellStatus = memo(() => {
 OSShellStatus.displayName = "OSShellStatus";
 
 /** The shell's live "agent is working" indicator; hidden whenever no agent is acting. */
-const OSShellAgentPill = memo(({ onOpen }: { onOpen: () => void }) => {
-    const presences = useAgentPresences();
-    const latest = presences[presences.length - 1];
-    if (latest == null) return null;
-    const waiting = presences.find((presence) => presence.awaitingApproval);
-    const label = describeAgentPresence(waiting ?? latest);
-    return (
-        <div className={cn("os-agent-pill", waiting && "is-waiting")} role="status" aria-live="polite">
-            <button type="button" className="os-agent-pill-main" onClick={onOpen} title={label}>
-                <span className="os-agent-pill-dot" aria-hidden="true" />
-                <span className="os-agent-pill-label">{label}</span>
-                {presences.length > 1 && <span className="os-agent-pill-count">+{presences.length - 1}</span>}
-            </button>
-            <button
-                type="button"
-                className="os-agent-pill-takeover"
-                onClick={() => requestAgentTakeover()}
-                aria-label="Take over from the agent"
-            >
-                Take over
-            </button>
-        </div>
-    );
-});
-OSShellAgentPill.displayName = "OSShellAgentPill";
-
 function OSModeShell({
     workspaces,
     currentWorkspaceId,
@@ -840,7 +836,7 @@ function OSModeShell({
     onFreeform: () => void;
     onPresentation: (presentation: WorkspacePresentation) => void;
 }) {
-    const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+    const shellTabId = useAtomValue(atoms.staticTabId);
     const [activeSystemCenter, setActiveSystemCenter] = useState<OSSystemCenter>();
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
     const systemModel = OSSystemModel.getInstance();
@@ -852,31 +848,18 @@ function OSModeShell({
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
+    const sidebarOpen = useStore($sidebarOpen);
+    const inspectorOpen = useStore($krontermInspectorOpen);
     const hudMode = useSyncExternalStore(
         kronTermHudController.subscribe,
         kronTermHudController.getSnapshot,
         kronTermHudController.getSnapshot
     );
     const [clock, setClock] = useState(() => new Date());
-    const wallpaper = useAtomValue(getSettingsKeyAtom("window:wallpaper" as never));
-    const surfaceOpacity = useAtomValue(getSettingsKeyAtom("window:surfaceopacity" as never));
-    const [wallpaperDraft, setWallpaperDraft] = useState(() => String(wallpaper ?? ""));
     useEffect(() => {
         const timer = window.setInterval(() => setClock(new Date()), 30_000);
         return () => window.clearInterval(timer);
     }, []);
-    useEffect(() => {
-        if (systemMenuOpen) setWallpaperDraft(String(wallpaper ?? ""));
-    }, [systemMenuOpen, wallpaper]);
-    const saveWallpaper = useCallback((value: string) => {
-        void RpcApi.SetConfigCommand(TabRpcClient, { "window:wallpaper": value.trim() || undefined });
-    }, []);
-    const chooseWallpaper = useCallback(async () => {
-        const selected = await getApi().selectWallpaper();
-        if (!selected) return;
-        setWallpaperDraft(selected);
-        saveWallpaper(selected);
-    }, [saveWallpaper]);
     const appDescriptors = useMemo(() => {
         const builtins = mergeAppDescriptors(getBuiltinViewDescriptors(blocks), [], blocks);
         const pinned = builtins.filter((descriptor) => descriptor.pinned);
@@ -907,14 +890,12 @@ function OSModeShell({
         }
     }, []);
     const toggleSystemCenter = useCallback((center: OSSystemCenter) => {
-        setSystemMenuOpen(false);
         setActiveSystemCenter((current) => (current === center ? undefined : center));
     }, []);
     useEffect(() => {
         const handleSystemCenterOpen = (event: Event) => {
             const center = (event as CustomEvent<{ center?: SystemCenterTarget }>).detail?.center;
             if (center !== "activity" && center !== "control") return;
-            setSystemMenuOpen(false);
             setViewMenuOpen(false);
             setActiveSystemCenter(center);
         };
@@ -924,6 +905,11 @@ function OSModeShell({
 
     const launchApp = useCallback(
         (descriptor: AppDescriptor) => {
+            if (descriptor.view === "preview" || descriptor.view === "codeeditor") {
+                $krontermInspectorSection.set("files");
+                $krontermInspectorOpen.set(true);
+                return;
+            }
             void launchSystemApp(descriptor, {
                 focusBlock: onFocusApp,
                 createView: onCreateBlock,
@@ -980,19 +966,23 @@ function OSModeShell({
                 className={cn("os-shell", isMacOS() && "is-macos")}
             >
                 <div className="os-shell-left">
-                    <button
+                    <SystemButton
                         type="button"
-                        className="os-brand"
+                        size="small"
+                        className="cursor-pointer"
+                        aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                        aria-expanded={sidebarOpen}
+                        aria-controls="kronterm-left-sidebar"
+                        title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
                         onClick={() => {
-                            onSetOSView("canvas");
-                            const blockId =
-                                activeBlockId ?? blocks.find((block) => !collapsedIds.includes(block.blockId))?.blockId;
-                            if (blockId) onFocusApp(blockId);
+                            toggleSidebarOpen();
+                            if ($sidebarOpen.get() && !$krontermSidebarOwner.get()) {
+                                hermesSurfaceController.requestOpenHud();
+                            }
                         }}
-                        aria-label="Return to the KronTerm desktop"
                     >
-                        <strong>KronTerm</strong>
-                    </button>
+                        <PanelLeft />
+                    </SystemButton>
                     <nav className="os-workspaces" aria-label="Workspaces">
                         {workspaces.slice(0, 4).map((workspace, index) => (
                             <button
@@ -1010,9 +1000,9 @@ function OSModeShell({
                             <Plus />
                         </button>
                     </nav>
+                    <div id={`hermes-hud-shell-${shellTabId}`} className="os-shell-chat" />
                 </div>
                 <SystemToolbar className="os-shell-right" aria-label="System controls">
-                    <DesktopGrabControl compact />
                     <SystemButton
                         type="button"
                         size="small"
@@ -1037,29 +1027,20 @@ function OSModeShell({
                         title="Activity Center"
                     >
                         <Bell />
-                        {(unreadActivityCount > 0 || systemLoadState === "degraded") && (
-                            <span className="os-system-entry-badge">
-                                {systemLoadState === "degraded" ? "!" : unreadActivityCount}
-                            </span>
-                        )}
                     </SystemButton>
                     <SystemButton
                         type="button"
                         size="small"
-                        selected={activeSystemCenter === "control"}
-                        className={cn("os-system-entry", activeSystemCenter === "control" && "is-active")}
-                        onClick={() => toggleSystemCenter("control")}
-                        aria-label="Open Control Center"
-                        aria-pressed={activeSystemCenter === "control"}
-                        title="Control Center"
+                        className="os-system-entry"
+                        onClick={() => {
+                            hermesSurfaceController.requestOpenHud();
+                            requestKronTermSettings("appearance");
+                        }}
+                        aria-label="Open Hermes settings"
+                        title="Hermes settings"
                     >
                         <Settings2 />
                     </SystemButton>
-                    <OSShellAgentPill
-                        onOpen={() => {
-                            if (hermesSurface.presentation !== "hud") toggleHermesChat();
-                        }}
-                    />
                     <SystemButton
                         type="button"
                         size="small"
@@ -1071,30 +1052,6 @@ function OSModeShell({
                         title="KronTerm Agent chat"
                     >
                         <KronPetIcon />
-                    </SystemButton>
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        selected={hudMode.active && hudMode.keepWorkspaceVisible}
-                        className="os-coucou-button"
-                        onClick={() => {
-                            if (hudMode.active && hudMode.keepWorkspaceVisible) {
-                                kronTermHudController.setActive(false);
-                                hermesSurfaceController.dismiss();
-                                return;
-                            }
-                            kronTermHudController.openAlongsideWorkspace();
-                            hermesSurfaceController.requestOpenHud();
-                        }}
-                        aria-label={
-                            hudMode.active && hudMode.keepWorkspaceVisible
-                                ? "Close floating Coucou HUD"
-                                : "Float Coucou HUD above this workspace"
-                        }
-                        aria-pressed={hudMode.active && hudMode.keepWorkspaceVisible}
-                        title="Float Coucou above workspace"
-                    >
-                        <PanelTop />
                     </SystemButton>
                     <SystemButton
                         type="button"
@@ -1229,7 +1186,6 @@ function OSModeShell({
                     </SystemSegmentedControl>
                     <time>{clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                     <OSShellStatus />
-                    <OSNativeTaskGroups />
                     <button
                         type="button"
                         onClick={() => {
@@ -1245,134 +1201,23 @@ function OSModeShell({
                     >
                         {sceneKind === "overview" ? <Focus /> : <Grid2X2 />}
                     </button>
-                    <button
+                    <SystemButton
                         type="button"
-                        className="os-layout-menu"
+                        size="small"
+                        className="cursor-pointer"
+                        aria-label={inspectorOpen ? "Hide files and changes" : "Show files and changes"}
+                        aria-expanded={inspectorOpen}
+                        aria-controls="kronterm-right-inspector"
+                        selected={inspectorOpen}
+                        title="Files and changes"
                         onClick={() => {
-                            setActiveSystemCenter(undefined);
-                            setSystemMenuOpen((open) => !open);
+                            if (!$krontermInspectorOpen.get()) $krontermInspectorSection.set("files");
+                            $krontermInspectorOpen.set(!$krontermInspectorOpen.get());
                         }}
-                        aria-label="Wallpaper and layout controls"
-                        aria-expanded={systemMenuOpen}
                     >
-                        <LayoutGrid />
-                    </button>
+                        <PanelRight />
+                    </SystemButton>
                 </SystemToolbar>
-                {systemMenuOpen && (
-                    <SystemPopover className="os-system-menu" aria-label="Wallpaper and layout controls">
-                        <header>
-                            <span>
-                                <Image aria-hidden="true" />
-                            </span>
-                            <div>
-                                <strong>Wallpaper engine</strong>
-                                <small>Still images and looping video</small>
-                            </div>
-                        </header>
-                        <label className="os-wallpaper-source">
-                            <span>File path or URL</span>
-                            <input
-                                value={wallpaperDraft}
-                                onChange={(event) => setWallpaperDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter") saveWallpaper(wallpaperDraft);
-                                    if (event.key === "Escape") setSystemMenuOpen(false);
-                                }}
-                                placeholder="Choose an image/video or paste a URL"
-                            />
-                        </label>
-                        <div className="os-wallpaper-actions">
-                            <button type="button" onClick={() => void chooseWallpaper()}>
-                                Choose file
-                            </button>
-                            <button type="button" onClick={() => saveWallpaper(wallpaperDraft)}>
-                                Apply
-                            </button>
-                            <button
-                                type="button"
-                                className="is-danger"
-                                onClick={() => {
-                                    setWallpaperDraft("");
-                                    saveWallpaper("");
-                                }}
-                                aria-label="Clear wallpaper"
-                            >
-                                <Trash2 aria-hidden="true" />
-                            </button>
-                        </div>
-                        <label className="os-surface-opacity">
-                            <span>Widget glass</span>
-                            <input
-                                type="range"
-                                min="35"
-                                max="100"
-                                value={Math.min(100, Math.max(35, Number(surfaceOpacity ?? 78)))}
-                                onChange={(event) =>
-                                    void RpcApi.SetConfigCommand(TabRpcClient, {
-                                        "window:surfaceopacity": Number(event.target.value),
-                                    })
-                                }
-                            />
-                        </label>
-                        <div className="os-layout-actions">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const blockId =
-                                        activeBlockId ??
-                                        blocks.find((block) => !collapsedIds.includes(block.blockId))?.blockId;
-                                    if (blockId) onFocusApp(blockId);
-                                    setSystemMenuOpen(false);
-                                }}
-                            >
-                                <Focus aria-hidden="true" />
-                                <span>
-                                    <strong>Window carousel</strong>
-                                    <small>Large apps arranged side by side</small>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onFreeform();
-                                    setSystemMenuOpen(false);
-                                }}
-                            >
-                                <Grid2X2 aria-hidden="true" />
-                                <span>
-                                    <strong>Freeform canvas</strong>
-                                    <small>Arrange windows on an infinite desktop</small>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onPresentation("widgets");
-                                    setSystemMenuOpen(false);
-                                }}
-                            >
-                                <LayoutGrid aria-hidden="true" />
-                                <span>
-                                    <strong>Legacy widgets</strong>
-                                    <small>Open the compatibility tile presentation</small>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onPresentation("canvas");
-                                    setSystemMenuOpen(false);
-                                }}
-                            >
-                                <Grid2X2 aria-hidden="true" />
-                                <span>
-                                    <strong>Legacy canvas</strong>
-                                    <small>Open the compatibility infinite canvas</small>
-                                </span>
-                            </button>
-                        </div>
-                    </SystemPopover>
-                )}
                 {activeSystemCenter != null && (
                     <OSSystemCenterPanel
                         center={activeSystemCenter}
@@ -1464,6 +1309,13 @@ function OSGroupDivider({
 }
 
 function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
+    const sidebarOpen = useStore($sidebarOpen);
+    const inspectorOpen = useStore($krontermInspectorOpen);
+    const inspectorExpanded = useStore($krontermInspectorExpanded);
+    const inspectorCompact = useStore($krontermInspectorCompact);
+    const inspectorWidth = useStore($krontermInspectorWidth);
+    const attachInspector = useCallback((target: HTMLDivElement) => $krontermInspectorTarget.set(target), []);
+    const attachSidebar = useCallback((target: HTMLDivElement) => $krontermSidebarTarget.set(target), []);
     const hudMode = useSyncExternalStore(
         kronTermHudController.subscribe,
         kronTermHudController.getSnapshot,
@@ -1479,6 +1331,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
     const stateRef = useRef(state);
     const rootRef = useRef<HTMLDivElement>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const persistTimerRef = useRef<number | undefined>(undefined);
     const checkpointTimerRef = useRef<number | undefined>(undefined);
     const [measuredViewport, setViewport] = useState({ width: 1440, height: 900 });
@@ -1487,13 +1340,16 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const viewport = useMemo(
         () => ({
             ...measuredViewport,
-            rightInset: desktopWidgetsEnabled ? (media.state?.playing && !media.state.muted ? 264 : 72) : 0,
+            rightInset: desktopWidgetsEnabled && media.state?.playing && !media.state.muted ? 384 : 0,
         }),
         [measuredViewport, media.state?.playing, media.state?.muted, desktopWidgetsEnabled]
     );
+    const [workspaceSetupOpen, setWorkspaceSetupOpen] = useState(false);
+    const [editingWorkspaceSetup, setEditingWorkspaceSetup] = useState(false);
+    const pendingWorkspaceId = useRef<string>(undefined);
     const [tool, setTool] = useState<OSCanvasTool>("select");
     const [connectorStartId, setConnectorStartId] = useState<string | undefined>(undefined);
-    const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([]);
+    const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; tabId?: string }>>([]);
     const [dragBounds, setDragBounds] = useState<Record<string, DragBounds>>({});
     const [dockPreview, setDockPreview] = useState<DockPreview | undefined>(undefined);
     const panRef = useRef<{ pointerId: number; clientX: number; clientY: number; x: number; y: number } | undefined>(
@@ -1540,10 +1396,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
 
     useEffect(() => {
-        setState((current) => reconcileOSModeState(current, blockIds, resolvedViewsByBlockId(descriptors)));
-    }, [blockIdsKey, viewsKey]);
-
-    useEffect(() => {
         if (!currentWorkspace?.oid) return;
         systemModel.reconcileAppInstances(
             currentWorkspace.oid,
@@ -1565,7 +1417,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     }, [currentWorkspace?.oid, systemModel]);
 
     useEffect(() => {
-        const root = rootRef.current;
+        const root = viewportRef.current;
         if (!root) return;
         const observer = new ResizeObserver(([entry]) => {
             setViewport({ width: entry.contentRect.width, height: entry.contentRect.height });
@@ -1592,6 +1444,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 setWorkspaces(
                     (items ?? []).map((item, index) => ({
                         id: item.workspacedata.oid,
+                        tabId: item.workspacedata.activetabid || item.workspacedata.tabids?.[0],
                         name: item.workspacedata.name || `Workspace ${index + 1}`,
                     }))
                 );
@@ -1602,7 +1455,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [state.scene.kind]);
 
     const persist = useCallback(
         (nextState: OSModeState) => {
@@ -1643,6 +1496,16 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         [persist]
     );
 
+    useEffect(() => {
+        setAndPersist((current) =>
+            arrangeOSLaunchedWindows(
+                current,
+                reconcileOSModeState(current, blockIds, resolvedViewsByBlockId(descriptors)),
+                viewport
+            )
+        );
+    }, [blockIdsKey, viewsKey]);
+
     const dispatch = useCallback(
         (action: OSSpatialAction) => {
             setAndPersist((current) => reduceOSModeState(current, action));
@@ -1651,7 +1514,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
 
     useEffect(() => {
-        const rect = rootRef.current?.getBoundingClientRect();
+        const rect = viewportRef.current?.getBoundingClientRect();
         if (rect == null || rect.width < 1 || rect.height < 1) return;
         setAndPersist((current) => {
             const windows = Object.fromEntries(
@@ -1724,6 +1587,10 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             if (!resource.resource) return;
             if (resource.kind === "url") {
                 getApi().openExternal(resource.resource);
+                return;
+            }
+            if (resource.kind === "file") {
+                openKrontermFile(resource.resource);
                 return;
             }
             void RpcApi.CreateBlockCommand(TabRpcClient, {
@@ -1817,6 +1684,11 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     const handleCreateBlock = useCallback(
         (view: string) => {
+            if (view === "preview" || view === "codeeditor") {
+                $krontermInspectorSection.set("files");
+                $krontermInspectorOpen.set(true);
+                return;
+            }
             dispatch({ type: "os.view.set", view: "canvas" });
             const existing = descriptors.find((block) => block.view === view);
             if (existing) {
@@ -1989,7 +1861,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
 
     const askKronos = useCallback((text: string) => {
-        hermesSurfaceController.requestOpenPanel();
+        hermesSurfaceController.requestOpenChat();
         submitToHermes(text, "new");
     }, []);
 
@@ -2005,7 +1877,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             { label: "Terminal", click: () => handleCreateBlock("term") },
                             { label: "Browser", click: () => handleCreateBlock("web") },
                             { label: "Files", click: () => handleCreateBlock("preview") },
-                            { label: "KronTerm Agent", click: () => hermesSurfaceController.requestOpenPanel() },
+                            { label: "KronTerm Agent", click: () => hermesSurfaceController.requestOpenChat() },
                         ],
                     },
                     { type: "separator" },
@@ -2191,7 +2063,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         : resizeBoundsFromEdge(interaction.bounds, interaction.edge, dx, dy);
                 setDragBounds((current) => ({ ...current, [interaction.blockId]: bounds }));
                 if (interaction.kind === "move") {
-                    const rootBounds = rootRef.current?.getBoundingClientRect();
+                    const rootBounds = viewportRef.current?.getBoundingClientRect();
                     const pointer = {
                         x: event.clientX - (rootBounds?.left ?? 0),
                         y: event.clientY - (rootBounds?.top ?? 0),
@@ -2307,7 +2179,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             if (stateRef.current.scene.kind !== "freeform") return;
             event.preventDefault();
             if (event.ctrlKey || event.metaKey) {
-                const rect = rootRef.current?.getBoundingClientRect();
+                const rect = viewportRef.current?.getBoundingClientRect();
                 const point = { x: event.clientX - (rect?.left ?? 0), y: event.clientY - (rect?.top ?? 0) };
                 setAndPersist((current) => ({
                     ...current,
@@ -2485,10 +2357,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     }
                     if (input.action === "spatial.openFile") {
                         if (!input.file) return { success: false, message: "File path is required." };
-                        await RpcApi.CreateBlockCommand(TabRpcClient, {
-                            tabid: tabId,
-                            blockdef: { meta: { view: "preview", file: input.file } },
-                        });
+                        openKrontermFile(input.file);
                         return { success: true, message: `Opening ${input.file}.` };
                     }
                     if (input.action === "spatial.openCommandCenter") {
@@ -2672,8 +2541,17 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     "os-mode-root",
                     `scene-${state.scene.kind}`,
                     `view-${state.view}`,
+                    sidebarOpen && "has-agent-sidebar",
+                    inspectorOpen && "has-files-inspector",
+                    inspectorExpanded && "has-expanded-inspector",
+                    inspectorCompact && "has-compact-inspector",
                     reducedMotion && "reduced-motion"
                 )}
+                style={
+                    inspectorWidth
+                        ? ({ "--os-inspector-dragged-width": `${inspectorWidth}px` } as CSSProperties)
+                        : undefined
+                }
                 tabIndex={-1}
                 onPointerMove={handleRootPointerMove}
                 onPointerUp={handleRootPointerUp}
@@ -2681,6 +2559,81 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 onWheel={handleWheel}
             >
                 <WorkspaceWallpaper />
+                <aside
+                    id="kronterm-left-sidebar"
+                    data-live-block-occluder=""
+                    className="os-agent-sidebar"
+                    aria-label="KronTerm Agent navigation"
+                    hidden={!sidebarOpen}
+                >
+                    <div ref={attachSidebar} className="h-full min-h-0" />
+                </aside>
+                <aside
+                    id="kronterm-right-inspector"
+                    data-live-block-occluder=""
+                    className="os-files-inspector"
+                    aria-label="Files and changes inspector"
+                    hidden={!inspectorOpen}
+                >
+                    <div ref={attachInspector} className="h-full min-h-0" />
+                </aside>
+                {OSSpaceIdentities.find((identity) => identity.id === currentWorkspace?.meta?.["os:identity"]) && (
+                    <div
+                        className="os-space-background"
+                        style={{
+                            background: OSSpaceIdentities.find(
+                                (identity) => identity.id === currentWorkspace?.meta?.["os:identity"]
+                            ).background,
+                        }}
+                        aria-hidden="true"
+                    />
+                )}
+                {workspaceSetupOpen && (
+                    <OSWorkspaceSetup
+                        editing={editingWorkspaceSetup}
+                        initialName={editingWorkspaceSetup ? currentWorkspace?.name : undefined}
+                        initialIdentity={editingWorkspaceSetup ? currentWorkspace?.meta?.["os:identity"] : undefined}
+                        initialChannel={editingWorkspaceSetup ? currentWorkspace?.meta?.["os:channelsetup"] : undefined}
+                        onClose={() => {
+                            pendingWorkspaceId.current = undefined;
+                            setWorkspaceSetupOpen(false);
+                            setEditingWorkspaceSetup(false);
+                        }}
+                        onCreate={async (name, identity, channel) => {
+                            if (editingWorkspaceSetup) {
+                                await WorkspaceService.UpdateWorkspace(
+                                    currentWorkspace.oid,
+                                    name,
+                                    currentWorkspace.icon,
+                                    currentWorkspace.color,
+                                    false
+                                );
+                                await RpcApi.SetMetaCommand(TabRpcClient, {
+                                    oref: WOS.makeORef("workspace", currentWorkspace.oid),
+                                    meta: { "os:channelsetup": channel } as MetaType,
+                                });
+                                setWorkspaceSetupOpen(false);
+                                setEditingWorkspaceSetup(false);
+                                return;
+                            }
+                            const workspaceId =
+                                pendingWorkspaceId.current ??
+                                (await WorkspaceService.CreateWorkspace(name, "", identity.color, true));
+                            pendingWorkspaceId.current = workspaceId;
+                            if (!workspaceId) throw new Error("Workspace creation failed");
+                            await RpcApi.SetMetaCommand(TabRpcClient, {
+                                oref: WOS.makeORef("workspace", workspaceId),
+                                meta: {
+                                    "os:identity": identity.id,
+                                    ...(channel ? { "os:channelsetup": channel } : {}),
+                                } as MetaType,
+                            });
+                            pendingWorkspaceId.current = undefined;
+                            setWorkspaceSetupOpen(false);
+                            getApi().switchWorkspace(workspaceId);
+                        }}
+                    />
+                )}
                 <img className="os-wallpaper-fallback" src={KronTermOSWallpaper} alt="" aria-hidden="true" />
                 {systemLoadState === "restoring" && (
                     <div className="os-restore-status" role="status">
@@ -2697,7 +2650,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     showCollapsedDock={!desktopWidgetsEnabled || viewport.width <= 900}
                     sceneKind={state.scene.kind}
                     onWorkspace={(workspaceId) => getApi().switchWorkspace(workspaceId)}
-                    onCreateWorkspace={() => getApi().createWorkspace()}
+                    onCreateWorkspace={() => setWorkspaceSetupOpen(true)}
                     onCreateBlock={handleCreateBlock}
                     onRestore={(blockId) => dispatch({ type: "spatial.restore", blockId })}
                     onPinResource={pinResource}
@@ -2715,11 +2668,16 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 />
                 {state.scene.kind === "overview" && (
                     <OSSpaceOverview
+                        blocks={descriptors}
                         workspaces={workspaces}
                         currentWorkspaceId={currentWorkspace?.oid ?? ""}
                         state={state}
                         onSwitch={(workspaceId) => getApi().switchWorkspace(workspaceId)}
-                        onCreate={() => getApi().createWorkspace()}
+                        onCreate={() => setWorkspaceSetupOpen(true)}
+                        onConfigure={() => {
+                            setEditingWorkspaceSetup(true);
+                            setWorkspaceSetupOpen(true);
+                        }}
                     />
                 )}
                 {activeTabGroup &&
@@ -2816,12 +2774,19 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         >
                             <ChevronLeft aria-hidden="true" />
                         </button>
-                        <span aria-live="polite">
-                            {descriptors.find((block) => block.blockId === activeBlockId)?.title ?? "App"}
-                            <small>
-                                {carouselOrder.indexOf(activeBlockId) + 1} / {carouselOrder.length}
-                            </small>
-                        </span>
+                        <div className="os-carousel-dots" aria-label="Open windows">
+                            {carouselOrder.map((blockId) => (
+                                <button
+                                    key={blockId}
+                                    type="button"
+                                    aria-label={descriptors.find((block) => block.blockId === blockId)?.title ?? "App"}
+                                    aria-current={blockId === activeBlockId ? "true" : undefined}
+                                    onClick={() => dispatch({ type: "os.window.focus", blockId })}
+                                >
+                                    <span aria-hidden="true" />
+                                </button>
+                            ))}
+                        </div>
                         <button
                             type="button"
                             aria-label="Next window"
@@ -2935,6 +2900,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 )}
                 <div
                     className="os-mode-viewport"
+                    ref={viewportRef}
                     onDragOver={(event) => {
                         if (
                             event.dataTransfer.types.includes(OSAppDragMimeType) ||
@@ -3002,7 +2968,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                 dispatch({ type: "spatial.focus", blockId });
                             }}
                             onAskKronos={askKronos}
-                            onOpenKronos={() => hermesSurfaceController.requestOpenPanel()}
+                            onOpenKronos={() => hermesSurfaceController.requestOpenChat()}
                             onLaunchPin={launchDockPin}
                             onPinsChange={updateDockPins}
                         />

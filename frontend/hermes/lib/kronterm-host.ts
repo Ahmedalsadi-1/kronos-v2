@@ -48,6 +48,7 @@ export interface HermesShellMode {
     hudMode: boolean;
     panelMode: boolean;
     webMode: boolean;
+    dockedChat?: boolean;
 }
 
 const HermesShellModeContext = createContext<HermesShellMode | null>(null);
@@ -58,12 +59,14 @@ export function HermesShellModeProvider({
     hudMode,
     panelMode = false,
     webMode = false,
+    dockedChat = false,
 }: {
     children: ReactNode;
     hostMode?: HermesHostMode;
     hudMode: boolean;
     panelMode?: boolean;
     webMode?: boolean;
+    dockedChat?: boolean;
 }) {
     const resolvedHostMode =
         hostMode ?? (webMode ? "web-fullscreen" : hudMode ? "hud" : panelMode ? "panel" : "kronterm");
@@ -74,6 +77,7 @@ export function HermesShellModeProvider({
             hudMode: resolvedHostMode === "hud",
             panelMode: resolvedHostMode === "panel",
             webMode: resolvedHostMode === "web-fullscreen",
+            dockedChat,
         },
         children,
     });

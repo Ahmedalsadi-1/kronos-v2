@@ -106,6 +106,7 @@ export function OSOverviewPreview() {
                     workspaces={spaces}
                     currentWorkspaceId={active}
                     state={state}
+                    blocks={[]}
                     onSwitch={setActive}
                     onCreate={() => {
                         const id = `space-${spaces.length + 1}`;

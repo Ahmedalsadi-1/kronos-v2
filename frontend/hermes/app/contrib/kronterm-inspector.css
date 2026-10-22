@@ -1,0 +1,215 @@
+.kronterm-inspector {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--ui-bg, #0d0d0d);
+    color: var(--ui-text-primary);
+}
+.kronterm-inspector-resize {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 8px;
+    margin-left: -4px;
+    cursor: col-resize;
+    touch-action: none;
+}
+.kronterm-inspector-resize:hover,
+.kronterm-inspector-resize:focus-visible {
+    background: var(--ui-focus-ring, #7aa7f5);
+    outline: none;
+}
+.kronterm-inspector-tabbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 48px;
+    flex-shrink: 0;
+    padding: 3px 6px 3px 8px;
+    background: #292929;
+    border-bottom: 1px solid var(--ui-stroke-secondary);
+}
+.kronterm-inspector-tabs {
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.kronterm-inspector .kronterm-inspector-tab {
+    display: flex;
+    align-items: center;
+    min-width: 100px;
+    max-width: 240px;
+    height: 38px;
+    border: 1px solid transparent;
+    border-radius: 11px !important;
+    color: var(--ui-text-tertiary);
+}
+.kronterm-inspector-tab[data-active] {
+    background: var(--ui-control-hover-background, #363636);
+    border-color: var(--ui-stroke-secondary, #494949);
+    color: var(--ui-text-primary);
+}
+.kronterm-inspector-tab > button:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 8px 0 12px;
+    font-size: 13px;
+}
+.kronterm-inspector-tab span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.kronterm-inspector-tab > button:last-child {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 28px;
+    flex-shrink: 0;
+    margin-right: 3px;
+    color: var(--ui-text-tertiary);
+}
+.kronterm-inspector button {
+    cursor: pointer;
+}
+.kronterm-inspector button:focus-visible {
+    outline: 2px solid var(--ui-focus-ring, #7aa7f5);
+    outline-offset: -2px;
+}
+.kronterm-inspector-tool {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    color: var(--ui-text-tertiary);
+    border-radius: 8px;
+}
+.kronterm-inspector-tool:hover,
+.kronterm-inspector-tab > button:last-child:hover {
+    background: var(--ui-control-hover-background);
+    color: var(--ui-text-primary);
+}
+.kronterm-inspector-pane {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+}
+.kronterm-inspector-pane[hidden] {
+    display: none;
+}
+
+.kronterm-inspector.is-compact .kronterm-inspector-resize {
+    display: none;
+}
+.kronterm-inspector.is-compact .kronterm-inspector-tabbar {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    height: auto;
+    padding: 6px 4px;
+    gap: 4px;
+    border-bottom: 0;
+    border-right: 1px solid var(--ui-stroke-secondary);
+}
+.kronterm-inspector.is-compact .kronterm-inspector-tabs {
+    flex-direction: column;
+    gap: 4px;
+    overflow: visible;
+}
+.kronterm-inspector.is-compact .kronterm-inspector-tab {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    height: 34px;
+    justify-content: center;
+}
+.kronterm-inspector.is-compact .kronterm-inspector-tab > button:first-child {
+    justify-content: center;
+    padding: 0 4px;
+}
+.kronterm-inspector.is-compact .kronterm-inspector-tab span,
+.kronterm-inspector.is-compact .kronterm-inspector-tab > button:last-child {
+    display: none;
+}
+.kronterm-inspector.is-compact .kronterm-inspector-pane {
+    display: none;
+}
+[data-slot="dropdown-menu-content"].kronterm-inspector-menu {
+    z-index: 6000 !important;
+    width: 256px;
+    padding: 5px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--ui-stroke-secondary);
+    background: #292929 !important;
+    color: var(--ui-text-primary);
+    box-shadow: 0 12px 30px rgb(0 0 0 / 25%);
+}
+.kronterm-inspector-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-height: 36px;
+    padding: 5px 9px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    cursor: pointer;
+}
+.kronterm-inspector-shortcut {
+    margin-left: auto;
+    color: var(--ui-text-tertiary);
+    font-size: 12px;
+}
+.kronterm-inspector [data-kronterm-side-chat] {
+    --composer-control-size: 24px;
+    --composer-control-primary-size: 24px;
+    --composer-control-gap: 4px;
+    --thread-viewport-height: 100%;
+    --thread-last-message-clearance: 8px;
+}
+.kronterm-inspector [data-kronterm-side-chat] [data-hermes-chat-header] {
+    display: none !important;
+}
+[data-kronterm-side-chat] [data-slot="composer-dock"] {
+    padding: 8px 10px;
+}
+[data-kronterm-side-chat] [data-slot="composer-surface"] {
+    border: 1px solid var(--ui-stroke-secondary);
+    background: var(--ui-bg-secondary, #24272a);
+}
+
+.kronterm-inspector [data-kronterm-side-chat] [data-slot="composer-root"] {
+    --composer-control-size: 24px;
+    --composer-control-primary-size: 24px;
+    --composer-control-gap: 4px;
+}
+
+.kronterm-inspector [data-kronterm-side-chat] [data-slot="composer-dock"] {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.kronterm-inspector [data-kronterm-side-chat] [data-slot="composer-root"] {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.kronterm-inspector [data-kronterm-side-chat] [data-slot="composer-surface"] .grid.w-full {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "input input" "menu controls";
+}
+
+.kronterm-inspector [data-kronterm-side-chat] [data-slot="composer-rich-input"] {
+    min-height: 48px;
+}

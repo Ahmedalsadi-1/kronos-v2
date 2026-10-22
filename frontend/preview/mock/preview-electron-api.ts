@@ -70,6 +70,12 @@ const previewRuntimes = new Map<
 >();
 
 const previewElectronApi: ElectronApi = {
+    openBotDesktop: async () => {
+        throw new Error("Bot desktops require the managed runtime");
+    },
+    openAgentWorkspace: async () => {
+        throw new Error("Agent workspace requires the managed Electron runtime.");
+    },
     getAuthKey: () => "",
     getIsDev: () => false,
     getCursorPoint: () => ({ x: 0, y: 0 }) as Electron.Point,
@@ -222,6 +228,7 @@ const previewElectronApi: ElectronApi = {
             accessibility: "granted",
             microphone: "granted",
         }),
+    appStreamInput: async () => {},
     prepareNativeSurfaceCapture: (input: { appId: string; appName: string }) =>
         Promise.resolve({ sourceId: `preview:${input.appId}`, title: input.appName }),
     acpApplyGitIdentity: (_opts: { workspace: string; userName: string; userEmail: string }) =>
@@ -245,6 +252,15 @@ const previewElectronApi: ElectronApi = {
     onOSOverviewGesture: () => () => {},
     manageNativeTaskGroups: async () => ({ success: true as const, data: { workspaces: [] } }),
     listLinuxDesktops: async () => ({ success: true as const, data: [] }),
+    listMacVms: async () => ({
+        success: true as const,
+        data: { available: false, problem: "macOS VMs are unavailable in preview.", machines: [] },
+    }),
+    startMacVm: async () => ({
+        success: false as const,
+        error: { code: "preview", message: "macOS VMs are unavailable in preview." },
+    }),
+    stopMacVm: async () => ({ success: true as const, data: undefined }),
     performLinuxDesktopAction: async () => ({
         success: false as const,
         error: { code: "unavailable", message: "Enable the local Linux desktop runtime." },

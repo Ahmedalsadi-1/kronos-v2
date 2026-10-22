@@ -41,6 +41,7 @@ import { NEW_SESSION_TITLE, sessionTitle as storedSessionTitle } from "@hermes/l
 import { Download, FileText, LayoutDashboard, PanelBottom, Terminal, Upload, Zap } from "@hermes/lib/icons";
 import { type KeybindContribution, KEYBINDS_AREA } from "@hermes/lib/keybinds/actions";
 import { isKronTermWebHost, isKronTermWidgetHost, useHermesShellMode } from "@hermes/lib/kronterm-host";
+import { $krontermSidebarTarget } from "@hermes/lib/kronterm-sidebar";
 import { setYoloEnabled } from "@hermes/lib/yolo-session";
 import { pruneComposerPopoutZones } from "@hermes/store/composer-popout";
 import {
@@ -206,22 +207,26 @@ registry.registerMany([
         },
         render: () => <WiredPane part="terminal" />,
     },
-    {
-        id: "files",
-        area: "panes",
-        title: "files",
-        // dock: re-adoption target after a stale dismissal (see sessions).
-        data: {
-            placement: "right",
-            collapsible: true,
-            dock: { pane: "workspace", pos: "right" },
-            revealAliases: ["file-browser"],
-            width: isKronTermWidgetHost() ? "15rem" : FILE_BROWSER_DEFAULT_WIDTH,
-            minWidth: isKronTermWidgetHost() ? "12rem" : FILE_BROWSER_MIN_WIDTH,
-            maxWidth: isKronTermWidgetHost() ? "20rem" : FILE_BROWSER_MAX_WIDTH,
-        },
-        render: () => idle(<FilesPane />),
-    },
+    ...(isKronTermWidgetHost()
+        ? []
+        : [
+              {
+                  id: "files",
+                  area: "panes",
+                  title: "files",
+                  // dock: re-adoption target after a stale dismissal (see sessions).
+                  data: {
+                      placement: "right",
+                      collapsible: true,
+                      dock: { pane: "workspace", pos: "right" },
+                      revealAliases: ["file-browser"],
+                      width: isKronTermWidgetHost() ? "15rem" : FILE_BROWSER_DEFAULT_WIDTH,
+                      minWidth: isKronTermWidgetHost() ? "12rem" : FILE_BROWSER_MIN_WIDTH,
+                      maxWidth: isKronTermWidgetHost() ? "20rem" : FILE_BROWSER_MAX_WIDTH,
+                  },
+                  render: () => idle(<FilesPane />),
+              },
+          ]),
     ...(isKronTermWidgetHost()
         ? []
         : [
@@ -617,6 +622,10 @@ $panesFlipped.listen((flipped) => {
 // that side hides together, whatever panes have been rearranged there.
 bindTreeSideVisibility("left", $sidebarOpen, setSidebarOpen);
 bindTreeSideVisibility("right", $fileBrowserOpen, setFileBrowserOpen);
+bindPaneVisibility(
+    "sessions",
+    computed($krontermSidebarTarget, (target) => !target)
+);
 
 // Workspace-scoped surfaces: the file tree and git diff only mean something
 // inside a project. A detached chat (no cwd) hides them — their zones
@@ -799,7 +808,7 @@ export function ContribController() {
     const sidebarOpen = useStore($sidebarOpen);
     const statusbarVisible = useStore($statusbarVisible);
     const widgetHost = isKronTermWidgetHost();
-    const { hudMode, panelMode, webMode } = useHermesShellMode();
+    const { hudMode, panelMode, webMode, dockedChat } = useHermesShellMode();
 
     if (panelMode) {
         return (
@@ -822,8 +831,8 @@ export function ContribController() {
     if (hudMode || (!webMode && isHudWindow())) {
         return (
             <ContribWiring>
-                <div data-hud-app="" className="flex h-full min-h-0 w-full flex-col">
-                    <HudNavigation />
+                <div data-hud-app={dockedChat ? undefined : ""} className="flex h-full min-h-0 w-full flex-col">
+                    {!dockedChat && <HudNavigation />}
                     <div className="relative min-h-0 flex-1">
                         <HudShell />
                     </div>

@@ -1,4 +1,6 @@
+import type { AppStreamInput } from "./appstream";
 import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "./linux-desktops";
+import type { MacVmConnection, MacVmInventory } from "./macos-vms";
 import type { NativeTaskGroupAction, NativeTaskGroupPreview, NativeTaskGroupsSnapshot } from "./native-task-groups";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -243,6 +245,10 @@ declare global {
     };
 
     type ElectronApi = {
+        openBotDesktop: (
+            botId: string
+        ) => Promise<{ botId: string; workspaceId: string; tabId: string; blockIds: string[] }>;
+        openAgentWorkspace: () => Promise<{ origin: string; parentOrigin: string }>;
         onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => () => void; // os-overview-gesture
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -389,6 +395,7 @@ declare global {
         requestHostPermission: (
             permission: "screen-capture" | "accessibility" | "microphone"
         ) => Promise<HostPermissionStatus>; // request-host-permission
+        appStreamInput: (input: AppStreamInput) => Promise<void>;
         prepareNativeSurfaceCapture: (input: {
             appId: string;
             appName: string;
@@ -459,6 +466,9 @@ declare global {
             input: NativeTaskGroupAction | { operation: "list" }
         ) => Promise<ComputerTargetsResult<NativeTaskGroupsSnapshot | NativeTaskGroupPreview>>; // native-task-groups:manage
         listLinuxDesktops: () => Promise<ComputerTargetsResult<LinuxDesktop[]>>;
+        listMacVms: () => Promise<ComputerTargetsResult<MacVmInventory>>;
+        startMacVm: (name: string) => Promise<ComputerTargetsResult<MacVmConnection>>;
+        stopMacVm: (sessionId: string) => Promise<ComputerTargetsResult<void>>;
         performLinuxDesktopAction: (
             action: LinuxDesktopAction
         ) => Promise<ComputerTargetsResult<LinuxDesktopActionResult>>;

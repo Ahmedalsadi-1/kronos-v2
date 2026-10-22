@@ -11,6 +11,8 @@ ipcRenderer.on("native-notch-availability", (_event, available: unknown) => {
 
 // update type in custom.d.ts (ElectronApi type)
 contextBridge.exposeInMainWorld("api", {
+    openBotDesktop: (botId: string) => ipcRenderer.invoke("open-bot-desktop", botId),
+    openAgentWorkspace: () => ipcRenderer.invoke("open-agent-workspace"),
     onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => {
         const listener = (_event, direction: unknown) => {
             if (direction === "up" || direction === "down") callback(direction);
@@ -225,6 +227,7 @@ contextBridge.exposeInMainWorld("api", {
     getHostPermissionStatus: () => ipcRenderer.invoke("get-host-permission-status"),
     requestHostPermission: (permission: "screen-capture" | "accessibility" | "microphone") =>
         ipcRenderer.invoke("request-host-permission", permission),
+    appStreamInput: (input) => ipcRenderer.invoke("appstream-input", input),
     prepareNativeSurfaceCapture: (input: { appId: string; appName: string }) =>
         ipcRenderer.invoke("prepare-native-surface-capture", input),
     acpApplyGitIdentity: (opts) => ipcRenderer.invoke("acp-apply-git-identity", opts),
@@ -258,6 +261,9 @@ contextBridge.exposeInMainWorld("api", {
     requestAgentTakeover: (sessionId?: string) => ipcRenderer.send("request-agent-takeover", sessionId),
     manageNativeTaskGroups: (input) => ipcRenderer.invoke("native-task-groups:manage", input),
     listLinuxDesktops: () => ipcRenderer.invoke("linux-desktops:list"),
+    listMacVms: () => ipcRenderer.invoke("macos-vms:list"),
+    startMacVm: (name: string) => ipcRenderer.invoke("macos-vms:start", { name }),
+    stopMacVm: (sessionId: string) => ipcRenderer.invoke("macos-vms:stop", { sessionId }),
     performLinuxDesktopAction: (action) => ipcRenderer.invoke("linux-desktops:action", action),
     assignLinuxDesktop: (desktopId, agentId, expectedGeneration) =>
         ipcRenderer.invoke("linux-desktops:assign", { desktopId, agentId, expectedGeneration }),

@@ -229,6 +229,19 @@ export class KronTermToolServer {
         return token;
     }
 
+    unregisterCaller(owner: string): void {
+        const token = this.callerTokens.get(owner);
+        if (!token) return;
+        this.callerTokens.delete(owner);
+        this.callerIdentities.delete(owner);
+        this.callers.delete(token);
+        for (const [id, session] of this.sessions) {
+            if (session.token !== token) continue;
+            void session.transport.close();
+            this.sessions.delete(id);
+        }
+    }
+
     setContextProvider(contextProvider: SurfaceContextProvider): void {
         this.contextProvider = contextProvider;
     }
@@ -474,4 +487,8 @@ export function startKronTermToolServer(
     }
     const token = toolServer.registerCaller(owner, contextProvider);
     return toolServer.start().then((descriptor) => ({ ...descriptor, token }));
+}
+
+export function revokeKronTermToolCaller(owner: string): void {
+    toolServer?.unregisterCaller(owner);
 }

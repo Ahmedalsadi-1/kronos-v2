@@ -93,6 +93,7 @@ function DropdownMenuContent({
         // (avoidCollisions defaults on); the padding stops it kissing the edge.
         collisionPadding={collisionPadding}
         data-slot="dropdown-menu-content"
+        data-hermes-portal=""
         sideOffset={sideOffset}
         {...props}
       />
@@ -272,6 +273,7 @@ function DropdownMenuSubContent({
         // the submenu never gets clipped.
         collisionPadding={collisionPadding}
         data-slot="dropdown-menu-sub-content"
+        data-hermes-portal=""
         {...props}
       />
     </DropdownMenuPrimitive.Portal>

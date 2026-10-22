@@ -1,3 +1,4 @@
+import { openBotDesktop, openMausBotConnection } from "./openmausbot-runtime";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -30,6 +31,8 @@ import {
     setWasActive,
 } from "./emain-activity";
 
+import { registerAgentInputIpc } from "./agent-input-ipc";
+import { registerAppStreamInputIpc } from "./appstream-input";
 import { registerComfyUiIpc } from "./comfyui-ipc";
 import { registerComputerTargetsIpc } from "./computer-targets-ipc";
 import { loadNativeAppIcons } from "./emain-app-icons";
@@ -72,7 +75,9 @@ import {
     type KronosCodeConnectionDescriptor,
 } from "./kronoscode-runtime";
 import { registerLinuxDesktopsIpc } from "./linux-desktops-ipc";
+import { registerMacVmIpc } from "./macos-vm-ipc";
 import { registerNativeHudIpc } from "./native-hud-ipc";
+import { registerNativeSurfaceCaptureIpc } from "./native-surface-capture";
 import { registerNativeTaskGroupsIpc } from "./native-task-groups-ipc";
 import { registerProductivityIpc } from "./productivity-ipc";
 import { managedAppBlocked } from "./productivity-runtime";
@@ -342,6 +347,18 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
+    electron.ipcMain.handle("open-bot-desktop", (event, botId: string) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id) || typeof botId !== "string")
+            throw new Error("Invalid bot desktop caller");
+        return openBotDesktop(event.sender, botId);
+    });
+    electron.ipcMain.handle("open-agent-workspace", (event) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id)) throw new Error("Unknown workspace renderer");
+        return openMausBotConnection(event.sender);
+    });
+    registerMacVmIpc();
+    registerAppStreamInputIpc((sender) => getWaveTabViewByWebContentsId(sender.id) != null);
+    registerNativeSurfaceCaptureIpc((sender) => getWaveTabViewByWebContentsId(sender.id) != null);
     registerNativeHudIpc();
     registerProductivityIpc();
     registerComfyUiIpc();
@@ -521,6 +538,10 @@ export function initIpcHandlers() {
         const base64String = image.toPNG().toString("base64");
         return `data:image/png;base64,${base64String}`;
     });
+
+    registerAgentInputIpc(
+        (sender) => getWaveTabViewByWebContentsId(sender.id) != null || isTrustedNativeHudSender(sender.id)
+    );
 
     electron.ipcMain.on("get-env", (event, varName) => {
         event.returnValue = process.env[varName] ?? null;

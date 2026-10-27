@@ -1,0 +1,252 @@
+.coucou-chrome.ade-tree-shell {
+    border-radius: 0;
+}
+
+.ade-workbench.ade-tree-code {
+    position: relative;
+    --coucou-surface: #fafafa;
+    --coucou-card: #fafafa;
+    --coucou-label: #52525b;
+    --coucou-secondary: #71717a;
+    --coucou-border: #e9e9ec;
+    --coucou-accent: #7793d4;
+    background: #fafafa;
+    color: #52525b;
+    border: 1px solid #e9e9ec;
+    border-radius: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.ade-tree-code [hidden] {
+    display: none;
+}
+
+.ade-tree-code .ade-workspace-toggle {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: #f1f1f3;
+    color: #52525b;
+    cursor: pointer;
+}
+
+.ade-tree-code .ade-explorer {
+    width: 250px;
+    background: #fafafa;
+    border-right: 1px solid #e9e9ec;
+    padding-top: 10px;
+}
+
+.ade-tree-code .ade-explorer-path {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px 6px;
+    border-bottom: 1px solid #e9e9ec;
+    font-size: 12px;
+}
+
+.ade-explorer-path button,
+.ade-explorer-nav button,
+.ade-sidebar-open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    gap: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ade-explorer-path button:first-child {
+    min-width: 0;
+    flex: 1;
+    justify-content: flex-start;
+}
+.ade-explorer-path span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ade-explorer-path svg {
+    flex-shrink: 0;
+}
+.ade-explorer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 4px;
+    border-bottom: 1px solid #e9e9ec;
+}
+.ade-explorer-nav button:hover,
+.ade-explorer-path button:hover {
+    background: #ededf0;
+}
+
+.ade-explorer-nav button[aria-pressed="true"] {
+    background: #e4eafa;
+    color: #526fb2;
+}
+
+.ade-create-entry {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px;
+    font-size: 12px;
+    border-bottom: 1px solid #e9e9ec;
+}
+.ade-create-entry input {
+    width: 100%;
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid #cbd0dc;
+    border-radius: 4px;
+    color: #3f3f46;
+    background: #fff;
+}
+.ade-create-entry button {
+    padding: 4px 8px;
+    background: #e4eafa;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.ade-create-entry button:disabled {
+    opacity: 0.5;
+}
+.ade-sidebar-open {
+    align-self: flex-start;
+    color: #52525b;
+}
+.ade-explorer-resizer {
+    width: 5px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    touch-action: none;
+    background: #fafafa;
+}
+.ade-explorer-resizer:hover,
+.ade-explorer-resizer:focus-visible {
+    background: #7993d0;
+    outline: none;
+}
+
+.ade-tree-code .ade-tree-row {
+    position: relative;
+    min-height: 36px;
+    font-size: 13px;
+    gap: 8px;
+    border-radius: 6px;
+    color: #52525b;
+}
+
+.ade-tree-code .ade-tree-row:hover,
+.ade-tree-code .ade-tree-row[data-selected="true"] {
+    background: #f1f1f3;
+    color: #3f3f46;
+}
+
+.ade-tree-code .ade-tree-row > svg {
+    color: #7993d0;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.ade-tree-code .ade-tree-row > svg:first-of-type:not(:last-of-type) {
+    width: 12px;
+    color: #a1a1aa;
+}
+
+.ade-tree-code .ade-tree-guides {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 16px;
+    pointer-events: none;
+    background: repeating-linear-gradient(to right, #e9e9ec 0 1px, transparent 1px 20px);
+}
+
+.ade-tree-code .ade-tree-row[data-json="true"] > svg {
+    color: #54bc8d;
+}
+
+.ade-tree-code .ade-code-frame {
+    min-width: 0;
+    padding: 10px;
+    background: #fafafa;
+}
+
+.ade-tree-code .ade-editor {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #353539;
+    border-radius: 6px;
+    background: #101114;
+    color: #e4e4e7;
+}
+
+.ade-tree-code .ade-editor > div {
+    padding-inline: 16px;
+}
+
+.ade-tree-code .ade-copy-code {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #d4d4d8;
+    border-radius: 6px;
+    background: #fafafa;
+    color: #52525b;
+    cursor: pointer;
+}
+
+.ade-tree-code button:focus-visible {
+    outline: 2px solid #526fb2;
+    outline-offset: -2px;
+}
+
+.ade-tree-code .ade-heading,
+.ade-tree-code .ade-tabs,
+.ade-tree-code .ade-breadcrumb,
+.ade-tree-code .ade-status {
+    background: #fafafa;
+    color: #52525b;
+}
+
+@media (max-width: 700px) {
+    .ade-tree-code .ade-explorer {
+        width: 180px;
+    }
+    .ade-tree-code .ade-code-frame {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 420px) {
+    .ade-tree-code .ade-explorer {
+        width: 140px;
+    }
+}
+
+.ade-hermes-tree {
+    --foreground: var(--coucou-label);
+    --ui-text-primary: var(--coucou-label);
+    --ui-text-secondary: var(--coucou-secondary);
+    --ui-text-tertiary: var(--coucou-secondary);
+    --ui-row-active-background: color-mix(in srgb, var(--coucou-label) 10%, transparent);
+    --ui-control-hover-background: color-mix(in srgb, var(--coucou-label) 7%, transparent);
+    --chrome-action-hover: var(--ui-control-hover-background);
+    color: var(--coucou-label);
+}

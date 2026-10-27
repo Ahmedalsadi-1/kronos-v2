@@ -6,7 +6,6 @@ import { IconButton } from "@/app/element/iconbutton";
 import { cn, useAtomValueSafe } from "@/util/util";
 import type { Atom } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { bundledLanguages, codeToHtml } from "shiki/bundle/web";
 import { Streamdown } from "streamdown";
 import { throttle } from "throttle-debounce";
 
@@ -42,6 +41,12 @@ function CodeHighlight({ className = "", lang, text }: { className?: string; lan
     const highlightCode = useCallback(
         async (textToHighlight: string, language: string, disposedRef: { current: boolean }, seq: number) => {
             try {
+                const { bundledLanguages, codeToHtml } = await import("shiki/bundle/web");
+                if (disposedRef.current || seq !== seqRef.current) return;
+                if (!(language in bundledLanguages)) {
+                    setHasError(true);
+                    return;
+                }
                 const full = await codeToHtml(textToHighlight, { lang: language, theme: ShikiTheme });
                 const start = full.indexOf("<code");
                 const open = full.indexOf(">", start);
@@ -62,6 +67,8 @@ function CodeHighlight({ className = "", lang, text }: { className?: string; lan
     );
 
     const throttledHighlight = useMemo(() => throttle(300, highlightCode, { noLeading: false }), [highlightCode]);
+
+    useEffect(() => () => throttledHighlight.cancel({ upcomingOnly: true }), [throttledHighlight]);
 
     useEffect(() => {
         const disposedRef = { current: false };
@@ -90,7 +97,7 @@ function CodeHighlight({ className = "", lang, text }: { className?: string; lan
 
     if (!html && text) {
         return (
-            <code ref={codeRef} className={cn("font-mono text-[12px] text-transparent", className)}>
+            <code ref={codeRef} className={cn("font-mono text-[12px]", className)}>
                 {text}
             </code>
         );
@@ -111,7 +118,7 @@ export function Code({ className = "", children }: { className?: string; childre
     const lang = m?.[1] || "text";
     const text = extractText(children);
 
-    if (isCodeBlock && lang in bundledLanguages) {
+    if (isCodeBlock) {
         return <CodeHighlight className={className} lang={lang} text={text} />;
     }
 

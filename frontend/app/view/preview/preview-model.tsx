@@ -271,38 +271,13 @@ export class PreviewModel implements ViewModel {
         this.viewName = atom("Preview");
         this.hideViewName = atom(true);
         this.viewText = atom((get) => {
-            let headerPath = get(this.metaFilePath);
             const connStatus = get(this.connStatus);
             if (connStatus?.status != "connected") {
-                return [
-                    {
-                        elemtype: "text",
-                        text: headerPath,
-                        className: "preview-filename",
-                    },
-                ];
+                return [];
             }
             const loadableSV = get(this.loadableSpecializedView);
             const isCeView = loadableSV.state == "hasData" && loadableSV.data.specializedView == "codeedit";
-            const loadableFileInfo = get(this.loadableFileInfo);
-            if (loadableFileInfo.state == "hasData") {
-                headerPath = loadableFileInfo.data?.path;
-                if (headerPath == "~") {
-                    headerPath = `~ (${loadableFileInfo.data?.dir + "/" + loadableFileInfo.data?.name})`;
-                }
-            }
-            if (!isBlank(headerPath) && headerPath != "/" && headerPath.endsWith("/")) {
-                headerPath = headerPath.slice(0, -1);
-            }
-            const viewTextChildren: HeaderElem[] = [
-                {
-                    elemtype: "text",
-                    text: headerPath,
-                    ref: this.previewTextRef,
-                    className: "preview-filename",
-                    onClick: () => this.toggleOpenFileModal(),
-                },
-            ];
+            const viewTextChildren: HeaderElem[] = [];
             let saveClassName = "grey";
             if (get(this.newFileContent) !== null) {
                 saveClassName = "green";

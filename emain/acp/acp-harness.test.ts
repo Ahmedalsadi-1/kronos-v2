@@ -60,6 +60,20 @@ describe("ACP capability leases", () => {
         });
     });
 
+    it("keeps shared skills and fast browser interactions discoverable for external agents", () => {
+        const lease = makeAcpCapabilityLease({
+            backend: "kilo",
+            capabilities: null,
+            content: "Open the browser tab",
+            surfaceAvailable: true,
+            workspace: "/tmp/project",
+        });
+        expect(lease.protocol.mcp).toContain("stdio");
+        expect(lease.toolsets).toContain("skills");
+        expect(KronTermToolsets.widget.tools).toContain("widget_sequence");
+        expect(KronTermToolsets.browser.tools).toContain("browser_configure");
+    });
+
     it("formats an explicit upper-bound policy for the specialist prompt", () => {
         const lease = makeAcpCapabilityLease({
             backend: "codex",
@@ -112,10 +126,10 @@ describe("KronTerm toolset registry", () => {
             surfaceAvailable: true,
             workspace: "/tmp/kronterm-project",
         });
-        expect(lease.toolsets).toEqual(["browser", "file", "workspace", "agents"]);
+        expect(lease.toolsets).toEqual(["browser", "file", "workspace", "skills", "agents"]);
         const prompt = formatAcpCapabilityLease(lease);
         expect(prompt).toContain("Recommended toolsets");
-        expect(prompt).toContain("In-app browser");
+        expect(prompt).toContain("Browser");
         expect(prompt).toContain("browser_open_tab");
     });
 
@@ -127,7 +141,7 @@ describe("KronTerm toolset registry", () => {
             surfaceAvailable: true,
             workspace: "/tmp/kronterm-project",
         });
-        expect(lease.toolsets).toEqual(["workspace", "hud", "widget", "sandbox", "desktop", "agents"]);
+        expect(lease.toolsets).toEqual(["workspace", "hud", "widget", "sandbox", "desktop", "skills", "agents"]);
     });
 
     it("does not recommend recursive ACP delegation to a KronTerm Agent child", () => {
@@ -138,6 +152,32 @@ describe("KronTerm toolset registry", () => {
             surfaceAvailable: true,
             workspace: "/tmp/kronterm-project",
         });
-        expect(lease.toolsets).toEqual(["file", "terminal", "widget", "workspace"]);
+        expect(lease.toolsets).toEqual(["file", "terminal", "lsp", "widget", "workspace", "skills"]);
+        expect(formatAcpCapabilityLease(lease, ["acp_run_agent", "lsp_hover"])).not.toContain("acp_run_agent");
+    });
+
+    it("advertises every available family without inventing executable capabilities", () => {
+        const lease = makeAcpCapabilityLease({
+            backend: "kronoscode",
+            capabilities: null,
+            content: "Implement parser",
+            surfaceAvailable: true,
+            workspace: "/tmp/project",
+        });
+        const tools = [
+            "lsp_hover",
+            "canvas_snapshot",
+            "workspace_os_action",
+            "linux_desktop_batch",
+            "device_key",
+            "workflow_run",
+            "tool_search",
+        ];
+        const prompt = formatAcpCapabilityLease(lease, tools);
+        for (const name of tools) expect(prompt).toContain(name);
+        expect(prompt).not.toContain("kron_computer_click");
+        expect(prompt).toContain("Recommendations do not grant permissions");
+        expect(prompt).toContain("Labs");
+        expect(formatAcpCapabilityLease(lease, [])).toContain("None available in this session");
     });
 });

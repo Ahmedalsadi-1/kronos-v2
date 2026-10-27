@@ -7,7 +7,7 @@ import { Codicon } from '@hermes/components/ui/codicon'
 import { DropdownMenuItem, dropdownMenuRow } from '@hermes/components/ui/dropdown-menu'
 import type { HermesGateway } from '@hermes/hermes'
 import { useI18n } from '@hermes/i18n'
-import { modelOptionsQueryKey, requestModelOptions } from '@hermes/lib/model-options'
+import { modelOptionsQueryKey, requestModelOptions, useAgentEngine } from '@hermes/lib/model-options'
 import { currentPickerSelection } from '@hermes/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT } from '@hermes/lib/reasoning-effort'
 import { cn } from '@hermes/lib/utils'
@@ -49,6 +49,7 @@ interface ModelMenuPanelProps {
  * stores honest, and roll back on a failed gateway write.
  */
 export function ModelMenuPanel({ gateway, onSelectModel, profile = 'default', requestGateway }: ModelMenuPanelProps) {
+  useAgentEngine()
   const { t } = useI18n()
   const copy = t.shell.modelMenu
   const [refreshing, setRefreshing] = useState(false)

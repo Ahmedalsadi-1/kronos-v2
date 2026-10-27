@@ -100,6 +100,7 @@ function CodeEditPreview({ model }: SpecializedViewProps) {
 
     return (
         <CodeEditor
+            treeCodeAppearance
             blockId={model.blockId}
             text={draft ?? fileContent}
             fileName={fileName}

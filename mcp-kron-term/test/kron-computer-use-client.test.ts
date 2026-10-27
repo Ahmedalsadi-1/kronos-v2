@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { KronComputerUseClient } from "../src/kron-computer-use.js";
+import { ToolOperationContext } from "../src/tool-execution.js";
 
 const fixture = async (run: (client: KronComputerUseClient, log: string) => Promise<void>) => {
     const directory = mkdtempSync(join(tmpdir(), "kron-computer-timings-"));
@@ -20,7 +21,7 @@ lines.on('line', async line => {
  const request = JSON.parse(line);
  if (!request.id) return;
  const name = request.params?.name ?? request.method;
- appendFileSync(process.env.KRON_TIMING_FIXTURE_LOG, JSON.stringify({name,initialized})+'\\n');
+ appendFileSync(process.env.KRON_TIMING_FIXTURE_LOG, JSON.stringify({name,initialized,args:request.params?.arguments})+'\\n');
  if(request.method === 'initialize') { await new Promise(resolve=>setTimeout(resolve,30)); initialized = true; }
  const result = request.method === 'initialize' ? {} : {content:[{type:'text',text:'private-result'}], ...(request.params?.arguments?.fail ? {isError:true} : {})};
  await new Promise(resolve=>setTimeout(resolve,5));
@@ -112,4 +113,77 @@ test("closing cancels queued mutations and only explicit new calls restart the c
         await client.callTool("get_app_state", { app: "Fixture" });
         assert.equal(client.diagnostics().running, true);
     });
+});
+
+test("queued tools keep the exact arguments supplied at invocation", async () => {
+    await fixture(async (client, log) => {
+        const args = { app: "Original", text: "safe" };
+        const pending = client.callTool("type_text", args);
+        args.app = "Different";
+        args.text = "changed";
+        await pending;
+        const call = readFileSync(log, "utf8")
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
+            .at(-1);
+        assert.deepEqual(call.args, { app: "Original", text: "safe" });
+    });
+});
+
+test("cancelled queued desktop mutations never reach the native runtime", async () => {
+    await fixture(async (client, log) => {
+        const blocker = client.callTool("get_app_state", { app: "Fixture" });
+        const controller = new AbortController();
+        const pending = ToolOperationContext.run({ signal: controller.signal } as any, () =>
+            client.callTool("click", { app: "Fixture" })
+        );
+        controller.abort();
+        await assert.rejects(pending, /abort/i);
+        await blocker;
+        const names = readFileSync(log, "utf8")
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line).name);
+        assert.deepEqual(names, ["initialize", "get_app_state"]);
+    });
+});
+
+test("a desktop completion arriving after cancellation cannot report success", async (t) => {
+    const client = new KronComputerUseClient();
+    const controller = new AbortController();
+    let complete: (value: unknown) => void;
+    let entered: () => void;
+    const requestEntered = new Promise<void>((resolve) => {
+        entered = resolve;
+    });
+    t.mock.method(client as any, "ensureStarted", async () => {});
+    t.mock.method(client as any, "request", async () => {
+        entered();
+        return new Promise((resolve) => {
+            complete = resolve;
+        });
+    });
+    const pending = ToolOperationContext.run({ signal: controller.signal } as any, () =>
+        client.callTool("click", { app: "Fixture" })
+    );
+    await requestEntered;
+    controller.abort();
+    complete({ content: [] });
+    await assert.rejects(pending, /abort/i);
+    client.close();
+});
+
+test("starts a helper installed beside node when the GUI PATH omits its runtime", async () => {
+    const previousPath = process.env.PATH;
+    try {
+        await fixture(async (client, log) => {
+            symlinkSync(process.execPath, join(log, "..", "node"));
+            process.env.PATH = "/usr/bin:/bin";
+            await client.warm();
+            assert.equal(client.diagnostics().running, true);
+        });
+    } finally {
+        process.env.PATH = previousPath;
+    }
 });

@@ -122,6 +122,16 @@ function detectCommand(command: string): Promise<string | null> {
     });
 }
 
+export async function detectOpenCodeCli(defaultCliPath?: string): Promise<string | null> {
+    const candidates = [
+        process.env.KRONTERM_OPENCODE_BIN,
+        process.env.OPENCODE_BIN,
+        defaultCliPath,
+        path.join(os.homedir(), ".opencode", "bin", process.platform === "win32" ? "opencode.exe" : "opencode"),
+    ].filter((candidate): candidate is string => Boolean(candidate));
+    return candidates.find((candidate) => isExecutablePath(candidate)) ?? (await detectCommand("opencode"));
+}
+
 async function detectKronTermAgentCli(defaultCliPath?: string): Promise<string | null> {
     const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
     const candidates = [
@@ -133,7 +143,7 @@ async function detectKronTermAgentCli(defaultCliPath?: string): Promise<string |
     return (
         candidates.find((candidate) => isExecutablePath(candidate)) ??
         (await detectCommand("kronterm-agent")) ??
-        (await detectCommand("opencode"))
+        (await detectOpenCodeCli())
     );
 }
 
@@ -205,6 +215,14 @@ export async function detectInstalledAgents(): Promise<
 
             if (id === "kronterm-agent") {
                 const detectedCliPath = await detectKronTermAgentCli(config.defaultCliPath);
+                if (detectedCliPath) {
+                    available = true;
+                    cliPath = detectedCliPath;
+                }
+            }
+
+            if (id === "opencode") {
+                const detectedCliPath = await detectOpenCodeCli(config.defaultCliPath);
                 if (detectedCliPath) {
                     available = true;
                     cliPath = detectedCliPath;

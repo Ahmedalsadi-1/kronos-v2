@@ -7,14 +7,25 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import type { PreviewModel } from "@/app/view/preview/preview-model";
 import { createBlockSplitHorizontally, getApi, getBlockComponentModel } from "@/store/global";
+import { resolveAgentFilePath } from "@/types/agent-file-activity";
 import { atom, useAtomValue } from "jotai";
 import {
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
     ChevronDown,
     ChevronRight,
+    ChevronsDownUp,
     Copy,
     FileCode2,
+    FilePlus2,
     Folder,
     FolderOpen,
+    FolderPlus,
+    Home,
+    MoreHorizontal,
+    PanelLeftClose,
+    PanelLeftOpen,
     Pencil,
     RefreshCw,
     Save,
@@ -22,13 +33,23 @@ import {
     X,
 } from "lucide-react";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { subscribeAgentActivityStream } from "../../types/agent-activity";
+import {
+    agentActivityTimeline,
+    subscribeAgentActivityStream,
+    type LiveAgentSurfaceActivity,
+} from "../../types/agent-activity";
 import type { NotchExplorerEntry } from "../../types/native-notch";
 import { AdeDiagnostics } from "./ade-diagnostics";
+import { AdeProjectTree } from "./ade-project-tree";
+import "./ade-tree-code.css";
 import { useCoucouWorkbenchAppearance } from "./coucou-workbench-appearance";
 
 type LogEntry = { time: number; text: string; error?: boolean; output?: boolean };
 const DefaultFocused = atom(true);
+
+function resolvedFileInfoPath(info: FileInfo): string {
+    return info.path === "~" && info.dir && info.name ? `${info.dir.replace(/\/$/, "")}/${info.name}` : info.path;
+}
 
 export function NativeFileWorkbench({
     blockId,
@@ -59,7 +80,10 @@ export function NativeFileWorkbench({
         return () => clearInterval(timer);
     }, [blockId, previewModel]);
     return (
-        <div className="coucou-chrome relative flex min-h-0 flex-1 flex-col overflow-hidden" style={appearance}>
+        <div
+            className="coucou-chrome ade-tree-shell relative flex min-h-0 flex-1 flex-col overflow-hidden"
+            style={appearance}
+        >
             {model ? (
                 <NativeFileTabs model={model} searchAnchorRef={searchAnchorRef}>
                     {children}
@@ -93,11 +117,22 @@ function NativeFileTabs({
     const [panel, setPanel] = useState<"output" | "logs" | "problems">("output");
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [controlsOpen, setControlsOpen] = useState(false);
+    const copyTimeout = useRef<ReturnType<typeof setTimeout>>(null);
+    useEffect(() => () => clearTimeout(copyTimeout.current), []);
     const navigationBusy = useRef(false);
     const [inventory, setInventory] = useState<NotchExplorerEntry[]>([]);
     const [filter, setFilter] = useState("");
     const [treeLoading, setTreeLoading] = useState(true);
     const [explorerOpen, setExplorerOpen] = useState(true);
+    const [explorerWidth, setExplorerWidth] = useState(250);
+    const [followAgent, setFollowAgent] = useState(true);
+    const [newEntry, setNewEntry] = useState<"new-file" | "new-folder">(null);
+    const [newEntryName, setNewEntryName] = useState("");
+    const [creatingEntry, setCreatingEntry] = useState(false);
+    const followedFile = useRef<string>(null);
+    const followEpoch = useRef(0);
     const [activityOpen, setActivityOpen] = useState(false);
     const [sidebar, setSidebar] = useState<"files" | "changes">("files");
     const [changes, setChanges] = useState<OSWorktreeChange[]>([]);
@@ -195,7 +230,7 @@ function NativeFileTabs({
             .get(model.statFile)
             .then(async (info) => {
                 if (!active || !info) return;
-                tree.current.root = info.isdir ? info.path : info.dir;
+                tree.current.root = info.isdir ? resolvedFileInfoPath(info) : info.dir;
                 await readFolder(tree.current.root);
             })
             .catch((e) => {
@@ -225,20 +260,21 @@ function NativeFileTabs({
             .get(model.statFile)
             .then(async (info) => {
                 if (!active || !info) return;
-                setResolvedPath(info.path);
+                const resolved = resolvedFileInfoPath(info);
+                setResolvedPath(resolved);
                 setDirectory(info.isdir === true);
                 if (info.isdir) {
-                    if (tree.current.root && tree.current.root !== info.path) {
+                    if (tree.current.root && tree.current.root !== resolved) {
                         requestEpoch.current++;
                         changesEpoch.current++;
                         diffEpoch.current++;
                         setDiff(undefined);
                         setChanges([]);
                         setSidebar("files");
-                        tree.current = { root: info.path, entries: new Map(), expanded: new Set() };
+                        tree.current = { root: resolved, entries: new Map(), expanded: new Set() };
                         setTreeLoading(true);
                         try {
-                            await readFolder(info.path);
+                            await readFolder(resolved);
                         } finally {
                             if (active) setTreeLoading(false);
                         }
@@ -257,9 +293,15 @@ function NativeFileTabs({
     }, [path, model, publish, readFolder]);
 
     const explorerAction = useCallback(
-        (next: string) => {
+        (next: string, entryName?: string) => {
             if (next.startsWith(":")) {
                 const action = next.slice(1);
+                if ((action === "new-file" || action === "new-folder") && entryName == null) {
+                    setExplorerOpen(true);
+                    setNewEntry(action);
+                    setNewEntryName("");
+                    return;
+                }
                 void (async () => {
                     try {
                         if (action === "collapse") {
@@ -272,11 +314,12 @@ function NativeFileTabs({
                             return;
                         }
                         if (!["new-file", "new-folder"].includes(action)) return;
-                        const name = window.prompt(action === "new-file" ? "New file name" : "New folder name");
+                        const name = entryName;
                         if (!name || !name.trim()) return;
                         if (/[/\\]/.test(name) || [".", ".."].includes(name.trim()))
                             throw new Error("Enter a name without path separators");
                         const file = tree.current.root.replace(/\/$/, "") + "/" + name.trim();
+                        setCreatingEntry(true);
                         const info = { path: await model.formatRemoteUri(file, globalStore.get) };
                         const existing = await model.env.rpc.FileInfoCommand(TabRpcClient, { info });
                         if (!existing?.notfound) throw new Error("A file or folder with that name already exists");
@@ -290,9 +333,13 @@ function NativeFileTabs({
                             await model.setEditMode(true);
                         }
                         setError("");
+                        setNewEntry(null);
+                        setNewEntryName("");
                     } catch (e) {
                         setError(String(e));
                         log(String(e), true);
+                    } finally {
+                        setCreatingEntry(false);
                     }
                 })();
                 return;
@@ -340,6 +387,74 @@ function NativeFileTabs({
         [model, log]
     );
 
+    useEffect(() => {
+        if (!followAgent || connection || treeLoading) return;
+        let refreshTimer: ReturnType<typeof setInterval>;
+        let followTask = Promise.resolve();
+        let refreshDeadline = 0;
+        const refresh = () => {
+            if (Date.now() > refreshDeadline) {
+                clearInterval(refreshTimer);
+                return;
+            }
+            if (
+                globalStore.get(model.metaFilePath) !== followedFile.current ||
+                globalStore.get(model.newFileContent) != null
+            )
+                return;
+            if (model.fileContentSaved) globalStore.set(model.fileContentSaved, null);
+            if (model.refreshVersion) globalStore.set(model.refreshVersion, (version) => version + 1);
+        };
+        const accept = (activity: LiveAgentSurfaceActivity) => {
+            if (activity.surface !== "file" || !activity.filepath) return;
+            const next = resolveAgentFilePath(activity.filepath, tree.current.root);
+            if (!next) return;
+            if (["failed", "cancelled"].includes(activity.phase)) {
+                if (next === followedFile.current) {
+                    followEpoch.current++;
+                    clearInterval(refreshTimer);
+                }
+                return;
+            }
+            if (!["running", "succeeded"].includes(activity.phase)) return;
+            const epoch = ++followEpoch.current;
+            clearInterval(refreshTimer);
+            followedFile.current = next;
+            refreshDeadline = Date.now() + 30000;
+            followTask = followTask.then(async () => {
+                if (epoch !== followEpoch.current) return;
+                try {
+                    await open(next);
+                    if (epoch !== followEpoch.current) return;
+                    await model.setEditMode(true);
+                    refresh();
+                    if (activity.phase === "running") refreshTimer = setInterval(refresh, 500);
+                    else await Promise.all([tree.current.root, ...tree.current.expanded].map(readFolder));
+                    await getApi().selectNativeHudWidget?.(model.blockId, true);
+                } catch (e) {
+                    if (epoch === followEpoch.current) setError(`Could not follow agent file: ${String(e)}`);
+                }
+            });
+        };
+        const off = subscribeAgentActivityStream(accept);
+        const latest = agentActivityTimeline
+            .getAll()
+            .filter(
+                (activity) =>
+                    activity.surface === "file" &&
+                    activity.filepath &&
+                    Date.now() - activity.timestamp < 30000 &&
+                    resolveAgentFilePath(activity.filepath, tree.current.root)
+            )
+            .at(-1);
+        if (latest) accept(latest);
+        return () => {
+            followEpoch.current++;
+            clearInterval(refreshTimer);
+            off();
+        };
+    }, [followAgent, connection, treeLoading, model, open, readFolder]);
+
     const visibleLogs = panel === "output" ? logs.filter((row) => row.output || row.error) : logs;
     const toggleFolder = async (folder: string) => {
         if (tree.current.expanded.has(folder)) {
@@ -384,8 +499,21 @@ function NativeFileTabs({
         }
     };
     return (
-        <div className="ade-workbench flex min-h-0 flex-1 flex-col" aria-label="KronTerm development environment">
-            <div ref={searchAnchorRef} className="ade-heading flex h-10 shrink-0 items-center gap-3 px-3 pr-28">
+        <div
+            ref={searchAnchorRef}
+            className="ade-workbench ade-tree-code flex min-h-0 flex-1 flex-col"
+            aria-label="KronTerm development environment"
+        >
+            <button
+                type="button"
+                className="ade-workspace-toggle"
+                aria-label="Toggle workspace controls"
+                aria-expanded={controlsOpen}
+                onClick={() => setControlsOpen(!controlsOpen)}
+            >
+                <MoreHorizontal size={16} aria-hidden="true" />
+            </button>
+            <div hidden={!controlsOpen} className="ade-heading flex h-10 shrink-0 items-center gap-3 px-3 pr-28">
                 <button
                     className="ade-control cursor-pointer rounded p-1.5"
                     aria-label="Toggle project explorer"
@@ -454,12 +582,123 @@ function NativeFileTabs({
                 </button>
             </div>
             <div className="flex min-h-0 flex-1">
+                {!explorerOpen && (
+                    <button
+                        type="button"
+                        className="ade-sidebar-open"
+                        aria-label="Expand file explorer"
+                        onClick={() => setExplorerOpen(true)}
+                    >
+                        <PanelLeftOpen size={16} />
+                    </button>
+                )}
                 <aside
                     hidden={!explorerOpen}
                     className="ade-explorer flex w-56 shrink-0 flex-col overflow-hidden max-[700px]:w-40"
                     aria-label="Project explorer"
+                    style={{ width: `clamp(140px, ${explorerWidth}px, 60%)` }}
                 >
-                    <div className="flex h-10 shrink-0 items-center gap-2 px-3">
+                    <div className="ade-explorer-path" title={tree.current.root}>
+                        <button
+                            type="button"
+                            aria-label="Open folder path"
+                            onClick={() => model.updateOpenFileModalAndError(true)}
+                        >
+                            <FolderOpen size={15} aria-hidden="true" />
+                            <span>{path === "~" ? `~ (${tree.current.root})` : tree.current.root || path}</span>
+                        </button>
+                        <button type="button" aria-label="Fold file explorer" onClick={() => setExplorerOpen(false)}>
+                            <PanelLeftClose size={16} />
+                        </button>
+                    </div>
+                    <nav className="ade-explorer-nav" aria-label="File explorer navigation">
+                        <button
+                            type="button"
+                            aria-label="Follow agent files"
+                            aria-pressed={followAgent}
+                            title="Follow files opened or changed by the agent"
+                            onClick={() => setFollowAgent(!followAgent)}
+                        >
+                            <FileCode2 size={15} />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label="Back"
+                            onClick={() => void model.goHistoryBack().catch((e) => setError(String(e)))}
+                        >
+                            <ArrowLeft size={15} />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label="Forward"
+                            onClick={() => void model.goHistoryForward().catch((e) => setError(String(e)))}
+                        >
+                            <ArrowRight size={15} />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label="Parent folder"
+                            onClick={() => void model.goParentDirectory({}).catch((e) => setError(String(e)))}
+                        >
+                            <ArrowUp size={15} />
+                        </button>
+                        <button type="button" aria-label="Home folder" onClick={() => void open("~")}>
+                            <Home size={15} />
+                        </button>
+                        <button type="button" aria-label="New file" onClick={() => explorerAction(":new-file")}>
+                            <FilePlus2 size={15} />
+                        </button>
+                        <button type="button" aria-label="New folder" onClick={() => explorerAction(":new-folder")}>
+                            <FolderPlus size={15} />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label="Collapse all folders"
+                            onClick={() => explorerAction(":collapse")}
+                        >
+                            <ChevronsDownUp size={15} />
+                        </button>
+                    </nav>
+                    {newEntry && (
+                        <form
+                            className="ade-create-entry"
+                            aria-label={newEntry === "new-file" ? "Create new file" : "Create new folder"}
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                if (!creatingEntry) explorerAction(`:${newEntry}`, newEntryName);
+                            }}
+                        >
+                            <input
+                                autoFocus
+                                aria-label={newEntry === "new-file" ? "New file name" : "New folder name"}
+                                placeholder={newEntry === "new-file" ? "File name" : "Folder name"}
+                                value={newEntryName}
+                                onChange={(event) => setNewEntryName(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Escape") {
+                                        event.preventDefault();
+                                        setNewEntry(null);
+                                    }
+                                }}
+                                disabled={creatingEntry}
+                            />
+                            <button type="submit" disabled={creatingEntry || !newEntryName.trim()}>
+                                {creatingEntry ? "Creating…" : "Create"}
+                            </button>
+                            <button
+                                type="button"
+                                aria-label="Cancel creation"
+                                disabled={creatingEntry}
+                                onClick={() => setNewEntry(null)}
+                            >
+                                <X size={14} />
+                            </button>
+                        </form>
+                    )}
+                    <div
+                        hidden={!controlsOpen}
+                        className="ade-explorer-tools flex h-10 shrink-0 items-center gap-2 px-3"
+                    >
                         <button
                             className="ade-control cursor-pointer rounded px-1 py-1 text-xs"
                             aria-pressed={sidebar === "files"}
@@ -501,7 +740,10 @@ function NativeFileTabs({
                     </div>
                     {sidebar === "files" ? (
                         <>
-                            <label className="ade-filter mx-2 mb-2 flex items-center gap-2 rounded px-2 py-1.5">
+                            <label
+                                hidden={!controlsOpen}
+                                className="ade-filter mx-2 mb-2 flex items-center gap-2 rounded px-2 py-1.5"
+                            >
                                 <Search size={13} aria-hidden="true" />
                                 <input
                                     className="min-w-0 flex-1 bg-transparent text-xs outline-none"
@@ -517,7 +759,7 @@ function NativeFileTabs({
                                         Loading project files…
                                     </p>
                                 )}
-                                <div className="flex gap-2 px-3 pb-2">
+                                <div hidden={!controlsOpen} className="ade-explorer-tools flex gap-2 px-3 pb-2">
                                     <button
                                         className="ade-control cursor-pointer rounded px-1 py-1 text-xs"
                                         disabled={treeLoading || !tree.current.root}
@@ -540,42 +782,96 @@ function NativeFileTabs({
                                             : "This folder is empty. Create a file to start editing."}
                                     </p>
                                 )}
-                                {inventory
-                                    .filter(
-                                        (entry) => !filter || entry.path.toLowerCase().includes(filter.toLowerCase())
-                                    )
-                                    .map((entry) => (
-                                        <button
-                                            key={entry.path}
-                                            type="button"
-                                            className="ade-tree-row flex w-full cursor-pointer items-center gap-1.5 py-1.5 pr-2 text-left text-xs"
-                                            data-selected={entry.path === resolvedPath}
-                                            aria-current={entry.path === resolvedPath ? "page" : undefined}
-                                            aria-expanded={entry.directory ? entry.expanded : undefined}
-                                            title={entry.path}
-                                            style={{ paddingLeft: 10 + entry.depth * 14 }}
-                                            onClick={() =>
-                                                entry.directory ? void toggleFolder(entry.path) : void open(entry.path)
+                                {!connection && !treeLoading && inventory.length > 0 && (
+                                    <AdeProjectTree
+                                        entries={inventory}
+                                        root={tree.current.root}
+                                        selectedPath={resolvedPath}
+                                        isDirty={(entryPath) =>
+                                            entryPath === path ? draft != null : model.hasFileDraft(entryPath)
+                                        }
+                                        filter={filter}
+                                        focused={focused}
+                                        onOpen={(path) => void open(path)}
+                                        onAttach={(resource) =>
+                                            void attachOSResourceToKronos({
+                                                id: `local:${resource}`,
+                                                kind: inventory.find((entry) => entry.path === resource)?.directory
+                                                    ? "folder"
+                                                    : "file",
+                                                name: resource.split("/").pop(),
+                                                resource,
+                                            })
+                                        }
+                                        onLoad={async (folder) => {
+                                            try {
+                                                await readFolder(folder);
+                                            } catch (reason) {
+                                                setError(String(reason));
                                             }
-                                        >
-                                            {entry.directory ? (
-                                                <>
-                                                    {entry.expanded ? (
-                                                        <ChevronDown size={12} />
-                                                    ) : (
-                                                        <ChevronRight size={12} />
-                                                    )}
-                                                    {entry.expanded ? <FolderOpen size={14} /> : <Folder size={14} />}
-                                                </>
-                                            ) : (
-                                                <FileCode2 size={14} className="ml-4" />
-                                            )}
-                                            <span className="truncate">{entry.name}</span>
-                                            {(entry.path === path ? draft != null : model.hasFileDraft(entry.path)) && (
-                                                <span aria-label="Unsaved changes">•</span>
-                                            )}
-                                        </button>
-                                    ))}
+                                        }}
+                                        onToggle={(folder, expanded) => {
+                                            if (expanded) tree.current.expanded.add(folder);
+                                            else tree.current.expanded.delete(folder);
+                                            publish();
+                                        }}
+                                        onRefresh={() => explorerAction(":refresh")}
+                                    />
+                                )}
+                                {connection &&
+                                    inventory
+                                        .filter(
+                                            (entry) =>
+                                                !filter || entry.path.toLowerCase().includes(filter.toLowerCase())
+                                        )
+                                        .map((entry) => (
+                                            <button
+                                                key={entry.path}
+                                                type="button"
+                                                className="ade-tree-row flex w-full cursor-pointer items-center gap-1.5 py-1.5 pr-2 text-left text-xs"
+                                                data-selected={entry.path === resolvedPath}
+                                                data-json={entry.name.endsWith(".json") || undefined}
+                                                aria-current={entry.path === resolvedPath ? "page" : undefined}
+                                                aria-expanded={entry.directory ? entry.expanded : undefined}
+                                                title={entry.path}
+                                                style={{ paddingLeft: 20 + entry.depth * 20 }}
+                                                onClick={() =>
+                                                    entry.directory
+                                                        ? void toggleFolder(entry.path)
+                                                        : void open(entry.path)
+                                                }
+                                            >
+                                                {entry.depth > 0 && (
+                                                    <span
+                                                        className="ade-tree-guides"
+                                                        aria-hidden="true"
+                                                        style={{ width: entry.depth * 20 }}
+                                                    />
+                                                )}
+                                                {entry.directory ? (
+                                                    <>
+                                                        {entry.expanded ? (
+                                                            <ChevronDown size={12} />
+                                                        ) : (
+                                                            <ChevronRight size={12} />
+                                                        )}
+                                                        {entry.expanded ? (
+                                                            <FolderOpen size={14} />
+                                                        ) : (
+                                                            <Folder size={14} />
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <FileCode2 size={14} className="ml-4" />
+                                                )}
+                                                <span className="truncate">{entry.name}</span>
+                                                {(entry.path === path
+                                                    ? draft != null
+                                                    : model.hasFileDraft(entry.path)) && (
+                                                    <span aria-label="Unsaved changes">•</span>
+                                                )}
+                                            </button>
+                                        ))}
                                 {filter &&
                                     inventory.length > 0 &&
                                     !inventory.some((entry) =>
@@ -616,9 +912,51 @@ function NativeFileTabs({
                         </div>
                     )}
                 </aside>
-                <div className="flex min-w-0 flex-1 flex-col">
+                {explorerOpen && (
+                    <div
+                        className="ade-explorer-resizer"
+                        role="separator"
+                        tabIndex={0}
+                        aria-label="Resize file explorer"
+                        aria-orientation="vertical"
+                        aria-valuemin={140}
+                        aria-valuemax={600}
+                        aria-valuenow={explorerWidth}
+                        onDoubleClick={() => setExplorerWidth(250)}
+                        onKeyDown={(event) => {
+                            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                            event.preventDefault();
+                            setExplorerWidth((width) =>
+                                event.key === "Home"
+                                    ? 140
+                                    : event.key === "End"
+                                      ? 600
+                                      : Math.max(140, Math.min(600, width + (event.key === "ArrowRight" ? 20 : -20)))
+                            );
+                        }}
+                        onPointerDown={(event) => {
+                            if (event.button !== 0) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                        }}
+                        onPointerMove={(event) => {
+                            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                            const bounds = event.currentTarget.parentElement.getBoundingClientRect();
+                            setExplorerWidth(
+                                Math.max(140, Math.min(600, bounds.width * 0.6, event.clientX - bounds.left))
+                            );
+                        }}
+                        onPointerUp={(event) => {
+                            if (event.currentTarget.hasPointerCapture(event.pointerId))
+                                event.currentTarget.releasePointerCapture(event.pointerId);
+                        }}
+                    />
+                )}
+                <div className="ade-code-frame flex min-w-0 flex-1 flex-col">
                     <div
                         className="ade-tabs flex h-10 shrink-0 items-center"
+                        hidden={!controlsOpen}
                         role="tablist"
                         aria-label="Open files"
                         onKeyDown={(event) => {
@@ -721,7 +1059,10 @@ function NativeFileTabs({
                             <Save size={15} />
                         </button>
                     </div>
-                    <div className="ade-breadcrumb flex shrink-0 items-center gap-2 px-3 py-1 text-xs">
+                    <div
+                        hidden={!controlsOpen}
+                        className="ade-breadcrumb flex shrink-0 items-center gap-2 px-3 py-1 text-xs"
+                    >
                         <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap" title={resolvedPath}>
                             {resolvedPath}
                         </div>
@@ -794,6 +1135,28 @@ function NativeFileTabs({
                             hidden={Boolean(diff) || directory}
                             className="ade-editor flex min-h-0 flex-1 flex-col"
                         >
+                            <button
+                                type="button"
+                                className="ade-copy-code"
+                                aria-label={copied ? "Code copied" : "Copy file contents"}
+                                title={copied ? "Code copied" : "Copy file contents"}
+                                onClick={async () => {
+                                    try {
+                                        const content =
+                                            draft ??
+                                            model.monacoRef?.current?.getValue() ??
+                                            (await globalStore.get(model.fileContent));
+                                        await navigator.clipboard.writeText(content);
+                                        setCopied(true);
+                                        clearTimeout(copyTimeout.current);
+                                        copyTimeout.current = setTimeout(() => setCopied(false), 2000);
+                                    } catch (e) {
+                                        setError(`Could not copy file contents: ${String(e)}`);
+                                    }
+                                }}
+                            >
+                                <Copy size={16} aria-hidden="true" />
+                            </button>
                             {children}
                         </div>
                         {!diff && directory && (
@@ -863,7 +1226,7 @@ function NativeFileTabs({
                     )}
                 </div>
             </div>
-            <footer className="ade-status flex h-7 shrink-0 items-center gap-3 px-3 text-[11px]">
+            <footer hidden={!controlsOpen} className="ade-status flex h-7 shrink-0 items-center gap-3 px-3 text-[11px]">
                 <span>{connection || "Local project"}</span>
                 <span className="ade-secondary">
                     {tabs.length} open {tabs.length === 1 ? "file" : "files"}

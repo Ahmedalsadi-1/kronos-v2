@@ -1,3 +1,4 @@
+import { OpenMausBotHermesBackend, onBotConversationFocus, parseBotSessionId } from "./openmausbot-hermes-backend";
 // Copyright (c) 2026 KronTerm. Licensed under the Apache License, Version 2.0 (the "License").
 // This shim implements `window.hermesDesktop` inside the KronTerm renderer so the
 // vendored Hermes UI (frontend/hermes) can run as a widget without the Electron
@@ -59,6 +60,8 @@ import type {
     HermesTerminalSession,
     HermesWindowState,
 } from "@hermes/global";
+import { desktopFsProfile } from "@hermes/lib/desktop-fs";
+import { gatewayGit } from "@hermes/lib/desktop-git";
 import type { WakeIndicatorState } from "@hermes/lib/wake-indicator";
 import type { GatewayWsUrlResult } from "@hermes/shared";
 import type { PetOverlayBounds, PetOverlayControl, PetOverlayStatePayload } from "@hermes/store/pet-overlay";
@@ -153,6 +156,8 @@ export function buildProfileScopedApiUrl(baseUrl: string, requestPath: string, p
 
 /** Mirror of the Electron main process fetchJson contract. */
 async function apiFetch<T>(request: HermesApiRequest): Promise<T> {
+    const botResponse = botBackend.apiRequest(request);
+    if (botResponse) return botResponse as Promise<T>;
     requireSessionToken();
     return getApi().hermesApi<T>(request);
 }
@@ -346,6 +351,7 @@ async function previewKronTermSurface(blockId: string): Promise<string> {
 }
 
 // One per renderer: ACP events are delivered only to the webContents that started the session.
+const botBackend = new OpenMausBotHermesBackend();
 const kronosCodeBackend = new KronosCodeHermesBackend(() => {
     try {
         return getApi();
@@ -446,7 +452,16 @@ const shim: Window["hermesDesktop"] = {
                 (item) => (item.bundleid || item.appid) === id
             );
             if (!app) throw new Error("The selected application is unavailable.");
-            await launchSystemApp(makeInstalledAppDescriptor(app), {
+            const streams = (await listKronTermSurfaces()).filter((surface) => {
+                if (surface.view !== "appstream") return false;
+                const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", surface.id)));
+                return block?.meta?.["appstream:appid"] === id;
+            });
+            const descriptor = {
+                ...makeInstalledAppDescriptor(app),
+                runningBlockIds: streams.map((surface) => surface.id),
+            };
+            await launchSystemApp(descriptor, {
                 focusBlock: async (blockId) => {
                     await focusKronTermSurface(blockId);
                 },
@@ -481,7 +496,7 @@ const shim: Window["hermesDesktop"] = {
                 (app) => (app.bundleid || app.appid) === id
             );
             if (!app) throw new Error("The selected app is unavailable");
-            getApi().syncNativeNotch({ controlTarget: { name: app.name } });
+            await shim.krontermSurfaces.launchApp(id);
         },
         focus: focusKronTermSurface,
         openSplit: focusKronTermSurface,
@@ -577,12 +592,20 @@ const shim: Window["hermesDesktop"] = {
     agentBackends: {
         list: async () =>
             (await kronosCodeBackend.list()).map((engine) => ({ ...engine, logo: acpAgentLogo(engine.id) })),
-        getSessionBackend: (sessionId) => kronosCodeBackend.getSessionBackend(sessionId),
+        getSessionBackend: (sessionId) =>
+            parseBotSessionId(sessionId) ? "openmausbot" : kronosCodeBackend.getSessionBackend(sessionId),
         getActive: () => kronosCodeBackend.getActive(),
         setActive: (id) => kronosCodeBackend.setActive(id),
         onActiveChange: (listener) => kronosCodeBackend.onActiveChange(listener),
-        route: (method, params) => kronosCodeBackend.route(method, params),
-        onEvent: (listener) => kronosCodeBackend.onEvent(listener),
+        route: (method, params) => botBackend.route(method, params) ?? kronosCodeBackend.route(method, params),
+        onEvent: (listener) => {
+            const bot = botBackend.onEvent(listener);
+            const acp = kronosCodeBackend.onEvent(listener);
+            return () => {
+                bot();
+                acp();
+            };
+        },
     },
     revalidateConnection: async () => ({ ok: true, rebuilt: false }),
     touchBackend: async () => ({ ok: true }),
@@ -609,6 +632,7 @@ const shim: Window["hermesDesktop"] = {
             }
         },
         dock: async () => {
+            kronTermHudController.setActive(false);
             hermesSurfaceController.requestOpenPanel();
             return { ok: true };
         },
@@ -822,13 +846,17 @@ const shim: Window["hermesDesktop"] = {
         }
     },
 
-    readFileDataUrl: async () => {
-        throw new Error("readFileDataUrl is not supported by the Hermes shim");
+    selectPaths: async (options) => {
+        const api = getApi();
+        if (options?.directories) {
+            if (!api?.selectDirectory) throw new Error("Folder selection is unavailable in this window");
+            const path = await api.selectDirectory();
+            return path ? [path] : [];
+        }
+        if (!api?.selectFiles) throw new Error("File selection is unavailable in this window");
+        const paths = await api.selectFiles();
+        return options?.multiple ? paths : paths.slice(0, 1);
     },
-    readFileText: async () => {
-        throw new Error("readFileText is not supported by the Hermes shim");
-    },
-    selectPaths: async () => [],
     writeClipboard: async (text: string) => {
         try {
             await navigator.clipboard.writeText(text);
@@ -860,6 +888,9 @@ const shim: Window["hermesDesktop"] = {
     openExternal: async (url: string): Promise<void> => {
         window.open(url, "_blank", "noopener");
     },
+    openPreviewInBrowser: async (url: string): Promise<void> => {
+        getApi().openExternal(url);
+    },
     fetchLinkTitle: async (url: string): Promise<string> => {
         try {
             const res = await fetch(url, { method: "GET" });
@@ -884,7 +915,31 @@ const shim: Window["hermesDesktop"] = {
     reportRendererError: (report: { label: string; boundary: string; message: string; componentStack: string }) => {
         console.warn(`[hermes-shim] renderer error boundary ${report.boundary}: ${report.message}`);
     },
-    readDir: async (): Promise<HermesReadDirResult> => ({ entries: [], error: "not-supported" }),
+    readDir: (path: string): Promise<HermesReadDirResult> =>
+        apiFetch({
+            path: `/api/fs/list?path=${encodeURIComponent(path)}`,
+            profile: desktopFsProfile(),
+        }),
+    gitRoot: async (path: string) =>
+        (
+            await apiFetch<{ root: string }>({
+                path: `/api/fs/git-root?path=${encodeURIComponent(path)}`,
+                profile: desktopFsProfile(),
+            })
+        ).root,
+    readFileText: (path: string) =>
+        apiFetch({
+            path: `/api/fs/read-text?path=${encodeURIComponent(path)}`,
+            profile: desktopFsProfile(),
+        }),
+    readFileDataUrl: async (path: string) => {
+        const result = await apiFetch<string | { dataUrl?: string }>({
+            path: `/api/fs/read-data-url?path=${encodeURIComponent(path)}`,
+            profile: desktopFsProfile(),
+        });
+        return typeof result === "string" ? result : result.dataUrl || "";
+    },
+    git: gatewayGit,
 
     terminal: {
         cwd: async () => null,
@@ -904,7 +959,7 @@ const shim: Window["hermesDesktop"] = {
     onDeepLink: () => () => undefined,
     signalDeepLinkReady: async () => ({ ok: true }),
     onWindowStateChanged: (_callback: (payload: HermesWindowState) => void) => () => undefined,
-    onFocusSession: () => () => undefined,
+    onFocusSession: (listener) => onBotConversationFocus(listener),
     onNotificationAction: () => () => undefined,
     onPreviewFileChanged: () => () => undefined,
     onBackendExit: (_callback: (payload: HermesTerminalExit) => void) => () => undefined,

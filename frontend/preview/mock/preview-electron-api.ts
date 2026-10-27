@@ -73,6 +73,7 @@ const previewElectronApi: ElectronApi = {
     openBotDesktop: async () => {
         throw new Error("Bot desktops require the managed runtime");
     },
+    agentBotCommand: async () => ({ bots: [], messages: [], busy: false }),
     openAgentWorkspace: async () => {
         throw new Error("Agent workspace requires the managed Electron runtime.");
     },

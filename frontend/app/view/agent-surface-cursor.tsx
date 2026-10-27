@@ -1,7 +1,8 @@
 import { getApi } from "@/store/global";
 import { mountAgentCursor } from "@/util/agent-cursor-feedback";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { useAgentOverlays } from "./use-agent-overlays";
+import { useBrowserAgentCursor } from "./use-browser-agent-cursor";
 import { useReducedAgentMotion } from "./use-reduced-agent-motion";
 
 export function AgentSurfaceCursor({
@@ -9,11 +10,13 @@ export function AgentSurfaceCursor({
     surface,
     surfaceId,
     coordinates = "local",
+    webviewRef,
 }: {
     blockId?: string;
     surface?: string;
     surfaceId?: string;
     coordinates?: "local" | "normalized" | "capture";
+    webviewRef?: RefObject<Electron.WebviewTag>;
 }) {
     const { cursorPoint, cursorActive, clickFlashCount, cursorLabel } = useAgentOverlays(surface, blockId, surfaceId);
     const cursorOwner = `${surface ?? "surface"}:${blockId ?? "block"}:${surfaceId ?? ""}`;
@@ -41,6 +44,7 @@ export function AgentSurfaceCursor({
         };
     }, [cursorOwner]);
     const reducedMotion = useReducedAgentMotion();
+    useBrowserAgentCursor(webviewRef, cursorPoint, cursorActive, cursorLabel, clickFlashCount, reducedMotion);
     useEffect(() => {
         if (!cursorActive || !cursorPoint || !element.current) {
             controller.current?.clear();
@@ -74,9 +78,12 @@ export function AgentSurfaceCursor({
                         ? capture.videoHeight
                         : capture.height;
             if (!width || !height) return;
+            const scale = coordinates === "capture" ? Math.min(rect.width / width, rect.height / height) : 1;
+            const renderedWidth = coordinates === "capture" ? width * scale : rect.width;
+            const renderedHeight = coordinates === "capture" ? height * scale : rect.height;
             target = {
-                x: rect.left - parent.left + (cursorPoint.x / width) * rect.width,
-                y: rect.top - parent.top + (cursorPoint.y / height) * rect.height,
+                x: rect.left - parent.left + (rect.width - renderedWidth) / 2 + (cursorPoint.x / width) * renderedWidth,
+                y: rect.top - parent.top + (rect.height - renderedHeight) / 2 + (cursorPoint.y / height) * renderedHeight,
             };
         }
         const click = clickFlashCount != null && clickFlashCount !== lastClick.current;
@@ -87,7 +94,14 @@ export function AgentSurfaceCursor({
         <div
             ref={element}
             aria-hidden="true"
-            style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 50 }}
+            style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                overflow: "hidden",
+                zIndex: 50,
+                visibility: webviewRef ? "hidden" : "visible",
+            }}
         />
     );
 }

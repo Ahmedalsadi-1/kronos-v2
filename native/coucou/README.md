@@ -2,7 +2,10 @@
 
 The native notch panel uses Louis Raillé's Coucou source at commit
 `8a5c26328bd6409ff873e6f66bdc2e6ba004c856`. Its SwiftUI character, gestures,
-state machine, resting notch geometry, and sounds remain upstream.
+state machine, resting notch geometry, and sounds remain upstream. The local
+KronTerm build adds small cat ears to the body path; they retract during the
+upload morph. Workspace setup uses the existing COUCOU canvas port with the
+same small ear treatment, plus per-bot color and expression choices.
 KronTerm expands the overview for live previews and docked widgets.
 The header adds KronTerm launchers; the overview uses the live agent plugin
 workspace pages, with four categories per dot-pager page.

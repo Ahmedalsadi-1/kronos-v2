@@ -7,7 +7,9 @@ import logging
 import math
 import os
 import re
+import threading
 import time
+import urllib.parse
 import urllib.error
 import urllib.request
 from typing import Any, Dict, Iterable
@@ -22,13 +24,14 @@ _TIMEOUT_SECONDS = 35
 _READ_TIMEOUT_SECONDS = 15
 _readonly_tools: set[str] = set()
 _MANIFEST_TIMEOUT_SECONDS = 15
-_MAX_OUTPUT_BYTES = 16 * 1024 * 1024
+_MAX_OUTPUT_BYTES = 28 * 1024 * 1024
 _ALIASES = {"browser_navigate": "kronterm_browser_navigate", "tool_search": "kronterm_tool_search"}
 _ALLOWED_TTL_SECONDS = 20.0
 _ALLOWED_FAILURE_TTL_SECONDS = 2.0
 _allowed_ttl = _ALLOWED_TTL_SECONDS
 _allowed_cache: tuple[float, frozenset[str]] | None = None
 _allowed_bridge: tuple[str, str] | None = None
+_allowed_lock = threading.Lock()
 
 
 def _timeout_number(value: Any, default: float, minimum: float, maximum: float) -> float:
@@ -55,11 +58,30 @@ def _transport_failure(message: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             "uncertain": payload.get("method") == "call" and payload.get("name") not in _readonly_tools}}
 
 
+class _LocalBridgeRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _open_request(request, timeout):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _LocalBridgeRedirects())
+    return opener.open(request, timeout=timeout)
+
+
 def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
     url = os.environ.get(_URL_ENV, "").strip()
     token = os.environ.get(_TOKEN_ENV, "").strip()
     if not url or not token:
         return {"error": "KronTerm TypeScript tool bridge is unavailable"}
+    try:
+        endpoint = urllib.parse.urlsplit(url)
+        if (endpoint.scheme != "http" or endpoint.hostname not in {"127.0.0.1", "localhost", "::1"}
+                or endpoint.username or endpoint.password or endpoint.path != "/native"
+                or endpoint.query or endpoint.fragment):
+            return {"error": "KronTerm tool bridge must use a local HTTP /native endpoint"}
+        endpoint.port
+    except ValueError:
+        return {"error": "Invalid KronTerm tool bridge endpoint"}
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -73,14 +95,18 @@ def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
         timeout = _timeout_number(arguments.get("timeoutSeconds", 180), 180, 15, 600) + 10
     elif name in {"linux_desktop_start", "sandbox_task_start"}:
         timeout = 185
-    elif name.startswith("kron_computer_background_workspace_"):
-        timeout = 125
+    elif name.startswith("kron_computer_"):
+        timeout = 130
+    elif name in {"linux_desktop_exec", "linux_desktop_apps", "linux_desktop_launch_app", "linux_desktop_open_url"}:
+        timeout = 105
+    elif name.startswith("linux_desktop_") or name == "sandbox_task_finish":
+        timeout = 65
     elif name == "widget_wait_for":
         timeout = _timeout_number(arguments.get("timeoutMs", 10000), 10000, 100, 60000) / 1000 + 7
     if payload.get("method") != "call":
         timeout = _MANIFEST_TIMEOUT_SECONDS
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with _open_request(request, timeout=timeout) as response:
             output = response.read(_MAX_OUTPUT_BYTES + 1)
     except urllib.error.HTTPError as exc:
         message = _http_error_message(exc)
@@ -128,6 +154,12 @@ def _allowed_tools() -> frozenset[str]:
     Hermes probes every tool's check_fn when it builds a turn; one subprocess per tool
     made the whole toolset flap as unavailable under load.
     """
+    # Parallel tool checks share one refresh instead of flooding Electron on expiry.
+    with _allowed_lock:
+        return _refresh_allowed_tools()
+
+
+def _refresh_allowed_tools() -> frozenset[str]:
     global _allowed_cache, _allowed_bridge, _allowed_ttl
     bridge = (os.environ.get(_URL_ENV, "").strip(), os.environ.get(_TOKEN_ENV, "").strip())
     if bridge != _allowed_bridge:

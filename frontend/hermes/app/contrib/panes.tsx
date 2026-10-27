@@ -22,6 +22,7 @@ import { ContribBoundary, ContribRender } from '@hermes/contrib/react/boundary'
 import { useContributions } from '@hermes/contrib/react/use-contributions'
 import { registry } from '@hermes/contrib/registry'
 import { getLogs } from '@hermes/hermes'
+import { attachPathToComposer } from '@hermes/lib/composer-file-context'
 import { normalizeOrLocalPreviewTarget } from '@hermes/lib/local-preview'
 import { cn } from '@hermes/lib/utils'
 import { openPreview } from '@hermes/store/preview'
@@ -88,7 +89,11 @@ const ZONE_CONTENT = 'h-full [&>aside]:h-full [&>aside]:w-full [&>aside]:pt-0'
 export function FilesPane() {
   return (
     <div className={ZONE_CONTENT}>
-      <RightSidebarPane onActivateFile={previewFile} onActivateFolder={previewFile} />
+      <RightSidebarPane
+        onOpenFile={previewFile}
+        onActivateFile={path => attachPathToComposer(path, $currentCwd.get())}
+        onActivateFolder={path => attachPathToComposer(path, $currentCwd.get(), true)}
+      />
     </div>
   )
 }

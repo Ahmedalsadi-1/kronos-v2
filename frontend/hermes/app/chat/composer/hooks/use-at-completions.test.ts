@@ -2,9 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { liveSurfaceEntries, nativeAppEntries } from "./use-at-completions";
+import { classify, liveSurfaceEntries, nativeAppEntries } from "./use-at-completions";
 
 describe("KronTerm @ completions", () => {
+    it("shows the live app name instead of a block ID in the picker", () => {
+        expect(classify({ text: "@widget:block-7", display: "Calculator", meta: "appstream" })).toMatchObject({
+            type: "widget",
+            insertId: "block-7",
+            display: "Calculator",
+        });
+    });
     it("includes live widgets and each internal browser tab", () => {
         const entries = liveSurfaceEntries(
             [

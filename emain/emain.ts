@@ -463,15 +463,6 @@ async function appMain() {
     console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
     await electronApp.whenReady();
 
-    // Start background daemons (non-blocking)
-    fireAndForget(async () => {
-        try {
-            await HermesRuntime.ensure();
-        } catch (error) {
-            console.log("background Hermes startup failed", error);
-        }
-    });
-
     if (process.platform === "darwin") {
         const micStatus = electron.systemPreferences.getMediaAccessStatus("microphone");
         if (micStatus === "not-determined") {
@@ -492,9 +483,9 @@ async function appMain() {
     const fullConfig = await RpcApi.GetFullConfigCommand(ElectronWshClient);
     fireAndForget(async () => {
         try {
-            await KronosCodeRuntime.ensure(fullConfig);
+            await HermesRuntime.ensure();
         } catch (error) {
-            console.log("background KronosCode startup failed", error);
+            console.log("background agent startup failed", error);
         }
     });
     checkIfRunningUnderARM64Translation(fullConfig);

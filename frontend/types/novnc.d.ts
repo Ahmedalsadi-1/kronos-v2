@@ -127,8 +127,8 @@ declare module "@novnc/novnc" {
         ): void;
 
         readonly viewOnly: boolean;
-        readonly qualityLevel: number;
-        readonly compressionLevel: number;
+        qualityLevel: number;
+        compressionLevel: number;
         scaleViewport: boolean;
         resizeSession: boolean;
     }

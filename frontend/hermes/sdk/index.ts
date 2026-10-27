@@ -132,6 +132,11 @@ const $focusedUsage = computed($focusedSessionState, (state) => state?.usage ?? 
 
 export const host = {
     state: {
+        /** Stored identity shared by the focused tile and the main conversation. */
+        storedSessionId: computed(
+            [$focusedStoredSessionId, $selectedStoredSessionId],
+            (focused, selected) => focused ?? selected
+        ),
         /** Runtime id of the active chat session (null on a fresh draft). */
         activeSessionId: readonlyAtom<null | string>($activeSessionId),
         /** True from send until the first assistant payload on the focused chat. */

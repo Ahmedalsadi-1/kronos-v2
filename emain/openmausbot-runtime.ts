@@ -175,3 +175,102 @@ export async function openBotDesktop(sender: Electron.WebContents, botId: string
 }
 
 app.once("before-quit", stopOpenMausBotRuntime);
+
+export async function agentBotCommand(
+    sender: Electron.WebContents,
+    command: import("../frontend/types/agent-bot").AgentBotCommand
+): Promise<import("../frontend/types/agent-bot").AgentBotResult> {
+    if (!command || !["list", "history", "send", "interrupt"].includes(command.action))
+        throw new Error("Unsupported bot command");
+    if (
+        command.action !== "list" &&
+        ![command.botId, command.threadId].every((id) => typeof id === "string" && /^[\w-]{1,128}$/.test(id))
+    )
+        throw new Error("Invalid bot conversation identity");
+    if (
+        command.action === "send" &&
+        (typeof command.text !== "string" ||
+            !command.text.trim() ||
+            command.text.length > 20000 ||
+            typeof command.sendId !== "string" ||
+            !/^[\w-]{16,80}$/.test(command.sendId))
+    )
+        throw new Error("Invalid bot message");
+    if (
+        command.action === "history" &&
+        command.before != null &&
+        (typeof command.before !== "string" || !/^[\w-]{1,128}$/.test(command.before))
+    )
+        throw new Error("Invalid history cursor");
+    const runtime = await openMausBotConnection(sender);
+    const request = async (route: string, body?: Record<string, unknown>) => {
+        const response = await fetch(`${runtime.origin}${route}`, {
+            method: body ? "POST" : "GET",
+            headers: { [OwnerHeader]: ownerToken, "Content-Type": "application/json" },
+            body: body ? JSON.stringify(body) : undefined,
+            signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) throw new Error(`Bot request failed (${response.status})`);
+        return response.json();
+    };
+    const roster = await request("/api/bots?messages=0");
+    const bots: import("../frontend/types/agent-bot").AgentBot[] = roster.bots.map((bot: any) => ({
+        id: bot.id,
+        name: bot.name,
+        threadId: bot.threadId,
+        tasks: (bot.tasks ?? []).map((task: any) => ({
+            threadId: task.threadId,
+            title: task.title,
+            busy: !!task.busy,
+        })),
+    }));
+    if (command.action === "list") return { bots };
+    const bot = bots.find((item) => item.id === command.botId);
+    const task = bot?.tasks.find((item) => item.threadId === command.threadId);
+    if (!bot || (!task && bot.threadId !== command.threadId))
+        throw new Error("This conversation does not belong to that bot");
+    if (command.action === "send") {
+        await request(`/api/bots/${bot.id}/messages`, {
+            threadId: command.threadId,
+            text: command.text,
+            sendId: command.sendId,
+        });
+        return { ok: true };
+    }
+    if (command.action === "interrupt") {
+        await request(`/api/bots/${bot.id}/interrupt`, { threadId: command.threadId });
+        return { ok: true };
+    }
+    const page = await request(
+        `/api/threads/${command.threadId}/messages?limit=200${command.before ? `&before=${command.before}` : ""}`
+    );
+    return {
+        busy: task?.busy ?? false,
+        hasMore: !!page.hasMore,
+        messages: page.messages.map((message: any) => ({
+            id: message.id,
+            role: message.role,
+            kind: message.kind,
+            at: message.at,
+            text: ["text", "widget", "compaction"].includes(message.kind) ? message.text : undefined,
+            tool: message.tool
+                ? {
+                      name: message.tool.name,
+                      summary: message.tool.summary,
+                      output: message.tool.output,
+                      ok: message.tool.ok,
+                  }
+                : undefined,
+            card: message.card
+                ? {
+                      title: message.card.title,
+                      requestId: message.card.requestId,
+                      requestType: message.card.requestType,
+                      answered: !!message.card.answered,
+                      dismissed: !!message.card.dismissed,
+                      expired: !!message.card.expired,
+                  }
+                : undefined,
+        })),
+    };
+}

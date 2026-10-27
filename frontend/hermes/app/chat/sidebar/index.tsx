@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 
 import { PlatformAvatar } from "@hermes/app/messaging/platform-icon";
+import { revealTreePane } from "@hermes/components/pane-shell/tree/store";
 import { Button } from "@hermes/components/ui/button";
 import { Codicon } from "@hermes/components/ui/codicon";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@hermes/components/ui/context-menu";
@@ -328,7 +329,7 @@ export function ChatSidebar({
             navContributions.flatMap((c) => {
                 const data = c.data as Partial<SidebarNavContribution> | undefined;
 
-                if (!data?.path?.startsWith("/") || !data.label) {
+                if (!data?.label || (!data.path?.startsWith("/") && !data.pane)) {
                     return [];
                 }
 
@@ -340,6 +341,7 @@ export function ChatSidebar({
                         label: data.label,
                         icon: (props: { className?: string }) => <Codicon name={codicon} {...props} />,
                         route: data.path,
+                        pane: data.pane,
                     },
                 ];
             }),
@@ -1469,7 +1471,7 @@ export function ChatSidebar({
                     <SidebarGroupContent>
                         <SidebarMenu className="gap-px">
                             {[...SIDEBAR_NAV, ...contributedNav].map((item) => {
-                                const isInteractive = Boolean(item.action) || Boolean(item.route);
+                                const isInteractive = Boolean(item.action) || Boolean(item.route) || Boolean(item.pane);
 
                                 const active =
                                     (item.id === "skills" && currentView === "skills") ||
@@ -1508,6 +1510,10 @@ export function ChatSidebar({
                                                 $newChatProfile.set(null);
                                             }
 
+                                            if (item.pane) {
+                                                revealTreePane(item.pane);
+                                                return;
+                                            }
                                             onNavigate(item);
                                         }}
                                         tooltip={

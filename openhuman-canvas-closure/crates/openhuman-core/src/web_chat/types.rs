@@ -1,0 +1,227 @@
+//! Shared state and RPC parameter types for the web chat turn: the cached
+//! `SessionEntry`/`SessionCacheFingerprint`, in-flight/parallel turn tracking
+//! (`InFlightEntry`, `ParallelEntry`), the turn result (`WebChatTaskResult`),
+//! and the `channel.web_*` request param structs.
+
+use serde::Deserialize;
+use tinyagents_harness::run_queue::QueueLane;
+
+use crate::agent::OpenHumanSessionHost;
+
+/// How a web request arriving during an active turn is handled.
+///
+/// This is a web/orchestration disposition, not queue state. Only the three
+/// variants returned by [`Self::queue_lane`] are ever inserted into TinyAgents'
+/// run queue; interrupt and parallel are resolved by `start_chat` first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum QueueMode {
+    #[default]
+    Interrupt,
+    Steer,
+    Followup,
+    Collect,
+    Parallel,
+}
+
+impl QueueMode {
+    pub(super) fn queue_lane(self) -> Option<QueueLane> {
+        match self {
+            Self::Steer => Some(QueueLane::Steer),
+            Self::Followup => Some(QueueLane::Followup),
+            Self::Collect => Some(QueueLane::Collect),
+            Self::Interrupt | Self::Parallel => None,
+        }
+    }
+}
+
+impl std::fmt::Display for QueueMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Interrupt => "interrupt",
+            Self::Steer => "steer",
+            Self::Followup => "followup",
+            Self::Collect => "collect",
+            Self::Parallel => "parallel",
+        })
+    }
+}
+
+/// All inputs that the cached `SessionEntry`'s `Agent` was built from,
+/// captured at build time. The cache-hit predicate is a single
+/// `entry.fingerprint == current_fingerprint` comparison — pulling the
+/// fields into a named struct (instead of inlining four `&&`s) makes
+/// the predicate testable in isolation and makes "what invalidates the
+/// cache?" answerable in one place.
+///
+/// Adding a new dimension that should force a rebuild = add a field
+/// here and populate it both at insert time and at the call-site
+/// fingerprint construction.
+#[derive(PartialEq, Debug, Clone)]
+pub(crate) struct SessionCacheFingerprint {
+    pub(super) model_override: Option<String>,
+    /// Resolved model selected by the effective configuration, including a
+    /// persisted managed default when no per-turn override was sent.
+    pub(super) effective_model: String,
+    pub(super) temperature: Option<f64>,
+    pub(super) target_agent_id: String,
+    pub(super) provider_binding: String,
+    pub(super) autonomy_signature: String,
+    /// Signature of `config.model_registry`. The cached `Agent` stores a
+    /// build-time `model_vision` bool; toggling a model's "Supports vision" flag
+    /// keeps the same model id (so neither `model_override` nor `provider_binding`
+    /// change) — without this the stale session would be reused. Mirrors
+    /// [`Self::autonomy_signature`].
+    pub(super) model_registry_signature: String,
+    /// The workspace the agent was built against. A cached agent carries its
+    /// workspace's transcripts, memory binding and identity; reusing it after
+    /// the workspace changed (a different user signed in, or another embedded
+    /// agent asked for the same thread id) would hand one owner another's
+    /// conversation.
+    pub(super) workspace_dir: std::path::PathBuf,
+}
+
+pub(super) struct SessionEntry {
+    pub(super) agent: OpenHumanSessionHost,
+    pub(super) fingerprint: SessionCacheFingerprint,
+}
+
+#[derive(Debug)]
+pub(super) struct InFlightEntry {
+    pub(super) request_id: String,
+    /// The client that started the turn, so a teardown that no client asked
+    /// for (a lost profile lease) still resolves that client's stream.
+    pub(super) client_id: String,
+    pub(super) handle: tokio::task::JoinHandle<()>,
+    pub(super) run_queue: std::sync::Arc<
+        tinyagents_harness::run_queue::RunQueue<crate::agent::queued_turn::QueuedTurn>,
+    >,
+    /// Cooperative cancellation for this turn. Cancelling it makes the turn's
+    /// `tokio::select!` arm fire and drops the in-flight turn future (which
+    /// cancels the in-flight LLM request and releases locks at a safe await
+    /// point) — a graceful alternative to the abrupt `handle.abort()`. The
+    /// handle is retained only as a hard backstop if cooperative cancellation
+    /// does not land within a grace period.
+    pub(super) cancel_token: tokio_util::sync::CancellationToken,
+}
+
+/// A concurrent, forked (`QueueMode::Parallel`) turn on a thread. Tracked in a
+/// separate lane keyed by `request_id` so any number can run alongside the
+/// primary in-flight turn without participating in interrupt/steer/queue
+/// semantics. Carries `thread_id` so cancellation-by-thread can find it.
+#[derive(Debug)]
+pub(super) struct ParallelEntry {
+    pub(super) thread_id: String,
+    /// The client that started the turn (see [`InFlightEntry::client_id`]).
+    pub(super) client_id: String,
+    pub(super) handle: tokio::task::JoinHandle<()>,
+    pub(super) cancel_token: tokio_util::sync::CancellationToken,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct WebChatTaskResult {
+    pub(super) full_response: String,
+    pub(super) citations: Vec<crate::web_chat::TurnCitation>,
+    /// Holistic token/cost/context totals for the turn (parent + sub-agents),
+    /// forwarded to the frontend on `chat_done`. `None` for synthetic results
+    /// (e.g. budget-exhausted placeholders) that never ran a real turn.
+    pub(super) usage: Option<crate::agent::tinyagents::host::LastTurnUsage>,
+    /// The workspace this turn actually ran in, carried to delivery so the
+    /// reply is stored there before it is announced (#6034).
+    ///
+    /// Taken from the config the turn resolved rather than re-read at delivery
+    /// time: a sign-out or account switch moves `workspace_dir`, and a reply
+    /// re-resolved afterwards would be filed under whoever is signed in when
+    /// the turn happens to finish.
+    pub(super) workspace_dir: std::path::PathBuf,
+    /// The bridge's `TurnTiming` snapshot (first-token/first-tool/total ms),
+    /// read from `ProgressBridgeHandle::timing_snapshot()` after
+    /// `wait_drained` — i.e. after the bridge has seen `TurnCompleted`.
+    /// `None` for a synthetic result (budget-exhausted placeholder) that
+    /// never ran a bridge, or a turn that errored before completing a round.
+    pub(super) timing: Option<super::turn_timing::TurnTimingSnapshot>,
+}
+
+/// Per-request metadata carried alongside a chat send. Currently used by the
+/// PTT flow (Task 4 wires it to `voice::reply_speech`); other voice surfaces
+/// can populate it the same way.
+#[derive(Debug, Default, Clone)]
+pub struct ChatRequestMetadata {
+    pub speak_reply: Option<bool>,
+    pub source: Option<String>,
+    pub session_id: Option<u64>,
+    /// Resolved agent definition id driving this turn (e.g. `"orchestrator"`,
+    /// a task executor's agent). Stamped by the run entrypoint once the agent
+    /// is resolved — used purely for trace attribution (Langfuse `agent.id` /
+    /// `agent.turn:<id>` trace name), never for routing.
+    pub agent_id: Option<String>,
+    /// Do not stream the orchestrator's answer text (`text_delta`) to the
+    /// client; the reply arrives whole in `chat_done`. Set for threads whose
+    /// final reply is post-processed (TinyMemes treatment arm), so the user
+    /// never sees the original stream in and then get replaced. Interim
+    /// narration before tool calls is still flushed as `chat_interim`.
+    pub hold_text_stream: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WebChatParams {
+    pub(super) client_id: String,
+    pub(super) thread_id: String,
+    pub(super) message: String,
+    pub(super) model_override: Option<String>,
+    pub(super) temperature: Option<f64>,
+    /// BCP-47 locale of the frontend UI (e.g. `ar`, `zh-CN`). When set
+    /// and not English, the system prompt is augmented to ask the
+    /// agent to reply in that language. `None` keeps the agent's
+    /// default language (English) so existing integrations don't
+    /// silently change behaviour.
+    pub(super) locale: Option<String>,
+    /// When `true`, the agent's final reply should be spoken via TTS
+    /// (for PTT and similar background voice flows). Accepted and
+    /// stored here; wired to TTS in Task 4.
+    #[serde(default)]
+    pub(super) speak_reply: Option<bool>,
+    /// Origin of the message: `"ptt"` | `"dictation"` | `"type"` | other.
+    /// Used for analytics and downstream metadata.
+    #[serde(default)]
+    pub(super) source: Option<String>,
+    /// Optional caller-provided correlation id (PTT session id).
+    #[serde(default)]
+    pub(super) session_id: Option<u64>,
+    /// Queue mode for concurrent messages: `interrupt` (default), `steer`,
+    /// `followup`, or `collect`.
+    #[serde(default)]
+    pub(super) queue_mode: Option<String>,
+    /// Optional `"plan"` | `"build"` — lets the caller start this turn with
+    /// the thread already in the requested run mode, mirroring the socket
+    /// `chat:start` payload's `run_mode` field. Unrecognized values are
+    /// ignored (logged), not rejected.
+    #[serde(default)]
+    pub(super) run_mode: Option<String>,
+    /// Optional reasoning effort for this thread (`inference::reasoning`).
+    /// Omitted leaves the thread's prior choice; `"default"` clears it.
+    #[serde(default)]
+    pub(super) reasoning_effort: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct WebQueueParams {
+    pub(super) thread_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct WebQueueRemoveParams {
+    pub(super) client_id: String,
+    pub(super) thread_id: String,
+    pub(super) item_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct WebCancelParams {
+    pub(super) client_id: String,
+    pub(super) thread_id: String,
+    /// The `request_id` this cancel targets. When present, the cancel is scoped
+    /// to that exact turn, so a stale cancel for a superseded request can't kill
+    /// the newer turn on the thread (#4760). Absent = stop whatever is running.
+    #[serde(default)]
+    pub(super) request_id: Option<String>,
+}

@@ -1,4 +1,4 @@
-import { openBotDesktop, openMausBotConnection } from "./openmausbot-runtime";
+import { agentBotCommand, openBotDesktop, openMausBotConnection } from "./openmausbot-runtime";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -347,13 +347,18 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
+    electron.ipcMain.handle("agent-bot-command", (event, command) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
+            throw new Error("Unknown bot chat renderer");
+        return agentBotCommand(event.sender, command);
+    });
     electron.ipcMain.handle("open-bot-desktop", (event, botId: string) => {
-        if (!getWaveTabViewByWebContentsId(event.sender.id) || typeof botId !== "string")
+        if ((!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id)) || typeof botId !== "string")
             throw new Error("Invalid bot desktop caller");
         return openBotDesktop(event.sender, botId);
     });
     electron.ipcMain.handle("open-agent-workspace", (event) => {
-        if (!getWaveTabViewByWebContentsId(event.sender.id)) throw new Error("Unknown workspace renderer");
+        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id)) throw new Error("Unknown workspace renderer");
         return openMausBotConnection(event.sender);
     });
     registerMacVmIpc();

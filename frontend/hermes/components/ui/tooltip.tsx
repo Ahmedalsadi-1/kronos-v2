@@ -105,6 +105,7 @@ function TooltipContent({
         // chrome underneath (titlebar tools, adjacent tabs, etc.).
         className={cn('pointer-events-none z-(--z-over-modal) w-fit max-w-64 select-none', className)}
         data-slot="tooltip-content"
+        data-hermes-portal=""
         sideOffset={sideOffset}
         {...props}
       >

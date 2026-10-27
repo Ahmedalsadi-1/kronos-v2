@@ -115,6 +115,8 @@ const remoteGit: GitBridge = {
     scanRepos: async () => [],
 };
 
+export { remoteGit as gatewayGit };
+
 export function desktopGit(): GitBridge | undefined {
     if (typeof window === "undefined") {
         return undefined;

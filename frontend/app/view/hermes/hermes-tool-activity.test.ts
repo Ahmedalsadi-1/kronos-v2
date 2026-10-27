@@ -30,7 +30,12 @@ describe("hermesToolActivityToAgentActivity", () => {
             name: "read_file",
             args: { path: "src/app.ts" },
         });
-        expect(event).toMatchObject({ surface: "file", action: "inspect", detail: "read file · src/app.ts" });
+        expect(event).toMatchObject({
+            surface: "file",
+            action: "inspect",
+            detail: "read file · src/app.ts",
+            filepath: "src/app.ts",
+        });
     });
 
     it("skips tools the KronTerm runtime already publishes precisely", () => {

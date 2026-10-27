@@ -876,6 +876,13 @@ export class WshBridge {
         return this.run(["-b", this.blockRef(blockId), "widget", "press", ...keys]);
     }
 
+    async widgetScroll(blockId: string, amount: number, originX?: number, originY?: number): Promise<string> {
+        const args = ["-b", this.blockRef(blockId), "widget", "scroll", "--amount", String(amount)];
+        if (originX != null) args.push("--origin-x", String(originX));
+        if (originY != null) args.push("--origin-y", String(originY));
+        return this.run(args);
+    }
+
     async widgetScrollTo(blockId: string, elementRef?: string, x?: number, y?: number): Promise<string> {
         const args = ["-b", this.blockRef(blockId), "widget", "scroll-to"];
         if (elementRef) args.push("--element-ref", this.normalizeElementRef(elementRef));

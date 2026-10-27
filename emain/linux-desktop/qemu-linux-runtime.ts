@@ -4,6 +4,7 @@
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "../../frontend/types/linux-desktops";
+import { normalizeToolResult, ToolOperationContext } from "../../mcp-kron-term/src/tool-execution";
 import { runLinuxDesktopCommand } from "./command-runner";
 import { linuxVmQemuArgs, makeLinuxVmCloudInit, makeLinuxVmMetadata } from "./qemu-provision";
 import { DATA_DIR } from "./upstream/openmaus/kronterm-adapter";
@@ -51,7 +52,9 @@ export class QemuLinuxDesktopRuntime {
                 expectedGeneration: this.generation,
                 assignedAgentId: this.assignedAgentId,
             };
-            void this.queued(action, this.owner === "agent").catch(() => this.scheduleIdle());
+            ToolOperationContext.exit(() => {
+                void this.queued(action, this.owner === "agent").catch(() => this.scheduleIdle());
+            });
         }, ms);
         this.idleTimer.unref?.();
     }
@@ -207,6 +210,7 @@ export class QemuLinuxDesktopRuntime {
         return (await this.list())[0];
     }
     private check(action: LinuxDesktopAction, agent: boolean) {
+        ToolOperationContext.getStore()?.signal.throwIfAborted();
         this.id(action.desktopId);
         if (!Actions.has(action.action)) throw new Error("Unsupported Linux VM action.");
         if (
@@ -231,7 +235,9 @@ export class QemuLinuxDesktopRuntime {
         return this.queued(action, false);
     }
     private queued(action: LinuxDesktopAction, agent: boolean): Promise<LinuxDesktopActionResult> {
+        action = structuredClone(action);
         this.check(action, agent);
+        if (action.action !== "screenshot") this.screenshotPromise = undefined;
         if (action.action === "screenshot" && this.screenshotPromise) {
             return this.screenshotPromise.then((result) => {
                 this.check(action, agent);
@@ -410,13 +416,29 @@ export class QemuLinuxDesktopRuntime {
                         if (typeof action.key !== "string" || !action.key.trim() || action.key.length > 80)
                             throw new Error("Invalid key.");
                         tool = "press_key";
+                        const aliases = {
+                            control: "ctrl",
+                            command: "super",
+                            cmd: "super",
+                            meta: "super",
+                            option: "alt",
+                        };
                         const parts = action.key.split("+");
                         const modifiers: string[] = [];
-                        while (parts.length > 1 && ["ctrl", "alt", "shift", "super"].includes(parts[0].toLowerCase())) {
-                            modifiers.push(parts.shift().toLowerCase());
+                        while (parts.length > 1) {
+                            const part = parts[0].toLowerCase();
+                            const modifier = aliases[part] ?? part;
+                            if (!["ctrl", "alt", "shift", "super"].includes(modifier)) break;
+                            modifiers.push(modifier);
+                            parts.shift();
                         }
+                        if (!parts.join("+").trim()) throw new Error("Invalid shortcut key.");
                         params = { scope: "desktop", delivery_mode: "foreground", key: parts.join("+"), modifiers };
                     } else {
+                        if (
+                            ![action.x ?? 512, action.y ?? 320].every((v) => Number.isFinite(v) && v >= 0 && v <= 16384)
+                        )
+                            throw new Error("Invalid scroll coordinates.");
                         const dx = action.deltaX ?? 0;
                         const dy = action.deltaY ?? 0;
                         if (![dx, dy].every((value) => Number.isFinite(value) && Math.abs(value) <= 10_000))
@@ -439,16 +461,19 @@ export class QemuLinuxDesktopRuntime {
                 }
                 this.check(action, agent);
                 const { stdout } = await this.ssh(command, 80_000);
+                this.check(action, agent);
                 if (action.action !== "exec") {
-                    let result: { code?: string; isError?: boolean; error?: unknown };
+                    let result: { code?: string; isError?: boolean; error?: unknown; message?: string };
                     try {
                         result = JSON.parse(stdout);
                     } catch {
                         throw new Error("Guest driver returned an invalid input response.");
                     }
-                    if (result.code || result.isError || result.error)
+                    if (!result || typeof result !== "object")
+                        throw new Error("Guest driver returned an invalid input response.");
+                    if (result.code || normalizeToolResult(result).isError)
                         throw new Error(
-                            `Guest input failed: ${result.code || JSON.stringify(result.error) || "driver rejected action"}`
+                            `Guest input failed: ${result.code || result.message || JSON.stringify(result.error) || "driver rejected action"}`
                         );
                 }
                 return { desktop, output: stdout.slice(0, 20_000) };

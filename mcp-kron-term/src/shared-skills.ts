@@ -122,6 +122,11 @@ export class SharedSkillCatalog {
                 }
             }
         }
-        return records.sort((left, right) => left.id.localeCompare(right.id));
+        // Preserve the same first-root precedence for discovery and exact-ID reads.
+        const unique = new Map<string, SharedSkillRecord>();
+        for (const record of records) {
+            if (!unique.has(record.id)) unique.set(record.id, record);
+        }
+        return [...unique.values()].sort((left, right) => left.id.localeCompare(right.id));
     }
 }

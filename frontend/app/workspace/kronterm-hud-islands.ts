@@ -11,7 +11,18 @@ import { getApi } from "@/store/global";
 import { kronTermHudController } from "./kronterm-hud-controller";
 
 export type KronTermHudApp =
-    "machines" | "files" | "terminal" | "web" | "widget" | "editor" | "diff" | "sandbox" | "apps" | "appstream";
+    | "machines"
+    | "files"
+    | "terminal"
+    | "web"
+    | "widget"
+    | "editor"
+    | "diff"
+    | "sandbox"
+    | "apps"
+    | "appstream"
+    | "workflowcanvas"
+    | "bots";
 export type HudLaunchOptions = {
     machineKind?: "desktop" | "android" | "iphone";
     machineSettings?: boolean;
@@ -27,6 +38,12 @@ export type HudLaunchOptions = {
 };
 
 const HudAppDefinitions: Record<KronTermHudApp, { meta: MetaType; title: string; view: string }> = {
+    workflowcanvas: {
+        meta: { view: "plugin:kronterm.openhuman-workflow/canvas" },
+        title: "Workflow Canvas",
+        view: "plugin:kronterm.openhuman-workflow/canvas",
+    },
+    bots: { meta: { view: "bots" }, title: "Bots", view: "bots" },
     machines: { meta: { view: "linux-vms" }, title: "Devices", view: "linux-vms" },
     apps: { meta: { view: "installedapps" }, title: "Streamed apps", view: "installedapps" },
     appstream: { meta: { view: "appstream" }, title: "App stream", view: "appstream" },
@@ -61,6 +78,7 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
         ...(app === "appstream" ? { "appstream:appid": options.appId, "appstream:appname": options.appName } : {}),
         ...(options.url && app === "web" ? { url: options.url } : {}),
         ...(options.file ? { file: options.file } : {}),
+        ...(options.file && app === "files" ? { edit: true } : {}),
         ...(options.connection ? { connection: options.connection } : {}),
         ...(app === "diff" ? { "aifilediff:chatid": options.chatId, "aifilediff:toolcallid": options.toolCallId } : {}),
     };
@@ -77,6 +95,14 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
                     ] === options.appId)
         );
     if (existing && !options.forceNew) {
+        if (options.file && definition.view === "preview") {
+            const preview = existing as typeof existing & {
+                goHistory: (file: string) => Promise<void>;
+                setEditMode: (edit: boolean) => Promise<void>;
+            };
+            await preview.goHistory(options.file);
+            await preview.setEditMode(true);
+        }
         if (app === "machines" || app === "sandbox") {
             await RpcApi.SetMetaCommand(TabRpcClient, {
                 oref: WOS.makeORef("block", existing.blockId),
@@ -94,6 +120,12 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
         const block = (await ObjectService.GetObject(`block:${candidate}`)) as Block;
         if (block?.meta?.view !== definition.view) continue;
         if (app === "appstream" && block.meta["appstream:appid"] !== options.appId) continue;
+        if (options.file && definition.view === "preview") {
+            await RpcApi.SetMetaCommand(TabRpcClient, {
+                oref: WOS.makeORef("block", candidate),
+                meta: { file: options.file, edit: true } as MetaType,
+            });
+        }
         if (app === "machines" || app === "sandbox") {
             await RpcApi.SetMetaCommand(TabRpcClient, {
                 oref: WOS.makeORef("block", candidate),

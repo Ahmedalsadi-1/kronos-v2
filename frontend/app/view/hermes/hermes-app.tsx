@@ -36,6 +36,7 @@ export interface HermesAppProps {
     hudMode?: boolean;
     panelMode?: boolean;
     webMode?: boolean;
+    dockedChat?: boolean;
 }
 
 export function HermesApp({
@@ -44,6 +45,7 @@ export function HermesApp({
     hudMode = false,
     panelMode = false,
     webMode = false,
+    dockedChat = false,
 }: HermesAppProps) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(HermesMaximumScale);
@@ -115,12 +117,12 @@ export function HermesApp({
 
     useLayoutEffect(() => {
         markKronTermHudHost(hudMode);
-        setEmbeddedHudMode(hudMode);
+        setEmbeddedHudMode(hudMode && !dockedChat);
         return () => {
             markKronTermHudHost(false);
             setEmbeddedHudMode(false);
         };
-    }, [hudMode]);
+    }, [hudMode, dockedChat]);
 
     useEffect(() => {
         setTerminalTakeover(false);
@@ -209,6 +211,7 @@ export function HermesApp({
                                         <HermesShellModeProvider
                                             hostMode={hostMode}
                                             hudMode={hudMode}
+                                            dockedChat={dockedChat}
                                             panelMode={panelMode}
                                             webMode={webMode}
                                         >

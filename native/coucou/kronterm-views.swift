@@ -52,7 +52,8 @@ struct KronTermMediaIndicator: View {
 struct KronTermLaunchers: View {
     @ObservedObject private var bridge = KronTermBridge.shared
     private let items = [("globe", "web", "Browser"), ("folder.fill", "files", "Files"),
-        ("terminal", "terminal", "Terminal"), ("desktopcomputer", "machines", "Sandbox"),
+        ("point.3.connected.trianglepath.dotted", "workflowcanvas", "Workflows"),
+        ("person.2", "bots", "Bots"), ("terminal", "terminal", "Terminal"), ("desktopcomputer", "machines", "Sandbox"),
         ("display", "apps", "Streamed apps"), ("square.grid.2x2", "widget", "Widget"),
         ("rectangle.portrait.and.arrow.right", "exit", "Exit HUD")]
     var body: some View {

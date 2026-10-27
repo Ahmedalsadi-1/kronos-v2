@@ -19,6 +19,8 @@ Build predictable agent behavior with explicit state, bounded authority, durable
 
 ## Boundaries
 
+Current KronTerm tools are discovered with `tool_search`; shared workflow guidance is discovered with `shared_skill_list` and read with `shared_skill_read`. Load `kronterm-tool-workflows` for cross-surface tasks. Keep harness recommendations aligned with `mcp-kron-term/src/tool-families.ts` and the scoped live manifest. Distinguish registration, advertisement, execution authority and runtime readiness. A tool-group recommendation never expands permissions.
+
 - `agents/kronoscode/`: packaged ACP boundary
 - `emain/acp/`: protocol and agent management
 - `emain/kronoscode-runtime.ts`: managed process lifecycle

@@ -31,7 +31,7 @@ describe("native surface source selection", () => {
         ).toBeUndefined();
     });
 
-    test("falls back only when exactly one non-KronTerm window exists", () => {
+    test("never captures an unrelated window even when it is the only candidate", () => {
         expect(
             selectNativeSurfaceSource(
                 [
@@ -40,7 +40,7 @@ describe("native surface source selection", () => {
                 ],
                 "Unknown App"
             )?.id
-        ).toBe("finder-1");
+        ).toBeUndefined();
         expect(selectNativeSurfaceSource(Sources, "Unknown App")).toBeUndefined();
     });
 });

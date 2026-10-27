@@ -4,7 +4,7 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    background: var(--ui-bg, #0d0d0d);
+    background: var(--os-frame-color, var(--color-black, #000));
     color: var(--ui-text-primary);
 }
 .kronterm-inspector-resize {
@@ -13,8 +13,7 @@
     left: 0;
     bottom: 0;
     z-index: 5;
-    width: 8px;
-    margin-left: -4px;
+    width: 10px;
     cursor: col-resize;
     touch-action: none;
 }
@@ -30,7 +29,7 @@
     height: 48px;
     flex-shrink: 0;
     padding: 3px 6px 3px 8px;
-    background: #292929;
+    background: var(--os-frame-color, var(--color-black, #000));
     border-bottom: 1px solid var(--ui-stroke-secondary);
 }
 .kronterm-inspector-tabs {
@@ -40,6 +39,7 @@
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
+    background: var(--color-black, #000);
 }
 .kronterm-inspector .kronterm-inspector-tab {
     display: flex;
@@ -104,6 +104,10 @@
     min-height: 0;
     flex: 1;
     overflow: hidden;
+    background: var(--ui-bg, #0d0d0d);
+}
+.kronterm-inspector .kronterm-inspector-pane {
+    border-radius: 0 !important;
 }
 .kronterm-inspector-pane[hidden] {
     display: none;
@@ -112,7 +116,12 @@
 .kronterm-inspector.is-compact .kronterm-inspector-resize {
     display: none;
 }
+.os-files-inspector .kronterm-inspector.is-compact {
+    height: auto;
+    background: transparent;
+}
 .kronterm-inspector.is-compact .kronterm-inspector-tabbar {
+    position: relative;
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
@@ -120,7 +129,20 @@
     padding: 6px 4px;
     gap: 4px;
     border-bottom: 0;
-    border-right: 1px solid var(--ui-stroke-secondary);
+    border-right: 0;
+}
+.os-files-inspector .kronterm-inspector.is-compact .kronterm-inspector-tabbar::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: var(--os-inspector-compact-width, 56px);
+    height: var(--os-inspector-compact-width, 56px);
+    background: var(--os-frame-color, #000);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0H100V100C100 50 0 50 0 0Z'/%3E%3C/svg%3E");
+    mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+    pointer-events: none;
 }
 .kronterm-inspector.is-compact .kronterm-inspector-tabs {
     flex-direction: column;

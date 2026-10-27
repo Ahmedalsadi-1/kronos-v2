@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { detectInstalledAgents, spawnAcpAgent } from "./acp-connector";
+import { detectInstalledAgents, detectOpenCodeCli, spawnAcpAgent } from "./acp-connector";
 
 const mocks = vi.hoisted(() => ({ execFile: vi.fn(), spawn: vi.fn() }));
 vi.mock("child_process", () => ({ execFile: mocks.execFile, spawn: mocks.spawn }));
@@ -42,6 +44,44 @@ describe("ACP agent discovery", () => {
         expect((await detectInstalledAgents())[0].available).toBe(false);
         mocks.execFile.mockImplementation((_command, args, _options, callback) => callback(null, `/bin/${args[0]}\n`));
         expect((await detectInstalledAgents())[0].available).toBe(true);
+    });
+});
+
+describe("OpenCode executable discovery", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.unstubAllEnvs();
+    });
+
+    it("prefers the native user installation over an unrelated PATH wrapper", async () => {
+        const native = path.join(
+            os.homedir(),
+            ".opencode",
+            "bin",
+            process.platform === "win32" ? "opencode.exe" : "opencode"
+        );
+        vi.spyOn(fs, "accessSync").mockImplementation((value) => {
+            if (String(value) !== native) throw new Error("missing");
+        });
+        mocks.execFile.mockClear();
+        expect(await detectOpenCodeCli()).toBe(native);
+        expect(mocks.execFile).not.toHaveBeenCalled();
+    });
+
+    it("honors an executable override before the native installation", async () => {
+        vi.stubEnv("KRONTERM_OPENCODE_BIN", "/custom/opencode");
+        vi.spyOn(fs, "accessSync").mockImplementation(() => {});
+        expect(await detectOpenCodeCli()).toBe("/custom/opencode");
+    });
+
+    it("falls back to PATH when no native executable exists", async () => {
+        vi.spyOn(fs, "accessSync").mockImplementation(() => {
+            throw new Error("missing");
+        });
+        mocks.execFile.mockImplementation((_command, _args, _options, callback) =>
+            callback(null, "/installed/opencode\n")
+        );
+        expect(await detectOpenCodeCli()).toBe("/installed/opencode");
     });
 });
 

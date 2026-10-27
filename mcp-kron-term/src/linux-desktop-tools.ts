@@ -1,3 +1,4 @@
+import { toolTimeoutMs } from "./tool-execution.js";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -117,7 +118,7 @@ async function callLinuxDesktopTool(
         const response = await fetch(url, {
             method: "POST",
             redirect: "error",
-            signal: AbortSignal.timeout(name === "sandbox_task_start" ? 185_000 : 45_000),
+            signal: AbortSignal.timeout(toolTimeoutMs(name, args, action == null || action === "screenshot") + 5000),
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify({ method: "call", name, arguments: args }),
         });

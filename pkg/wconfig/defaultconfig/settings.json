@@ -8,7 +8,7 @@
     "app:layoutmode": "os",
     "app:notchhotkey": "Ctrl:Alt:Space",
     "feature:systemlayer": true,
-    "feature:nativesurfacev2": false,
+    "feature:nativesurfacev2": true,
     "feature:ambientos": false,
     "app:quickcomposer": false,
     "app:confirmquit": true,

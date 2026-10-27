@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { useI18n } from '@hermes/i18n'
-import { modelOptionsQueryKey, requestModelOptions } from '@hermes/lib/model-options'
+import { modelOptionsQueryKey, requestModelOptions, useAgentEngine } from '@hermes/lib/model-options'
 import { modelSearchText } from '@hermes/lib/model-search-text'
 import { currentPickerSelection } from '@hermes/lib/model-status-label'
 import { normalize } from '@hermes/lib/text'
@@ -48,6 +48,7 @@ export function ModelPickerDialog({
   profile = 'default',
   contentClassName
 }: ModelPickerDialogProps) {
+  useAgentEngine()
   const { t } = useI18n()
   const copy = t.modelPicker
   // Own the search term so we can filter manually. cmdk's built-in

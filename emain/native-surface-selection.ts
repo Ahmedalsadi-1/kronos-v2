@@ -20,11 +20,8 @@ export function selectNativeSurfaceSource<T extends NativeSurfaceSource>(sources
     if (exact != null) return exact;
     const matching = sources.filter((source) => {
         const sourceName = normalizedNativeSurfaceName(source.name);
-        return sourceName.includes(requestedName) || requestedName.includes(sourceName);
+        return sourceName.length > 0 && sourceName.includes(requestedName);
     });
     if (matching.length === 1) return matching[0];
-    const nonKronTermSources = sources.filter(
-        (source) => !normalizedNativeSurfaceName(source.name).includes("kronterm")
-    );
-    return nonKronTermSources.length === 1 ? nonKronTermSources[0] : undefined;
+    return undefined;
 }

@@ -1,11 +1,4 @@
-export type AgentActivitySource =
-    | "acp"
-    | "hermes"
-    | "kronoscode-tui"
-    | "wave"
-    | "mcp"
-    | "plugin"
-    | "surface-runtime";
+export type AgentActivitySource = "acp" | "hermes" | "kronoscode-tui" | "wave" | "mcp" | "plugin" | "surface-runtime";
 
 export type AgentActivityPhase =
     | "queued"
@@ -57,6 +50,7 @@ export type AgentActivityEvent = {
     source: AgentActivitySource;
     phase: AgentActivityPhase | LegacyAgentActivityPhase;
     blockid?: string;
+    filepath?: string;
     surface: AgentActivitySurface;
     action: AgentActivityAction;
     capabilityid?: string;
@@ -126,6 +120,9 @@ export function createAgentActivityTimeline(maxEntries = 120) {
             }
             entriesByRun.set(runid, entries);
             return entry;
+        },
+        getAll(): TimedAgentActivityEvent[] {
+            return [...entriesByRun.values()].flat().sort((a, b) => a.timestamp - b.timestamp);
         },
         get(runid = "default"): TimedAgentActivityEvent[] {
             return [...(entriesByRun.get(runid) ?? [])];

@@ -1424,9 +1424,10 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
         data-hermes-command-palette=""
         className={cn(
           HUD_POSITION,
+          'top-[329px]',
           HUD_SURFACE,
           'hermes-glass-menu',
-          'z-(--z-over-modal-content) w-[min(34rem,calc(100vw-2rem))] overflow-hidden duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95'
+          'z-(--z-over-modal-content) w-[323px] overflow-hidden duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95'
         )}
         // The close animation finishing is what retires this whole subtree —
         // the CSS owns the duration, not a hardcoded timer. Guarded on the
@@ -1479,7 +1480,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             right={page === 'pets' ? <PetInlineToggle /> : undefined}
             value={search}
           />
-          <CommandList className="dt-portal-scrollbar max-h-[176px] border-white bg-black text-[#a3a3a3]">
+          <CommandList className="dt-portal-scrollbar max-h-[404px] text-[84px] border-white bg-black text-[#a3a3a3]">
             {/* Server-driven pages render their own list; the rest show groups. */}
             {page === 'pets' ? (
               <PetPalettePage

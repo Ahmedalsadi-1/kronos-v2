@@ -1,8 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useRef } from "react";
-import { MochiBotEngine, type BotState, type BotEmote, type EyeShape } from "./bot-engine";
+import { useEffect, useRef, useState } from "react";
+import { MochiBotEngine, type BotEmote, type BotState } from "./bot-engine";
 
 export interface MochiCanvasProps {
     state?: BotState;
@@ -14,6 +14,8 @@ export interface MochiCanvasProps {
     className?: string;
     width?: number;
     height?: number;
+    appearance?: "coucou" | "kronterm";
+    animated?: boolean;
 }
 
 export function MochiCanvas({
@@ -26,12 +28,25 @@ export function MochiCanvas({
     className,
     width = 230,
     height = 230,
+    appearance = "coucou",
+    animated = true,
 }: MochiCanvasProps) {
+    const [reducedMotion, setReducedMotion] = useState(
+        () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+    );
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<MochiBotEngine | null>(null);
     const lookRef = useRef({ x: lookX, y: lookY });
     lookRef.current = { x: lookX, y: lookY };
     const rafRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const preference = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+        if (!preference) return;
+        const update = () => setReducedMotion(preference.matches);
+        preference.addEventListener("change", update);
+        return () => preference.removeEventListener("change", update);
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -47,6 +62,7 @@ export function MochiCanvas({
 
         const engine = new MochiBotEngine();
         engine.isMini = mini;
+        engine.catEars = appearance === "kronterm";
         if (bodyColor) {
             const hex = bodyColor.replace("#", "");
             const n = parseInt(hex, 16);
@@ -56,6 +72,14 @@ export function MochiCanvas({
         engine.lookY = lookY;
         engine.setState(state, true);
         engineRef.current = engine;
+
+        if (!animated || reducedMotion) {
+            engine.update(0.016);
+            engine.draw(ctx, width, height);
+            return () => {
+                engineRef.current = null;
+            };
+        }
 
         const loop = () => {
             const now = performance.now();
@@ -73,7 +97,7 @@ export function MochiCanvas({
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             engineRef.current = null;
         };
-    }, [mini, bodyColor, width, height]);
+    }, [mini, bodyColor, width, height, appearance, animated, reducedMotion, state]);
 
     useEffect(() => {
         if (engineRef.current) {
@@ -87,12 +111,5 @@ export function MochiCanvas({
         }
     }, [emote]);
 
-    return (
-        <canvas
-            ref={canvasRef}
-            className={className}
-            style={{ width, height }}
-            aria-hidden="true"
-        />
-    );
+    return <canvas ref={canvasRef} className={className} style={{ width, height }} aria-hidden="true" />;
 }

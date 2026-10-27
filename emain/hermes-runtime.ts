@@ -1,12 +1,13 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
+import { ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { resolveAgentWsh } from "./agent-runtime-paths";
 import { installHermesWorkflowPack } from "./hermes-workflow-packs";
 import { getKronosCodeBinaryCandidates, KronosCodeRuntime, withKronosCodeAttachArgs } from "./kronoscode-runtime";
@@ -20,6 +21,8 @@ const RestartDelaysMs = [1_000, 3_000, 10_000];
 const StableRuntimeMs = 60_000;
 const ApiTimeoutMs = 15_000;
 const SurfaceRefreshLeadMs = 10 * 60 * 1000;
+const ExecFile = promisify(execFile);
+const PluginPreparations = new Map<string, Promise<string>>();
 
 type KronTermSkillRootOptions = {
     cwd?: string;
@@ -102,7 +105,29 @@ export function parseHermesReadyPort(output: string): number | undefined {
     return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : undefined;
 }
 
-function resolveHermesBinary(): string {
+async function resolveManagedHermesLauncher(binary: string): Promise<string> {
+    const python = ["python", "python3", "python.exe"]
+        .map((name) => path.join(path.dirname(binary), name))
+        .find(existingExecutable);
+    if (!python) return binary;
+    const probe = await ExecFile(
+        python,
+        [
+            "-c",
+            'import hermes_cli.main; from pm.environments import project_python; from pm.paths import repo_root; print(project_python(repo_root()).parent / "hermes")',
+        ],
+        {
+            encoding: "utf8",
+            timeout: 15_000,
+            windowsHide: true,
+            env: { ...process.env, HERMES_DISABLE_LAZY_INSTALLS: "1" },
+        }
+    ).catch(() => null);
+    const candidate = probe?.stdout.trim().split(/\r?\n/).slice(-1)[0];
+    return existingExecutable(candidate) ?? binary;
+}
+
+async function resolveHermesBinary(): Promise<string> {
     const homeDir = os.homedir();
     const executable = process.platform === "win32" ? "hermes.exe" : "hermes";
     const candidates = [
@@ -124,18 +149,19 @@ function resolveHermesBinary(): string {
     for (const candidate of candidates) {
         const resolved = existingExecutable(candidate);
         if (resolved) {
-            return resolved;
+            return resolveManagedHermesLauncher(resolved);
         }
     }
 
-    const lookup = spawnSync(process.platform === "win32" ? "where" : "which", [executable], {
+    const lookup = await ExecFile(process.platform === "win32" ? "where" : "which", [executable], {
         encoding: "utf8",
         windowsHide: true,
-    });
-    const fromPath = lookup.status === 0 ? lookup.stdout.trim().split(/\r?\n/, 1)[0] : undefined;
+        timeout: 5_000,
+    }).catch(() => null);
+    const fromPath = lookup?.stdout.trim().split(/\r?\n/, 1)[0];
     const resolved = existingExecutable(fromPath);
     if (resolved) {
-        return resolved;
+        return resolveManagedHermesLauncher(resolved);
     }
 
     throw new Error(
@@ -158,14 +184,37 @@ function makeHermesPath(binary: string, toolEnvironment?: Record<string, string>
     return Array.from(new Set(entries)).join(path.delimiter);
 }
 
-export function prepareHermesBundledPlugins(binary: string, target: string, adapterSource: string): string {
+export function prepareHermesBundledPlugins(
+    binary: string,
+    target: string,
+    adapterSource: string,
+    assertCurrent: () => void = () => {}
+): Promise<string> {
+    const key = path.resolve(target);
+    const previous = PluginPreparations.get(key) ?? Promise.resolve();
+    const preparation = previous
+        .catch(() => undefined)
+        .then(() => stageHermesBundledPlugins(binary, key, adapterSource, assertCurrent));
+    PluginPreparations.set(key, preparation);
+    return preparation.finally(() => {
+        if (PluginPreparations.get(key) === preparation) PluginPreparations.delete(key);
+    });
+}
+
+async function stageHermesBundledPlugins(
+    binary: string,
+    target: string,
+    adapterSource: string,
+    assertCurrent: () => void
+): Promise<string> {
+    assertCurrent();
     let bundledRoot = process.env.HERMES_BUNDLED_PLUGINS;
     if (!bundledRoot) {
         const python = ["python", "python3", "python.exe"]
             .map((name) => path.join(path.dirname(binary), name))
             .find(existingExecutable);
         if (python) {
-            const probe = spawnSync(
+            const probe = await ExecFile(
                 python,
                 [
                     "-c",
@@ -176,31 +225,63 @@ export function prepareHermesBundledPlugins(binary: string, target: string, adap
                     timeout: 5_000,
                     windowsHide: true,
                 }
-            );
-            if (probe.status === 0) {
+            ).catch(() => null);
+            if (probe) {
                 bundledRoot = probe.stdout.trim();
             }
         }
     }
-    fs.mkdirSync(target, { recursive: true, mode: 0o700 });
-    // Hermes scans its bundled plugin root, not the managed configuration directory.
-    if (bundledRoot && fs.existsSync(bundledRoot)) {
-        for (const name of fs.readdirSync(bundledRoot)) {
-            if (name === "kronterm-tools") {
-                continue;
-            }
-            const destination = path.join(target, name);
-            const source = path.resolve(bundledRoot, name);
-            fs.rmSync(destination, { recursive: true, force: true });
-            if (fs.statSync(source).isDirectory()) {
-                fs.symlinkSync(source, destination, "junction");
-            } else {
-                fs.copyFileSync(source, destination);
+    assertCurrent();
+    await fs.promises.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
+    const staging = await fs.promises.mkdtemp(path.join(path.dirname(target), ".plugins-"));
+    const backup = `${staging}.previous`;
+    let hasBackup = false;
+    let published = false;
+    let completed = false;
+    try {
+        const existing = await fs.promises.lstat(target).catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== "ENOENT") throw error;
+            return null;
+        });
+        if (existing) {
+            await fs.promises.cp(target, staging, { recursive: true, force: true, verbatimSymlinks: true });
+        }
+        // Hermes must never scan an adapter while it is still being copied.
+        if (bundledRoot && fs.existsSync(bundledRoot)) {
+            for (const name of await fs.promises.readdir(bundledRoot)) {
+                if (name === "kronterm-tools") continue;
+                const destination = path.join(staging, name);
+                const source = path.resolve(bundledRoot, name);
+                await fs.promises.rm(destination, { recursive: true, force: true });
+                if ((await fs.promises.stat(source)).isDirectory()) {
+                    await fs.promises.symlink(source, destination, "junction");
+                } else {
+                    await fs.promises.copyFile(source, destination);
+                }
             }
         }
+        await fs.promises.cp(adapterSource, path.join(staging, "kronterm-tools"), { recursive: true, force: true });
+        assertCurrent();
+        try {
+            await fs.promises.rename(target, backup);
+            hasBackup = true;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        assertCurrent();
+        await fs.promises.rename(staging, target);
+        published = true;
+        assertCurrent();
+        completed = true;
+        return target;
+    } catch (error) {
+        if (published) await fs.promises.rm(target, { recursive: true, force: true });
+        if (hasBackup) await fs.promises.rename(backup, target);
+        throw error;
+    } finally {
+        await fs.promises.rm(staging, { recursive: true, force: true });
+        if (completed) await fs.promises.rm(backup, { recursive: true, force: true });
     }
-    fs.cpSync(adapterSource, path.join(target, "kronterm-tools"), { recursive: true, force: true });
-    return target;
 }
 
 export function resolveKronTermSharedSkillDirs(options: KronTermSkillRootOptions = {}): string[] {
@@ -310,6 +391,7 @@ export function makeHermesRuntimeEnvironment(
         ...process.env,
         HERMES_DASHBOARD_SESSION_TOKEN: token,
         HERMES_DESKTOP: "1",
+        HERMES_DISABLE_LAZY_INSTALLS: "1",
         HERMES_PARENT_PID: String(process.pid),
         HERMES_EPHEMERAL_SYSTEM_PROMPT: KronTermSurfaceSystemPrompt,
         ...(options.managedDir
@@ -592,7 +674,11 @@ class ManagedHermesRuntime extends EventEmitter {
     }
 
     private async start(generation: number): Promise<HermesConnectionDescriptor> {
-        const binary = resolveHermesBinary();
+        const assertCurrent = () => {
+            if (generation !== this.startupGeneration) throw new Error("Hermes startup was cancelled.");
+        };
+        const binary = await resolveHermesBinary();
+        assertCurrent();
         const kronosCodeBinary = resolveKronosCodeDelegationBinary();
         if (!kronosCodeBinary) {
             throw new Error("KronosCode executable not found for Hermes delegation.");
@@ -615,11 +701,13 @@ class ManagedHermesRuntime extends EventEmitter {
         this.delegationConnection = kronosCodeConnection;
         const wshPath = resolveAgentWsh();
         fs.mkdirSync(managedDir, { recursive: true, mode: 0o700 });
-        prepareHermesBundledPlugins(
+        await prepareHermesBundledPlugins(
             binary,
             path.join(managedDir, "plugins"),
-            path.join(resolveHermesToolAdapterRoot(), "kronterm-tools")
+            path.join(resolveHermesToolAdapterRoot(), "kronterm-tools"),
+            assertCurrent
         );
+        assertCurrent();
         fs.writeFileSync(
             path.join(managedDir, "config.yaml"),
             JSON.stringify(makeHermesManagedConfig(toolServer), null, 2),

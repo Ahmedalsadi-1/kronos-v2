@@ -108,6 +108,15 @@ export function ContextMenu({
 
           <DropdownMenuSeparator />
 
+          {window.hermesDesktop?.hud?.dock && (
+            <>
+              <DropdownMenuItem className="cursor-pointer" onSelect={() => void window.hermesDesktop.hud.dock()}>
+                Open side panel
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+
           <div className="px-2 py-1 text-[0.7rem] text-muted-foreground/80">
             {c.tipPre}
             <Kbd size="sm">@</Kbd>

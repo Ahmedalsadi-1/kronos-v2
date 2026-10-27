@@ -233,15 +233,15 @@ export function KronTermHudControls({ onOpenWidgetCatalog }: { onOpenWidgetCatal
 
     const { geometry } = surface;
     const launcherStyle = {
-        left: geometry.x + geometry.width / 2,
+        left: `clamp(12px, ${geometry.x}px, max(12px, calc(100vw - 540px)))`,
         top: geometry.y + geometry.height + 8,
     };
 
     return (
         <nav
-            className="kronterm-hud-launchers pointer-events-auto fixed z-[116] flex -translate-x-1/2 gap-1.5 [&_button]:flex [&_button]:min-h-11 [&_button]:min-w-12 [&_button]:cursor-pointer [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-1 [&_button]:rounded-xl [&_button]:border [&_button]:border-white/15 [&_button]:bg-zinc-950/95 [&_button]:px-2 [&_button]:text-white/90 [&_button]:shadow-lg [&_button:hover]:bg-zinc-800 [&_button:focus-visible]:outline-accent [&_span]:text-[9px]"
+            className="kronterm-hud-launchers kt-hud-workspace-navigation pointer-events-auto fixed z-[116] flex"
             style={launcherStyle}
-            aria-label="KronTerm HUD applications"
+            aria-label="Bot Mode workspace navigation"
         >
             <DesktopGrabControl />
             <button
@@ -265,6 +265,18 @@ export function KronTermHudControls({ onOpenWidgetCatalog }: { onOpenWidgetCatal
                 <i className="fa-solid fa-terminal" aria-hidden="true" />
                 <span>Terminal</span>
             </button>
+            <button
+                type="button"
+                onClick={() =>
+                    void launchKronTermHudIsland("machines", { machineKind: "android", machinePicker: true }).catch(
+                        (error) => console.warn("Could not open devices", error)
+                    )
+                }
+                aria-label="Open Android and iOS devices"
+            >
+                <i className="fa-solid fa-mobile-screen" aria-hidden="true" />
+                <span>Devices</span>
+            </button>
             <button type="button" onClick={onOpenWidgetCatalog} aria-label="Open Widget catalog">
                 <i className="fa-solid fa-table-cells-large" aria-hidden="true" />
                 <span>Widget</span>
@@ -273,12 +285,12 @@ export function KronTermHudControls({ onOpenWidgetCatalog }: { onOpenWidgetCatal
                 type="button"
                 onClick={() => {
                     kronTermHudController.setActive(false);
-                    hermesSurfaceController.dismiss();
+                    hermesSurfaceController.requestOpenChat();
                 }}
-                aria-label="Exit KronTerm HUD mode"
+                aria-label="Return to workspace with current chat"
             >
                 <LogOut aria-hidden="true" />
-                <span>Exit HUD</span>
+                <span>Workspace</span>
             </button>
         </nav>
     );

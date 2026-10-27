@@ -120,7 +120,9 @@ export interface SidebarNavContribution {
     codicon: string;
     label: string;
     /** Route to navigate to (usually a contributed page's path). */
-    path: string;
+    path?: string;
+    /** Reveal an existing plugin pane without replacing the active conversation. */
+    pane?: string;
 }
 
 // Views that render as a full-screen modal card (OverlayView) over the shell.

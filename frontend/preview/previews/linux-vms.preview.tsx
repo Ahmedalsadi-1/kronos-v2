@@ -7,7 +7,7 @@ import { LinuxVmsPanel, type MachineSection } from "@/app/view/linux-vms/linux-v
 export function LinuxVmsPreview() {
     const params = new URLSearchParams(window.location.search);
     const kind = params.get("device");
-    const section: MachineSection = kind == "android" || kind == "iphone" ? kind : "desktop";
+    const section: MachineSection = kind == "macos" || kind == "android" || kind == "iphone" ? kind : "desktop";
     return (
         <SystemUIProvider>
             <div

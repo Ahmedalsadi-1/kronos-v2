@@ -1,7 +1,9 @@
+import { revealTreePane } from "@hermes/components/pane-shell/tree/store";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
+import { useAgentFileEditor } from "./use-agent-file-editor";
 import { useNativeHudMode } from "./use-native-hud-mode";
 import { useNativeNotchPreview } from "./use-native-notch-preview";
 
@@ -42,6 +44,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExterna
 import "./kronarchy-shell.scss";
 
 const WorkspaceElem = memo(() => {
+    useAgentFileEditor();
     const workspaceLayoutModel = WorkspaceLayoutModel.getInstance();
     const tabId = useAtomValue(atoms.staticTabId);
     const ws = useAtomValue(atoms.workspace);
@@ -87,16 +90,23 @@ const WorkspaceElem = memo(() => {
     useEffect(() => installAgentFollow(), []);
     useEffect(() => {
         const offContext = getApi().onHermesContext?.((text) => {
-            hermesSurfaceController.requestOpenPanel();
+            hermesSurfaceController.requestOpenChat();
             submitToHermes(text, "current");
         });
         const offSelection = getApi().onHermesSelection?.((payload) => {
-            hermesSurfaceController.requestOpenPanel();
+            hermesSurfaceController.requestOpenChat();
             submitToHermes(payload.text, payload.target, payload.images);
         });
         return () => {
             offContext?.();
             offSelection?.();
+        };
+    }, []);
+    useEffect(() => {
+        const toggleCompanion = () => kronTermHudController.toggle();
+        window.addEventListener("kronterm:toggle-desktop-companion", toggleCompanion);
+        return () => {
+            window.removeEventListener("kronterm:toggle-desktop-companion", toggleCompanion);
         };
     }, []);
     const [autoOpenHud] = useState(consumeHermesHudAutoOpen);
@@ -121,11 +131,8 @@ const WorkspaceElem = memo(() => {
     });
     const panelWidthRef = useRef(panelWidth);
     panelWidthRef.current = panelWidth;
+    const persistedPanelWidth = Number(ws?.meta?.["layout:hermespanelwidth"]);
     const renderHermesAuxiliarySurfaces = shouldRenderHermesAuxiliarySurfaces(presentation);
-
-    useEffect(() => {
-        if (presentation === "os" && surface.presentation === "panel") hermesSurfaceController.requestOpenHud();
-    }, [presentation, surface.presentation]);
 
     useEffect(() => {
         const handleResize = () => setViewportWidth(window.innerWidth);
@@ -136,8 +143,13 @@ const WorkspaceElem = memo(() => {
     }, []);
 
     useEffect(() => {
-        setPanelWidth((width) => clampHermesPanelWidth(width, panelBounds));
-    }, [panelBounds]);
+        setPanelWidth(
+            clampHermesPanelWidth(
+                Number.isFinite(persistedPanelWidth) ? persistedPanelWidth : panelBounds.defaultWidth,
+                panelBounds
+            )
+        );
+    }, [panelBounds, persistedPanelWidth, ws?.oid]);
 
     useNativeHudMode(
         hudMode.active,
@@ -151,7 +163,17 @@ const WorkspaceElem = memo(() => {
 
     useEffect(() => {
         const launchNativeHudApp = async (
-            app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone",
+            app:
+                | "web"
+                | "files"
+                | "terminal"
+                | "widget"
+                | "apps"
+                | "machines"
+                | "android"
+                | "iphone"
+                | "workflowcanvas"
+                | "bots",
             forceNew = false
         ) => {
             try {
@@ -180,13 +202,33 @@ const WorkspaceElem = memo(() => {
         });
         const unsubscribeExit = getApi().onNativeHudExit(() => {
             kronTermHudController.setActive(false);
-            hermesSurfaceController.dismiss();
+            hermesSurfaceController.requestOpenChat();
         });
         return () => {
             unsubscribeLaunch();
             unsubscribeAppTarget?.();
             unsubscribeExit();
         };
+    }, []);
+
+    useEffect(() => {
+        const openPluginWidget = (event: Event) => {
+            const view = (event as CustomEvent).detail?.view;
+            if (
+                view !== "bots" &&
+                view !== "plugin:kronterm.openhuman-workflow/canvas" &&
+                view !== "plugin:kronterm.tapflow/devices"
+            )
+                return;
+            if (view === "bots") {
+                hermesSurfaceController.requestOpenChat();
+                revealTreePane("kronterm-bots:workspace");
+                return;
+            }
+            void createBlock({ meta: { view } }, false).catch((error) => console.error("Could not open widget", error));
+        };
+        window.addEventListener("kronterm:open-plugin-widget", openPluginWidget);
+        return () => window.removeEventListener("kronterm:open-plugin-widget", openPluginWidget);
     }, []);
 
     const expandHermes = useCallback(async () => {
@@ -218,7 +260,7 @@ const WorkspaceElem = memo(() => {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [widgetsPanelVisible, workspaceLayoutModel]);
 
-    useEffect(() => getApi().onDesktopPetResume(() => hermesSurfaceController.requestOpenPanel()), []);
+    useEffect(() => getApi().onDesktopPetResume(() => hermesSurfaceController.requestOpenChat()), []);
 
     return (
         <div className="flex flex-col w-full flex-grow overflow-hidden">
@@ -269,9 +311,16 @@ const WorkspaceElem = memo(() => {
                                     return;
                                 }
                                 event.preventDefault();
-                                setPanelWidth((width) =>
-                                    clampHermesPanelWidth(width + (event.key === "ArrowLeft" ? 12 : -12), panelBounds)
+                                const width = clampHermesPanelWidth(
+                                    panelWidthRef.current + (event.key === "ArrowLeft" ? 12 : -12),
+                                    panelBounds
                                 );
+                                panelWidthRef.current = width;
+                                setPanelWidth(width);
+                                void RpcApi.SetMetaCommand(TabRpcClient, {
+                                    oref: WOS.makeORef("workspace", ws.oid),
+                                    meta: { "layout:hermespanelwidth": width } as unknown as MetaType,
+                                });
                             }}
                             onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
                             onPointerMove={(event) => {
@@ -308,14 +357,18 @@ const WorkspaceElem = memo(() => {
                     </div>
                 )}
             </div>
-            {renderHermesAuxiliarySurfaces && !(hudMode.active && hudMode.keepWorkspaceVisible) && (
-                <HermesHudHost
-                    autoOpen={autoOpenHud || canvasComposerContext.active}
-                    canvasContext={canvasComposerContext}
-                    onExpand={expandHermes}
-                    tabId={tabId}
-                />
-            )}
+            {renderHermesAuxiliarySurfaces &&
+                (surface.presentation === "panel" ||
+                    presentation === "os" ||
+                    !(hudMode.active && hudMode.keepWorkspaceVisible)) && (
+                    <HermesHudHost
+                        autoOpen={autoOpenHud || canvasComposerContext.active || presentation === "os"}
+                        placement={presentation === "os" ? "shell" : "floating"}
+                        canvasContext={canvasComposerContext}
+                        onExpand={expandHermes}
+                        tabId={tabId}
+                    />
+                )}
             {hudMode.active && !hudMode.keepWorkspaceVisible && (
                 <KronTermHudControls onOpenWidgetCatalog={() => workspaceLayoutModel.setWidgetsPanelVisible(true)} />
             )}

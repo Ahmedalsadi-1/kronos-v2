@@ -12,7 +12,7 @@ import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
 
 const HealthTimeoutMs = 3_000;
 const ApiRequestTimeoutMs = 30_000;
-const StartupTimeoutMs = 15_000;
+const StartupTimeoutMs = 90_000;
 const RestartDelaysMs = [1_000, 2_000, 4_000];
 const RequiredProtocolVersion = "1.0";
 

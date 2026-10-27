@@ -131,6 +131,66 @@ describe("KronosCodeHermesBackend", () => {
         expect(backend.route("prompt.submit", { session_id: "abc" })).toBeUndefined();
     });
 
+    it("fetches draft models from the selected engine and stops the discovery session", async () => {
+        const { api } = makeApi();
+        vi.mocked(api.acpDetectAgents).mockResolvedValue([
+            { backend: "opencode", name: "OpenCode", cliPath: "/bin/opencode", available: true },
+        ]);
+        vi.mocked(api.acpInitialize).mockResolvedValue({
+            success: true,
+            state: {
+                modelInfo: { currentModelId: "provider/model", availableModels: [{ id: "provider/model" }] },
+            },
+        } as any);
+        const backend = new KronosCodeHermesBackend(
+            () => api,
+            () => undefined,
+            store
+        );
+        backend.setActive("opencode");
+        const [options, duplicate] = await Promise.all([backend.route("model.options"), backend.route("model.options")]);
+        expect(options).toBe(duplicate);
+        expect(options).toMatchObject({
+            provider: "opencode",
+            model: "provider/model",
+            providers: [{ slug: "opencode", models: ["provider/model"] }],
+        });
+        expect(api.acpInitialize).toHaveBeenCalledWith(expect.objectContaining({ backend: "opencode" }));
+        expect(api.acpStop).toHaveBeenCalledOnce();
+        expect(api.acpInitialize).toHaveBeenCalledOnce();
+        backend.setActive("hermes");
+        expect(backend.route("model.options")).toBeUndefined();
+    });
+
+    it("uses the live chat engine for model discovery and switching after the draft engine changes", async () => {
+        const { api } = makeApi();
+        api.acpGetModelInfo = vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+                modelInfo: { currentModelId: "m1", availableModels: [{ id: "m1" }, { id: "m2" }] },
+            },
+        });
+        api.acpSetModel = vi.fn().mockResolvedValue({ success: true });
+        const backend = new KronosCodeHermesBackend(
+            () => api,
+            () => undefined,
+            store
+        );
+        backend.setActive("kronoscode");
+        const created = (await backend.route("session.create")) as { session_id: string };
+        backend.setActive("hermes");
+        expect(await backend.route("model.options", { session_id: created.session_id })).toMatchObject({
+            provider: "kronoscode",
+            providers: [{ models: ["m1", "m2"] }],
+        });
+        await backend.route("config.set", {
+            session_id: created.session_id,
+            key: "model",
+            value: "m2 --provider kronoscode --session",
+        });
+        expect(api.acpSetModel).toHaveBeenCalledWith(expect.objectContaining({ modelId: "m2" }));
+    });
+
     it("lists detected ACP agents and keeps each chat bound to its selected backend", async () => {
         const { api } = makeApi();
         vi.mocked(api.acpDetectAgents).mockResolvedValue([

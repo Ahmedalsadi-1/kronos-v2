@@ -69,6 +69,7 @@ describe("agent activity normalization", () => {
         timeline.record({ source: "acp", phase: "finish", surface: "browser", action: "verify", runid: "run-1" }, 4);
 
         expect(timeline.get()).toHaveLength(1);
+        expect(timeline.getAll().map(({ timestamp }) => timestamp)).toEqual([1, 3, 4]);
         expect(timeline.get("run-1").map(({ phase, timestamp }) => ({ phase, timestamp }))).toEqual([
             { phase: "verifying", timestamp: 3 },
             { phase: "succeeded", timestamp: 4 },

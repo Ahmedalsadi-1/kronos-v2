@@ -84,6 +84,8 @@ export class LspSession {
  */
 class LspServiceImpl {
     private sessions = new Map<string, LspSession>();
+    private pendingStarts = new Map<string, Promise<LspSession>>();
+    private generation = 0;
     private cleanupFn: (() => void) | null = null;
 
     /**
@@ -115,22 +117,30 @@ class LspServiceImpl {
             }
         }
 
+        const pending = this.pendingStarts.get(language);
+        if (pending != null) return pending;
+
         const api = getApi();
         if (!api?.lspStart) {
             throw new Error("LSP IPC not available (running outside Electron?)");
         }
 
-        const sessionId = await api.lspStart(language);
-        const session = new LspSession(sessionId, language);
-
-        // Register cleanup on close
-        const origClose = session.onClose.bind(session);
-        session.onClose(() => {
-            this.sessions.delete(sessionId);
+        const generation = this.generation;
+        const start = api.lspStart(language).then((sessionId) => {
+            if (generation !== this.generation) {
+                api.lspStop?.(sessionId);
+                throw new Error("LSP startup cancelled");
+            }
+            const session = new LspSession(sessionId, language);
+            this.sessions.set(sessionId, session);
+            return session;
         });
-
-        this.sessions.set(sessionId, session);
-        return session;
+        this.pendingStarts.set(language, start);
+        try {
+            return await start;
+        } finally {
+            if (this.pendingStarts.get(language) === start) this.pendingStarts.delete(language);
+        }
     }
 
     /** Get an existing session by ID. */
@@ -150,6 +160,8 @@ class LspServiceImpl {
 
     /** Stop all active LSP sessions. */
     stopAll(): void {
+        this.generation++;
+        this.pendingStarts.clear();
         for (const session of this.sessions.values()) {
             session.stop();
         }

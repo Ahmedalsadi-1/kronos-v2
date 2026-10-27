@@ -139,6 +139,7 @@ function DialogContent({
             'gap-0'
           )}
           data-slot="dialog-content"
+          data-hermes-portal=""
           onOpenAutoFocus={onOpenAutoFocus}
           ref={setContentNode}
           {...props}
@@ -185,6 +186,7 @@ function DialogContent({
           className
         )}
         data-slot="dialog-content"
+        data-hermes-portal=""
         onOpenAutoFocus={onOpenAutoFocus}
         ref={setContentNode}
         {...props}

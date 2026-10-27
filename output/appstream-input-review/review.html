@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KronTerm cursor review</title>
+<style>body{margin:0;background:#161616;color:#eee;font:14px -apple-system,sans-serif}main{max-width:720px;margin:48px auto;padding:24px}h1{font-size:20px;font-weight:500}.surface{position:relative;height:320px;border:1px solid #454545;border-radius:8px;background:#fafafa;color:#252525}button{font:inherit;border:1px solid #666;border-radius:6px;padding:8px 16px;background:#262626;color:white;cursor:pointer}button:focus-visible{outline:2px solid #a9b4ff}p{color:#aaa;line-height:1.5}.target{position:absolute;top:145px;left:46%;padding:12px;border:1px solid #ddd;border-radius:6px}canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}@media(max-width:600px){main{margin:12px auto;padding:16px}}</style>
+<main><h1>KronTerm cursor feedback</h1><p>Source renderer review. The glow marks a click; reduced motion removes the pulse.</p><div class="surface"><span class="target">Click target</span><canvas aria-hidden="true"></canvas></div><p><button id="normal">Click feedback</button> <button id="reduced">Reduced motion</button></p><div role="status" id="status">Ready</div></main>
+<script type="module">
+import {drawAgentCursor} from '/@fs/Users/albsheralsadi/kronterm/frontend/util/agent-cursor-feedback.ts';
+const canvas=document.querySelector('canvas'),host=document.querySelector('.surface');
+function render(reduced=false){const dpr=devicePixelRatio||1;canvas.width=host.clientWidth*dpr;canvas.height=host.clientHeight*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);drawAgentCursor(ctx,{x:host.clientWidth*.46,y:155},80,'Click target',reduced);document.querySelector('#status').textContent=reduced?'Reduced motion: static pointer':'Click: subtle color pulse';}
+document.querySelector('#normal').onclick=()=>render();document.querySelector('#reduced').onclick=()=>render(true);window.addEventListener('resize',()=>render());render();
+</script></html>

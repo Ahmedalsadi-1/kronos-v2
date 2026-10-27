@@ -746,7 +746,7 @@ export class KronTermNativeToolBridge extends WshBridge {
                     workspaceId: context.workspaceId,
                     workflowRunId: context.workflowRunId,
                 };
-                let customArgs: string[] | undefined;
+                let customArgs: string[] | undefined = agent.acpArgs;
                 let customEnv: Record<string, string> | undefined;
                 if (backend === "kronoscode") {
                     const { KronosCodeRuntime, isKronosCodeLoopbackUrl, withKronosCodeAttachArgs } =
@@ -1302,6 +1302,16 @@ export class KronTermNativeToolBridge extends WshBridge {
             await this.rpc(
                 "widgetkeyboardpress",
                 { blockid: this.assertBlockScope(targetBlockId), keys },
+                this.tabRoute()
+            )
+        );
+    }
+
+    async widgetScroll(targetBlockId: string, amount: number, originX?: number, originY?: number): Promise<string> {
+        return json(
+            await this.rpc(
+                "widgetmousescroll",
+                { blockid: this.assertBlockScope(targetBlockId), amount, originx: originX, originy: originY },
                 this.tabRoute()
             )
         );

@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { type WebSocket, newWebSocket } from "@/util/wsutil";
@@ -47,6 +47,9 @@ class WSControl {
     eoOpts: ElectronOverrideOpts;
     noReconnect: boolean = false;
     onOpenTimeoutId: NodeJS.Timeout = null;
+    private pingTimer: ReturnType<typeof setInterval>;
+    private reconnectTimer: ReturnType<typeof setTimeout>;
+    private queueTimer: ReturnType<typeof setTimeout>;
 
     constructor(
         baseHostPort: string,
@@ -59,16 +62,29 @@ class WSControl {
         this.stableId = stableId;
         this.open = false;
         this.eoOpts = electronOverrideOpts;
-        setInterval(this.sendPing.bind(this), 5000);
+        this.pingTimer = setInterval(() => this.sendPing(), 5000);
     }
 
     shutdown() {
         this.noReconnect = true;
-        this.wsConn.close();
+        this.open = false;
+        this.opening = false;
+        clearInterval(this.pingTimer);
+        clearTimeout(this.reconnectTimer);
+        clearTimeout(this.queueTimer);
+        clearTimeout(this.onOpenTimeoutId);
+        this.msgQueue.length = 0;
+        if (this.wsConn) {
+            this.wsConn.onopen = null;
+            this.wsConn.onmessage = null;
+            this.wsConn.onclose = null;
+            this.wsConn.close();
+            this.wsConn = null;
+        }
     }
 
     connectNow(desc: string) {
-        if (this.open || this.noReconnect) {
+        if (this.open || this.opening || this.noReconnect) {
             return;
         }
         this.lastReconnectTime = Date.now();
@@ -121,7 +137,8 @@ class WSControl {
         if (timeout > 0) {
             dlog(sprintf("sleeping %ds", timeout));
         }
-        setTimeout(() => {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
             this.connectNow(String(this.reconnectTimes));
         }, timeout * 1000);
     }
@@ -144,9 +161,13 @@ class WSControl {
     }
 
     onopen(e: Event) {
+        if (this.noReconnect) {
+            return;
+        }
         dlog("connection open");
         this.open = true;
         this.opening = false;
+        clearTimeout(this.onOpenTimeoutId);
         this.onOpenTimeoutId = setTimeout(() => {
             this.reconnectTimes = 0;
             dlog("clear reconnect times");
@@ -166,7 +187,8 @@ class WSControl {
         }
         const msg = this.msgQueue.shift();
         this.sendMessage(msg);
-        setTimeout(() => {
+        clearTimeout(this.queueTimer);
+        this.queueTimer = setTimeout(() => {
             this.runMsgQueue();
         }, 100);
     }
@@ -220,6 +242,9 @@ class WSControl {
     }
 
     pushMessage(data: WSCommandType) {
+        if (this.noReconnect) {
+            return;
+        }
         if (!this.open) {
             if (data.wscommand === "rpc" && data.message) {
                 const cmd = data.message.command;
@@ -241,6 +266,7 @@ function initGlobalWS(
     messageCallback: WSEventCallback,
     electronOverrideOpts?: ElectronOverrideOpts
 ) {
+    globalWS?.shutdown();
     globalWS = new WSControl(baseHostPort, stableId, messageCallback, electronOverrideOpts);
 }
 

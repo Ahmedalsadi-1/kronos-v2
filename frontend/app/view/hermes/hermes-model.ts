@@ -45,9 +45,6 @@ export class HermesViewModel implements ViewModel {
     }
 
     dispose(): void {
-        const surface = hermesSurfaceController.getSnapshot();
-        if (surface.presentation === "widget" && surface.widgetBlockId === this.blockId) {
-            hermesSurfaceController.returnToHud(surface.sessionId);
-        }
+        hermesSurfaceController.disposeWidget(this.blockId);
     }
 }

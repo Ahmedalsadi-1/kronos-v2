@@ -284,6 +284,9 @@ export class AndroidSimulatorService {
             ArrowRight: 22,
             Home: 122,
             End: 123,
+            Power: 26,
+            VolumeUp: 24,
+            VolumeDown: 25,
         };
         if (!Object.hasOwn(keycodes, key)) throw new Error("Unsupported Android keyboard key.");
         const device = await this.connected(id);

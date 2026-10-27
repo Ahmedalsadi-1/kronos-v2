@@ -11,6 +11,18 @@ afterEach(() => {
 });
 
 describe("Hermes surface controller", () => {
+    it("defaults ordinary chat to HUD while preserving explicitly docked chat and its session", () => {
+        hermesSurfaceController.requestOpenChat("session-1");
+        expect(hermesSurfaceController.getSnapshot().presentation).toBe("hud");
+        hermesSurfaceController.requestOpenPanel();
+        hermesSurfaceController.requestOpenChat();
+        expect(hermesSurfaceController.getSnapshot()).toMatchObject({ presentation: "panel", sessionId: "session-1" });
+        hermesSurfaceController.returnToHud();
+        expect(hermesSurfaceController.getSnapshot()).toMatchObject({ presentation: "hud", sessionId: "session-1" });
+        hermesSurfaceController.dismiss();
+        hermesSurfaceController.requestOpenChat();
+        expect(hermesSurfaceController.getSnapshot().presentation).toBe("hud");
+    });
     it("moves one surface between HUD and widget presentation", async () => {
         const expand = vi.fn(async () => undefined);
         hermesSurfaceController.setExpandHandler(expand);
@@ -45,6 +57,18 @@ describe("Hermes surface controller", () => {
 
         hermesSurfaceController.requestOpenPanel("session-panel");
         expect(closeToHud).toHaveBeenCalledOnce();
+        unregister();
+        expect(hermesSurfaceController.getSnapshot()).toMatchObject({
+            presentation: "panel",
+            sessionId: "session-panel",
+            widgetBlockId: null,
+        });
+    });
+
+    it("keeps the requested panel destination when the widget model disposes before React cleanup", () => {
+        const unregister = hermesSurfaceController.registerWidgetHost({ blockId: "hermes-1", closeToHud: vi.fn() });
+        hermesSurfaceController.requestOpenPanel("session-panel");
+        hermesSurfaceController.disposeWidget("hermes-1");
         unregister();
         expect(hermesSurfaceController.getSnapshot()).toMatchObject({
             presentation: "panel",

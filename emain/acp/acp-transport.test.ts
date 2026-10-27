@@ -797,6 +797,46 @@ describe("AcpAgentManager protocol requests", () => {
         });
     });
 
+    it("loads and switches grouped model choices from modern ACP config options", async () => {
+        const manager = new AcpAgentManager({
+            conversationId: "config-models",
+            backend: "opencode",
+            workspace: "/tmp/kronterm-workspace",
+        });
+        const transport = makeManagerTransport();
+        const options = [
+            {
+                id: "model",
+                category: "model",
+                type: "select",
+                currentValue: "provider/a",
+                options: [
+                    { value: "provider/a", name: "Model A" },
+                    { group: "Provider", options: [{ value: "provider/b", name: "Model B" }] },
+                ],
+            },
+        ];
+        transport.sendRequest.mockReset();
+        transport.sendRequest.mockResolvedValueOnce({ sessionId: "session-models", configOptions: options });
+        manager.transport = transport as any;
+        await (manager as any).ensureSession();
+        expect(manager.modelInfo).toMatchObject({
+            currentModelId: "provider/a",
+            availableModels: [
+                { id: "provider/a", label: "Model A" },
+                { id: "provider/b", label: "Model B" },
+            ],
+        });
+        transport.sendRequest.mockResolvedValueOnce({ configOptions: [{ ...options[0], currentValue: "provider/b" }] });
+        await manager.setModel({ conversationId: "config-models", modelId: "provider/b" });
+        expect(transport.sendRequest).toHaveBeenLastCalledWith("session/set_config_option", {
+            sessionId: "session-models",
+            configId: "model",
+            value: "provider/b",
+        });
+        expect(manager.modelInfo.currentModelId).toBe("provider/b");
+    });
+
     it("emits PromptResponse usage when usage_update notifications are not available", async () => {
         const manager = new AcpAgentManager({
             conversationId: "conversation-usage",
@@ -900,7 +940,7 @@ describe("AcpAgentManager protocol requests", () => {
         expect(JSON.stringify(events.map((event) => event.trace))).not.toContain("must-not-appear-in-trace");
     });
 
-    it("does not send configured MCP servers when the runtime does not advertise stdio MCP", async () => {
+    it("sends scoped and configured stdio MCP servers when a v1 runtime omits optional capabilities", async () => {
         const manager = new AcpAgentManager({
             conversationId: "conversation-mcp-disabled",
             backend: "codex",
@@ -914,6 +954,26 @@ describe("AcpAgentManager protocol requests", () => {
 
         expect(transport.sendRequest).toHaveBeenNthCalledWith(1, "session/new", {
             cwd: "/tmp/kronterm-workspace",
+            mcpServers: expect.arrayContaining([
+                expect.objectContaining({ name: "kron-term", type: "stdio" }),
+                { name: "configured", type: "stdio", command: "node", args: ["server.js"], env: [] },
+            ]),
+        });
+    });
+
+    it("honors an explicit stdio opt-out", async () => {
+        const manager = new AcpAgentManager({
+            conversationId: "stdio-disabled",
+            backend: "kilo",
+            workspace: "/tmp/project",
+            mcpServers: [{ name: "configured", command: "node", args: [], env: [] }],
+        });
+        const transport = makeManagerTransport();
+        manager.transport = transport as any;
+        manager.capabilities = { mcpCapabilities: { stdio: false, http: false, sse: false } } as any;
+        await manager.sendMessage({ conversationId: "stdio-disabled", content: "hello" });
+        expect(transport.sendRequest).toHaveBeenNthCalledWith(1, "session/new", {
+            cwd: ".",
             mcpServers: [],
         });
     });

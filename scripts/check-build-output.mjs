@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import console from "node:console";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
 
 const MaxRendererChunkKb = 22000;
@@ -50,13 +51,16 @@ if (/circular dependency between chunks|broken execution order/i.test(log)) {
   failures.push("Rollup reported circular chunks that may break execution order.");
 }
 
-const chunkPattern = /dist\/frontend\/assets\/([^\s]+\.js)\s+([\d,.]+)\s+kB/g;
-for (const match of log.matchAll(chunkPattern)) {
-  const [, fileName, sizeText] = match;
-  const sizeKb = Number(sizeText.replaceAll(",", ""));
-  if (!Number.isFinite(sizeKb)) {
-    continue;
-  }
+const assetsDirectory = "dist/frontend/assets";
+const chunks = existsSync(assetsDirectory)
+  ? readdirSync(assetsDirectory, { recursive: true }).filter((file) => String(file).endsWith(".js"))
+  : [];
+if (chunks.length === 0) {
+  failures.push("No renderer JavaScript assets found; build the renderer before checking output.");
+}
+for (const file of chunks) {
+  const fileName = String(file);
+  const sizeKb = statSync(path.join(assetsDirectory, fileName)).size / 1000;
   if (sizeKb > MaxRendererChunkKb) {
     failures.push(`${fileName} is ${sizeKb.toFixed(2)} kB, above the ${MaxRendererChunkKb} kB beta budget.`);
   } else if (sizeKb > LargeRendererChunkKb) {

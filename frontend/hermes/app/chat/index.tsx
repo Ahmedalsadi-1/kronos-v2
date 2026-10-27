@@ -54,6 +54,7 @@ import { titlebarHeaderBaseClass, titlebarHeaderShadowClass, titlebarHeaderTitle
 import { ChatDropOverlay } from './chat-drop-overlay'
 import { ChatSwapOverlay } from './chat-swap-overlay'
 import { ChatBar, ChatBarFallback } from './composer'
+import { AgentEnginePill } from './composer/agent-engine-pill'
 import { requestComposerInsert } from './composer/focus'
 import { droppedFileInlineRefs } from './composer/inline-refs'
 import { useComposerScope } from './composer/scope'
@@ -122,6 +123,8 @@ function ChatHeader({
   const sessions = useStore($sessions)
   const pinnedSessionIds = useStore($pinnedSessionIds)
   const profiles = useStore($profiles)
+  const sessionView = useSessionView()
+  const busy = useStore(sessionView.$busy)
 
   const activeStoredSession =
     (selectedSessionId && sessions.find(session => sessionMatchesStoredId(session, selectedSessionId))) || null
@@ -150,7 +153,7 @@ function ChatHeader({
   }
 
   return (
-    <header className={cn(titlebarHeaderBaseClass, 'overflow-visible', isRoutedSessionView && titlebarHeaderShadowClass)}>
+    <header data-hermes-chat-header="" className={cn(titlebarHeaderBaseClass, 'overflow-visible', isRoutedSessionView && titlebarHeaderShadowClass)}>
       <div
         className={cn(titlebarHeaderTitleClass, 'overflow-visible', showProfileTag && 'flex items-center')}
         style={{
@@ -172,6 +175,7 @@ function ChatHeader({
         </SessionActionsMenu>
         <SessionHeaderPlusButton />
       </div>
+      <div className="hermes-panel-agent-picker hidden shrink-0"><AgentEnginePill disabled={busy} compact /></div>
     </header>
   )
 }

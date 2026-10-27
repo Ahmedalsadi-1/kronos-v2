@@ -1,5 +1,14 @@
 import { getGlobalModelOptions, type HermesGateway, type ModelOptionsResponse } from '@hermes/hermes'
 import type { ModelOptionProvider } from '@hermes/types/hermes'
+import { useSyncExternalStore } from 'react'
+
+export function useAgentEngine() {
+  const backends = window.hermesDesktop?.agentBackends
+  return useSyncExternalStore(
+    listener => backends?.onActiveChange(listener) ?? (() => {}),
+    () => backends?.getActive() ?? 'hermes'
+  )
+}
 
 /**
  * True only when a persisted **manual** composer pick has been removed from the
@@ -47,7 +56,8 @@ interface ModelOptionsRequest {
 export function modelOptionsQueryKey(profile: null | string | undefined, sessionId?: null | string) {
   const profileKey = (profile ?? '').trim() || 'default'
 
-  return ['model-options', profileKey, sessionId || 'global'] as const
+  const engine = !sessionId ? (window.hermesDesktop?.agentBackends?.getActive() ?? 'hermes') : 'session'
+  return ['model-options', profileKey, sessionId || 'global', engine] as const
 }
 
 function hasSelectableModels(options: ModelOptionsResponse | null | undefined): boolean {
@@ -60,6 +70,11 @@ export async function requestModelOptions({
   refresh = false,
   sessionId
 }: ModelOptionsRequest): Promise<ModelOptionsResponse> {
+  const routed = window.hermesDesktop?.agentBackends?.route('model.options', {
+    ...(sessionId ? { session_id: sessionId } : {}),
+    ...(refresh ? { refresh: true } : {})
+  })
+  if (routed) return routed as Promise<ModelOptionsResponse>
   if (gateway) {
     const params: Record<string, unknown> = {}
 

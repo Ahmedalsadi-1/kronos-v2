@@ -1194,7 +1194,7 @@
     z-index: 3900;
     width: min(260px, 80vw);
     overflow: hidden;
-    border-radius: var(--os-frame-content-radius) 0 var(--os-frame-content-radius) 0;
+    border-radius: 0;
     background: var(--ui-sidebar-surface-background, var(--os-shell-bg));
 
     &[hidden] {
@@ -1213,7 +1213,7 @@
     width: var(--os-inspector-width);
     overflow: hidden;
     border-left: 1px solid var(--ui-stroke-secondary);
-    border-radius: 0 var(--os-frame-content-radius) 0 var(--os-frame-content-radius);
+    border-radius: 0;
     background: var(--ui-sidebar-surface-background, var(--os-shell-bg));
 
     &[hidden] {
@@ -4224,7 +4224,7 @@
 .os-mode-root {
     --os-frame-color: var(--color-black, #101113);
     --os-frame-border: 12px;
-    --os-frame-top-border: 4px;
+    --os-frame-top-border: 2px;
     --os-frame-radius: 28px;
     --os-frame-content-radius: 18px;
     --os-frame-top: 56px;
@@ -4275,6 +4275,45 @@
 
 .os-mode-root.has-compact-inspector {
     --os-inspector-width: var(--os-inspector-compact-width);
+}
+
+.os-mode-root .os-window.is-phone-window.kt-system-material {
+    --os-phone-radius: 0px;
+    --kt-window: transparent;
+    --kt-window-inactive: transparent;
+    --kt-content: transparent;
+    --kt-shadow-window: none;
+    --kt-shadow-active: none;
+    min-width: 0;
+    min-height: 0;
+    background: transparent;
+    border: 0;
+    border-radius: var(--os-phone-radius);
+    box-shadow: none;
+    backdrop-filter: none;
+
+    .os-window-content,
+    .os-window-surface,
+    .block-content,
+    .os-window-surface > .block,
+    .os-window-surface > .block > .block-frame-default-inner {
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .os-window-content {
+        margin: 0;
+    }
+
+    .block-mask {
+        border-radius: var(--os-phone-radius);
+    }
+
+    &[data-phone-platform="iphone"] {
+        --os-phone-radius: 0px;
+    }
 }
 
 .os-space-background {
@@ -4469,4 +4508,121 @@
 
 .os-agent-control-edge[data-awaiting-approval="true"]::before {
     box-shadow: inset 0 0 12px rgb(255 188 88 / 0.4);
+}
+
+// Outside corner fillets join the sidebars to the connected frame.
+.os-agent-sidebar,
+.os-files-inspector {
+    overflow: visible;
+    background: var(--os-frame-color);
+
+    > div {
+        overflow: hidden;
+    }
+
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        width: var(--os-frame-content-radius);
+        height: var(--os-frame-content-radius);
+        pointer-events: none;
+    }
+}
+
+.os-agent-sidebar {
+    &::before {
+        left: 100%;
+        top: 0;
+        background: radial-gradient(
+            circle at bottom right,
+            transparent calc(var(--os-frame-content-radius) - 0.5px),
+            var(--os-frame-color) var(--os-frame-content-radius)
+        );
+    }
+    &::after {
+        left: 100%;
+        bottom: 0;
+        background: radial-gradient(
+            circle at top right,
+            transparent calc(var(--os-frame-content-radius) - 0.5px),
+            var(--os-frame-color) var(--os-frame-content-radius)
+        );
+    }
+}
+
+.os-files-inspector {
+    border-left: 0;
+    &::before {
+        right: 100%;
+        top: 0;
+        background: radial-gradient(
+            circle at bottom left,
+            transparent calc(var(--os-frame-content-radius) - 0.5px),
+            var(--os-frame-color) var(--os-frame-content-radius)
+        );
+    }
+    &::after {
+        right: 100%;
+        bottom: 0;
+        background: radial-gradient(
+            circle at top left,
+            transparent calc(var(--os-frame-content-radius) - 0.5px),
+            var(--os-frame-color) var(--os-frame-content-radius)
+        );
+    }
+}
+
+.os-mode-root.has-compact-inspector .os-files-inspector {
+    bottom: auto;
+    height: fit-content;
+    background: transparent;
+
+    > div {
+        overflow: visible;
+    }
+
+    &::after {
+        display: none;
+    }
+}
+
+.os-agent-plan {
+    position: absolute;
+    top: calc(var(--os-frame-content-top) + 12px);
+    right: calc(var(--os-frame-border) + 68px);
+    z-index: 3890;
+    width: min(304px, calc(100% - 100px));
+    border: 1px solid var(--ui-stroke-secondary);
+    border-radius: 10px;
+    color: var(--os-text);
+    background: var(--os-shell-bg);
+
+    summary {
+        list-style: none;
+    }
+    summary::-webkit-details-marker {
+        display: none;
+    }
+    summary:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 3px;
+    }
+    [data-task-status="failed"] > svg {
+        color: var(--color-red-400, #f87171);
+    }
+    [data-task-status="done"] > svg {
+        color: var(--color-green-400, #4ade80);
+    }
+}
+
+.has-files-inspector:not(.has-compact-inspector) .os-agent-plan {
+    right: calc(var(--os-inspector-width) + var(--os-frame-border) + 12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .os-agent-plan * {
+        animation: none !important;
+        transition: none !important;
+    }
 }

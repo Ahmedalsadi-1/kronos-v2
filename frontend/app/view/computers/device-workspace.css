@@ -1,0 +1,255 @@
+/* Copyright 2026, KronTerm. SPDX-License-Identifier: Apache-2.0 */
+.kt-device-workspace {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    padding: 12px;
+    gap: 16px;
+    color: var(--kt-label, #f5f5f5);
+    font:
+        13px/1.4 -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
+    background: transparent;
+    container-type: inline-size;
+}
+.kt-device-workspace button,
+.kt-device-workspace select {
+    cursor: pointer;
+}
+.kt-device-workspace button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    min-width: 32px;
+    padding: 4px 8px;
+    border: 1px solid var(--kt-separator, #666);
+    border-radius: 8px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+}
+.kt-device-workspace button:disabled {
+    opacity: 0.5;
+}
+.kt-device-workspace :is(button, select, input):focus-visible {
+    outline: 2px solid var(--kt-focus-ring, #80bfff);
+    outline-offset: 2px;
+}
+.kt-device-workspace-bar,
+.kt-device-titlebar,
+.kt-device-settings {
+    background: color-mix(in srgb, var(--kt-content, #202124) 84%, transparent);
+    border: 1px solid var(--kt-separator, #666);
+    border-radius: 18px;
+    box-shadow: 0 8px 28px #0002;
+}
+.kt-device-workspace-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: center;
+    padding: 6px 10px;
+    max-width: 100%;
+    flex-wrap: wrap;
+}
+.kt-device-workspace-bar > strong {
+    margin-right: auto;
+}
+.kt-device-workspace-bar [aria-pressed="true"] {
+    background: var(--kt-label, #eee);
+    color: var(--kt-content, #222);
+}
+.kt-device-workspace-bar input {
+    width: 150px;
+    min-height: 32px;
+    padding: 4px 8px;
+    border: 1px solid var(--kt-separator);
+    border-radius: 8px;
+    color: inherit;
+    background: transparent;
+}
+.kt-device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 20px;
+    min-height: 0;
+    flex: 1;
+}
+.kt-device-workspace.has-settings .kt-device-grid {
+    margin-right: 252px;
+}
+.kt-device-workspace.is-single .kt-device-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+.kt-device-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    min-height: 360px;
+    gap: 8px;
+}
+.kt-device-tile[hidden] {
+    display: none;
+}
+.kt-device-titlebar {
+    display: flex;
+    align-items: center;
+    width: min(100%, 310px);
+    padding: 3px 6px;
+    gap: 4px;
+    border-radius: 14px;
+}
+.kt-device-titlebar button {
+    border: 0;
+}
+.kt-device-titlebar .kt-device-identity {
+    justify-content: flex-start;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+.kt-device-identity > span:last-child {
+    min-width: 0;
+}
+.kt-device-identity :is(strong, small) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.kt-device-identity strong {
+    font-size: 12px;
+    font-weight: 500;
+}
+.kt-device-identity small {
+    font-size: 11px;
+}
+.kt-device-power-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+    background: #93979f;
+}
+.kt-device-power-dot[data-on="true"] {
+    background: #58d76b;
+}
+.kt-device-live {
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+    flex: 1;
+    container-type: size;
+}
+.is-farm .kt-device-live {
+    height: 300px;
+    flex: none;
+}
+.kt-device-live .kt-computers,
+.kt-device-live .kt-computers-screen,
+.kt-device-live .kt-computers-screen:has(.kt-computers-empty) {
+    background: transparent;
+}
+.kt-device-live .kt-phone-toolbar {
+    display: none;
+}
+.kt-device-offscreen {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #08090b;
+    color: #eee;
+    padding: 12px;
+    text-align: center;
+}
+.kt-device-settings {
+    position: absolute;
+    top: 76px;
+    right: 12px;
+    z-index: 5;
+    width: 232px;
+    max-height: calc(100% - 88px);
+    overflow: auto;
+    padding: 12px;
+    backdrop-filter: blur(16px);
+}
+.kt-device-settings header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.kt-device-settings label,
+.kt-device-runtime {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+.kt-device-settings select {
+    min-width: 0;
+    max-width: 145px;
+    min-height: 32px;
+    border-radius: 8px;
+    color: inherit;
+    background: var(--kt-content, #222);
+    border: 1px solid var(--kt-separator);
+}
+.kt-device-settings-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    border-block: 1px solid var(--kt-separator);
+    padding-block: 10px;
+    margin-block: 10px;
+}
+.kt-device-settings-actions button {
+    flex-direction: column;
+    font-size: 10px;
+    padding: 6px 2px;
+}
+.kt-device-settings .kt-device-power-action {
+    width: 100%;
+}
+.kt-device-settings p {
+    font-size: 11px;
+    margin: 10px 0 0;
+}
+@container (max-width: 560px) {
+    .kt-device-workspace.has-settings .kt-device-grid {
+        margin-right: 0;
+    }
+    .kt-device-settings {
+        top: 64px;
+        right: 8px;
+        max-height: calc(100% - 76px);
+    }
+    .kt-device-workspace-bar input {
+        width: 110px;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .kt-device-settings,
+    .kt-device-titlebar,
+    .kt-device-workspace-bar {
+        backdrop-filter: none;
+        background: var(--kt-content, #222);
+    }
+}
+[data-reduced-transparency="true"] :is(.kt-device-settings, .kt-device-titlebar, .kt-device-workspace-bar),
+.reduced-transparency :is(.kt-device-settings, .kt-device-titlebar, .kt-device-workspace-bar) {
+    backdrop-filter: none;
+    background: var(--kt-content, #222);
+}

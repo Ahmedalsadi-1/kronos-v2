@@ -14,6 +14,10 @@ export const colorRegex = /^((#[0-9a-f]{6,8})|([a-z]+))$/;
 export const NumActiveConnColors = 8;
 
 const ViewIconMap: Record<string, string> = {
+    "plugin:kronterm.openhuman-workflow/canvas": "diagram-project",
+    "plugin:kronterm.tapflow/devices": "mobile-screen",
+    workflowcanvas: "diagram-project",
+    bots: "robot",
     aifilediff: "file-lines",
     appstream: "desktop",
     computers: "desktop",
@@ -61,6 +65,9 @@ export function blockViewToName(view: string): string {
     if (util.isBlank(view)) {
         return "(No View)";
     }
+    if (view == "plugin:kronterm.tapflow/devices") return "Tapflow Mobile Labs";
+    if (view == "plugin:kronterm.openhuman-workflow/canvas" || view == "workflowcanvas") return "Workflow Canvas";
+    if (view == "bots") return "Bots";
     if (view == "videostudio") return "Video Studio";
     if (view == "audiostudio") return "Audio Studio";
     if (view == "documentstudio") return "Document Studio";

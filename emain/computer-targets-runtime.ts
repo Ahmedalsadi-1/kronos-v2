@@ -25,6 +25,7 @@ const Actions = new Set([
     "home",
     "swipe",
     "rotate",
+    "button",
 ]);
 const MaxImageBytes = 20 * 1024 * 1024;
 export type ComputerTargetExecutor = (file: string, args: string[]) => Promise<string>;
@@ -123,7 +124,7 @@ export class ComputerTargetsRuntime {
                 target.status === "booted"
                     ? {
                           ...target,
-                          capabilities: [...target.capabilities, "tap", "type", "home", "swipe", "rotate"],
+                          capabilities: [...target.capabilities, "tap", "type", "home", "swipe", "rotate", "button"],
                       }
                     : target
             );
@@ -146,6 +147,7 @@ export class ComputerTargetsRuntime {
                                     "tap",
                                     "type",
                                     "key",
+                                    "button",
                                     "home",
                                     "back",
                                     "swipe",
@@ -221,6 +223,8 @@ export class ComputerTargetsRuntime {
         if (!input || typeof input !== "object") throw new Error("Invalid simulator action.");
         const action = input as ComputerTargetAction;
         if (!Actions.has(action.action)) throw new Error("Unsupported simulator action.");
+        if (action.action === "button" && !["power", "volume-up", "volume-down"].includes(action.button))
+            throw new Error("Unsupported device button.");
         if (
             action.expectedGeneration != null &&
             (!Number.isSafeInteger(action.expectedGeneration) || action.expectedGeneration < 0)
@@ -251,6 +255,11 @@ export class ComputerTargetsRuntime {
                 else if (action.action === "tap") await this.android.tap(target.id, action.x, action.y);
                 else if (action.action === "type") await this.android.type(target.id, action.text);
                 else if (action.action === "key") await this.android.key(target.id, action.key);
+                else if (action.action === "button")
+                    await this.android.key(
+                        target.id,
+                        { power: "Power", "volume-up": "VolumeUp", "volume-down": "VolumeDown" }[action.button]
+                    );
                 else if (action.action === "swipe")
                     await this.android.swipe(target.id, action.x, action.y, action.endX, action.endY);
                 else if (action.action === "home" || action.action === "back")
@@ -278,7 +287,7 @@ export class ComputerTargetsRuntime {
                 return snapshot;
             }
             let imageDataUrl: string;
-            if (this.ios && ["tap", "type", "home", "swipe", "rotate"].includes(action.action)) {
+            if (this.ios && ["tap", "type", "home", "swipe", "rotate", "button"].includes(action.action)) {
                 const assertControl = () => {
                     if ((this.generations.get(target.id) ?? 0) !== target.controlGeneration)
                         throw new Error("Control changed before device input.");
@@ -286,6 +295,8 @@ export class ComputerTargetsRuntime {
                 if (action.action === "tap") await this.ios.tap(target.id, action.x, action.y, assertControl);
                 else if (action.action === "type") await this.ios.type(target.id, action.text, assertControl);
                 else if (action.action === "home") await this.ios.button(target.id, "home", assertControl);
+                else if (action.action === "button")
+                    await this.ios.button(target.id, action.button === "power" ? "lock" : action.button, assertControl);
                 else if (action.action === "rotate")
                     await this.ios.rotate(target.id, action.orientation ?? "landscape-left", assertControl);
                 else

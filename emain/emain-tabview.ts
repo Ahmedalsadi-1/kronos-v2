@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -236,10 +236,12 @@ export class WaveTabView extends WebContentsView {
 
 let MaxCacheSize = 10;
 const wcvCache = new Map<string, WaveTabView>();
+let CacheEvictionTimer: ReturnType<typeof setTimeout>;
 
 export function setMaxTabCacheSize(size: number) {
     console.log("setMaxTabCacheSize", size);
     MaxCacheSize = size;
+    checkAndEvictCache();
 }
 
 export function getWaveTabView(waveTabId: string): WaveTabView | undefined {
@@ -276,19 +278,30 @@ function tryEvictEntry(waveTabId: string): boolean {
 }
 
 function checkAndEvictCache(): void {
+    clearTimeout(CacheEvictionTimer);
+    CacheEvictionTimer = undefined;
     if (wcvCache.size <= MaxCacheSize) {
         return;
     }
-    const sorted = Array.from(wcvCache.values()).sort((a, b) => {
-        // Prioritize entries which are active
-        if (a.isActiveTab && !b.isActiveTab) {
-            return -1;
+    const sorted = Array.from(wcvCache.values())
+        .filter((tabView) => !tabView.isActiveTab)
+        .sort((a, b) => a.lastUsedTs - b.lastUsedTs);
+    let retryAfterMs = Infinity;
+    for (const tabView of sorted) {
+        if (wcvCache.size <= MaxCacheSize) {
+            break;
         }
-        // Otherwise, sort by lastUsedTs
-        return a.lastUsedTs - b.lastUsedTs;
-    });
-    for (let i = 0; i < sorted.length - MaxCacheSize; i++) {
-        tryEvictEntry(sorted[i].waveTabId);
+        if (!tryEvictEntry(tabView.waveTabId)) {
+            const remainingGraceMs = 1000 - (Date.now() - tabView.lastUsedTs);
+            if (remainingGraceMs > 0) {
+                retryAfterMs = Math.min(retryAfterMs, remainingGraceMs);
+            }
+        }
+    }
+    // A rapid tab switch must not leave renderers over budget indefinitely.
+    if (wcvCache.size > MaxCacheSize && Number.isFinite(retryAfterMs)) {
+        CacheEvictionTimer = setTimeout(checkAndEvictCache, retryAfterMs);
+        CacheEvictionTimer.unref();
     }
 }
 

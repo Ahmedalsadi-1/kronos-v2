@@ -290,7 +290,7 @@ export function CanvasWorkflows({
         try {
             const context = await api.workflowContext();
             if (context.tabId !== tabId) throw new Error("Return to this canvas before generating its workflow.");
-            hermesSurfaceController.requestOpenPanel();
+            hermesSurfaceController.requestOpenChat();
             submitToHermes(
                 [
                     "Create an editable KronTerm canvas workflow draft for this request. Do not execute or schedule it.",

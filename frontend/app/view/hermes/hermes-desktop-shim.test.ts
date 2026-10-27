@@ -47,6 +47,63 @@ afterEach(() => {
 });
 
 describe("Kronos profile routing", () => {
+    it("opens preview files through the native external browser bridge", async () => {
+        const openExternal = vi.fn();
+        Object.defineProperty(window, "api", { configurable: true, value: { openExternal } });
+        replaceHermesDesktopShim();
+        await window.hermesDesktop.openPreviewInBrowser("file:///repo/index.html");
+        expect(openExternal).toHaveBeenCalledWith("file:///repo/index.html");
+    });
+
+    it("opens the native folder picker and preserves cancellation", async () => {
+        const selectDirectory = vi.fn().mockResolvedValueOnce("/repo").mockResolvedValueOnce(null);
+        Object.defineProperty(window, "api", { configurable: true, value: { selectDirectory } });
+        replaceHermesDesktopShim();
+        await expect(window.hermesDesktop.selectPaths({ directories: true })).resolves.toEqual(["/repo"]);
+        await expect(window.hermesDesktop.selectPaths({ directories: true })).resolves.toEqual([]);
+        expect(selectDirectory).toHaveBeenCalledTimes(2);
+    });
+
+    it("selects files through preload and respects single selection", async () => {
+        const selectFiles = vi.fn().mockResolvedValue(["/repo/one.html", "/repo/two.png"]);
+        Object.defineProperty(window, "api", { configurable: true, value: { selectFiles } });
+        replaceHermesDesktopShim();
+        await expect(window.hermesDesktop.selectPaths({ multiple: false })).resolves.toEqual(["/repo/one.html"]);
+        await expect(window.hermesDesktop.selectPaths({ multiple: true })).resolves.toEqual([
+            "/repo/one.html",
+            "/repo/two.png",
+        ]);
+    });
+
+    it("reports unavailable pickers instead of silently cancelling", async () => {
+        Object.defineProperty(window, "api", { configurable: true, value: {} });
+        replaceHermesDesktopShim();
+        await expect(window.hermesDesktop.selectPaths({ directories: true })).rejects.toThrow("Folder selection");
+    });
+
+    it("loads inspector files and git diffs through the managed backend", async () => {
+        const hermesApi = vi.fn(async (request: HermesApiIpcRequest) => {
+            if (request.path.startsWith("/api/fs/list"))
+                return { entries: [{ name: "changed.ts", path: "/repo/changed.ts", isDirectory: false }] };
+            if (request.path.startsWith("/api/git/review/list")) return { files: [] };
+            return { diff: "-old\n+new" };
+        });
+        Object.defineProperty(window, "api", { configurable: true, value: { hermesApi } });
+        configureHermesDesktopShim({ token: "session-token" });
+        replaceHermesDesktopShim();
+        await expect(window.hermesDesktop.readDir("/repo")).resolves.toEqual({
+            entries: [expect.objectContaining({ name: "changed.ts" })],
+        });
+        await expect(window.hermesDesktop.git.review.list("/repo", "uncommitted", null)).resolves.toEqual({
+            files: [],
+        });
+        await expect(
+            window.hermesDesktop.git.review.diff("/repo", "changed.ts", "uncommitted", null, false)
+        ).resolves.toBe("-old\n+new");
+        expect(hermesApi).toHaveBeenCalledWith(
+            expect.objectContaining({ path: expect.stringContaining("/api/git/review/diff?") })
+        );
+    });
     it("never persists the daemon session token across renderer lifetimes", () => {
         window.localStorage.setItem("kronterm.hermes.shim.token", "expired-token");
 

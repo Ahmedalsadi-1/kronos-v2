@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { ToolOperationContext } from "../../mcp-kron-term/src/tool-execution";
 import { DATA_DIR } from "./upstream/openmaus/kronterm-adapter";
 
 vi.mock("node:fs/promises", () => ({
@@ -185,4 +186,99 @@ describe("VM idle shutdown and driver input", () => {
             runtime.perform({ desktopId: "linux-vm:ubuntu", action: "click", x: 20, y: 30, expectedGeneration: 0 })
         ).rejects.toThrow("invalid_action_target");
     });
+});
+
+describe("VM queue observation ordering", () => {
+    it("does not share a screenshot across an intervening queued input", async () => {
+        const runtime = new QemuLinuxDesktopRuntime(vi.fn(), "darwin", "arm64");
+        let release: () => void;
+        const barrier = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const calls: string[] = [];
+        vi.spyOn(runtime as any, "execute").mockImplementation(async (action: any) => {
+            calls.push(action.action);
+            if (calls.length === 1) await barrier;
+            return { desktop: {}, output: String(calls.length) };
+        });
+        const initial = runtime.perform({ desktopId: "linux-vm:ubuntu", action: "screenshot" });
+        const click = runtime.perform({
+            desktopId: "linux-vm:ubuntu",
+            action: "click",
+            expectedGeneration: 0,
+            x: 10,
+            y: 20,
+        });
+        const after = runtime.perform({ desktopId: "linux-vm:ubuntu", action: "screenshot" });
+        release();
+        const [beforeResult, , afterResult] = await Promise.all([initial, click, after]);
+        expect(calls).toEqual(["screenshot", "click", "screenshot"]);
+        expect(afterResult.output).not.toBe(beforeResult.output);
+    });
+    it("freezes queued VM inputs instead of allowing caller retargeting", async () => {
+        const runtime = new QemuLinuxDesktopRuntime(vi.fn(), "darwin", "arm64");
+        const execute = vi.spyOn(runtime as any, "execute").mockResolvedValue({ desktop: {} });
+        const action = { desktopId: "linux-vm:ubuntu", action: "click" as const, expectedGeneration: 0, x: 10, y: 20 };
+        const pending = runtime.perform(action);
+        action.x = 900;
+        await pending;
+        expect(execute.mock.calls[0][0]).toMatchObject({ x: 10 });
+    });
+});
+
+describe("VM input result and shortcut consistency", () => {
+    it("rejects explicit guest failure envelopes and malformed scroll origins", async () => {
+        const runner = vi.fn(async () => ({ stdout: '{"success":false,"message":"not focused"}' }));
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        vi.spyOn(runtime, "list").mockResolvedValue([{ id: "linux-vm:ubuntu", ready: true } as any]);
+        await expect(
+            runtime.perform({ desktopId: "linux-vm:ubuntu", action: "click", expectedGeneration: 0, x: 1, y: 2 })
+        ).rejects.toThrow("Guest input failed");
+        runner.mockClear();
+        await expect(
+            runtime.perform({
+                desktopId: "linux-vm:ubuntu",
+                action: "scroll",
+                expectedGeneration: 0,
+                x: NaN,
+                deltaY: 40,
+            })
+        ).rejects.toThrow("scroll coordinates");
+        expect(runner).not.toHaveBeenCalled();
+    });
+    it("accepts canonical Control and Meta modifier names from agent shortcuts", async () => {
+        const runner = vi.fn(async () => ({ stdout: "{}" }));
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        vi.spyOn(runtime, "list").mockResolvedValue([{ id: "linux-vm:ubuntu", ready: true } as any]);
+        await runtime.perform({
+            desktopId: "linux-vm:ubuntu",
+            action: "key",
+            expectedGeneration: 0,
+            key: "Control+Alt+t",
+        });
+        expect(runner.mock.calls[0][1].at(-1)).toContain('"key":"t","modifiers":["ctrl","alt"]');
+    });
+});
+
+it("does not execute cancelled VM inputs that were waiting in the queue", async () => {
+    const runner = vi.fn();
+    const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+    let release: () => void;
+    (runtime as any).queue = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const controller = new AbortController();
+    const pending = ToolOperationContext.run({ signal: controller.signal } as any, () =>
+        runtime.perform({
+            desktopId: "linux-vm:ubuntu",
+            action: "click",
+            x: 20,
+            y: 30,
+            expectedGeneration: 0,
+        })
+    );
+    controller.abort();
+    release();
+    await expect(pending).rejects.toThrow(/abort/i);
+    expect(runner).not.toHaveBeenCalled();
 });

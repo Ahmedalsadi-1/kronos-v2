@@ -14,7 +14,8 @@ function clampHermesPanelWidth(width: number, bounds: HermesPanelWidthBounds): n
 }
 
 function getHermesPanelWidthBounds(presentation: WorkspacePresentation, viewportWidth: number): HermesPanelWidthBounds {
-    const min = Math.min(360, Math.max(280, viewportWidth - 240));
+    const available = Math.max(1, viewportWidth - Math.min(240, viewportWidth * 0.4));
+    const min = Math.min(360, available);
     if (presentation !== "tabs") {
         const max = Math.max(min, Math.min(520, viewportWidth - 240));
         return { min, max, defaultWidth: clampHermesPanelWidth(390, { min, max, defaultWidth: 390 }) };

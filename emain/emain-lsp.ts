@@ -11,8 +11,10 @@ type LspSession = {
     sessionId: string;
     language: string;
     proc: child_process.ChildProcess;
-    buffer: string;
     webContents: WebContents;
+    stopping: boolean;
+    stopTimer?: ReturnType<typeof setTimeout>;
+    cleanup: () => void;
 };
 
 const sessions = new Map<string, LspSession>();
@@ -388,27 +390,40 @@ export function startLanguageServer(webContents: WebContents, language: string):
         env: { ...process.env },
     });
 
-    let buffer = "";
+    let buffer: Buffer = Buffer.alloc(0);
+
+    const stopForOwner = () => stopLanguageServer(sessionId);
+    const stopForNavigation = (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => {
+        if (isMainFrame && !isInPlace) stopForOwner();
+    };
+    const cleanup = () => {
+        clearTimeout(sessions.get(sessionId)?.stopTimer);
+        webContents.removeListener("destroyed", stopForOwner);
+        webContents.removeListener("render-process-gone", stopForOwner);
+        webContents.removeListener("did-start-navigation", stopForNavigation);
+        buffer = Buffer.alloc(0);
+        sessions.delete(sessionId);
+    };
 
     proc.stdout?.on("data", (chunk: Buffer) => {
-        buffer += chunk.toString();
-        // LSP uses Content-Length headers
-        // Process complete messages from the buffer
+        if (!sessions.has(sessionId) || sessions.get(sessionId).stopping) return;
+        buffer = Buffer.concat([buffer, chunk]);
         let idx: number;
         while ((idx = buffer.indexOf("\r\n\r\n")) !== -1) {
-            const header = buffer.substring(0, idx);
+            const header = buffer.subarray(0, idx).toString("ascii");
             const contentStart = idx + 4;
             const match = header.match(/Content-Length:\s*(\d+)/i);
             if (!match) {
-                buffer = buffer.substring(contentStart);
+                buffer = buffer.subarray(contentStart);
                 continue;
             }
             const length = parseInt(match[1], 10);
             if (buffer.length < contentStart + length) {
                 break; // wait for more data
             }
-            const body = buffer.substring(contentStart, contentStart + length);
-            buffer = buffer.substring(contentStart + length);
+            const body = buffer.subarray(contentStart, contentStart + length).toString("utf8");
+            buffer = buffer.subarray(contentStart + length);
+            if (buffer.length === 0) buffer = Buffer.alloc(0);
 
             const session = sessions.get(sessionId);
             if (session) {
@@ -427,15 +442,19 @@ export function startLanguageServer(webContents: WebContents, language: string):
         if (session) {
             sendToRenderer(session.webContents, sessionId, JSON.stringify({ error: err.message }));
         }
-        sessions.delete(sessionId);
+        cleanup();
     });
 
     proc.on("exit", (code, signal) => {
         console.log(`[lsp:${sessionId}] exited code=${code} signal=${signal}`);
-        sessions.delete(sessionId);
+        cleanup();
     });
 
-    sessions.set(sessionId, { sessionId, language, proc, buffer, webContents });
+    sessions.set(sessionId, { sessionId, language, proc, webContents, stopping: false, cleanup });
+    webContents.once("destroyed", stopForOwner);
+    webContents.once("render-process-gone", stopForOwner);
+    webContents.on("did-start-navigation", stopForNavigation);
+    if (webContents.isDestroyed()) stopForOwner();
 
     console.log(`[lsp] started ${server.command} for "${language}" (session=${sessionId})`);
     return sessionId;
@@ -446,7 +465,7 @@ export function startLanguageServer(webContents: WebContents, language: string):
  */
 export function sendLspMessage(sessionId: string, content: string): void {
     const session = sessions.get(sessionId);
-    if (!session) {
+    if (!session || session.stopping) {
         console.warn(`[lsp] cannot send to unknown session: ${sessionId}`);
         return;
     }
@@ -459,19 +478,20 @@ export function sendLspMessage(sessionId: string, content: string): void {
  */
 export function stopLanguageServer(sessionId: string): void {
     const session = sessions.get(sessionId);
-    if (!session) {
+    if (!session || session.stopping) {
         return;
     }
+    session.stopping = true;
     console.log(`[lsp] stopping session: ${sessionId}`);
-    session.proc.kill("SIGTERM");
-    // Force kill after 3s if it doesn't exit cleanly
-    setTimeout(() => {
+    session.stopTimer = setTimeout(() => {
         const s = sessions.get(sessionId);
         if (s) {
             s.proc.kill("SIGKILL");
-            sessions.delete(sessionId);
+            s.cleanup();
         }
     }, 3000);
+    session.stopTimer.unref();
+    session.proc.kill("SIGTERM");
 }
 
 /**

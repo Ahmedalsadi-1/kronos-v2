@@ -3,6 +3,7 @@
 
 import * as electron from "electron";
 import { getWebServerEndpoint } from "../frontend/util/endpoints";
+import { isManagedRuntimeFrame } from "./authkey";
 
 export const WaveAppPathVarName = "WAVETERM_APP_PATH";
 export const WaveAppResourcesPathVarName = "WAVETERM_RESOURCES_PATH";
@@ -136,6 +137,14 @@ export function shFrameNavHandler(event: Electron.Event<Electron.WebContentsWill
         return;
     }
     const url = event.url;
+    if (
+        event.frame.parent === event.frame.top &&
+        isManagedRuntimeFrame(
+            url,
+            event.frame.top?.processId != null ? electron.webContents.fromFrame(event.frame.top)?.id : -1
+        )
+    )
+        return;
     console.log(`frame-navigation url=${url} frame=${event.frame.name}`);
     if (event.frame.name == "webview") {
         // "webview" links always open in new window

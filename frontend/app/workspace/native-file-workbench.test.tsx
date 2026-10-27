@@ -3,6 +3,7 @@ import { globalStore } from "@/app/store/jotaiStore";
 import { attachOSResourceToKronos } from "@/app/store/os-resource-service";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { createBlockSplitHorizontally } from "@/store/global";
+import { agentActivityTimeline, publishAgentActivity } from "@/types/agent-activity";
 import { Provider, atom } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -30,14 +31,27 @@ vi.mock("@/app/store/wshclientapi", () => ({
 let root: Root;
 let container: HTMLDivElement;
 afterEach(async () => {
+    agentActivityTimeline.clear();
     if (root) await act(async () => root.unmount());
     container?.remove();
     vi.useRealTimers();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
 });
 
 async function mount() {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 250,
+        bottom: 400,
+        width: 250,
+        height: 400,
+        toJSON: () => ({}),
+    });
     const metaFilePath = atom("/project");
     const newFileContent = atom(null as string);
     const drafts = new Map<string, string>();
@@ -54,6 +68,11 @@ async function mount() {
         setEditMode: vi.fn(async (edit: boolean) => globalStore.set(mocks.model.editMode, edit)),
         connectionImmediate: atom(""),
         errorMsgAtom: atom(null),
+        refreshVersion: atom(0),
+        fileContentSaved: atom("initial disk contents"),
+        goHistoryBack: vi.fn(async () => {}),
+        goHistoryForward: vi.fn(async () => {}),
+        goParentDirectory: vi.fn(async () => {}),
         statFile: atom((get) =>
             Promise.resolve({ path: get(metaFilePath), dir: "/project", isdir: get(metaFilePath) === "/project" })
         ),
@@ -66,6 +85,7 @@ async function mount() {
                     notfound: !files.some((file) => file.path === info.path),
                 })),
                 FileAppendCommand: vi.fn(async () => {}),
+                FileMkdirCommand: vi.fn(async () => {}),
             },
         },
         goHistory: vi.fn(async (path: string) => {
@@ -96,7 +116,107 @@ async function mount() {
     return { metaFilePath, newFileContent };
 }
 
+it("copies the current unsaved file content and exposes workspace controls on demand", async () => {
+    const writeText = vi.fn(async () => {});
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+        const { metaFilePath, newFileContent } = await mount();
+        await act(async () => {
+            globalStore.set(metaFilePath, "/project/a.ts");
+            globalStore.set(newFileContent, "const localDraft = true;");
+        });
+        const heading = container.querySelector(".ade-heading") as HTMLElement;
+        expect(heading.hidden).toBe(true);
+        await act(async () =>
+            (container.querySelector('[aria-label="Toggle workspace controls"]') as HTMLButtonElement).click()
+        );
+        expect(heading.hidden).toBe(false);
+        await act(async () =>
+            (container.querySelector('[aria-label="Copy file contents"]') as HTMLButtonElement).click()
+        );
+        expect(writeText).toHaveBeenCalledWith("const localDraft = true;");
+        expect(container.querySelector('[aria-label="Code copied"]')).not.toBeNull();
+        expect(mocks.model.handleFileSave).not.toHaveBeenCalled();
+    } finally {
+        if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+        else Reflect.deleteProperty(navigator, "clipboard");
+    }
+});
+
 describe("native mini IDE", () => {
+    it("picks up file activity that arrived while the editor was opening", async () => {
+        publishAgentActivity({
+            source: "hermes",
+            surface: "file",
+            action: "type",
+            phase: "running",
+            filepath: "/project/b.ts",
+        });
+        const { metaFilePath } = await mount();
+        expect(globalStore.get(metaFilePath)).toBe("/project/b.ts");
+        expect(globalStore.get(mocks.model.refreshVersion)).toBeGreaterThan(0);
+    });
+    it("follows agent files, reloads disk updates, and preserves unsaved local edits", async () => {
+        const { metaFilePath, newFileContent } = await mount();
+        vi.useFakeTimers();
+        const activity = {
+            source: "hermes" as const,
+            surface: "file" as const,
+            action: "type" as const,
+            phase: "running" as const,
+            filepath: "/project/a.ts",
+            blockid: "agent-chat",
+        };
+        await act(async () => publishAgentActivity(activity));
+        expect(globalStore.get(metaFilePath)).toBe("/project/a.ts");
+        expect(mocks.model.setEditMode).toHaveBeenCalledWith(true);
+        const version = Number(globalStore.get(mocks.model.refreshVersion));
+        await act(async () => vi.advanceTimersByTime(500));
+        expect(globalStore.get(mocks.model.refreshVersion)).toBeGreaterThan(version);
+        await act(async () => globalStore.set(newFileContent, "my unsaved edits"));
+        const protectedVersion = globalStore.get(mocks.model.refreshVersion);
+        await act(async () => vi.advanceTimersByTime(1000));
+        expect(globalStore.get(mocks.model.refreshVersion)).toBe(protectedVersion);
+        expect(globalStore.get(newFileContent)).toBe("my unsaved edits");
+        await act(async () => publishAgentActivity({ ...activity, phase: "failed" }));
+        await act(async () => globalStore.set(newFileContent, null));
+        await act(async () => vi.advanceTimersByTime(1000));
+        expect(globalStore.get(mocks.model.refreshVersion)).toBe(protectedVersion);
+    });
+
+    it("exposes navigation and supports resizing, folding, and opting out of agent follow", async () => {
+        const { metaFilePath } = await mount();
+        const button = (label: string) => container.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement;
+        await act(async () => {
+            button("Back").click();
+            button("Forward").click();
+            button("Parent folder").click();
+        });
+        expect(mocks.model.goHistoryBack).toHaveBeenCalled();
+        expect(mocks.model.goHistoryForward).toHaveBeenCalled();
+        expect(mocks.model.goParentDirectory).toHaveBeenCalled();
+        const separator = container.querySelector('[role="separator"]');
+        await act(async () =>
+            separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))
+        );
+        expect(separator.getAttribute("aria-valuenow")).toBe("270");
+        await act(async () => button("Fold file explorer").click());
+        expect((container.querySelector('[aria-label="Project explorer"]') as HTMLElement).hidden).toBe(true);
+        await act(async () => button("Expand file explorer").click());
+        expect((container.querySelector('[aria-label="Project explorer"]') as HTMLElement).hidden).toBe(false);
+        await act(async () => button("Follow agent files").click());
+        await act(async () =>
+            publishAgentActivity({
+                source: "hermes",
+                surface: "file",
+                action: "type",
+                phase: "running",
+                filepath: "/project/b.ts",
+            })
+        );
+        expect(globalStore.get(metaFilePath)).toBe("/project");
+    });
     it("does not republish an unchanged tree while idle", async () => {
         vi.useFakeTimers();
         await mount();
@@ -253,14 +373,45 @@ it("exposes Edit and Preview on the integrated file toolbar", async () => {
 
 it("refuses to replace an existing file from the native new-file action", async () => {
     await mount();
-    const prompt = vi.spyOn(window, "prompt").mockReturnValue("a.ts");
-    try {
-        await act(async () => {
-            mocks.explorer(":new-file");
+    await act(async () => mocks.explorer(":new-file"));
+    const input = container.querySelector('[aria-label="New file name"]') as HTMLInputElement;
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "a.ts");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () =>
+        container
+            .querySelector('[aria-label="Create new file"]')
+            .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    );
+    expect(mocks.model.env.rpc.FileAppendCommand).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("already exists");
+});
+
+it.each(["file", "folder"])("creates a new %s from the sidebar without a browser prompt", async (kind) => {
+    await mount();
+    await act(async () => (container.querySelector(`[aria-label="New ${kind}"]`) as HTMLButtonElement).click());
+    const input = container.querySelector(`[aria-label="New ${kind} name"]`) as HTMLInputElement;
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(
+            input,
+            kind === "file" ? "notes.ts" : "notes"
+        );
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () =>
+        container
+            .querySelector(`[aria-label="Create new ${kind}"]`)
+            .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    );
+    if (kind === "file")
+        expect(mocks.model.env.rpc.FileAppendCommand.mock.calls[0]?.[1]).toEqual({
+            info: { path: "/project/notes.ts" },
+            data64: "",
         });
-        expect(mocks.model.env.rpc.FileAppendCommand).not.toHaveBeenCalled();
-        expect(container.textContent).toContain("already exists");
-    } finally {
-        prompt.mockRestore();
-    }
+    else
+        expect(mocks.model.env.rpc.FileMkdirCommand.mock.calls[0]?.[1]).toEqual({
+            info: { path: "/project/notes" },
+        });
+    expect(container.querySelector(`[aria-label="New ${kind} name"]`)).toBeNull();
 });

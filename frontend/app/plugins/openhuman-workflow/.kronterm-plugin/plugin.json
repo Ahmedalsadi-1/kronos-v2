@@ -1,0 +1,72 @@
+{
+    "manifestVersion": 1,
+    "id": "openhuman-workflow",
+    "publisher": "kronterm",
+    "name": "Workflow Canvas",
+    "version": "0.1.0",
+    "description": "OpenHuman graph canvas adapted to KronTerm widgets and shared Kronos chat.",
+    "license": "GPL-3.0-only",
+    "homepage": "https://github.com/tinyhumansai/openhuman",
+    "engines": {
+        "kronterm": ">=0.14.3"
+    },
+    "pluginApi": 1,
+    "activation": ["onWidget:canvas"],
+    "contributes": {
+        "widgets": [
+            {
+                "id": "canvas",
+                "title": "Workflow Canvas",
+                "icon": "diagram-project",
+                "renderer": "renderer.html",
+                "defaultSize": {
+                    "width": 1000,
+                    "height": 680
+                },
+                "minSize": {
+                    "width": 480,
+                    "height": 320
+                },
+                "singleton": "none"
+            }
+        ],
+        "applications": [
+            {
+                "id": "workflow-canvas",
+                "title": "Workflow Canvas",
+                "widget": "canvas",
+                "category": "Agents",
+                "aliases": ["workflow", "automation", "openhuman"]
+            }
+        ],
+        "commands": [
+            {
+                "id": "workflow-canvas.open",
+                "title": "Open Workflow Canvas",
+                "context": "workspace",
+                "openWidget": "canvas"
+            }
+        ]
+    },
+    "capabilities": [
+        {
+            "kind": "workspace:widget"
+        },
+        {
+            "kind": "workspace:read"
+        },
+        {
+            "kind": "storage"
+        },
+        {
+            "kind": "agents:kronoscode"
+        },
+        {
+            "kind": "agents:evidence"
+        }
+    ],
+    "metadata": {
+        "integration": "bundled-native-widget",
+        "upstream": "tinyhumansai/openhuman"
+    }
+}

@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+    arrangeOSLaunchedWindows,
     computeOSWindowLayout,
     findOSDockHitTarget,
     fitOSWindowToContentAspect,
@@ -19,6 +20,37 @@ import {
 function tab(meta: Record<string, unknown> = {}): Tab {
     return { oid: "tab-1", blockids: ["browser", "hermes", "term"], meta } as Tab;
 }
+
+it("fits phone window bounds to the handset in every desktop presentation", () => {
+    const state = makeInitialOSModeState(tab(), ["browser"]);
+    for (const scene of [
+        { kind: "freeform" },
+        { kind: "focused", blockId: "browser" },
+        { kind: "overview" },
+    ] as const) {
+        for (const maximized of [false, true]) {
+            const current = {
+                ...state,
+                scene,
+                windows: { ...state.windows, browser: { ...state.windows.browser, maximized } },
+            };
+            for (const aspect of [380 / 830, 433 / 882]) {
+                const original = computeOSWindowLayout(current, "browser", "linux-vms", { width: 1440, height: 900 });
+                const phone = computeOSWindowLayout(
+                    current,
+                    "browser",
+                    "linux-vms",
+                    { width: 1440, height: 900 },
+                    aspect
+                );
+                expect(phone.bounds.width / phone.bounds.height).toBeCloseTo(aspect, 8);
+                expect(phone.bounds.width).toBeLessThanOrEqual(original.bounds.width);
+                expect(phone.bounds.height).toBeLessThanOrEqual(original.bounds.height);
+                expect(phone.presentation).toBe(original.presentation);
+            }
+        }
+    }
+});
 
 describe("OS workspace state", () => {
     it("seeds geometry and canvas notes without mutating Canvas state", () => {
@@ -435,5 +467,43 @@ describe("os.window.setBounds / os.window.arrangeBounds", () => {
         });
         expect(state.windows.b.bounds.x).toBe(410);
         expect(state.windows.ghost).toBeUndefined();
+    });
+});
+
+describe("OS launch choreography", () => {
+    it("centers the first app and moves it left when a second app arrives", () => {
+        const empty = makeInitialOSModeState(tab(), []);
+        const first = arrangeOSLaunchedWindows(empty, reconcileOSModeState(empty, ["browser"]), {
+            width: 1440,
+            height: 900,
+        });
+        expect(first.windows.browser.bounds).toEqual({ x: 240, y: 80, width: 960, height: 720 });
+        const second = arrangeOSLaunchedWindows(first, reconcileOSModeState(first, ["browser", "term"]), {
+            width: 1440,
+            height: 900,
+        });
+        expect(second.windows.browser.bounds).toEqual({ x: 28, y: 80, width: 684, height: 720 });
+        expect(second.windows.term.bounds).toEqual({ x: 728, y: 80, width: 684, height: 720 });
+        expect(first.windows.browser.bounds.x).toBe(240);
+        expect(second.scene.kind).toBe("freeform");
+        const resolved = reconcileOSModeState(second, ["browser", "term"], { browser: "web", term: "term" });
+        expect(resolved.windows.term.bounds).toEqual(second.windows.term.bounds);
+    });
+
+    it("preserves restored layouts, overview, zoomed canvases, and narrow desktops", () => {
+        const first = makeInitialOSModeState(tab(), ["browser"]);
+        const next = reconcileOSModeState(first, ["browser", "term"]);
+        expect(arrangeOSLaunchedWindows(first, next, { width: 600, height: 800 })).toBe(next);
+        expect(arrangeOSLaunchedWindows(first, first, { width: 1440, height: 900 })).toBe(first);
+        expect(
+            arrangeOSLaunchedWindows({ ...first, scene: { kind: "overview" } }, next, { width: 1440, height: 900 })
+        ).toBe(next);
+        expect(
+            arrangeOSLaunchedWindows(
+                { ...first, scene: { kind: "freeform" }, camera: { x: 20, y: 0, zoom: 1 } },
+                next,
+                { width: 1440, height: 900 }
+            )
+        ).toBe(next);
     });
 });

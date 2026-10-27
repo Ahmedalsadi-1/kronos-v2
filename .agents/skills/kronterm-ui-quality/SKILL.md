@@ -18,6 +18,9 @@ Create a calm, precise, agent-native workspace that combines the immediacy of a 
 
 ## Product rules
 
+- Hermes chat uses square corners across the HUD, side panel, widget, composer, messages, controls and chat-owned menus/dialogs. Keep radius overrides scoped to chat; preserve focus visibility and target size.
+- HUD is the default chat presentation. Side-panel docking is explicit and must preserve the same mounted conversation, draft, attachments, selected agent and running task across all four workspace layouts.
+
 - Make the interface feel native through rhythm, feedback, focus behavior, command-first navigation, and predictable state—not through ornamental imitation.
 - Keep agent activity legible: distinguish thinking, tool use, approval, blocked, failure, and completion.
 - Keep chrome quiet and content dominant. Use one accent hierarchy and avoid competing glows, borders, badges, or floating controls.

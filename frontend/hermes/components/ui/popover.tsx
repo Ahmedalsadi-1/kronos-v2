@@ -45,6 +45,7 @@ function PopoverContent({
         )}
         collisionPadding={collisionPadding}
         data-slot="popover-content"
+        data-hermes-portal=""
         sideOffset={sideOffset}
         {...props}
       >

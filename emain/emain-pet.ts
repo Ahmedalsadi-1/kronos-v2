@@ -17,6 +17,7 @@ import {
     type AgentActivityPhase,
     type AgentActivitySurface,
 } from "../frontend/types/agent-activity";
+import { filePathFromAgentInput } from "../frontend/types/agent-file-activity";
 import type { AcpEvent } from "./acp";
 import { listNativeHudWebContents, publishNativeNotchActivity } from "./emain-hud";
 import type { OverlayAnimationCommand } from "./emain-overlay";
@@ -725,7 +726,7 @@ type AcpCanvasTaskState = {
     replyId?: string;
     replyText: string;
     runid: string;
-    tools: Map<string, { blockid?: string; surface: AgentActivitySurface; title: string }>;
+    tools: Map<string, { blockid?: string; surface: AgentActivitySurface; title: string; filepath?: string }>;
     turn: number;
 };
 
@@ -1006,7 +1007,8 @@ export function notifyDesktopPetActivity(event: AcpEvent) {
         const toolId = data?.toolCallId || event.msgId;
         const blockid = blockIdFromAcpInput(data?.rawInput);
         const surface = inferAgentActivitySurface(title, blockid);
-        task.tools.set(toolId, { blockid, surface, title });
+        const filepath = surface === "file" ? filePathFromAgentInput(data?.rawInput) : undefined;
+        task.tools.set(toolId, { blockid, surface, title, filepath });
         notifyDesktopPetSurfaceActivity({
             ...acpActivityBase(event, task, toolId, task.currentDecisionId || task.lastNodeId),
             phase:
@@ -1021,6 +1023,7 @@ export function notifyDesktopPetActivity(event: AcpEvent) {
             surface,
             action: inferAgentActivityAction(title),
             detail: title,
+            filepath,
             point: pointFromAgentActivityInput(data?.rawInput),
             path: pathFromToolInput(data?.rawInput) ?? undefined,
             target: targetFromToolInput(data?.rawInput),
@@ -1050,6 +1053,7 @@ export function notifyDesktopPetActivity(event: AcpEvent) {
             surface: priorTool?.surface ?? inferAgentActivitySurface(title, blockid),
             action: previewimageurl ? "screenshot" : "verify",
             detail: previewimageurl ? "Captured tool evidence" : title,
+            filepath: filePathFromAgentInput(data?.rawInput) ?? priorTool?.filepath,
             previewimageurl,
             verificationstatus: data?.status === "failed" ? "failed" : "verified",
         });

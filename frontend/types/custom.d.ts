@@ -245,6 +245,7 @@ declare global {
     };
 
     type ElectronApi = {
+        agentBotCommand: (command: import("./agent-bot").AgentBotCommand) => Promise<import("./agent-bot").AgentBotResult>;
         openBotDesktop: (
             botId: string
         ) => Promise<{ botId: string; workspaceId: string; tabId: string; blockIds: string[] }>;
@@ -273,7 +274,7 @@ declare global {
         }) => Promise<boolean>; // open-native-hud-island
         setNativeHudIslandVisibility: (blockId: string, visible: boolean) => Promise<boolean>; // set-native-hud-island-visibility
         requestNativeHudLaunch: (
-            app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone"
+            app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots"
         ) => void; // request-native-hud-launch
         getHudWidgetRoute: (blockId: string) => Promise<string>;
         getNativeHudIslandPresentation: () => Promise<"docked" | "detached">; // get-native-hud-island-presentation
@@ -328,7 +329,7 @@ declare global {
         closeNativeHudSurface: () => void; // close-native-hud-surface
         onNativeHudLaunch: (
             callback: (
-                app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone",
+                app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots",
                 forceNew?: boolean
             ) => void
         ) => () => void; // native-hud-launch

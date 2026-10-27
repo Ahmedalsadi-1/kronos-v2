@@ -32,7 +32,7 @@ vi.mock("@/app/store/wshrpcutil", () => ({ TabRpcClient: {} }));
 vi.mock("@/app/store/wos", () => ({ makeORef: (kind, id) => `${kind}:${id}` }));
 vi.mock("@/app/view/hermes/hermes-quick-submit", () => ({ submitToHermes: vi.fn() }));
 vi.mock("@/app/view/hermes/hermes-surface-controller", () => ({
-    hermesSurfaceController: { requestOpenPanel: vi.fn() },
+    hermesSurfaceController: { requestOpenChat: vi.fn() },
 }));
 
 import { CanvasWorkflows } from "./workspace-canvas-workflows";

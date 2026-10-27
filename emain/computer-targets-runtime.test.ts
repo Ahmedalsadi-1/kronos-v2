@@ -15,6 +15,46 @@ const deviceList = (state = "Shutdown") =>
         },
     });
 
+it("validates and routes phone hardware buttons to each simulator adapter", async () => {
+    const androidKey = vi.fn();
+    const android = {
+        discover: async () => [{ id: "android-adb:phone", name: "Phone", status: "booted", runtime: "Android" }],
+        key: androidKey,
+    };
+    const androidRuntime = new ComputerTargetsRuntime(vi.fn(), "linux", undefined, android as any);
+    await androidRuntime.perform({
+        targetId: "android-adb:phone",
+        action: "button",
+        button: "power",
+        expectedGeneration: 0,
+    });
+    expect(androidKey).toHaveBeenCalledWith("android-adb:phone", "Power");
+    await expect(
+        androidRuntime.perform({ targetId: "android-adb:phone", action: "button", button: "invalid" })
+    ).rejects.toThrow("Unsupported device button");
+    await expect(
+        androidRuntime.perform({
+            targetId: "android-adb:phone",
+            action: "button",
+            button: "power",
+            expectedGeneration: 99,
+        })
+    ).rejects.toThrow("Control changed");
+
+    const iosButton = vi.fn();
+    const iosRuntime = new ComputerTargetsRuntime(
+        vi.fn(async () => deviceList("Booted")),
+        "darwin",
+        undefined,
+        undefined,
+        { button: iosButton } as any
+    );
+    await iosRuntime.perform({ targetId: DeviceId, action: "button", button: "power", expectedGeneration: 0 });
+    expect(iosButton).toHaveBeenCalledWith(DeviceId, "lock", expect.any(Function));
+    await iosRuntime.perform({ targetId: DeviceId, action: "button", button: "volume-up", expectedGeneration: 0 });
+    expect(iosButton).toHaveBeenCalledWith(DeviceId, "volume-up", expect.any(Function));
+});
+
 describe("ComputerTargetsRuntime", () => {
     it("filters unsupported devices and exposes only state-supported capabilities", () => {
         const data = JSON.parse(deviceList());

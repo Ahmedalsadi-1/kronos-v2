@@ -118,6 +118,28 @@ describe("KronTerm Agent delegation to KronosCode", () => {
         expect(mocks.initialize).not.toHaveBeenCalled();
     });
 
+    test("preserves the detected OpenCode executable and ACP launch arguments", async () => {
+        mocks.detect.mockResolvedValue([
+            {
+                backend: "opencode",
+                name: "OpenCode",
+                available: true,
+                cliPath: "/installed/opencode",
+                acpArgs: ["acp", "--port", "0"],
+            },
+        ]);
+        const result = JSON.parse(await bridge().acpRunAgent("opencode", "Inspect the repository"));
+        expect(mocks.initialize).toHaveBeenCalledWith(
+            expect.objectContaining({
+                backend: "opencode",
+                cliPath: "/installed/opencode",
+                customArgs: ["acp", "--port", "0"],
+            })
+        );
+        expect(mocks.runtime).not.toHaveBeenCalled();
+        expect(result.backend).toBe("opencode");
+    });
+
     test("does not grant local workspace tools to a remote KronosCode backend", async () => {
         mocks.runtime.mockResolvedValueOnce({ baseUrl: "https://coding.example.com" });
         const result = JSON.parse(await bridge().acpRunAgent("kronoscode", "Inspect"));

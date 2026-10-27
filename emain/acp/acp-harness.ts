@@ -3,6 +3,7 @@
 
 import { createHash, randomUUID } from "crypto";
 import path from "path";
+import { groupKronTermTools, KronTermToolFamilies } from "../../mcp-kron-term/src/tool-families";
 import type { AcpAgentCapabilities } from "./acp-types";
 
 export type AcpHarnessTaskClass =
@@ -31,6 +32,8 @@ export type KronTermToolsetId =
     | "sandbox"
     | "desktop"
     | "file"
+    | "canvas"
+    | "lsp"
     | "memory"
     | "skills"
     | "agents";
@@ -156,6 +159,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
             "widget_mouse_move",
             "widget_type",
             "widget_press",
+            "widget_sequence",
             "widget_scroll_to",
             "widget_drag",
             "widget_long_press",
@@ -169,7 +173,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         id: "browser",
         label: "In-app browser",
         description: "Reuse, tab, navigate, and read the KronTerm browser surface.",
-        tools: ["browser_open", "browser_open_tab", "browser_navigate", "browser_get_html"],
+        tools: ["browser_open", "browser_open_tab", "browser_navigate", "browser_get_html", "browser_configure"],
     },
     terminal: {
         id: "terminal",
@@ -243,6 +247,26 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         description: "Open, list, read, and inspect files and directories through KronTerm file access.",
         tools: ["file_open", "file_list", "file_read", "file_info"],
     },
+    canvas: {
+        id: "canvas",
+        ...KronTermToolFamilies.canvas,
+        tools: [
+            "canvas_load",
+            "canvas_snapshot",
+            "canvas_create_node",
+            "canvas_save",
+            "canvas_update_node",
+            "canvas_delete_node",
+            "canvas_connect_nodes",
+            "canvas_launch_node",
+            "canvas_upload_asset",
+        ],
+    },
+    lsp: {
+        id: "lsp",
+        ...KronTermToolFamilies.lsp,
+        tools: ["lsp_diagnostics", "lsp_symbols", "lsp_hover", "lsp_definition", "lsp_references"],
+    },
     memory: {
         id: "memory",
         label: "Developer memory & workspace sessions",
@@ -281,7 +305,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
 const TaskClassToolsets: Record<AcpHarnessTaskClass, KronTermToolsetId[]> = {
     "workspace-control": ["workspace", "hud", "widget", "sandbox", "desktop"],
     automation: ["sandbox", "desktop", "widget", "terminal"],
-    coding: ["file", "terminal", "widget", "workspace"],
+    coding: ["file", "terminal", "lsp", "widget", "workspace"],
     debugging: ["terminal", "widget", "file", "workspace"],
     research: ["browser", "file", "workspace"],
     review: ["file", "widget", "workspace"],
@@ -421,7 +445,8 @@ export function classifyHarnessTask(content: string): { taskClass: AcpHarnessTas
     const candidates: Array<{ taskClass: AcpHarnessTaskClass; pattern: RegExp; reason: string }> = [
         {
             taskClass: "workspace-control",
-            pattern: /\b(kronterm|workspace|widget|block|canvas|desktop|browser tab|sandbox|vm|emulator|simulator|phone|iphone|android)\b/,
+            pattern:
+                /\b(kronterm|workspace|widget|block|canvas|desktop|browser tab|sandbox|vm|emulator|simulator|phone|iphone|android)\b/,
             reason: "The request targets a live KronTerm or desktop workspace surface.",
         },
         {
@@ -459,7 +484,9 @@ export function classifyHarnessTask(content: string): { taskClass: AcpHarnessTas
 }
 
 function protocolCapabilities(capabilities: AcpAgentCapabilities | null): AcpCapabilityLease["protocol"] {
-    const mcp = (["stdio", "http", "sse"] as const).filter((type) => capabilities?.mcpCapabilities?.[type]);
+    const mcp = (["stdio", "http", "sse"] as const).filter((type) =>
+        type === "stdio" ? capabilities?.mcpCapabilities?.stdio !== false : capabilities?.mcpCapabilities?.[type]
+    );
     const session = (["fork", "resume", "list", "close"] as const).filter(
         (type) => capabilities?.sessionCapabilities?.[type]
     );
@@ -482,7 +509,7 @@ export function makeAcpCapabilityLease(input: {
     const now = Date.now();
     const classification = classifyHarnessTask(input.content);
     const profile = getAcpHarnessProfile(input.backend);
-    const toolsets = [...TaskClassToolsets[classification.taskClass]];
+    const toolsets: KronTermToolsetId[] = [...TaskClassToolsets[classification.taskClass], "skills"];
     if (input.backend === "hermes" || input.backend === "kronoscode") {
         toolsets.push("agents");
     }
@@ -521,11 +548,26 @@ export function makeAcpCapabilityLease(input: {
 }
 
 export function formatAcpCapabilityLease(lease: AcpCapabilityLease, availableTools?: string[]): string {
+    const groups = groupKronTermTools(
+        availableTools ?? Object.values(KronTermToolsets).flatMap((toolset) => toolset.tools)
+    );
     const toolsetLines = lease.toolsets
         .map((id) => {
-            const toolset = KronTermToolsets[id];
-            return `- ${toolset.label}: ${toolset.description} Tools: ${toolset.tools.filter((name) => availableTools == null || availableTools.includes(name)).join(", ")}`;
+            const toolset = KronTermToolFamilies[id];
+            return groups[id].length
+                ? `- ${toolset.label}: ${toolset.description} Tools: ${groups[id].join(", ")}`
+                : "";
         })
+        .filter(Boolean)
+        .join("\n");
+    const otherFamilies = Object.entries(groups)
+        .filter(
+            ([id, names]) =>
+                names.length &&
+                !lease.toolsets.includes(id as KronTermToolsetId) &&
+                (id !== "agents" || lease.toolsets.includes("agents"))
+        )
+        .map(([id, names]) => `- ${KronTermToolFamilies[id].label}: ${names.join(", ")}`)
         .join("\n");
     return `[KronTerm Specialist Capability Lease]
 Lease: ${lease.id}
@@ -535,6 +577,9 @@ Workspace: ${lease.workspace}
 Granted capabilities: ${lease.capabilities.join(", ")}
 Recommended toolsets (surface tool groups for this task class):
 ${toolsetLines}
+Other discoverable authorized tool families:
+${otherFamilies || "None available in this session."}
+Tool discovery: use tool_search for current descriptions and input schemas before using an unfamiliar tool. Recommendations do not grant permissions. Registration and advertisement do not prove runtime readiness: inspect host/device/server status first. Labs capabilities require supported hosts and current assignments. An unavailable runtime must report its missing prerequisite; never substitute an unrelated target or replay an uncertain mutation.
 Constraints: filesystem=${lease.constraints.filesystem}; writes=${lease.constraints.writes}; destructive=${lease.constraints.destructiveActions}; external-side-effects=${lease.constraints.externalSideEffects}; credentials=${lease.constraints.credentialAccess}; surface=${lease.constraints.surface}
 Expires: ${new Date(lease.expiresAt).toISOString()}
 

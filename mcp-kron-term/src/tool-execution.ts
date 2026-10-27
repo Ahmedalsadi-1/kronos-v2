@@ -19,7 +19,15 @@ export type ToolOperation = {
 export const ToolOperationContext = new AsyncLocalStorage<ToolOperation>();
 
 export function toolTimeoutMs(name: string, args: Record<string, unknown>, readOnly: boolean): number {
-    if (name.startsWith("kron_computer_background_workspace_")) return 120_000;
+    if (name.startsWith("kron_computer_")) return 125_000;
+    if (
+        ["linux_desktop_exec", "linux_desktop_apps", "linux_desktop_launch_app", "linux_desktop_open_url"].includes(
+            name
+        )
+    )
+        return 100_000;
+    if (name === "sandbox_task_finish") return 60_000;
+    if (name.startsWith("linux_desktop_") && name !== "linux_desktop_start") return 60_000;
     if (name === "acp_run_agent") return Math.min(600, Math.max(15, Number(args.timeoutSeconds) || 180)) * 1000 + 5000;
     if (name === "linux_desktop_start" || name === "sandbox_task_start") return 180_000;
     if (name === "widget_wait_for") return Math.min(60_000, Math.max(100, Number(args.timeoutMs) || 10_000)) + 2000;
@@ -37,20 +45,29 @@ export class ToolFailure extends Error {
     }
 }
 
+function explicitToolFailure(value: any): boolean {
+    return (
+        value != null &&
+        typeof value === "object" &&
+        (value.success === false ||
+            value.ok === false ||
+            value.met === false ||
+            value.isError === true ||
+            Boolean(value.error))
+    );
+}
+
 export function normalizeToolResult(result: any): any {
-    let failure: unknown;
-    if (result?.success === false || result?.error) failure = result.error ?? result.message ?? "Action failed";
+    let failed = explicitToolFailure(result) || explicitToolFailure(result?.structuredContent);
     for (const item of result?.content ?? []) {
         if (item.type !== "text") continue;
         try {
-            const parsed = JSON.parse(item.text);
-            if (parsed?.success === false || parsed?.met === false || parsed?.error)
-                failure = parsed.error ?? parsed.message ?? "Action failed";
+            failed ||= explicitToolFailure(JSON.parse(item.text));
         } catch {
-            /* Plain text is a valid tool result. */
+            /* Page text and command output are not failure envelopes. */
         }
     }
-    return failure ? { ...result, isError: true } : result;
+    return failed ? { ...result, isError: true } : result;
 }
 
 const Diagnostics: Record<string, unknown>[] = [];

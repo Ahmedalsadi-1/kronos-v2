@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { filePathFromAgentInput } from "@/types/agent-file-activity";
 import {
     inferAgentActivityAction,
     pointFromAgentActivityInput,
@@ -112,6 +113,7 @@ export function hermesToolActivityToAgentActivity(activity: HermesToolActivity):
         surface,
         action,
         blockid,
+        filepath: surface === "file" ? filePathFromAgentInput(activity.args) : undefined,
         detail: describeHermesTool(activity.name, activity.args, activity.context),
         point: pointFromAgentActivityInput(activity.args),
         risk: surface === "terminal" || action === "type" ? "write" : "read",

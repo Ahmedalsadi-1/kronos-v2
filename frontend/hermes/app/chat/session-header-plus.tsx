@@ -2,12 +2,12 @@ import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
+import { $terminalTakeover, setTerminalTakeover } from '@hermes/app/right-sidebar/store'
 import { Codicon } from '@hermes/components/ui/codicon'
 import { Tip } from '@hermes/components/ui/tooltip'
 import { cn } from '@hermes/lib/utils'
 import { $fileBrowserOpen, $panesFlipped, toggleFileBrowserOpen } from '@hermes/store/layout'
 import { type PreviewTarget, $previewTabs, openPreview } from '@hermes/store/preview'
-import { $terminalTakeover, setTerminalTakeover } from '@hermes/app/right-sidebar/store'
 
 interface PanelAction {
   id: string
@@ -96,6 +96,34 @@ export function SessionHeaderPlusButton() {
   }, [])
 
   const panels: PanelAction[] = [
+    ...((window as any).api
+      ? [
+          {
+            id: 'workflow-canvas',
+            icon: 'type-hierarchy',
+            label: 'Workflow Canvas',
+            isActive: false,
+            onClick: () => {
+              window.dispatchEvent(
+                new CustomEvent('kronterm:open-plugin-widget', {
+                  detail: { view: 'plugin:kronterm.openhuman-workflow/canvas' }
+                })
+              )
+              setOpen(false)
+            }
+          },
+          {
+            id: 'bots',
+            icon: 'robot',
+            label: 'Bots and settings',
+            isActive: false,
+            onClick: () => {
+              window.dispatchEvent(new CustomEvent('kronterm:open-plugin-widget', { detail: { view: 'bots' } }))
+              setOpen(false)
+            }
+          }
+        ]
+      : []),
     {
       id: 'browser',
       icon: 'globe',
@@ -129,7 +157,7 @@ export function SessionHeaderPlusButton() {
             'hover:bg-(--chrome-action-hover)',
             open && 'bg-(--chrome-action-hover)'
           )}
-          onClick={() => setOpen(prev => !prev)}
+          onClick={() => setOpen((prev) => !prev)}
         >
           <Codicon name="add" className="text-(--ui-text-primary)" />
         </button>
@@ -138,10 +166,11 @@ export function SessionHeaderPlusButton() {
       {open &&
         createPortal(
           <div
+            data-hermes-portal=""
             className="flex gap-1 rounded-lg border border-(--ui-stroke-secondary) bg-(--ui-surface-background) p-1.5 shadow-lg"
             style={popupStyle}
           >
-            {panels.map(panel => (
+            {panels.map((panel) => (
               <Tip key={panel.id} label={panel.label}>
                 <button
                   className={cn(

@@ -20,8 +20,8 @@ vi.mock("@hermes/app/right-sidebar", () => ({
         <button onClick={() => onOpenFile(`${cwd}/changed.ts`)}>changed.ts</button>
     ),
 }));
-vi.mock("./kronterm-file-editor", () => ({
-    KrontermFileEditor: ({ path, onDirtyChange }) => (
+vi.mock("./kronterm-file-preview", () => ({
+    KrontermFilePreview: ({ path, onDirtyChange }) => (
         <div>
             Editable {path}
             <button onClick={() => onDirtyChange(true)}>Edit source</button>
@@ -182,6 +182,9 @@ it("resizes the side panel from the tab strip grip and folds it into a compact r
         await act(async () => compactButton.click());
         expect($krontermInspectorCompact.get()).toBe(true);
         expect(host.querySelector("section").className).toContain("is-compact");
+        await act(async () => host.querySelector<HTMLButtonElement>('[role="tab"]').click());
+        expect($krontermInspectorCompact.get()).toBe(false);
+        expect($krontermInspectorWidth.get()).toBe(KRONTERM_INSPECTOR_MIN_WIDTH);
     } finally {
         await act(async () => root.unmount());
         host.remove();

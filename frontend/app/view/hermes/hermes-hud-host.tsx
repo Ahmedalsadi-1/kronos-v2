@@ -11,11 +11,24 @@ import {
     type HermesComposerSubmitted,
 } from "@hermes/app/chat/composer/hooks/use-composer-submit";
 import { markKronTermWidgetHost } from "@hermes/lib/kronterm-host";
+import {
+    $krontermInspectorHasFiles,
+    $krontermInspectorOpen,
+    $krontermInspectorSection,
+    $krontermInspectorTarget,
+    $krontermSidebarTarget,
+    KrontermInspectorChatEvent,
+    KrontermInspectorChatTargetId,
+    KrontermSidebarActivateEvent,
+} from "@hermes/lib/kronterm-sidebar";
 import { ComposerAttachmentUserRemovedEvent, mainComposerScope, type ComposerAttachment } from "@hermes/store/composer";
+import { $sidebarOpen } from "@hermes/store/layout";
+import { useStore } from "@nanostores/react";
 import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { makeCanvasAttachments, mergeCanvasAttachments } from "./hermes-canvas-context";
+import { HermesChatMount } from "./hermes-chat-mount";
 import { installHermesDesktopShim } from "./hermes-desktop-shim";
-import { HermesHudOverlay } from "./hermes-hud-overlay";
+import { HermesHudFrame, HermesHudOverlay } from "./hermes-hud-overlay";
 import { HermesHudStreamCard } from "./hermes-hud-stream-card";
 import { hermesSurfaceController } from "./hermes-surface-controller";
 import { useKrontermHudMode } from "./kronterm-hud-mode";
@@ -45,7 +58,9 @@ export function HermesHudHost({
     canvasContext,
     onExpand,
     tabId,
+    placement = "floating",
 }: {
+    placement?: "floating" | "bottom" | "top" | "shell";
     autoOpen: boolean;
     canvasContext: WorkspaceCanvasComposerContext;
     onExpand: () => Promise<void>;
@@ -56,7 +71,16 @@ export function HermesHudHost({
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
-    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, surface.presentation === "hud");
+    const chatActive = surface.presentation === "hud" || surface.presentation === "panel";
+    const sidebarTarget = useStore($krontermSidebarTarget);
+    const sidebarOpen = useStore($sidebarOpen);
+    const inspectorTarget = useStore($krontermInspectorTarget);
+    const inspectorOpen = useStore($krontermInspectorOpen);
+    const inspectorHasFiles = useStore($krontermInspectorHasFiles);
+    const dockedChat = surface.presentation === "panel" && Boolean(inspectorTarget);
+    const sidebarActive =
+        (Boolean(sidebarTarget) && sidebarOpen) || (Boolean(inspectorTarget) && (inspectorOpen || inspectorHasFiles));
+    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, chatActive || sidebarActive);
     const krontermHudMode = useKrontermHudMode();
     const previousAutoOpenRef = useRef(false);
     const managedAttachmentsRef = useRef<ComposerAttachment[]>([]);
@@ -65,6 +89,25 @@ export function HermesHudHost({
     ensureShim();
 
     useEffect(() => hermesSurfaceController.setExpandHandler(onExpand), [onExpand]);
+    useEffect(() => {
+        const dock = () => hermesSurfaceController.requestOpenPanel();
+        window.addEventListener(KrontermInspectorChatEvent, dock);
+        return () => window.removeEventListener(KrontermInspectorChatEvent, dock);
+    }, []);
+    useEffect(() => {
+        if (!dockedChat) return;
+        $krontermInspectorOpen.set(true);
+        $krontermInspectorSection.set("chat");
+    }, [dockedChat]);
+    useEffect(() => {
+        const activate = () => {
+            if (hermesSurfaceController.getSnapshot().presentation === "closed") {
+                hermesSurfaceController.requestOpenHud();
+            }
+        };
+        window.addEventListener(KrontermSidebarActivateEvent, activate);
+        return () => window.removeEventListener(KrontermSidebarActivateEvent, activate);
+    }, []);
 
     useEffect(() => {
         if (
@@ -173,55 +216,45 @@ export function HermesHudHost({
         return () => window.removeEventListener("keydown", toggleFromShortcut, true);
     }, []);
 
-    if (surface.presentation !== "hud") {
+    if (!chatActive && !sidebarActive) {
         return null;
     }
 
     const { x, y, width, height } = surface.geometry;
 
     return (
-        <HermesHudOverlay>
-            {krontermHudMode.active ? (
-                <KrontermHudModeCard hudGeometry={{ x, y, width }} mode={krontermHudMode} />
-            ) : (
-                <HermesHudStreamCard hudGeometry={{ x, y, width }} />
-            )}
-            <KrontermVoiceHudCard onClose={() => undefined} />
-            <div
-                aria-label="KronTerm Agent HUD"
-                className="pointer-events-none fixed z-[115] overflow-visible"
-                data-kronterm-hermes-hud=""
-                style={{ left: x, top: y, width, height }}
+        <>
+            <div id={`hermes-chat-closed-${tabId}`} hidden />
+            <HermesChatMount
+                targetId={dockedChat ? KrontermInspectorChatTargetId : `hermes-chat-${surface.presentation}-${tabId}`}
             >
                 {connectionReady ? (
-                    <Suspense
-                        fallback={
-                            <div className="pointer-events-auto grid h-full place-items-center rounded-xl border border-white/10 bg-[#080a0df2] text-xs text-white/55 shadow-2xl backdrop-blur-xl">
-                                Loading Kronos…
-                            </div>
-                        }
-                    >
-                        <LazyHermesApp hudMode />
+                    <Suspense fallback={<div className="hermes-workspace-panel-state">Loading KronTerm Agent…</div>}>
+                        <LazyHermesApp hudMode dockedChat={dockedChat} />
                     </Suspense>
                 ) : (
-                    <div className="pointer-events-auto grid h-full place-items-center rounded-xl border border-white/10 bg-[#080a0df2] text-xs text-white/55 shadow-2xl backdrop-blur-xl">
-                        <HermesConnectionState error={error} retry={retry} />
-                    </div>
+                    <HermesConnectionState error={error} retry={retry} />
                 )}
-            </div>
-        </HermesHudOverlay>
+            </HermesChatMount>
+            {surface.presentation === "hud" && (
+                <HermesHudOverlay targetId={placement === "shell" ? `hermes-hud-shell-${tabId}` : undefined}>
+                    {placement === "floating" &&
+                        (krontermHudMode.active ? (
+                            <KrontermHudModeCard hudGeometry={{ x, y, width }} mode={krontermHudMode} />
+                        ) : (
+                            <HermesHudStreamCard hudGeometry={{ x, y, width }} />
+                        ))}
+                    {placement === "floating" && <KrontermVoiceHudCard onClose={() => undefined} />}
+                    <HermesHudFrame placement={placement} geometry={{ x, y, width, height }}>
+                        <div id={`hermes-chat-hud-${tabId}`} className="pointer-events-auto h-full min-h-0" />
+                    </HermesHudFrame>
+                </HermesHudOverlay>
+            )}
+        </>
     );
 }
 
 export function HermesPanelHost({ tabId }: { tabId: string }) {
-    const surface = useSyncExternalStore(
-        hermesSurfaceController.subscribe,
-        hermesSurfaceController.getSnapshot,
-        hermesSurfaceController.getSnapshot
-    );
-    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, surface.presentation === "panel");
-    ensureShim();
-
     return (
         <section
             className="hermes-workspace-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
@@ -231,22 +264,18 @@ export function HermesPanelHost({ tabId }: { tabId: string }) {
                 <button
                     type="button"
                     onClick={() => hermesSurfaceController.requestOpenHud()}
-                    aria-label="Move Kronos to HUD"
-                    title="Move to HUD"
-                    className="cursor-pointer"
+                    aria-label="Return to HUD"
+                    title="Return to HUD"
+                    className="flex cursor-pointer items-center gap-2 text-xs focus-visible:outline-2"
                 >
                     <i className="fa-solid fa-window-restore" aria-hidden="true" />
+                    Return to HUD
                 </button>
             </div>
-            <div className="hermes-workspace-panel-content min-h-0 min-w-0 flex-1 overflow-hidden">
-                {connectionReady ? (
-                    <Suspense fallback={<div className="hermes-workspace-panel-state">Loading Kronos…</div>}>
-                        <LazyHermesApp panelMode />
-                    </Suspense>
-                ) : (
-                    <HermesConnectionState error={error} retry={retry} />
-                )}
-            </div>
+            <div
+                id={`hermes-chat-panel-${tabId}`}
+                className="hermes-workspace-panel-content min-h-0 min-w-0 flex-1 overflow-hidden"
+            />
         </section>
     );
 }

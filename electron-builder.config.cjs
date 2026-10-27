@@ -59,6 +59,11 @@ const config = {
         "!node_modules", // We don't need electron-builder to package in Node modules as Vite has already bundled any code that our program is using.
     ],
     extraResources: [
+        {
+            from: "integrations/openmausbot/upstream",
+            to: "openmausbot",
+            filter: ["dist/**/*", "dist-server/**/*", "LICENSE", "NOTICE", "LICENSING.md", "third_party/**/*", "package.json", "skills/**/*"],
+        },
         { from: "scripts/import-workflow-pack.py", to: "workflow-packs/import-workflow-pack.py" },
         {
             from: "emain/linux-desktop/upstream",

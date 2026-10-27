@@ -49,6 +49,35 @@ import { launchKronTermHudIsland } from "./kronterm-hud-islands";
 describe("KronTerm HUD island launcher", () => {
     beforeEach(() => vi.clearAllMocks());
 
+    it("opens a requested file in the existing explorer before selecting its notch preview", async () => {
+        const goHistory = vi.fn(async () => {});
+        const setEditMode = vi.fn(async () => {});
+        mocks.getModels.mockReturnValueOnce([
+            { viewModel: { viewType: "preview", blockId: "files-existing", goHistory, setEditMode } },
+        ]);
+        await expect(launchKronTermHudIsland("files", { file: "/project/live.ts" })).resolves.toBe("files-existing");
+        expect(goHistory).toHaveBeenCalledWith("/project/live.ts");
+        expect(setEditMode).toHaveBeenCalledWith(true);
+        expect(mocks.selectNativeHudWidget).toHaveBeenCalledWith("files-existing", true);
+        expect(mocks.createBlock).not.toHaveBeenCalled();
+    });
+
+    it("opens the workflow plugin as a live notch widget", async () => {
+        await launchKronTermHudIsland("workflowcanvas");
+        expect(mocks.createBlock).toHaveBeenCalledWith(
+            { meta: { view: "plugin:kronterm.openhuman-workflow/canvas" } },
+            { termsize: { rows: 25, cols: 80 } }
+        );
+        expect(mocks.openNativeHudIsland).toHaveBeenCalledWith(
+            expect.objectContaining({ view: "plugin:kronterm.openhuman-workflow/canvas", title: "Workflow Canvas" })
+        );
+    });
+    it("reuses the persistent Bots widget from the notch", async () => {
+        mocks.getModels.mockReturnValueOnce([{ viewModel: { viewType: "bots", blockId: "bots-existing" } }]);
+        await expect(launchKronTermHudIsland("bots")).resolves.toBe("bots-existing");
+        expect(mocks.selectNativeHudWidget).toHaveBeenCalledWith("bots-existing", true);
+        expect(mocks.createBlock).not.toHaveBeenCalled();
+    });
     it("switches an existing device widget to the phone requested by the notch", async () => {
         mocks.getModels.mockReturnValueOnce([{ viewModel: { viewType: "linux-vms", blockId: "devices" } }]);
         await expect(launchKronTermHudIsland("machines", { machineKind: "iphone" })).resolves.toBe("devices");

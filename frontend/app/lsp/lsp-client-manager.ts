@@ -12,6 +12,7 @@ import { BUILTIN_LSP_CONFIGS, LspLanguageConfig } from "../../types/lsp-types";
  * Maps Monaco language IDs to running LSP clients.
  */
 const activeClients = new Map<string, MonacoLanguageClient>();
+const pendingClients = new Map<string, Promise<MonacoLanguageClient | null>>();
 
 /**
  * Resolve the LspLanguageConfig for a given Monaco language ID.
@@ -28,11 +29,25 @@ export async function startLspClient(
     model: MonacoTypes.editor.ITextModel,
     language: string
 ): Promise<MonacoLanguageClient | null> {
-    // Don't start if there's already a client for this language
     if (activeClients.has(language)) {
         return activeClients.get(language)!;
     }
+    const pending = pendingClients.get(language);
+    if (pending != null) return pending;
 
+    const start = createLspClient(model, language);
+    pendingClients.set(language, start);
+    try {
+        return await start;
+    } finally {
+        pendingClients.delete(language);
+    }
+}
+
+async function createLspClient(
+    model: MonacoTypes.editor.ITextModel,
+    language: string
+): Promise<MonacoLanguageClient | null> {
     const config = getConfigForLanguage(language);
     if (!config) {
         return null; // no LSP configured for this language (e.g. plaintext, markdown)
@@ -108,7 +123,8 @@ export async function startLspClient(
             if (stateChange.newState === 3) {
                 // Stopped state
                 changeSub.dispose();
-                activeClients.delete(language);
+                if (activeClients.get(language) === client) activeClients.delete(language);
+                session.stop();
             }
         });
 

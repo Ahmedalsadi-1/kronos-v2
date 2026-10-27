@@ -1,3 +1,6 @@
+import { TapflowModel } from "@/app/view/tapflow/tapflow-model";
+import { BotsModel } from "@/app/view/bots/bots";
+import { WorkflowCanvasModel } from "@/app/view/workflowcanvas/workflowcanvas-model";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -70,6 +73,10 @@ BlockRegistry.set("medialibrary", MediaLibraryViewModel);
 BlockRegistry.set("imagestudio", ImageStudioModel);
 BlockRegistry.set("personal", PersonalViewModel);
 BlockRegistry.set("gamestudio", GameStudioModel);
+BlockRegistry.set("plugin:kronterm.openhuman-workflow/canvas", WorkflowCanvasModel);
+BlockRegistry.set("plugin:kronterm.tapflow/devices", TapflowModel);
+BlockRegistry.set("workflowcanvas", WorkflowCanvasModel);
+BlockRegistry.set("bots", BotsModel);
 BlockRegistry.set("term", TermViewModel);
 BlockRegistry.set("preview", PreviewModel);
 BlockRegistry.set("web", WebViewModel);

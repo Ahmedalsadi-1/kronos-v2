@@ -20,7 +20,7 @@ import { toolTimeoutMs } from "./tool-execution.js";
 const ReadOnlyTools = new Set<string>();
 const URL_ENV = "KRONTERM_NATIVE_TOOL_URL";
 const TOKEN_ENV = "KRONTERM_NATIVE_TOOL_TOKEN";
-const MAX_OUTPUT_CHARS = 16 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 28 * 1024 * 1024;
 
 type NativeTool = {
     name?: unknown;
@@ -33,39 +33,75 @@ function isNativeTool(value: unknown): value is NativeTool & { name: string } {
     return typeof value === "object" && value != null && typeof (value as NativeTool).name === "string";
 }
 
-async function bridgeRequest(payload: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    const url = (process.env[URL_ENV] ?? "").trim();
+export async function bridgeRequest(
+    payload: Record<string, unknown>,
+    signal?: AbortSignal
+): Promise<Record<string, unknown>> {
+    const endpoint = (process.env[URL_ENV] ?? "").trim();
     const token = (process.env[TOKEN_ENV] ?? "").trim();
-    if (!url || !token) {
-        return { error: "KronTerm native tool bridge is unavailable (missing URL or token)" };
-    }
-    let response: Response;
+    if (!endpoint || !token) return { error: "KronTerm native tool bridge is unavailable (missing URL or token)" };
+    const name = String(payload.name);
+    const mutation = payload.method === "call" && !ReadOnlyTools.has(name);
+    let dispatched = false;
+    const failure = (message: string, uncertain = dispatched && mutation) => ({
+        error: message,
+        failure: { code: "TRANSPORT_FAILED", retryable: false, uncertain },
+    });
     try {
-        response = await fetch(url, {
+        const url = new URL(endpoint);
+        if (
+            url.protocol !== "http:" ||
+            !["127.0.0.1", "[::1]", "localhost"].includes(url.hostname) ||
+            url.username ||
+            url.password ||
+            url.pathname !== "/native" ||
+            url.search ||
+            url.hash
+        )
+            return failure("KronTerm native transport must use a local HTTP /native endpoint.", false);
+        if (url.hostname === "localhost") url.hostname = "127.0.0.1";
+        signal?.throwIfAborted();
+        const budget =
+            payload.method === "call"
+                ? toolTimeoutMs(name, (payload.arguments ?? {}) as Record<string, unknown>, ReadOnlyTools.has(name)) +
+                  5000
+                : 15000;
+        dispatched = true;
+        const response = await fetch(url, {
             method: "POST",
+            redirect: "error",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify(payload),
-            signal: AbortSignal.any([AbortSignal.timeout(payload.method === "call" ? toolTimeoutMs(String(payload.name), (payload.arguments ?? {}) as Record<string, unknown>, ReadOnlyTools.has(String(payload.name))) + 5000 : 15000), ...(signal ? [signal] : [])]),
+            signal: AbortSignal.any([AbortSignal.timeout(budget), ...(signal ? [signal] : [])]),
         });
-    } catch (error) {
-        return {
-            error: `KronTerm native tool bridge failed: ${error instanceof Error ? error.message : String(error)}`,
-        };
-    }
-    const text = await response.text();
-    if (text.length > MAX_OUTPUT_CHARS) {
-        return { error: "KronTerm native tool bridge returned an oversized response" };
-    }
-    if (response.status !== 200) {
-        return { error: `KronTerm native tool bridge returned ${response.status}: ${text.slice(0, 200)}` };
-    }
-    try {
+        if (!response.body) return failure("KronTerm native tool bridge returned an empty response");
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        try {
+            while (true) {
+                const chunk = await reader.read();
+                if (chunk.done) break;
+                size += chunk.value.byteLength;
+                if (size > MAX_OUTPUT_BYTES)
+                    return failure("KronTerm native tool bridge returned an oversized response");
+                chunks.push(chunk.value);
+            }
+        } finally {
+            await reader.cancel().catch(() => {});
+        }
+        const text = Buffer.concat(chunks).toString("utf8");
+        if (response.status !== 200)
+            return failure(
+                `KronTerm native tool bridge returned ${response.status}: ${text.slice(0, 200)}`,
+                mutation && response.status >= 500
+            );
         const parsed: unknown = JSON.parse(text);
-        return typeof parsed === "object" && parsed != null
-            ? (parsed as Record<string, unknown>)
-            : { error: "KronTerm native tool bridge returned an invalid response" };
-    } catch {
-        return { error: "KronTerm native tool bridge returned invalid JSON" };
+        if (typeof parsed !== "object" || parsed == null || Array.isArray(parsed))
+            return failure("KronTerm native tool bridge returned an invalid response");
+        return parsed as Record<string, unknown>;
+    } catch (error) {
+        return failure(`KronTerm native tool bridge failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
@@ -95,15 +131,26 @@ export async function startKronTermNativeProxy(): Promise<void> {
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-        const response = await bridgeRequest({
-            method: "call",
-            name: request.params.name,
-            arguments: (request.params.arguments ?? {}) as Record<string, unknown>,
-        }, extra.signal);
+        const response = await bridgeRequest(
+            {
+                method: "call",
+                name: request.params.name,
+                arguments: (request.params.arguments ?? {}) as Record<string, unknown>,
+            },
+            extra.signal
+        );
         if (response.error) {
             return {
-                content: [{ type: "text", text: String(response.error) }],
+                content: [
+                    {
+                        type: "text",
+                        text: response.failure
+                            ? JSON.stringify({ error: response.error, failure: response.failure })
+                            : String(response.error),
+                    },
+                ],
                 isError: true,
+                _meta: response.failure ? { failure: response.failure } : undefined,
             };
         }
         return response;

@@ -1,10 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { createInterface, type Interface } from "node:readline";
 import { ComputerUseLatency } from "./computer-use-latency.js";
+import { ToolOperationContext } from "./tool-execution.js";
 
 type JsonRpcResponse = {
     id?: number;
@@ -83,18 +84,22 @@ export class KronComputerUseClient {
 
     async callTool(name: string, args: Record<string, unknown> = {}): Promise<KronComputerUseToolResult> {
         const boundArgs = structuredClone(args);
+        const signal = ToolOperationContext.getStore()?.signal;
         const generation = this.generation;
         return this.serialize(async () => {
             const phase = this.child && !this.child.killed && !this.startPromise ? "call:warm" : "call:cold";
             const started = performance.now();
             let failed = false;
             try {
+                signal?.throwIfAborted();
                 await this.ensureStarted();
+                signal?.throwIfAborted();
                 this.assertGeneration(generation);
                 const result = (await this.request("tools/call", {
                     name,
-                    arguments: args,
+                    arguments: boundArgs,
                 })) as KronComputerUseToolResult;
+                signal?.throwIfAborted();
                 failed = result.isError === true;
                 return result;
             } catch (error) {
@@ -120,24 +125,30 @@ export class KronComputerUseClient {
     async callSequence(calls: KronComputerUseCall[]): Promise<KronComputerUseToolResult[]> {
         validateComputerUseSequence(calls);
         const boundCalls = structuredClone(calls);
+        const signal = ToolOperationContext.getStore()?.signal;
         const generation = this.generation;
         return this.serialize(async () => {
             const started = performance.now();
             let failed = false;
             try {
+                signal?.throwIfAborted();
                 await this.ensureStarted();
+                signal?.throwIfAborted();
                 const results: KronComputerUseToolResult[] = [];
                 for (const call of boundCalls) {
+                    signal?.throwIfAborted();
                     this.assertGeneration(generation);
                     const result = (await this.request("tools/call", {
                         name: call.name,
                         arguments: call.args ?? {},
                     })) as KronComputerUseToolResult;
+                    signal?.throwIfAborted();
                     results.push(result);
                     if (result.isError) {
                         failed = true;
                         const observation = boundCalls.at(-1);
                         if (call !== observation && observation?.name === "get_app_state") {
+                            signal?.throwIfAborted();
                             this.assertGeneration(generation);
                             results.push(
                                 (await this.request("tools/call", {
@@ -225,6 +236,13 @@ export class KronComputerUseClient {
         const child = spawn(binary, ["mcp"], {
             env: {
                 ...process.env,
+                PATH: [
+                    ...new Set([
+                        ...(isAbsolute(binary) ? [dirname(binary)] : []),
+                        ...(process.env.PATH ?? "").split(delimiter).filter(Boolean),
+                        ...(process.platform === "darwin" ? ["/opt/homebrew/bin", "/usr/local/bin"] : []),
+                    ]),
+                ].join(delimiter),
                 OPEN_COMPUTER_USE_VISUAL_CURSOR: process.env.OPEN_COMPUTER_USE_VISUAL_CURSOR ?? "1",
             },
             stdio: ["pipe", "pipe", "pipe"],

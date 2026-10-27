@@ -63,6 +63,8 @@ export type KronosCodeAcpApi = {
     acpCancel: ElectronApi["acpCancel"];
     acpStop: ElectronApi["acpStop"];
     acpDetectAgents: ElectronApi["acpDetectAgents"];
+    acpGetModelInfo?: ElectronApi["acpGetModelInfo"];
+    acpSetModel?: ElectronApi["acpSetModel"];
     onAcpEvent: ElectronApi["onAcpEvent"];
 };
 
@@ -251,6 +253,7 @@ export class KronosCodeHermesBackend {
     private sessions = new Map<string, KronosCodeSession>();
     private eventListeners = new Set<(event: HermesGatewayEventFrame) => void>();
     private activeListeners = new Set<(id: HermesAgentBackendId) => void>();
+    private draftCatalogs = new Map<string, Promise<unknown>>();
     private removeAcpListener: (() => void) | undefined;
     private getApi: () => KronosCodeAcpApi | undefined;
     private store: Pick<typeof AcpService, "GetSession" | "SaveSession">;
@@ -328,6 +331,9 @@ export class KronosCodeHermesBackend {
 
     /** Returns a promise when this adapter owns the request, otherwise undefined. */
     route(method: string, params: Record<string, unknown> = {}): Promise<unknown> | undefined {
+        if (method === "model.options" && !params.session_id && this.active !== "hermes") {
+            return this.draftModelOptions(this.active);
+        }
         if (method === "session.create" && this.active !== "hermes") {
             return this.createSession(params);
         }
@@ -337,6 +343,10 @@ export class KronosCodeHermesBackend {
         }
         const session = this.sessions.get(sessionId);
         switch (method) {
+            case "model.options":
+                return this.sessionModelOptions(sessionId);
+            case "config.set":
+                return this.setSessionModel(sessionId, params);
             case "prompt.submit":
                 return this.submit(session, sessionId, params);
             case "session.interrupt":
@@ -352,6 +362,66 @@ export class KronosCodeHermesBackend {
                 // Hermes-only features (yolo, usage, model switching) have no ACP twin yet.
                 return Promise.reject(new UnsupportedAcpOperationError(method));
         }
+    }
+
+    private modelOptions(backend: string, modelInfo: any) {
+        const models = (modelInfo?.availableModels ?? []).map((model: any) => model.id).filter(Boolean);
+        const model = modelInfo?.currentModelId ?? "";
+        if (model && !models.includes(model)) models.unshift(model);
+        return { provider: backend, model, providers: [{ slug: backend, name: backend, models }] };
+    }
+
+    private draftModelOptions(backend: string): Promise<unknown> {
+        const existing = this.draftCatalogs.get(backend);
+        if (existing) return existing;
+        const pending = this.loadDraftModelOptions(backend).finally(() => this.draftCatalogs.delete(backend));
+        this.draftCatalogs.set(backend, pending);
+        return pending;
+    }
+
+    private async loadDraftModelOptions(backend: string): Promise<unknown> {
+        const api = this.getApi();
+        if (!api) throw new Error("Agent model discovery requires KronTerm");
+        const agent = (await api.acpDetectAgents()).find((item) => item.backend === backend && item.available);
+        if (!agent) throw new Error(`${backend} is unavailable`);
+        const conversationId = `hermes-models-${crypto.randomUUID()}`;
+        try {
+            const result = await api.acpInitialize({
+                conversationId,
+                backend,
+                cliPath: agent.cliPath,
+                customArgs: agent.acpArgs,
+                surfaceContext: this.resolveTabContext(),
+            });
+            if (!result?.success) throw new Error(result?.error || "Model discovery failed");
+            return this.modelOptions(backend, result.state?.modelInfo);
+        } finally {
+            await api.acpStop({ conversationId });
+        }
+    }
+
+    private async sessionModelOptions(sessionId: string): Promise<unknown> {
+        const session = await this.restore(sessionId);
+        const result = await this.getApi()?.acpGetModelInfo?.({ conversationId: session.conversationId });
+        if (!result?.success) throw new Error(result?.error || "Agent model catalog unavailable");
+        return this.modelOptions(session.backend, result.data?.modelInfo);
+    }
+
+    private async setSessionModel(sessionId: string, params: Record<string, unknown>): Promise<unknown> {
+        if (params.key !== "model") throw new UnsupportedAcpOperationError(String(params.key));
+        const session = await this.restore(sessionId);
+        const modelId = String(params.value ?? "")
+            .split(/\s+--provider\s+/)[0]
+            .trim();
+        if (!modelId) throw new Error("A model is required");
+        const result = await this.getApi()?.acpSetModel?.({ conversationId: session.conversationId, modelId });
+        if (!result?.success) throw new Error(result?.error || "Agent model switch failed");
+        session.stored.meta["hermes:model"] = modelId;
+        await this.persist(session);
+        this.emit([
+            { type: "session.info", session_id: sessionId, payload: { model: modelId, provider: session.backend } },
+        ]);
+        return { ok: true };
     }
 
     private emit(frames: HermesGatewayEventFrame[]): void {
@@ -429,6 +499,15 @@ export class KronosCodeHermesBackend {
         if (!result?.success) {
             throw new Error(result?.error || `${agent.name || backend} failed to start`);
         }
+        if (typeof params.model === "string" && params.model && params.provider === backend) {
+            const switched = await api.acpSetModel?.({ conversationId, modelId: params.model });
+            if (!switched?.success) {
+                await api.acpStop({ conversationId });
+                throw new Error(switched?.error || "Could not apply the selected agent model");
+            }
+            if (switched.data?.modelInfo) result.state.modelInfo = switched.data.modelInfo;
+        }
+        const model = result.state?.modelInfo?.currentModelId ?? result.state?.modelInfo?.currentModelLabel;
         this.sessions.set(sessionId, {
             backend,
             conversationId,
@@ -447,15 +526,19 @@ export class KronosCodeHermesBackend {
                 createdts: Date.now(),
                 updatedts: Date.now(),
                 events: [],
-                meta: { "hermes:adapter": true } as MetaType,
+                meta: { "hermes:adapter": true, "hermes:model": model } as MetaType,
                 status: "idle",
             },
         });
         await this.persist(this.sessions.get(sessionId));
-        const model = result.state?.modelInfo?.currentModelLabel ?? result.state?.modelInfo?.currentModelId;
         return {
             session_id: sessionId,
-            info: { agent_backend: backend, model: model ?? agent.name ?? backend, cwd: cwd ?? null },
+            info: {
+                agent_backend: backend,
+                provider: backend,
+                model: model ?? agent.name ?? backend,
+                cwd: cwd ?? null,
+            },
         };
     }
 
@@ -599,7 +682,12 @@ export class KronosCodeHermesBackend {
                     : null,
             running: session.turnActive,
             status: session.turnActive ? "running" : "idle",
-            info: { agent_backend: session.backend, cwd: session.stored?.workspace },
+            info: {
+                agent_backend: session.backend,
+                provider: session.backend,
+                model: session.stored?.meta?.["hermes:model"],
+                cwd: session.stored?.workspace,
+            },
         };
     }
 

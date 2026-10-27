@@ -81,6 +81,8 @@ export default defineConfig({
                 },
                 output: {
                     manualChunks(id) {
+                        // A shared loader in an optional chunk makes that entire chunk eager.
+                        if (id === "\0vite/preload-helper.js") return "preload-helper";
                         const p = id.replace(/\\/g, "/");
                         if (p.includes("node_modules/monaco") || p.includes("node_modules/@monaco")) return "monaco";
                         if (p.includes("node_modules/mermaid") || p.includes("node_modules/@mermaid")) return "mermaid";

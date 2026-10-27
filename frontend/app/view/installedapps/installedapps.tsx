@@ -1,7 +1,6 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createBlockSplitHorizontally } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
@@ -16,6 +15,7 @@ import * as React from "react";
 const featuredApps = ["browseros", "messages", "preview", "iterm"];
 
 export type InstalledAppsEnv = WaveEnvSubset<{
+    createBlock: WaveEnv["createBlock"];
     rpc: {
         ListInstalledAppsCommand: WaveEnv["rpc"]["ListInstalledAppsCommand"];
     };
@@ -141,24 +141,20 @@ function InstalledAppsView({ model }: ViewComponentProps<InstalledAppsViewModel>
                     setLaunchState({ execpath: app.execpath, name: app.name, status: "launched" });
                     return;
                 }
-                await createBlockSplitHorizontally(
-                    {
-                        meta: {
-                            view: "appstream",
-                            "appstream:appid": app.bundleid || app.appid,
-                            "appstream:appname": app.name,
-                        } as unknown as MetaType,
-                    },
-                    model.blockId,
-                    "after"
-                );
+                await model.env.createBlock({
+                    meta: {
+                        view: "appstream",
+                        "appstream:appid": app.bundleid || app.appid,
+                        "appstream:appname": app.name,
+                    } as unknown as MetaType,
+                });
                 setLaunchState({ execpath: app.execpath, name: app.name, status: "launched" });
             } catch (e) {
                 console.error(`Failed to stream ${app.name}:`, e);
                 setLaunchState({ execpath: app.execpath, name: app.name, status: "error" });
             }
         },
-        [model.blockId, setLaunchState]
+        [model, setLaunchState]
     );
 
     const handleSearchKeyDown = React.useCallback(

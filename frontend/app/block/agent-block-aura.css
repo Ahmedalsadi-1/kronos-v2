@@ -1,0 +1,127 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.agent-block-aura {
+    position: absolute;
+    inset: 0;
+    z-index: var(--zindex-block-mask-inner, 6);
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+
+.agent-block-aura[data-active] {
+    opacity: 1;
+    box-shadow:
+        inset 0 1px 1px rgb(255 255 255 / 0.75),
+        inset 0 -1px 2px rgb(63 81 116 / 0.18),
+        inset 0 0 8px rgb(74 93 131 / 0.1);
+}
+
+.agent-block-aura-haze,
+.agent-block-aura::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+}
+
+.agent-block-aura-haze {
+    padding: 0;
+    background:
+        radial-gradient(ellipse at 15% 0%, rgb(219 149 217 / 0.9), transparent 65%),
+        radial-gradient(ellipse at 100% 65%, rgb(144 164 233 / 0.75), transparent 60%),
+        radial-gradient(ellipse at 35% 100%, rgb(196 157 225 / 0.65), transparent 65%);
+    filter: blur(9px);
+    mask:
+        linear-gradient(to right, #000, transparent 80px, transparent calc(100% - 80px), #000),
+        linear-gradient(to bottom, #000, transparent 80px, transparent calc(100% - 80px), #000);
+    mask-composite: add;
+    opacity: 0.68;
+}
+
+.agent-block-aura::after {
+    content: "";
+    padding: 0;
+    mask-image:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0%,
+            rgb(0 0 0 / 0.15) 14%,
+            #000 23%,
+            transparent 34%,
+            transparent 50%
+        ),
+        linear-gradient(to right, #000, transparent 80px, transparent calc(100% - 80px), #000),
+        linear-gradient(to bottom, #000, transparent 80px, transparent calc(100% - 80px), #000);
+    mask-size:
+        100% 200%,
+        100% 100%,
+        100% 100%;
+    mask-composite: intersect, add;
+    background:
+        radial-gradient(circle, rgb(240 248 255 / 0.95) 0.8px, transparent 1.2px) 0 0 / 6px 6px,
+        radial-gradient(circle, #fff 0.9px, transparent 1.3px) 3px 5px / 11px 13px;
+    opacity: 0.4;
+}
+
+.agent-block-aura[data-active] .agent-block-aura-haze {
+    animation: agent-block-aura-breathe 3.6s ease-in-out infinite;
+}
+
+.agent-block-aura[data-active]::after {
+    animation: agent-block-particle-wave 7s linear infinite;
+}
+
+@keyframes agent-block-particle-wave {
+    from {
+        mask-position:
+            0% 0%,
+            0 0,
+            0 0;
+        background-position:
+            0 0,
+            3px 5px;
+    }
+    to {
+        mask-position:
+            0% 100%,
+            0 0,
+            0 0;
+        background-position:
+            0 -6px,
+            3px -8px;
+    }
+}
+
+@keyframes agent-block-aura-breathe {
+    50% {
+        opacity: 0.54;
+    }
+}
+
+.agent-block-aura[data-reduced-motion] {
+    transition: none;
+}
+
+.agent-block-aura[data-reduced-motion] .agent-block-aura-haze,
+.agent-block-aura[data-reduced-motion]::after {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-block-aura {
+        transition: none;
+    }
+
+    .agent-block-aura[data-active] .agent-block-aura-haze,
+    .agent-block-aura[data-active]::after {
+        animation: none;
+    }
+}

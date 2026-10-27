@@ -13,6 +13,14 @@ import {
 const event = { event: "ready" as const, x: -1512, y: 100, width: 1512, height: 982, inset: 32 };
 
 describe("Coucou notch bridge", () => {
+    test("accepts workflow and Bots widget launches", () => {
+        for (const action of ["workflowcanvas", "bots"]) {
+            expect(parseCoucouHudEvent(JSON.stringify({ ...event, event: "action", action }))).toMatchObject({
+                event: "action",
+                action,
+            });
+        }
+    });
     test("recovery chat stays beside a docked VM and below the character", () => {
         const screen = { ...event, x: 0, y: 0, width: 1235, height: 803 };
         const preview = { x: 573, y: 44, width: 572, height: 578 };

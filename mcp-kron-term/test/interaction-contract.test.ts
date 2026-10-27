@@ -60,8 +60,39 @@ test("does not report an unverified mutation as successful", async () => {
 });
 
 test("distinguishes acknowledged mutations from verified effects", async () => {
-    const result = await runInteraction({ surface: "kronterm", surfaceId: "block", action: "click" }, async () => "sent");
+    const result = await runInteraction(
+        { surface: "kronterm", surfaceId: "block", action: "click" },
+        async () => "sent"
+    );
     assert.equal(result.result.ok, true);
     assert.equal(result.result.evidence.verifiedAfter, false);
     assert.equal(result.result.evidence.status, "acknowledged");
+});
+
+test("reports the actual exhausted attempt count and failed preflight accurately", async () => {
+    const failed = await runInteraction(
+        { surface: "desktop", surfaceId: "App", action: "observe", maxAttempts: 2 },
+        async () => {
+            throw new Error("connection unavailable");
+        }
+    );
+    assert.equal(failed.result.attempts, 2);
+    const preflight = await runInteraction(
+        { surface: "desktop", surfaceId: "App", action: "click" },
+        async () => "never",
+        {
+            preflight: async () => {
+                throw new Error("permission denied");
+            },
+        }
+    );
+    assert.equal(preflight.result.attempts, 0);
+    assert.equal(preflight.result.evidence.observedBefore, false);
+});
+
+test("contradictory verification status cannot turn an unverified effect into success", async () => {
+    const result = await runInteraction({ surface: "desktop", surfaceId: "App", action: "click" }, async () => "sent", {
+        verify: async () => ({ observedBefore: false, verifiedAfter: false, status: "verified" }),
+    });
+    assert.equal(result.result.ok, false);
 });

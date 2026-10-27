@@ -29,6 +29,7 @@ function ContextMenuContent({ className, ...props }: React.ComponentProps<typeof
           className
         )}
         data-slot="context-menu-content"
+        data-hermes-portal=""
         {...props}
       />
     </ContextMenuPrimitive.Portal>
@@ -158,6 +159,7 @@ function ContextMenuSubContent({
         )}
         collisionPadding={collisionPadding}
         data-slot="context-menu-sub-content"
+        data-hermes-portal=""
         {...props}
       />
     </ContextMenuPrimitive.Portal>

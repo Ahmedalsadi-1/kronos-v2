@@ -1,0 +1,157 @@
+.kt-phone-frame {
+    --phone-edge: #404040;
+    --phone-body: #262626;
+    position: relative;
+    cursor: grab;
+    flex: none;
+    width: min(100cqw, calc(100cqh * 380 / 830));
+    aspect-ratio: 380 / 830;
+    border-radius: 11.05% / 5.06%;
+}
+.kt-phone-frame-ios {
+    width: min(100cqw, calc(100cqh * 433 / 882));
+    aspect-ratio: 433 / 882;
+    border-radius: 17.32% / 8.28%;
+}
+.kt-phone-screen {
+    cursor: default;
+    position: absolute;
+    left: calc(9 / 380 * 100%);
+    top: calc(14 / 830 * 100%);
+    width: calc(360 / 380 * 100%);
+    height: calc(800 / 830 * 100%);
+    border-radius: 9.1667% / 3.125%;
+    overflow: hidden;
+    background: var(--color-black, #000);
+}
+.kt-phone-frame-ios .kt-phone-screen {
+    left: calc(21.25 / 433 * 100%);
+    top: calc(19.25 / 882 * 100%);
+    width: calc(389.5 / 433 * 100%);
+    height: calc(843.5 / 882 * 100%);
+    border-radius: 14.3132% / 6.6094%;
+}
+.kt-phone-frame.kt-phone-frame-adaptive {
+    width: min(calc(100cqw - 40px), calc((100cqh - 16px) * var(--device-aspect)));
+    aspect-ratio: var(--device-aspect);
+    outline: 4px solid var(--phone-edge);
+    border-radius: 9.1667% / 4.125%;
+}
+.kt-phone-frame-adaptive .kt-phone-screen {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+}
+.kt-phone-frame-adaptive .kt-phone-hardware {
+    display: none;
+}
+.kt-phone-hardware {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.kt-phone-screen > div {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.kt-phone-screen .kt-computers-tap,
+.kt-phone-screen img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    object-fit: fill;
+}
+.kt-computers-phone-stage {
+    container-type: size;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kt-phone-button {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    width: 14px;
+    min-height: 32px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+}
+.kt-phone-button:disabled {
+    cursor: default;
+}
+.kt-phone-button:focus-visible {
+    outline: 2px solid var(--kt-focus-ring, #7aa7f5);
+    outline-offset: -2px;
+}
+.kt-phone-power {
+    top: 36.265%;
+    height: 6.265%;
+}
+.kt-phone-volume-up {
+    top: 18.434%;
+    height: 5.904%;
+}
+.kt-phone-volume-down {
+    top: 24.338%;
+    height: 5.904%;
+}
+.kt-phone-frame-ios .kt-phone-power {
+    top: 31.633%;
+    height: 12.245%;
+}
+.kt-phone-frame-ios .kt-phone-volume-up {
+    left: 0;
+    right: auto;
+    top: 26.417%;
+    height: 7.596%;
+}
+.kt-phone-frame-ios .kt-phone-volume-down {
+    left: 0;
+    right: auto;
+    top: 36.054%;
+    height: 7.596%;
+}
+
+/* Adaptive captures use their whole surface, so hardware targets stay outside the image. */
+.kt-phone-frame-adaptive .kt-phone-button {
+    right: -18px;
+    width: 16px;
+    background: var(--phone-edge);
+    border-radius: 3px;
+}
+.kt-phone-frame-adaptive .kt-phone-volume-up,
+.kt-phone-frame-adaptive .kt-phone-volume-down {
+    left: -18px;
+    right: auto;
+}
+
+.kt-phone-toolbar {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 3;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--kt-content, var(--color-black));
+}
+.kt-phone-toolbar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+}

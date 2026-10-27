@@ -48,6 +48,24 @@ with tempfile.TemporaryDirectory(prefix="kronterm-coucou-") as directory:
         ], check=True)
         subprocess.run(["git", "-C", str(source), "checkout", "--detach", REVISION], check=True)
     app = source / "NotchBuddy"
+    engine = app / "Sources/App/BotEngine.swift"
+    text = engine.read_text()
+    marker = "        let bodyPath = mochiPath(rx: rx, ry: ry, morph: morph, R: R)"
+    assert marker in text, "Upstream companion body path changed"
+    text = text.replace(marker, """        var bodyPath = mochiPath(rx: rx, ry: ry, morph: morph, R: R)
+        if morph < 0.3 {
+            let earHeight = (1 - morph / 0.3) * ry * 0.36
+            for side: CGFloat in [-1, 1] {
+                var ear = Path()
+                ear.move(to: CGPoint(x: side * rx * 0.86, y: -ry * 0.5))
+                ear.addQuadCurve(to: CGPoint(x: side * rx * 0.8, y: -ry - earHeight),
+                                 control: CGPoint(x: side * rx, y: -ry - earHeight))
+                ear.addLine(to: CGPoint(x: side * rx * 0.35, y: -ry * 0.78))
+                ear.closeSubpath()
+                bodyPath.addPath(ear)
+            }
+        }""", 1)
+    engine.write_text(text)
     delegate = app / "Sources/App/AppDelegate.swift"
     text = delegate.read_text()
     assert "setupIsland()\n" in text, "Upstream launch hook changed"

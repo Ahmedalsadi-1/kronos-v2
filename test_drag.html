@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Drag Test</title>
+<style>
+#draggable {
+  width: 100px;
+  height: 100px;
+  background-color: #f66d41;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: absolute;
+  top: 50px;
+  left: 50px;
+}
+</style>
+</head>
+<body>
+<div id="draggable">Drag Me</div>
+<script>
+let elem = document.getElementById('draggable');
+let offsetX, offsetY, isDragging = false;
+
+elem.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  offsetX = e.clientX - elem.getBoundingClientRect().left;
+  offsetY = e.clientY - elem.getBoundingClientRect().top;
+  elem.style.cursor = 'grabbing';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  elem.style.left = (e.clientX - offsetX) + 'px';
+  elem.style.top = (e.clientY - offsetY) + 'px';
+});
+
+document.addEventListener('mouseup', () => {
+  isDragging = false;
+  elem.style.cursor = 'grab';
+});
+</script>
+</body>
+</html>

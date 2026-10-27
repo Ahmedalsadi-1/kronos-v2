@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import { TITLEBAR_HEIGHT } from "@hermes/app/shell/titlebar";
 import { TitlebarIcon } from "@hermes/app/shell/titlebar-icon";
@@ -6,7 +7,7 @@ import { Button } from "@hermes/components/ui/button";
 import { translateNow } from "@hermes/i18n";
 import { ESCAPE_PRIORITY, isTopEscapeLayer, pushEscapeLayer } from "@hermes/lib/escape-layers";
 import { triggerHaptic } from "@hermes/lib/haptics";
-import { useHermesShellMode } from "@hermes/lib/kronterm-host";
+import { isKronTermWidgetHost, useHermesShellMode } from "@hermes/lib/kronterm-host";
 import { cn } from "@hermes/lib/utils";
 
 // Shared top clearance for overlay content that sits *beside* the floating
@@ -24,6 +25,7 @@ interface OverlayViewProps {
     contentClassName?: string;
     headerContent?: ReactNode;
     rootClassName?: string;
+    compact?: boolean;
 }
 
 export function OverlayView({
@@ -33,8 +35,10 @@ export function OverlayView({
     contentClassName,
     headerContent,
     rootClassName,
+    compact = false,
 }: OverlayViewProps) {
-    const { hudMode } = useHermesShellMode();
+    const { hudMode, embedded } = useHermesShellMode();
+    const workspaceOverlay = embedded || isKronTermWidgetHost();
     const closeOverlay = () => {
         triggerHaptic("close");
         onClose();
@@ -64,7 +68,7 @@ export function OverlayView({
         };
     }, [onClose]);
 
-    return (
+    const overlay = (
         <div
             className={cn(
                 "fixed inset-0 z-50 bg-black/22 backdrop-blur-[0.125rem]",
@@ -73,7 +77,8 @@ export function OverlayView({
                 // since the card top already sits below them, the left needs no extra
                 // inset — keeping all sides equal so the card is ~full-width at any size.
                 "p-[calc(var(--titlebar-height)+0.625rem)]",
-                "sm:p-[calc(var(--titlebar-height)+0.875rem)]"
+                "sm:p-[calc(var(--titlebar-height)+0.875rem)]",
+                compact && "flex items-center justify-center"
             )}
             // Every OverlayView-based overlay (settings, command-center, agents, cron,
             // profiles, star map, …) covers the chat while the composer stays mounted
@@ -82,6 +87,8 @@ export function OverlayView({
             // leak into the hidden composer (and the overlay's own bare-key shortcuts,
             // e.g. star map's Space, keep working).
             data-overlay-surface=""
+            data-hermes-app=""
+            data-hermes-portal=""
             data-hud-overlay={hudMode ? "" : undefined}
             onClick={(event) => {
                 if (event.target === event.currentTarget) {
@@ -99,6 +106,7 @@ export function OverlayView({
             <div
                 className={cn(
                     "relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-surface-background) shadow-md",
+                    compact && "w-full max-w-[860px] h-[min(580px,calc(100dvh-96px))]",
                     rootClassName
                 )}
             >
@@ -127,4 +135,5 @@ export function OverlayView({
             </div>
         </div>
     );
+    return workspaceOverlay ? createPortal(overlay, document.body) : overlay;
 }

@@ -139,6 +139,7 @@ describe("Hermes KronTerm runtime environment", () => {
         expect(env.HERMES_BUNDLED_PLUGINS).toBe("/tmp/kronterm-hermes-managed/plugins");
         expect(env.PATH.split(path.delimiter)).toContain("/opt/kronterm/bin");
         expect(env.HERMES_COPILOT_ACP_COMMAND).toBe("/opt/kronterm/bin/kronoscode");
+        expect(env.HERMES_DISABLE_LAZY_INSTALLS).toBe("1");
         expect(env.HERMES_COPILOT_ACP_ARGS).toBe("acp");
         expect(env.HERMES_KRONTERM_NATIVE_TOOL_URL).toBe("http://127.0.0.1:9119/native");
         expect(env.KRONTERM_NATIVE_TOOL_TOKEN).toBe("tool-server-token");
@@ -247,7 +248,7 @@ describe("Hermes bundled tool discovery", () => {
         }
     });
 
-    test("publishes the adapter in a scanned root while preserving bundled plugins", () => {
+    test("publishes the adapter in a scanned root while preserving bundled plugins", async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-overlay-"));
         const base = path.join(root, "base");
         const adapter = path.join(root, "adapter");
@@ -258,17 +259,140 @@ describe("Hermes bundled tool discovery", () => {
         fs.writeFileSync(path.join(adapter, "plugin.yaml"), "name: kronterm-tools\nkind: backend");
         vi.stubEnv("HERMES_BUNDLED_PLUGINS", base);
         try {
-            expect(prepareHermesBundledPlugins("/missing/hermes", target, adapter)).toBe(target);
+            const preparation = prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+            expect(fs.existsSync(target)).toBe(false);
+            expect(await preparation).toBe(target);
             expect(fs.readFileSync(path.join(target, "copilot-provider", "plugin.yaml"), "utf8")).toBe("kind: backend");
             expect(fs.readFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "utf8")).toContain(
                 "name: kronterm-tools"
             );
-            prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+            await prepareHermesBundledPlugins("/missing/hermes", target, adapter);
         } finally {
             vi.unstubAllEnvs();
             fs.rmSync(root, { recursive: true, force: true });
         }
     });
+
+    test("keeps the previous plugin tree when an adapter update fails", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-failure-"));
+        const target = path.join(root, "plugins");
+        fs.mkdirSync(path.join(target, "kronterm-tools"), { recursive: true });
+        fs.writeFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "previous adapter");
+        vi.stubEnv("HERMES_BUNDLED_PLUGINS", path.join(root, "missing-base"));
+        try {
+            await expect(
+                prepareHermesBundledPlugins("/missing/hermes", target, path.join(root, "missing-adapter"))
+            ).rejects.toThrow();
+            expect(fs.readFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "utf8")).toBe(
+                "previous adapter"
+            );
+            expect(fs.readdirSync(root)).toEqual(["plugins"]);
+        } finally {
+            vi.unstubAllEnvs();
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test.each([3, 4, 5])(
+        "restores the previous adapter when cancelled at publication checkpoint %s",
+        async (checkpoint) => {
+            const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-cancel-"));
+            const target = path.join(root, "plugins");
+            const adapter = path.join(root, "adapter");
+            fs.mkdirSync(path.join(target, "kronterm-tools"), { recursive: true });
+            fs.mkdirSync(adapter);
+            fs.writeFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "previous");
+            fs.writeFileSync(path.join(adapter, "plugin.yaml"), "replacement");
+            vi.stubEnv("HERMES_BUNDLED_PLUGINS", path.join(root, "missing-base"));
+            let checks = 0;
+            try {
+                await expect(
+                    prepareHermesBundledPlugins("/missing/hermes", target, adapter, () => {
+                        if (++checks === checkpoint) throw new Error("cancelled");
+                    })
+                ).rejects.toThrow("cancelled");
+                expect(fs.readFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "utf8")).toBe("previous");
+                expect(fs.readdirSync(root).sort()).toEqual(["adapter", "plugins"]);
+            } finally {
+                vi.unstubAllEnvs();
+                fs.rmSync(root, { recursive: true, force: true });
+            }
+        }
+    );
+
+    test("serializes overlapping preparations and recovers after a failed update", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-overlap-"));
+        const target = path.join(root, "plugins");
+        const adapter = path.join(root, "adapter");
+        fs.mkdirSync(adapter);
+        fs.writeFileSync(path.join(adapter, "plugin.yaml"), "complete adapter");
+        vi.stubEnv("HERMES_BUNDLED_PLUGINS", path.join(root, "missing-base"));
+        try {
+            const failed = prepareHermesBundledPlugins("/missing/hermes", target, path.join(root, "missing-adapter"));
+            const first = prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+            const second = prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+            await expect(failed).rejects.toThrow();
+            expect(await Promise.all([first, second])).toEqual([target, target]);
+            expect(fs.readFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "utf8")).toBe(
+                "complete adapter"
+            );
+            expect(fs.readdirSync(root).sort()).toEqual(["adapter", "plugins"]);
+        } finally {
+            vi.unstubAllEnvs();
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("retains working providers when bundled plugin discovery is unavailable", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-retain-"));
+        const target = path.join(root, "plugins");
+        const adapter = path.join(root, "adapter");
+        fs.mkdirSync(path.join(target, "provider"), { recursive: true });
+        fs.mkdirSync(adapter);
+        fs.writeFileSync(path.join(target, "provider", "plugin.yaml"), "working provider");
+        fs.writeFileSync(path.join(adapter, "plugin.yaml"), "updated adapter");
+        vi.stubEnv("HERMES_BUNDLED_PLUGINS", path.join(root, "missing-base"));
+        try {
+            await prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+            expect(fs.readFileSync(path.join(target, "provider", "plugin.yaml"), "utf8")).toBe("working provider");
+            expect(fs.readFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "utf8")).toBe("updated adapter");
+        } finally {
+            vi.unstubAllEnvs();
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test.skipIf(process.platform === "win32")(
+        "keeps the event loop available during the Python discovery probe",
+        async () => {
+            const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-probe-"));
+            const base = path.join(root, "base");
+            const adapter = path.join(root, "adapter");
+            const target = path.join(root, "plugins");
+            fs.mkdirSync(path.join(base, "provider"), { recursive: true });
+            fs.mkdirSync(adapter);
+            fs.writeFileSync(path.join(base, "provider", "plugin.yaml"), "bundled provider");
+            fs.writeFileSync(path.join(adapter, "plugin.yaml"), "adapter");
+            fs.writeFileSync(
+                path.join(root, "python"),
+                `#!${process.execPath}\nsetTimeout(() => process.stdout.write(${JSON.stringify(base)}), 100);\n`,
+                { mode: 0o700 }
+            );
+            vi.stubEnv("HERMES_BUNDLED_PLUGINS", "");
+            let pending: Promise<string>;
+            try {
+                pending = prepareHermesBundledPlugins(path.join(root, "hermes"), target, adapter);
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                expect(fs.existsSync(target)).toBe(false);
+                await pending;
+                expect(fs.readFileSync(path.join(target, "provider", "plugin.yaml"), "utf8")).toBe("bundled provider");
+            } finally {
+                await pending?.catch(() => undefined);
+                vi.unstubAllEnvs();
+                fs.rmSync(root, { recursive: true, force: true });
+            }
+        }
+    );
 });
 
 describe("Hermes bounded recovery", () => {

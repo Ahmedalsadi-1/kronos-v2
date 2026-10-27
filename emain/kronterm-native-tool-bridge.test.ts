@@ -85,6 +85,17 @@ vi.mock("./emain-pet", () => ({}));
 vi.mock("./emain-wsh", () => ({ ElectronWshClient: { wshRpcCall: vi.fn() } }));
 
 describe("native tool CLI authentication", () => {
+    test("pixel wheel input uses scoped native RPC and preserves zero coordinates", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab", blockId: "browser" }));
+        vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValueOnce({ success: true });
+        await bridge.widgetScroll("browser", -120, 0, 0);
+        expect(ElectronWshClient.wshRpcCall).toHaveBeenCalledWith(
+            "widgetmousescroll",
+            { blockid: "browser", amount: -120, originx: 0, originy: 0 },
+            expect.objectContaining({ route: "tab:tab" })
+        );
+        expect(execFile).not.toHaveBeenCalled();
+    });
     beforeEach(() => {
         vi.stubEnv("KRONTERM_WSH", process.execPath);
         vi.stubEnv("KRONTERM_JWT", "stale-inherited-token");

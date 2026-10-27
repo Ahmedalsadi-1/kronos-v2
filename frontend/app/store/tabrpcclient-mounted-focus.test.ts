@@ -28,6 +28,19 @@ it("still rejects a missing unmounted block", async () => {
     );
 });
 
+it("focuses browser content instead of its address field in a detached widget", async () => {
+    const root = document.createElement("div");
+    const address = document.createElement("input");
+    const webview = document.createElement("webview");
+    root.append(address, webview);
+    document.body.append(root);
+    const addressFocus = vi.spyOn(address, "focus");
+    const guestFocus = vi.spyOn(webview, "focus");
+    await (TabClient.prototype as any).focusWidgetForAgent.call({ widgetRoot: () => root }, "browser");
+    expect(guestFocus).toHaveBeenCalledOnce();
+    expect(addressFocus).not.toHaveBeenCalled();
+});
+
 it("reports an unavailable snapshot instead of a successful empty page", async () => {
     const client = { widgetRoot: () => null };
     await expect(
@@ -64,4 +77,18 @@ it("captures the browser viewport so screenshot and pointer coordinates agree", 
     } finally {
         delete window["api"];
     }
+});
+
+it("refuses to report browser typing success when no writable field is focused", async () => {
+    const root = document.createElement("div");
+    const webview = document.createElement("webview");
+    const insertText = vi.fn();
+    Object.assign(webview, { executeJavaScript: vi.fn().mockResolvedValue(false), insertText });
+    root.append(webview);
+    const result = await (TabClient.prototype as any).executeRendererInteraction.call({}, root, "browser", "type", {
+        text: "hello",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("focused editable");
+    expect(insertText).not.toHaveBeenCalled();
 });

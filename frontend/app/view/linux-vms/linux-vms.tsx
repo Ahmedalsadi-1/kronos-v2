@@ -3,29 +3,39 @@
 
 import { ComputersPanel } from "@/app/view/computers/computers";
 import { ComputersController, type ComputersState } from "@/app/view/computers/computers-state";
+import { DeviceWorkspace } from "@/app/view/computers/device-workspace";
 import { getApi } from "@/store/global";
 import { useEffect, useState } from "react";
 import { DesktopScreen } from "./desktop-screen";
 import "./linux-vms.css";
+import { MacVmScreen } from "./macos-vm-screen";
 
-export type MachineSection = "desktop" | "android" | "iphone";
+export type MachineSection = "desktop" | "macos" | "android" | "iphone";
 
 export function LinuxVmsPanel({
     initialSection = "desktop",
     settings = false,
     targetId,
+    blockId,
 }: {
     initialSection?: MachineSection;
     settings?: boolean;
     targetId?: string;
+    blockId?: string;
 }) {
     return (
         <div
             className="flex h-full min-h-0 flex-col bg-[var(--kt-content)] text-[var(--kt-label)]"
-            style={initialSection !== "desktop" && !settings ? { background: "#141416" } : undefined}
+            style={
+                initialSection !== "desktop" && !settings
+                    ? { background: initialSection === "macos" ? "#141416" : "transparent" }
+                    : undefined
+            }
         >
             <div className="min-h-0 flex-1 overflow-hidden">
-                {initialSection == "desktop" ? (
+                {initialSection == "macos" ? (
+                    <MacVmScreen blockId={blockId} targetName={targetId} />
+                ) : initialSection == "desktop" ? (
                     <DesktopScreen settings={settings} desktopId={targetId} />
                 ) : (
                     <MobileMachinePanel
@@ -65,11 +75,7 @@ function MobileMachinePanel({
                     if (result.success === false) return result;
                     return {
                         success: true,
-                        data: result.data.filter((target) =>
-                            platform == "android"
-                                ? target.kind == "android-emulator" || target.kind == "android-device"
-                                : target.kind == "ios-simulator" || target.kind == "ios-device"
-                        ),
+                        data: result.data,
                     };
                 },
                 performComputerTargetAction: (action) => api.performComputerTargetAction(action),
@@ -88,5 +94,13 @@ function MobileMachinePanel({
         });
         return () => controller.dispose();
     }, [controller]);
-    return <ComputersPanel state={state} controller={controller} compact={!settings} />;
+    return settings ? (
+        <ComputersPanel state={state} controller={controller} />
+    ) : (
+        <DeviceWorkspace
+            state={state}
+            controller={controller}
+            preferredPlatform={platform === "android" ? "android" : "ios"}
+        />
+    );
 }

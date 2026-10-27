@@ -338,6 +338,7 @@ export class MochiBotEngine {
 
     isMini = false;
     bodyColor: [number, number, number] | null = null;
+    catEars = false;
 
     constructor() {
         this.time0 = performance.now();
@@ -615,7 +616,8 @@ export class MochiBotEngine {
         ctx.clearRect(0, 0, width, height);
         if (width <= 0 || height <= 0) return;
         const size = Math.min(width, height) * 0.3;
-        const color = this.currentColor;
+        const color = this.bodyColor ?? this.currentColor;
+        const bodyTint = this.bodyColor ? 1 : this.tint;
         const rgb = (value: number[]) => `rgb(${value.map(Math.round).join(",")})`;
         ctx.save();
         ctx.translate(width / 2 + this.ox * size / 100, height * 0.57 + this.oy * size);
@@ -624,9 +626,19 @@ export class MochiBotEngine {
         ctx.shadowColor = rgb(this.cfg.glow);
         ctx.shadowBlur = this.cfg.glowOpacity * size * 0.5;
         const gradient = ctx.createLinearGradient(0, -size, 0, size);
-        gradient.addColorStop(0, rgb(color.map((value, i) => MOCHI_CONST.baseTop[i] * (1 - this.tint) + value * this.tint)));
-        gradient.addColorStop(1, rgb(color.map((value, i) => MOCHI_CONST.baseBottom[i] * (1 - this.tint) + value * this.tint)));
+        gradient.addColorStop(0, rgb(color.map((value, i) => MOCHI_CONST.baseTop[i] * (1 - bodyTint) + value * bodyTint)));
+        gradient.addColorStop(1, rgb(color.map((value, i) => MOCHI_CONST.baseBottom[i] * (1 - bodyTint) + value * bodyTint)));
         ctx.fillStyle = gradient;
+        if (this.catEars) {
+            for (const side of [-1, 1]) {
+                ctx.beginPath();
+                ctx.moveTo(side * size * 0.9, -size * 0.48);
+                ctx.quadraticCurveTo(side * size * 1.02, -size * 1.22, side * size * 0.8, -size * 1.1);
+                ctx.lineTo(side * size * 0.38, -size * 0.76);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
         ctx.beginPath();
         ctx.roundRect(-size, -size * 0.86, size * 2, size * 1.72, size * 0.65);
         ctx.fill();

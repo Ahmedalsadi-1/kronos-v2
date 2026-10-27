@@ -11,6 +11,7 @@ ipcRenderer.on("native-notch-availability", (_event, available: unknown) => {
 
 // update type in custom.d.ts (ElectronApi type)
 contextBridge.exposeInMainWorld("api", {
+    agentBotCommand: (command) => ipcRenderer.invoke("agent-bot-command", command),
     openBotDesktop: (botId: string) => ipcRenderer.invoke("open-bot-desktop", botId),
     openAgentWorkspace: () => ipcRenderer.invoke("open-agent-workspace"),
     onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => {

@@ -88,7 +88,7 @@ def test_bridge_errors_surface_the_server_message(monkeypatch):
         body = io.BytesIO(json.dumps({"error": "Tool widget_click is unavailable"}).encode())
         raise urllib.error.HTTPError("http://127.0.0.1:9119/native", 404, "Not Found", {}, body)
 
-    monkeypatch.setattr(plugin.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(plugin, "_open_request", urlopen)
     result = json.loads(plugin._handler("widget_click")({}))
     assert result["error"] == "KronTerm tool bridge rejected the call (404): Tool widget_click is unavailable"
 
@@ -134,7 +134,7 @@ def test_read_calls_and_long_operations_use_distinct_socket_budgets(monkeypatch)
     def urlopen(_request, timeout):
         budgets.append(timeout)
         return io.BytesIO(b'{"content":[]}')
-    monkeypatch.setattr(plugin.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(plugin, "_open_request", urlopen)
     for name, arguments in [("workspace_snapshot", {}), ("widget_click", {}), ("sandbox_task_start", {}), ("acp_run_agent", {"timeoutSeconds": 600})]:
         plugin._bridge_request({"method": "call", "name": name, "arguments": arguments})
     assert budgets == [15, 35, 185, 610]
@@ -225,11 +225,11 @@ def test_background_workspace_budget_outlives_server_deadline(monkeypatch):
     def urlopen(request, timeout):
         budgets.append(timeout)
         return io.BytesIO(b'{"content":[]}')
-    monkeypatch.setattr(plugin.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(plugin, "_open_request", urlopen)
     plugin._readonly_tools.add("kron_computer_background_workspace_observe")
     for operation in ["start", "launch", "observe"]:
         plugin._bridge_request({"method": "call", "name": "kron_computer_background_workspace_" + operation, "arguments": {}})
-    assert budgets == [125, 125, 125]
+    assert budgets == [130, 130, 130]
 
 
 def test_timed_out_mutations_remain_uncertain_and_are_never_replayed(monkeypatch):
@@ -240,7 +240,7 @@ def test_timed_out_mutations_remain_uncertain_and_are_never_replayed(monkeypatch
     def urlopen(request, timeout):
         calls.append(request)
         raise TimeoutError("timed out")
-    monkeypatch.setattr(plugin.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(plugin, "_open_request", urlopen)
     plugin._readonly_tools.add("widget_snapshot")
     mutation = json.loads(plugin._handler("widget_type")({"text": "once"}))
     observation = json.loads(plugin._handler("widget_snapshot")({}))
@@ -268,7 +268,7 @@ def test_invalid_timeout_arguments_reach_server_validation_without_crashing_adap
     def urlopen(request, timeout):
         calls.append((json.loads(request.data), timeout))
         return io.BytesIO(b'{"isError":true,"content":[{"type":"text","text":"invalid arguments"}]}')
-    monkeypatch.setattr(plugin.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(plugin, "_open_request", urlopen)
     for name, args in [("acp_run_agent", {"timeoutSeconds": "bad"}), ("widget_wait_for", {"timeoutMs": None})]:
         result = json.loads(plugin._handler(name)(args))
         assert result["error"] == "invalid arguments"
@@ -282,7 +282,7 @@ def test_lost_mutation_receipt_stays_uncertain_when_response_is_malformed(monkey
     monkeypatch.setenv("HERMES_KRONTERM_NATIVE_TOOL_URL", "http://127.0.0.1:9119/native")
     monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "test-token")
     for body in [b'{"partial":', b'[]']:
-        monkeypatch.setattr(plugin.urllib.request, "urlopen", lambda request, timeout: io.BytesIO(body))
+        monkeypatch.setattr(plugin, "_open_request", lambda request, timeout: io.BytesIO(body))
         result = json.loads(plugin._handler("widget_type")({"text": "once"}))
         assert result["failure"]["uncertain"] is True
         assert result["failure"]["retryable"] is False
@@ -295,3 +295,69 @@ def test_non_object_arguments_fail_before_transport(monkeypatch):
     for value in [None, [], "bad", 3]:
         assert "must be an object" in json.loads(plugin._handler("tool_search")(value))["error"]
     assert calls == []
+
+
+def test_native_and_vm_budgets_outlive_the_server_deadline(monkeypatch):
+    import io
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KRONTERM_NATIVE_TOOL_URL", "http://127.0.0.1:9119/native")
+    monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "test-token")
+    budgets = []
+    def urlopen(request, timeout):
+        budgets.append(timeout)
+        return io.BytesIO(b'{"content":[]}')
+    monkeypatch.setattr(plugin, "_open_request", urlopen)
+    for name in ["kron_computer_get_app_state", "kron_computer_click", "linux_desktop_start", "linux_desktop_exec", "linux_desktop_screenshot"]:
+        plugin._bridge_request({"method": "call", "name": name, "arguments": {}})
+    assert budgets == [130, 130, 185, 105, 65]
+
+
+def test_bridge_never_sends_tokens_to_nonlocal_or_invalid_endpoints(monkeypatch):
+    plugin = _load_plugin()
+    monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "test-token")
+    monkeypatch.setattr(plugin, "_open_request", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not dispatch")))
+    for url in ["https://remote.example/native", "http://user:pass@127.0.0.1/native", "http://127.0.0.1/wrong", "http://127.0.0.1:bad/native"]:
+        monkeypatch.setenv("HERMES_KRONTERM_NATIVE_TOOL_URL", url)
+        assert plugin._bridge_request({"method": "call", "name": "widget_click"}).get("error")
+
+
+def test_bridge_redirect_handler_refuses_token_forwarding():
+    plugin = _load_plugin()
+    assert plugin._LocalBridgeRedirects().redirect_request(None, None, 302, "redirect", {}, "https://remote.example/") is None
+
+
+def test_parallel_availability_checks_share_one_inflight_refresh(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, Event
+
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KRONTERM_NATIVE_TOOL_URL", "http://127.0.0.1:9119/native")
+    monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "test-token")
+    start = Barrier(8)
+    entered = Event()
+    release = Event()
+    calls = []
+
+    def bridge_request(payload):
+        calls.append(payload)
+        entered.set()
+        assert release.wait(5)
+        return {"tools": [{"name": "widget_snapshot"}]}
+
+    def check():
+        start.wait(timeout=5)
+        return plugin._tool_allowed("widget_snapshot")
+
+    monkeypatch.setattr(plugin, "_bridge_request", bridge_request)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(check) for _ in range(8)]
+        try:
+            assert entered.wait(5)
+        finally:
+            release.set()
+        assert all(future.result(timeout=5) for future in futures)
+    assert calls == [{"method": "list"}]
+
+    monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "replacement-token")
+    assert plugin._tool_allowed("widget_snapshot")
+    assert len(calls) == 2

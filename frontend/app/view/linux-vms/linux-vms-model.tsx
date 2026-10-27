@@ -23,7 +23,13 @@ export class LinuxVmsViewModel implements ViewModel {
         this.blockAtom = WOS.getWaveObjectAtom<Block>(`block:${blockId}`);
         this.viewName = atom((get) => {
             const kind = get(this.blockAtom)?.meta?.["machine:kind"];
-            return kind == "android" ? "Android" : kind == "iphone" ? "iPhone" : "Sandbox";
+            return kind == "macos"
+                ? "macOS VM (Labs)"
+                : kind == "android"
+                  ? "Android"
+                  : kind == "iphone"
+                    ? "iPhone"
+                    : "Sandbox";
         });
     }
 
@@ -35,7 +41,7 @@ export class LinuxVmsViewModel implements ViewModel {
 export function LinuxVmsView({ model, contentRef }: ViewComponentProps<LinuxVmsViewModel>) {
     const block = useAtomValue(model.blockAtom);
     const kind = block?.meta?.["machine:kind"];
-    const section: MachineSection = kind == "android" || kind == "iphone" ? kind : "desktop";
+    const section: MachineSection = kind == "macos" || kind == "android" || kind == "iphone" ? kind : "desktop";
     const [settings, setSettings] = useState(Boolean(block?.meta?.["machine:settings"]));
     useEffect(() => setSettings(Boolean(block?.meta?.["machine:settings"])), [block?.meta?.["machine:settings"]]);
     useEffect(() => {
@@ -72,6 +78,7 @@ export function LinuxVmsView({ model, contentRef }: ViewComponentProps<LinuxVmsV
                     />
                 ) : (
                     <LinuxVmsPanel
+                        blockId={model.blockId}
                         initialSection={section}
                         settings={settings}
                         targetId={block?.meta?.["machine:target"] as string}

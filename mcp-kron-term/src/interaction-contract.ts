@@ -1,16 +1,7 @@
 export type InteractionSurface = "kronterm" | "sandbox" | "desktop";
 
 export type InteractionAction =
-    | "observe"
-    | "move"
-    | "click"
-    | "drag"
-    | "scroll"
-    | "type"
-    | "paste"
-    | "press"
-    | "wait"
-    | "inspect";
+    "observe" | "move" | "click" | "drag" | "scroll" | "type" | "paste" | "press" | "wait" | "inspect";
 
 export type InteractionPoint = { x: number; y: number };
 
@@ -100,13 +91,16 @@ export async function runInteraction<T>(
 ): Promise<{ value?: T; result: InteractionResult }> {
     const startedAt = new Date().toISOString();
     let attempts = 0;
+    let observedBefore = false;
     try {
         validateInteraction(request);
         await options.preflight?.();
+        observedBefore = options.preflight != null;
         const requestedAttempts = Math.max(1, Math.min(request.maxAttempts ?? 2, 3));
         const maxAttempts = MutatingActions.has(request.action) ? 1 : requestedAttempts;
         let lastError: unknown;
-        for (attempts = 1; attempts <= maxAttempts; attempts++) {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            attempts = attempt;
             try {
                 const value = await execute(attempts);
                 const evidence = options.verify
@@ -116,7 +110,7 @@ export async function runInteraction<T>(
                           verifiedAfter: false,
                           status: "acknowledged" as const,
                       };
-                if (!evidence.verifiedAfter && evidence.status == null) {
+                if (!evidence.verifiedAfter && (evidence.status == null || evidence.status === "verified")) {
                     throw new Error(evidence.summary ?? "Interaction could not be verified");
                 }
                 return {
@@ -143,7 +137,7 @@ export async function runInteraction<T>(
                 attempts,
                 startedAt,
                 finishedAt: new Date().toISOString(),
-                evidence: { observedBefore: options.preflight != null, verifiedAfter: false },
+                evidence: { observedBefore, verifiedAfter: false },
                 errorCode: classifyInteractionError(error),
                 error: error instanceof Error ? error.message : String(error),
             },

@@ -15,11 +15,11 @@ import {
     SuggestionControlNoData,
     SuggestionControlNoResults,
 } from "@/app/suggestion/suggestion";
-import { ActionMarker } from "@/app/view/action-marker";
-import { reportCursorToPet } from "@/app/view/cursor-overlay";
-import { useAgentOverlays } from "@/app/view/use-agent-overlays";
-import { WaterFlowOverlay } from "@/app/view/waterflow-overlay";
+import { useAgentPresenceForBlock } from "@/app/view/agent-control-indicator";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
+import { reportCursorToPet } from "@/app/view/cursor-overlay";
+import { requestAgentTakeover } from "@/app/view/hermes/hermes-tool-activity";
+import { useAgentOverlays } from "@/app/view/use-agent-overlays";
 import { BrowserAddressBar, clearBrowserAddressHistory } from "@/app/view/webview/browser-address-bar";
 import { BrowserAnnotationTray } from "@/app/view/webview/browser-annotation-tray";
 import { BrowserMarkupEvent } from "@/app/view/webview/browser-markup-overlay";
@@ -37,9 +37,8 @@ import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import type { WebviewTag } from "electron";
 import { Atom, PrimitiveAtom, atom, useAtomValue, useSetAtom } from "jotai";
-import { Code2, Cookie, ExternalLink } from "lucide-react";
+import { Code2, Cookie, ExternalLink, Pause } from "lucide-react";
 import { Fragment, createRef, memo, useCallback, useEffect, useRef, useState } from "react";
-import { subscribeAgentActivityStream } from "../../../types/agent-activity";
 import { makeBrowserPayload, publishCrossViewEvent } from "../../../types/cross-view-bus";
 import { getBrowserAnnotationsAtom } from "./browser-annotations";
 import { BrowserGrabController, type BrowserGrabIntent } from "./browser-grab-controller";
@@ -52,6 +51,7 @@ import type { WebViewEnv } from "./webviewenv";
 export const BrowserPageToolbar = memo(
     ({ model, islandControls }: { model: WebViewModel; islandControls?: React.ReactNode }) => {
         const block = useAtomValue(model.blockAtom);
+        const agentPresence = useAgentPresenceForBlock(model.blockId, "web");
         const currentUrl = useAtomValue(model.url);
         const homepageUrl = useAtomValue(model.homepageUrl);
         const canGoBack = useAtomValue(model.canGoBack);
@@ -238,6 +238,17 @@ export const BrowserPageToolbar = memo(
                         onSettings={openSettings}
                         onResearch={() => globalStore.set(model.grabController.researchOpen, true)}
                     />
+                    {agentPresence && (
+                        <button
+                            type="button"
+                            className="webview-toolbar-secondary"
+                            aria-label="Take over agent control"
+                            title="Take over agent control"
+                            onClick={() => requestAgentTakeover()}
+                        >
+                            <Pause size={16} aria-hidden="true" />
+                        </button>
+                    )}
                     {islandControls}
                 </BrowserNavigationControlRow>
                 {toolError && (
@@ -1687,24 +1698,11 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             if (detail.blockId !== model.blockId) {
                 return;
             }
-            webview.executeJavaScript("window.__showKronCursor?.(false)").catch(() => {});
             if (detail.point) {
                 reportCursorToPet(detail.point, "browser");
             }
             requestPreviewCapture(detail);
         };
-
-        const unsubscribeSurfaceActivity = subscribeAgentActivityStream((detail) => {
-            if (detail.blockid !== model.blockId) {
-                return;
-            }
-            const phase = detail.phase;
-            if (phase === "succeeded" || phase === "failed" || phase === "cancelled") {
-                webview.executeJavaScript("window.__showKronCursor?.(false)").catch(() => {});
-            } else if (phase === "running") {
-                webview.executeJavaScript("window.__showKronCursor?.(false)").catch(() => {});
-            }
-        });
 
         window.addEventListener("agent-widget-activity", handleWidgetActivity);
 
@@ -1714,7 +1712,6 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                 window.clearTimeout(previewCaptureTimer);
             }
             window.removeEventListener("agent-widget-activity", handleWidgetActivity);
-            unsubscribeSurfaceActivity();
         };
     }, [model.blockId, webPartition]);
 
@@ -1742,7 +1739,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                         />
                     </MockBoundary>
                     {errorText ? <WebViewFailureOverlay key={errorText} model={model} errorText={errorText} /> : null}
-                    <AgentSurfaceCursor surface="browser" blockId={model.blockId} />
+                    <AgentSurfaceCursor surface="browser" blockId={model.blockId} webviewRef={model.webviewRef} />
                     <BrowserAnnotationTrayLazy blockId={model.blockId} url={metaUrl} />
                     <BrowserResearchPanel controller={model.grabController} />
                     <BrowserGrabSheet controller={model.grabController} />

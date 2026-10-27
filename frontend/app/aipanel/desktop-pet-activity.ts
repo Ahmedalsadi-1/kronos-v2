@@ -1,4 +1,5 @@
 import { getApi } from "@/store/global";
+import { filePathFromAgentInput } from "@/types/agent-file-activity";
 import {
     cursorActionForAgentActivity,
     inferAgentActivityAction,
@@ -148,6 +149,7 @@ export function reportDesktopPetActivity(
         surface: inferAgentActivitySurface(detail, blockId),
         action: inferredAction,
         detail,
+        filepath: inferAgentActivitySurface(detail, blockId) === "file" ? filePathFromAgentInput(input) : undefined,
         thought: notification.thought,
         point,
         previewimageurl: notification.previewImageUrl,

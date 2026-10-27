@@ -69,6 +69,8 @@ export function parseCoucouHudEvent(line: string): CoucouHudEvent | undefined {
                 "browser-back",
                 "browser-forward",
                 "browser-reload",
+                "workflowcanvas",
+                "bots",
                 "machines",
                 "android",
                 "iphone",

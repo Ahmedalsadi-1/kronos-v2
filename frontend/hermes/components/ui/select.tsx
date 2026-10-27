@@ -60,6 +60,7 @@ function SelectContent({
           className
         )}
         data-slot="select-content"
+        data-hermes-portal=""
         position={position}
         {...props}
       >

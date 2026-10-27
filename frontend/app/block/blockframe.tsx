@@ -29,6 +29,8 @@ import * as jotai from "jotai";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import "./agent-aura.scss";
+import { AgentBlockAura } from "./agent-block-aura";
+import { AgentTakeoverBar } from "./agent-takeover-bar";
 import { BlockEnv } from "./blockenv";
 import { BlockFrameProps } from "./blocktypes";
 
@@ -115,7 +117,6 @@ const AgentWidgetOverlay = React.memo(
 
         return (
             <div className="agent-widget-overlay" aria-hidden="true">
-                {settings.aura && <div className="agent-widget-aura" />}
                 {settings.actionChip && (
                     <div className="agent-widget-action-chip">
                         <span className="agent-widget-action-dot" />
@@ -299,6 +300,14 @@ const BlockFrame_Default_Component = (props: BlockFrameProps) => {
             }
             inert={preview || undefined}
         >
+            {!preview && <AgentTakeoverBar blockId={nodeModel.blockId} />}
+            {!preview && (
+                <AgentBlockAura
+                    blockId={nodeModel.blockId}
+                    enabled={agentSettings.aura}
+                    active={agentActivity != null}
+                />
+            )}
             {agentActivity != null && !integratedChrome && (
                 <AgentWidgetOverlay activity={agentActivity} settings={agentSettings} />
             )}

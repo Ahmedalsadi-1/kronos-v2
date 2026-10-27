@@ -2,7 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export type ComputerTargetCapability =
-    "boot" | "shutdown" | "open" | "screenshot" | "tap" | "type" | "key" | "back" | "home" | "rotate" | "swipe";
+    | "boot"
+    | "shutdown"
+    | "open"
+    | "screenshot"
+    | "tap"
+    | "type"
+    | "key"
+    | "back"
+    | "home"
+    | "rotate"
+    | "swipe"
+    | "button";
 export type ComputerTarget = {
     id: string;
     name: string;
@@ -28,6 +39,7 @@ export type ComputerTargetAction = {
     y?: number;
     text?: string;
     key?: string;
+    button?: "power" | "volume-up" | "volume-down";
     endX?: number;
     endY?: number;
     orientation?: "portrait" | "landscape-left" | "landscape-right" | "portrait-upside-down";

@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import type { AcpTraceEnvelope } from "./acp-observability";
@@ -24,6 +24,7 @@ export type AcpBackendId =
     | "gemini"
     | "goose"
     | "hermes"
+    | "kilo"
     | "kimi"
     | "kiro"
     | "kronterm-agent"
@@ -165,6 +166,17 @@ export const ACP_BACKENDS_ALL: Record<string, AcpBackendConfig> = {
         skillsDirs: [".kimi/skills"],
         avatar: "🌙",
         description: "Moonshot Kimi CLI",
+    },
+    kilo: {
+        id: "kilo",
+        name: "Kilo Code",
+        cliCommand: "kilo",
+        authRequired: true,
+        enabled: true,
+        supportsStreaming: true,
+        acpArgs: ["acp"],
+        skillsDirs: [".kilocode/skills", ".agents/skills"],
+        description: "Kilo Code CLI via ACP",
     },
     opencode: {
         id: "opencode",

@@ -18,4 +18,16 @@ describe("Hermes workspace panel sizing", () => {
         const bounds = getHermesPanelWidthBounds("tabs", 720);
         expect(clampHermesPanelWidth(900, bounds)).toBe(bounds.max);
     });
+
+    test("fits OS and very narrow windows without overflowing", () => {
+        for (const presentation of ["widgets", "tabs", "canvas", "os"] as const) {
+            for (const width of [200, 320, 720, 1600]) {
+                const bounds = getHermesPanelWidthBounds(presentation, width);
+                expect(bounds.min).toBeLessThanOrEqual(bounds.max);
+                expect(bounds.max).toBeLessThan(width);
+                expect(bounds.defaultWidth).toBeGreaterThanOrEqual(bounds.min);
+                expect(bounds.defaultWidth).toBeLessThanOrEqual(bounds.max);
+            }
+        }
+    });
 });

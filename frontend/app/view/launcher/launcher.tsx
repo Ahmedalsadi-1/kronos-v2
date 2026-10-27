@@ -14,6 +14,19 @@ import React, { useEffect, useLayoutEffect, useRef } from "react";
 
 function sortByDisplayOrder(wmap: { [key: string]: WidgetConfigType } | null | undefined): WidgetConfigType[] {
     const builtins: Record<string, WidgetConfigType> = {
+        "kronterm@tapflow": {
+            label: "Tapflow Mobile Labs",
+            icon: "mobile-screen",
+            "display:order": 21,
+            blockdef: { meta: { view: "plugin:kronterm.tapflow/devices" } },
+        },
+        "kronterm@workflowcanvas": {
+            label: "Workflow Canvas",
+            icon: "diagram-project",
+            "display:order": 19,
+            blockdef: { meta: { view: "plugin:kronterm.openhuman-workflow/canvas" } },
+        },
+        "kronterm@bots": { label: "Bots", icon: "robot", "display:order": 20, blockdef: { meta: { view: "bots" } } },
         "kronterm@documentstudio": {
             label: "Document Studio",
             icon: "file-lines",

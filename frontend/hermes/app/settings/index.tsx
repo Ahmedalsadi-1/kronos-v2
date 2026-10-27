@@ -265,21 +265,24 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
                 ? [
                       {
                           active: getKronTermSettingsSectionId(activeView) != null,
-                          children: kronTermSettingsHost.sections.map((section) => ({
-                              active: activeView === makeKronTermSettingsViewId(section.id),
-                              icon: Settings2,
-                              id: makeKronTermSettingsViewId(section.id),
-                              label: section.label,
-                              onSelect: () => setActiveView(makeKronTermSettingsViewId(section.id)),
-                          })),
+                          children: kronTermSettingsHost.sections
+                              .filter((section) =>
+                                  ["visual", "shortcuts", "sessions", "git", "github", "voice", "desktop"].includes(
+                                      section.id
+                                  )
+                              )
+                              .map((section) => ({
+                                  active: activeView === makeKronTermSettingsViewId(section.id),
+                                  icon: Settings2,
+                                  id: makeKronTermSettingsViewId(section.id),
+                                  label: section.label,
+                                  onSelect: () => setActiveView(makeKronTermSettingsViewId(section.id)),
+                              })),
                           gapBefore: true,
                           icon: Monitor,
-                          id: "kronterm",
-                          label: "KronTerm",
-                          onSelect: () =>
-                              setActiveView(
-                                  makeKronTermSettingsViewId(kronTermSettingsHost.sections[0]?.id ?? "visual")
-                              ),
+                          id: "workspace",
+                          label: "Desktop controls",
+                          onSelect: () => setActiveView(makeKronTermSettingsViewId("visual")),
                       },
                   ]
                 : []),
@@ -327,7 +330,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
     );
 
     return (
-        <OverlayView closeLabel={t.settings.closeSettings} onClose={onClose}>
+        <OverlayView compact closeLabel={t.settings.closeSettings} onClose={onClose}>
             <OverlaySplitLayout>
                 <OverlayNav footer={navFooter} groups={navGroups} />
 

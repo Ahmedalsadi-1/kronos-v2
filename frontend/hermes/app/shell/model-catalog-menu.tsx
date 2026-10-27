@@ -20,7 +20,7 @@ import { usePointerQuiet } from '@hermes/components/ui/keyboard-first'
 import { Skeleton } from '@hermes/components/ui/skeleton'
 import type { HermesGateway } from '@hermes/hermes'
 import { useI18n } from '@hermes/i18n'
-import { modelOptionsQueryKey, requestModelOptions } from '@hermes/lib/model-options'
+import { modelOptionsQueryKey, requestModelOptions, useAgentEngine } from '@hermes/lib/model-options'
 import { displayModelName, modelDisplayParts } from '@hermes/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT, reasoningEffortLabel } from '@hermes/lib/reasoning-effort'
 import { normalize } from '@hermes/lib/text'
@@ -124,6 +124,7 @@ export function ModelCatalogMenu({
   profile = 'default',
   sessionId = null
 }: ModelCatalogMenuProps) {
+  useAgentEngine()
   const { t } = useI18n()
   const copy = t.shell.modelMenu
   const closeMenu = useContext(ModelMenuCloseContext)

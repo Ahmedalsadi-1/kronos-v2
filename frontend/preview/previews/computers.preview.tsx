@@ -65,6 +65,9 @@ function ComputersLivePreview() {
 }
 
 function ComputersMockPreview() {
+    const params = new URLSearchParams(window.location.search);
+    const standalone = params.get("chrome") !== "1";
+    const requestedDevice = params.get("device");
     const [scheme, setScheme] = useState("light");
     const [state, setState] = useState<ComputersState>({
         targets: [],
@@ -93,6 +96,17 @@ function ComputersMockPreview() {
                 kind: "ios-simulator",
                 status: "shutdown",
                 capabilities: ["boot", "shutdown", "open", "screenshot"],
+                controlOwner: "user",
+                controlGeneration: 0,
+                labs: true,
+            },
+            {
+                id: "preview-android",
+                name: "Android phone",
+                runtime: "Android mock",
+                kind: "android-emulator",
+                status: "booted",
+                capabilities: ["shutdown", "open", "screenshot", "tap", "type", "swipe", "home", "rotate"],
                 controlOwner: "user",
                 controlGeneration: 0,
                 labs: true,
@@ -151,8 +165,12 @@ function ComputersMockPreview() {
         return runtime;
     });
     useEffect(() => {
-        void controller.refresh();
-    }, [controller]);
+        void controller.refresh().then(() => {
+            if (!standalone) return;
+            if (requestedDevice === "android") controller.select("preview-android");
+            void controller.connect();
+        });
+    }, [controller, standalone, requestedDevice]);
     return (
         <SystemUIProvider>
             <div
@@ -161,28 +179,30 @@ function ComputersMockPreview() {
                 style={{
                     top: 48,
                     height: "calc(100% - 48px)",
-                    background: "var(--kt-content)",
+                    background: standalone ? "transparent" : "var(--kt-content)",
                     color: "var(--kt-label)",
                 }}
             >
-                <div style={{ height: 48, display: "flex", alignItems: "center", padding: "0 16px", gap: 12 }}>
-                    <span>Simulator UI · mock preview</span>
-                    <SystemButton onClick={() => setScheme(scheme == "light" ? "dark" : "light")}>
-                        Toggle appearance
-                    </SystemButton>
-                    <SystemButton
-                        onClick={() =>
-                            setState({
-                                ...controller.state,
-                                error: "Preview: Xcode is unavailable. Install Xcode, then refresh.",
-                            })
-                        }
-                    >
-                        Show error
-                    </SystemButton>
-                </div>
-                <div className="kt-computers-host" style={{ height: "calc(100% - 48px)" }}>
-                    <ComputersPanel state={state} controller={controller} />
+                {!standalone && (
+                    <div style={{ height: 48, display: "flex", alignItems: "center", padding: "0 16px", gap: 12 }}>
+                        <span>Simulator UI · mock preview</span>
+                        <SystemButton onClick={() => setScheme(scheme == "light" ? "dark" : "light")}>
+                            Toggle appearance
+                        </SystemButton>
+                        <SystemButton
+                            onClick={() =>
+                                setState({
+                                    ...controller.state,
+                                    error: "Preview: Xcode is unavailable. Install Xcode, then refresh.",
+                                })
+                            }
+                        >
+                            Show error
+                        </SystemButton>
+                    </div>
+                )}
+                <div className="kt-computers-host" style={{ height: standalone ? "100%" : "calc(100% - 48px)" }}>
+                    <ComputersPanel state={state} controller={controller} compact={standalone} />
                 </div>
             </div>
         </SystemUIProvider>

@@ -34,8 +34,17 @@ import type {
 import { DropDirection, getLayoutModelForStaticTab, LayoutTreeActionType, NavigateDirection } from "@/layout/index";
 import { base64ToArrayBuffer } from "@/util/util";
 import { WebviewTag } from "electron";
-import { browserHtmlScript, browserObservationScript, browserTargetPointScript } from "./browser-observation";
+import {
+    browserElementResolverSource,
+    browserHtmlScript,
+    browserObservationScript,
+    browserTargetPointScript,
+    browserTextTargetScript,
+    browserWaitConditionScript,
+    mergeBrowserObservations,
+} from "./browser-observation";
 import { sendPointerDrag } from "./pointer-drag";
+import { pressMacVmKeys, typeMacVmText } from "@/app/view/linux-vms/macos-vm-input";
 import { assessWorkspaceLayout, observeWorkspaceBlock, workspaceSurfaceElement } from "./workspace-surface-observation";
 import { RpcResponseHelper, WshClient } from "./wshclient";
 import { RpcApi } from "./wshclientapi";
@@ -119,11 +128,7 @@ export function buildBrowserInteractionScript(
                 if (!ref) {
                     return null;
                 }
-                const escaped = CSS.escape(String(ref));
-                return document.getElementById(String(ref)) ||
-                    document.querySelector('[name="' + escaped + '"]') ||
-                    document.querySelector('[aria-label="' + escaped + '"]') ||
-                    document.querySelector('[data-wave-ref="' + escaped + '"]');
+                return ${browserElementResolverSource()}(ref);
             }
 
             function findTarget(ref, x, y) {
@@ -431,7 +436,7 @@ export class TabClient extends WshClient {
         const hud = kronTermHudController.getSnapshot();
         const nativeIsland = new URLSearchParams(window.location.search).get("nativeSurface") === "island";
         if (mounted && (nativeIsland || (hud.active && !hud.keepWorkspaceVisible))) {
-            const target = mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"], webview');
+            const target = mounted.querySelector<HTMLElement>("webview") ?? mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
             target?.focus({ preventScroll: true });
             return mounted;
         }
@@ -441,7 +446,7 @@ export class TabClient extends WshClient {
         }
         const node = layoutModel.getNodeByBlockId(blockId);
         if (!node && mounted) {
-            const target = mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"], webview');
+            const target = mounted.querySelector<HTMLElement>("webview") ?? mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
             target?.focus({ preventScroll: true });
             return mounted;
         }
@@ -687,7 +692,18 @@ export class TabClient extends WshClient {
         if (action === "type") {
             const text = String(payload.text ?? "");
             const delayMs = Math.max(0, Number(payload.delayMs ?? 0));
+            if (root.querySelector("[data-macos-vm]")) {
+                await typeMacVmText(blockId, text, delayMs);
+                return { blockid: blockId, success: true, message: `Typed ${text.length} character(s) in macOS guest` };
+            }
             if (webview) {
+                if (!(await webview.executeJavaScript(browserTextTargetScript()))) {
+                    return {
+                        blockid: blockId,
+                        success: false,
+                        message: "No focused editable browser field; click a writable text target before typing",
+                    };
+                }
                 if (delayMs === 0) {
                     await webview.insertText(text);
                 } else {
@@ -707,6 +723,10 @@ export class TabClient extends WshClient {
             return { blockid: blockId, success: true, message: `Typed ${text.length} character(s)` };
         }
         if (action === "press") {
+            if (root.querySelector("[data-macos-vm]")) {
+                pressMacVmKeys(blockId, Array.isArray(payload.keys) ? payload.keys.map(String) : []);
+                return { blockid: blockId, success: true, message: "Keyboard shortcut sent to macOS guest" };
+            }
             await this.sendKeyChord(webview, Array.isArray(payload.keys) ? payload.keys.map(String) : []);
             return { blockid: blockId, success: true, message: "Keyboard shortcut sent" };
         }
@@ -718,7 +738,8 @@ export class TabClient extends WshClient {
                 return { blockid: blockId, success: result.success, message: result.message };
             }
             const point = this.rendererTarget(root, payload.elementref, payload.x, payload.y);
-            point?.target.scrollIntoView({ block: "center", inline: "nearest" });
+            if (!point) return { blockid: blockId, success: false, message: "Scroll target not found" };
+            point.target.scrollIntoView({ block: "center", inline: "nearest" });
             return { blockid: blockId, success: true, message: "Scrolled target into view" };
         }
 
@@ -1094,7 +1115,7 @@ export class TabClient extends WshClient {
             setMode: (mode) => {
                 if (mode === "workspace") {
                     kronTermHudController.setActive(false);
-                    hermesSurfaceController.dismiss();
+                    hermesSurfaceController.requestOpenChat();
                     return;
                 }
                 if (mode === "alongside") kronTermHudController.openAlongsideWorkspace();
@@ -1505,7 +1526,7 @@ export class TabClient extends WshClient {
     }
 
     async handle_waveaiaddcontext(rh: RpcResponseHelper, data: CommandWaveAIAddContextData): Promise<void> {
-        hermesSurfaceController.requestOpenPanel();
+        hermesSurfaceController.requestOpenChat();
 
         const model = WaveAIModel.getInstance();
 
@@ -2045,11 +2066,10 @@ export class TabClient extends WshClient {
             return { blockid: data.blockid, elements, count: elements.length, timestamp: Date.now() };
         }
         try {
+            const domElements = await webview.executeJavaScript(browserObservationScript(250));
             const accessibility = getApi()?.browserAccessibilitySnapshot;
             const axElements = accessibility ? await accessibility(webview.getWebContentsId()).catch(() => null) : null;
-            const elements = axElements?.length
-                ? axElements
-                : await webview.executeJavaScript(browserObservationScript());
+            const elements = mergeBrowserObservations(domElements, axElements);
             return {
                 blockid: data.blockid,
                 elements: elements || [],
@@ -2172,7 +2192,7 @@ export class TabClient extends WshClient {
                     var ref = ${JSON.stringify(ref)};
                     var el = null;
                     if (ref) {
-                        el = document.getElementById(ref) || document.querySelector('[name="' + ref + '"]') || document.querySelector('[aria-label="' + ref + '"]') || document.querySelector('[data-wave-ref="' + ref + '"]');
+                        el = ${browserElementResolverSource()}(ref);
                     }
                     if (!el) return null;
                     var rect = el.getBoundingClientRect();
@@ -2443,7 +2463,7 @@ export class TabClient extends WshClient {
                     var ref = ${JSON.stringify(ref)};
                     var el = null;
                     if (ref) {
-                        el = document.getElementById(ref) || document.querySelector('[name="' + ref + '"]') || document.querySelector('[aria-label="' + ref + '"]') || document.querySelector('[data-wave-ref="' + ref + '"]');
+                        el = ${browserElementResolverSource()}(ref);
                     }
                     if (!el) return '';
                     if (el.tagName === 'SELECT') return el.value || '';
@@ -2490,16 +2510,17 @@ export class TabClient extends WshClient {
                 (function() {
                     var ref = ${JSON.stringify(data.elementref || "")};
                     var value = ${JSON.stringify(data.value)};
-                    var el = document.getElementById(ref) || document.querySelector('[name="' + ref + '"]') || document.querySelector('[aria-label="' + ref + '"]') || document.querySelector('[data-wave-ref="' + ref + '"]');
+                    var el = ${browserElementResolverSource()}(ref);
                     if (!el) return { success: false, message: 'Element not found' };
+                    if (el.disabled || el.readOnly) return { success: false, message: 'Text control is disabled or read-only' };
                     if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) {
                         return { success: false, message: 'Element does not accept text input' };
                     }
                     var proto = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
                     var setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
                     setter?.call(el, value);
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
                     return { success: true, message: 'Value set' };
                 })()
             `);
@@ -2529,14 +2550,11 @@ export class TabClient extends WshClient {
                 const result = (await webview.executeJavaScript(`
                     (() => {
                         const ref = ${JSON.stringify(data.elementref || "")};
-                        const escaped = CSS.escape(ref);
-                        const target = document.getElementById(ref) ||
-                            document.querySelector('[name="' + escaped + '"]') ||
-                            document.querySelector('[aria-label="' + escaped + '"]') ||
-                            document.querySelector('[data-wave-ref="' + escaped + '"]');
+                        const target = ${browserElementResolverSource()}(ref);
                         if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
                             return false;
                         }
+                        if (target.disabled || target.readOnly) return false;
                         target.focus();
                         target.select();
                         return true;
@@ -2597,17 +2615,18 @@ export class TabClient extends WshClient {
                 (function() {
                     var ref = ${JSON.stringify(data.elementref || "")};
                     var requested = ${JSON.stringify(data.option)};
-                    var el = document.getElementById(ref) || document.querySelector('[name="' + ref + '"]') || document.querySelector('[aria-label="' + ref + '"]') || document.querySelector('[data-wave-ref="' + ref + '"]');
+                    var el = ${browserElementResolverSource()}(ref);
                     if (!(el instanceof HTMLSelectElement)) {
                         return { success: false, message: 'Select element not found' };
                     }
+                    if (el.disabled) return { success: false, message: 'Select is disabled' };
                     var option = Array.from(el.options).find(function(item) {
                         return item.value === requested || item.text === requested;
                     });
                     if (!option) return { success: false, message: 'Option not found' };
                     el.value = option.value;
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
                     return { success: true, message: 'Select executed' };
                 })()
             `);
@@ -2694,37 +2713,7 @@ export class TabClient extends WshClient {
 
         while (Date.now() - startTime < timeout) {
             try {
-                const checkResult = await webview.executeJavaScript(`
-                    (function() {
-                        var elementref = ${JSON.stringify(elementref)};
-                        var condition = ${JSON.stringify(condition)};
-                        var el = null;
-                        if (elementref) {
-                            el = document.getElementById(elementref) || document.querySelector('[name="' + elementref + '"]') || document.querySelector('[aria-label="' + elementref + '"]');
-                        }
-                        if (!el && elementref) return false;
-                        if (condition === 'visible' || condition === 'exists') {
-                            if (!el) return document.body != null;
-                            var rect = el.getBoundingClientRect();
-                            return rect.width > 0 && rect.height > 0;
-                        }
-                        if (condition === 'hidden') return el ? (el.offsetWidth === 0 && el.offsetHeight === 0) : true;
-                        if (condition === 'enabled') return el ? !el.disabled : false;
-                        if (condition === 'disabled') return el ? el.disabled : false;
-                        if (condition === 'focused') return el ? document.activeElement === el : false;
-                        if (condition === 'text') return el ? (el.textContent || '').length > 0 : false;
-                        if (condition === 'value') return el ? (el.value || '').length > 0 : false;
-                        if (condition.startsWith('text:')) {
-                            var searchText = condition.substring(5);
-                            return el ? (el.textContent || '').indexOf(searchText) !== -1 : false;
-                        }
-                        if (condition.startsWith('value:')) {
-                            var searchValue = condition.substring(6);
-                            return el ? String(el.value || '').indexOf(searchValue) !== -1 : false;
-                        }
-                        return el != null;
-                    })()
-                `);
+                const checkResult = await webview.executeJavaScript(browserWaitConditionScript(elementref, condition));
                 if (checkResult) {
                     return {
                         blockid: data.blockid,

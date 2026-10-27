@@ -153,3 +153,15 @@ it("reuses the display size for repeated taps and swipes", async () => {
     await f.service.swipe("android-avd:Pixel_8", 0.5, 0.8, 0.5, 0.2);
     expect(f.commands.filter((args) => args.includes("size"))).toHaveLength(1);
 });
+
+it("routes handset power and volume buttons through Android key events", async () => {
+    const f = fixture();
+    for (const [key, code] of [
+        ["Power", "26"],
+        ["VolumeUp", "24"],
+        ["VolumeDown", "25"],
+    ]) {
+        await f.service.key("android-avd:Pixel_8", key);
+        expect(f.commands.at(-1)).toEqual(["-s", "emulator-5554", "shell", "input", "keyevent", code]);
+    }
+});

@@ -164,9 +164,15 @@ export function useAgentOverlays(surface?: string, blockId?: string, surfaceId?:
         const pointer = (event: Event) => {
             const detail = (event as CustomEvent<{ blockId: string; point: { x: number; y: number }; action: string }>)
                 .detail;
-            if (!detail || detail.blockId !== blockId || !["browser", "desktop", "sandbox"].includes(surface)) return;
+            if (
+                !detail ||
+                detail.blockId !== blockId ||
+                (surface != null && !["browser", "desktop", "sandbox"].includes(surface))
+            )
+                return;
             clearTimeout(expiry);
             expiry = setTimeout(dim, 3000);
+            setWaterflowActive(true);
             setCursorPoint(detail.point);
             setCursorActive(true);
             setCursorLabel(

@@ -6,11 +6,11 @@ user-visible evidence. Matching a tool name alone is not parity.
 
 ## Inventory baseline
 
-- KronosCode currently contains **139 literal `Tool.define(...)` registrations** under
-  `kronoscoder/packages/kronoscode/src/tool/`. This excludes dynamically generated desktop and automation tools, so it is
-  a lower bound.
-- The scoped KronTerm TypeScript runtime currently exposes **136 tools** from `mcp-kron-term/src/index.ts`; Hermes registers
-  that live manifest through the bundled `kronterm-tools` backend plugin.
+- KronosCode maintains its own aggregate registrations under `kronoscoder/packages/kronoscode/src/tool/`, including
+  dynamically generated desktop and automation tools. Its source count is separate from the scoped KronTerm manifest.
+- The scoped KronTerm TypeScript runtime exposes the enabled registrations in `mcp-kron-term/src/index.ts`; Hermes registers
+  that live manifest through the bundled `kronterm-tools` backend plugin. Generate the current count and capability matrix
+  rather than treating a historical count as current.
 - Kronos's compatibility runtime also supplies native file, patch, shell, web, browser, computer-use, delegation, memory, skill, terminal,
   preview, project, media, and plugin tool families.
 - The two counts are not expected to match: KronosCode has several aggregate tools while the MCP server exposes smaller,
@@ -19,6 +19,9 @@ user-visible evidence. Matching a tool name alone is not parity.
 Reproduce the counts:
 
 ```bash
+npm --prefix mcp-kron-term run build
+node scripts/kronterm-tool-inventory.mjs
+
 perl -0777 -ne 'while (/Tool\.define\(\s*"([^"]+)"/g) { print "$1\n" }' \
   kronoscoder/packages/kronoscode/src/tool/*.ts | sort -u | wc -l
 perl -0777 -ne 'while (/server\.tool\(\s*"([^"]+)"/g) { print "$1\n" }' \
@@ -34,7 +37,7 @@ perl -0777 -ne 'while (/server\.tool\(\s*"([^"]+)"/g) { print "$1\n" }' \
 | KronTerm blocks, tabs, layout, badges, backgrounds, notifications    | Native TypeScript bridge                                                        | Available                     | Convert remaining aggregate KronosCode convenience verbs only when they add real semantics.          |
 | Browser navigation and inspection                                    | KronTerm `browser_*`, `widget_*`, and Hermes browser/computer-use tools         | Available                     | Build a scenario matrix for dialogs, downloads, uploads, hidden pages, and compromised page content. |
 | Native desktop control                                               | KronTerm `kron_computer_*` native tools                                         | Available                     | Validate app allowlists, approval copy, interruption, and screen-data redaction.                     |
-| Sandbox desktop control                                              | KronTerm `sandbox_*` native tools                                               | Available                     | Add lifecycle recovery and denied/malformed action tests.                                            |
+| Managed VM desktop control | KronTerm `linux_desktop_*` and `sandbox_task_*` native tools | Configured Apple Silicon hosts | Legacy `sandbox_*` execution is retired. Verify a current user assignment, generation, readiness and screenshot before input. |
 | Canvas load/edit/render/launch/assets                                | KronTerm `canvas_*` native tools                                                | Available                     | Add renderer integration tests and larger-scene performance limits.                                  |
 | Packaged, project, and user skills                                   | KronTerm `shared_skill_list` and `shared_skill_read` native tools               | Available                     | Add richer provenance/version display in Kronos.                                                     |
 | Managed widget JWT/profile routing                                   | Rotating capability file plus profile-scoped REST/WS URLs                       | Available                     | Add multi-window contention coverage if separate managed runtimes are introduced.                    |
@@ -50,6 +53,15 @@ perl -0777 -ne 'while (/server\.tool\(\s*"([^"]+)"/g) { print "$1\n" }' \
 | Kronos micro-widgets for KronTerm surfaces                           | Bundled `kronterm-surfaces` plugin                                              | First slice complete          | Add create/split/canvas-placement UI actions; equivalent actions already exist in the scoped MCP.    |
 
 ## Automated parity gate
+
+`mcp-kron-term/src/tool-families.ts` supplies the family metadata shared by ACP prompt recommendations and `tool_search`.
+ACP groups the actual scoped tool names each turn, including tools outside the task's recommended families; restricted
+children do not gain recursive delegation through this discovery path. `tool-families.test.ts` checks every enabled
+registration is classified and advertised by ACP, and rejects harness entries absent from the live manifest.
+
+The generated inventory distinguishes registration and unfiltered advertisement from session permission and runtime
+readiness. It does not claim that a listed native app, language server, VM, or device is operational. Existing execution
+checks remain authoritative; no permission changes accompany these recommendations. Linux/device capabilities remain Labs.
 
 `mcp-kron-term/test/hermes-tool-parity.test.ts` compares the native bridge manifest with the production server registration
 and asserts that Hermes receives every registered KronTerm tool, plus focused contracts for terminal, browser,

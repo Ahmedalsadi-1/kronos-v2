@@ -8,9 +8,9 @@ import { BlockChromeProvider } from "@/app/block/block-chrome-context";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
 import { PersistentBlock as BlockView } from "@/app/block/persistent-block";
 import { AppIcon } from "@/app/components/app-icon";
+import { DockNav } from "@/app/components/dock-nav";
 import {
     SystemButton,
-    SystemDock,
     SystemMaterial,
     SystemSegmentedControl,
     SystemToolbar,
@@ -217,6 +217,7 @@ const OSCanvasColors: OSCanvasColor[] = ["amber", "blue", "green", "rose", "slat
 type OSCanvasTool = "select" | "hand" | "note" | "rectangle" | "ellipse" | "diamond" | "connector";
 
 type BlockDescriptor = {
+    phoneAspect?: number;
     blockId: string;
     view: string;
     resolved: boolean;
@@ -411,7 +412,12 @@ const OSBlockWindow = memo(
             () => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", descriptor.blockId)),
             [descriptor.blockId]
         );
-        useAtomValue(blockAtom);
+        const block = useAtomValue(blockAtom);
+        const phoneWindow =
+            descriptor.view === "linux-vms" &&
+            ["android", "iphone"].includes(String(block?.meta?.["machine:kind"])) &&
+            !block?.meta?.["machine:settings"] &&
+            !block?.meta?.["machine:picker"];
         const [toolbarHost, setToolbarHost] = useState<HTMLDivElement>(null);
         const nodeModel = useMemo(
             () =>
@@ -434,6 +440,7 @@ const OSBlockWindow = memo(
             <section
                 className={cn(
                     "os-window",
+                    phoneWindow && "is-phone-window",
                     "kt-system-material",
                     "is-window",
                     `is-${layout.presentation}`,
@@ -444,6 +451,7 @@ const OSBlockWindow = memo(
                     interacting && "is-interacting"
                 )}
                 data-block-id={descriptor.blockId}
+                data-phone-platform={phoneWindow ? String(block?.meta?.["machine:kind"]) : undefined}
                 data-view={descriptor.view}
                 data-presentation={layout.presentation}
                 aria-label={descriptor.title}
@@ -460,6 +468,14 @@ const OSBlockWindow = memo(
                 onPointerDown={(event) => {
                     event.stopPropagation();
                     onFocus(descriptor.blockId);
+                    const target = event.target as HTMLElement;
+                    if (
+                        phoneWindow &&
+                        target.closest(".kt-phone-frame") &&
+                        !target.closest(".kt-phone-screen, button")
+                    ) {
+                        onTitlePointerDown(event, descriptor.blockId, layout);
+                    }
                 }}
             >
                 {agentWorking && ["web", "sandbox", "appstream", "phone", "devices"].includes(descriptor.view) && (
@@ -476,83 +492,85 @@ const OSBlockWindow = memo(
                 )}
                 <SystemWindowFrame
                     titlebar={
-                        <header
-                            className="os-window-titlebar"
-                            onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
-                            onDoubleClick={() => onToggleFocus(descriptor.blockId)}
-                            onContextMenu={(event) => {
-                                if (!onTitleContextMenu) return;
-                                event.preventDefault();
-                                event.stopPropagation();
-                                onFocus(descriptor.blockId);
-                                onTitleContextMenu(event, descriptor.blockId);
-                            }}
-                        >
-                            <div className="os-window-title">
-                                <AppIcon icon={descriptor.icon} />
-                                <span>{descriptor.title}</span>
-                            </div>
-                            <div
-                                ref={setToolbarHost}
-                                className="os-window-context"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onDoubleClick={(event) => event.stopPropagation()}
-                            />
-                            <div className="os-window-controls">
-                                {docked ? (
+                        phoneWindow ? null : (
+                            <header
+                                className="os-window-titlebar"
+                                onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
+                                onDoubleClick={() => onToggleFocus(descriptor.blockId)}
+                                onContextMenu={(event) => {
+                                    if (!onTitleContextMenu) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    onFocus(descriptor.blockId);
+                                    onTitleContextMenu(event, descriptor.blockId);
+                                }}
+                            >
+                                <div className="os-window-title">
+                                    <AppIcon icon={descriptor.icon} />
+                                    {descriptor.view !== "preview" && <span>{descriptor.title}</span>}
+                                </div>
+                                <div
+                                    ref={setToolbarHost}
+                                    className="os-window-context"
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onDoubleClick={(event) => event.stopPropagation()}
+                                />
+                                <div className="os-window-controls">
+                                    {docked ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onDetach(descriptor.blockId)}
+                                            aria-label="Detach window"
+                                        >
+                                            <Unlink />
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => onDock(descriptor.blockId, "left")}
+                                                aria-label="Dock left"
+                                            >
+                                                <PanelLeft />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => onDock(descriptor.blockId, "right")}
+                                                aria-label="Dock right"
+                                            >
+                                                <PanelRight />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                                <div className={cn("os-window-lights", !isMacOS() && "is-platform-controls")}>
                                     <button
                                         type="button"
-                                        onClick={() => onDetach(descriptor.blockId)}
-                                        aria-label="Detach window"
+                                        className="is-close"
+                                        onClick={() => onClose(descriptor.blockId)}
+                                        aria-label="Close"
                                     >
-                                        <Unlink />
+                                        <X />
                                     </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() => onDock(descriptor.blockId, "left")}
-                                            aria-label="Dock left"
-                                        >
-                                            <PanelLeft />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => onDock(descriptor.blockId, "right")}
-                                            aria-label="Dock right"
-                                        >
-                                            <PanelRight />
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                            <div className={cn("os-window-lights", !isMacOS() && "is-platform-controls")}>
-                                <button
-                                    type="button"
-                                    className="is-close"
-                                    onClick={() => onClose(descriptor.blockId)}
-                                    aria-label="Close"
-                                >
-                                    <X />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="is-minimize"
-                                    onClick={() => onCollapse(descriptor.blockId)}
-                                    aria-label="Minimize"
-                                >
-                                    <Minimize2 />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="is-zoom"
-                                    onClick={() => onToggleFocus(descriptor.blockId)}
-                                    aria-label={maximized ? "Restore window" : "Maximize window"}
-                                >
-                                    <Maximize2 />
-                                </button>
-                            </div>
-                        </header>
+                                    <button
+                                        type="button"
+                                        className="is-minimize"
+                                        onClick={() => onCollapse(descriptor.blockId)}
+                                        aria-label="Minimize"
+                                    >
+                                        <Minimize2 />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="is-zoom"
+                                        onClick={() => onToggleFocus(descriptor.blockId)}
+                                        aria-label={maximized ? "Restore window" : "Maximize window"}
+                                    >
+                                        <Maximize2 />
+                                    </button>
+                                </div>
+                            </header>
+                        )
                     }
                 >
                     <div
@@ -921,40 +939,25 @@ function OSModeShell({
 
     const appDock = (
         <div className="os-dock-bay" data-live-block-occluder="">
-            <SystemDock className="os-app-dock" aria-label="Applications">
-                {appDescriptors.map((descriptor) => {
-                    const running = descriptor.runningBlockIds.length > 0;
-                    const active = running && descriptor.runningBlockIds.includes(activeBlockId ?? "");
-                    return (
-                        <SystemButton
-                            type="button"
-                            size="large"
-                            selected={active}
-                            key={descriptor.id}
-                            className={cn(
-                                "os-dock-app",
-                                descriptor.view != null && `view-${descriptor.view}`,
-                                running && "is-running",
-                                active && "is-active"
-                            )}
-                            onClick={() => launchApp(descriptor)}
-                            aria-label={`Open ${descriptor.name}`}
-                            title={descriptor.name}
-                        >
-                            <AppIcon icon={descriptor.icon} />
-                        </SystemButton>
-                    );
-                })}
-                <SystemButton
-                    type="button"
-                    size="large"
-                    className="os-dock-app is-add"
-                    onClick={toggleCommandCenter}
-                    aria-label="More applications"
-                >
-                    <Plus />
-                </SystemButton>
-            </SystemDock>
+            <DockNav
+                aria-label="Applications"
+                items={[
+                    ...appDescriptors.map((descriptor) => ({
+                        id: descriptor.id,
+                        label: descriptor.name,
+                        icon: <AppIcon icon={descriptor.icon} />,
+                        running: descriptor.runningBlockIds.length > 0,
+                        active: descriptor.runningBlockIds.includes(activeBlockId ?? ""),
+                        onClick: () => launchApp(descriptor),
+                    })),
+                    {
+                        id: "more-applications",
+                        label: "More applications",
+                        icon: <Plus />,
+                        onClick: toggleCommandCenter,
+                    },
+                ]}
+            />
         </div>
     );
 
@@ -1589,7 +1592,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 getApi().openExternal(resource.resource);
                 return;
             }
-            if (resource.kind === "file") {
+            if (resource.kind === "file" && !/\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(resource.resource)) {
                 openKrontermFile(resource.resource);
                 return;
             }
@@ -1684,6 +1687,10 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     const handleCreateBlock = useCallback(
         (view: string) => {
+            if (view === "bots") {
+                window.dispatchEvent(new CustomEvent("kronterm:open-plugin-widget", { detail: { view: "bots" } }));
+                return;
+            }
             if (view === "preview" || view === "codeeditor") {
                 $krontermInspectorSection.set("files");
                 $krontermInspectorOpen.set(true);
@@ -2010,12 +2017,31 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         () =>
             Object.fromEntries(
                 descriptors.map((block) => {
-                    const computed = computeOSWindowLayout(state, block.blockId, block.view, viewport);
+                    const computed = computeOSWindowLayout(
+                        state,
+                        block.blockId,
+                        block.view,
+                        viewport,
+                        block.phoneAspect
+                    );
                     const dragged = dragBounds[block.blockId];
                     return [
                         block.blockId,
                         dragged
-                            ? { ...computed, bounds: dragged, rotateY: 0, scale: 1, opacity: 1, zIndex: 900 }
+                            ? {
+                                  ...computed,
+                                  bounds: block.phoneAspect
+                                      ? {
+                                            ...dragged,
+                                            width: Math.min(dragged.width, dragged.height * block.phoneAspect),
+                                            height: Math.min(dragged.height, dragged.width / block.phoneAspect),
+                                        }
+                                      : dragged,
+                                  rotateY: 0,
+                                  scale: 1,
+                                  opacity: 1,
+                                  zIndex: 900,
+                              }
                             : computed,
                     ];
                 })
@@ -2078,7 +2104,8 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                     current,
                                     descriptor.blockId,
                                     descriptor.view,
-                                    viewport
+                                    viewport,
+                                    descriptor.phoneAspect
                                 );
                                 return [descriptor.blockId, toScreenWindowLayout(current, layout)];
                             })
@@ -2270,7 +2297,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     rects: Object.fromEntries(
                         descriptors.map((block) => [
                             block.blockId,
-                            computeOSWindowLayout(stateRef.current, block.blockId, block.view, viewport).bounds,
+                            computeOSWindowLayout(
+                                stateRef.current,
+                                block.blockId,
+                                block.view,
+                                viewport,
+                                block.phoneAspect
+                            ).bounds,
                         ])
                     ),
                     objects: stateRef.current.objects,
@@ -2280,7 +2313,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     presentations: Object.fromEntries(
                         descriptors.map((block) => [
                             block.blockId,
-                            computeOSWindowLayout(stateRef.current, block.blockId, block.view, viewport).presentation,
+                            computeOSWindowLayout(
+                                stateRef.current,
+                                block.blockId,
+                                block.view,
+                                viewport,
+                                block.phoneAspect
+                            ).presentation,
                         ])
                     ),
                 }),
@@ -2904,29 +2943,54 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     onDragOver={(event) => {
                         if (
                             event.dataTransfer.types.includes(OSAppDragMimeType) ||
-                            event.dataTransfer.types.includes(OSResourceDragMimeType)
+                            event.dataTransfer.types.includes(OSResourceDragMimeType) ||
+                            event.dataTransfer.types.includes("Files")
                         ) {
                             event.preventDefault();
                             event.dataTransfer.dropEffect = "copy";
                         }
                     }}
                     onDrop={(event) => {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const camera = stateRef.current.camera;
+                        const point = screenRectToWorld(
+                            {
+                                x: event.clientX - bounds.left,
+                                y: event.clientY - bounds.top,
+                                width: 0,
+                                height: 0,
+                            },
+                            camera
+                        );
+                        if (event.dataTransfer.files.length) {
+                            event.preventDefault();
+                            for (const file of Array.from(event.dataTransfer.files)) {
+                                const path = window.hermesDesktop?.getPathForFile?.(file);
+                                if (!path || !path.startsWith("/")) continue;
+                                openResource({ id: `local:${path}`, kind: "file", name: file.name, resource: path });
+                            }
+                            return;
+                        }
                         const resource = readOSResourceDragPayload(event.dataTransfer);
                         if (resource != null) {
                             event.preventDefault();
-                            const camera = stateRef.current.camera;
                             pinResource(resource, {
-                                x: Math.max(16, (event.clientX - camera.x) / camera.zoom - 130),
-                                y: Math.max(96, (event.clientY - camera.y) / camera.zoom - 30),
+                                x: Math.max(16, point.x - 130),
+                                y: Math.max(96, point.y - 30),
                             });
+                            if (
+                                resource.kind === "file" &&
+                                /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(resource.resource)
+                            ) {
+                                openResource(resource);
+                            }
                             return;
                         }
                         const payload = readOSAppDragPayload(event.dataTransfer);
                         if (payload == null) return;
                         event.preventDefault();
-                        const camera = stateRef.current.camera;
-                        const worldX = Math.max(16, (event.clientX - camera.x) / camera.zoom - 260);
-                        const worldY = Math.max(96, (event.clientY - camera.y) / camera.zoom - 30);
+                        const worldX = Math.max(16, point.x - 260);
+                        const worldY = Math.max(96, point.y - 30);
                         handleDropApp(payload, worldX, worldY);
                     }}
                     onPointerDown={(event) => {

@@ -11,7 +11,20 @@ import {
     DropdownMenuTrigger,
 } from "@hermes/components/ui/dropdown-menu";
 import { Tip } from "@hermes/components/ui/tooltip";
+import { requestModelOptions } from "@hermes/lib/model-options";
 import { cn } from "@hermes/lib/utils";
+import { notifyError } from "@hermes/store/notifications";
+import {
+    $activeSessionId,
+    $currentModel,
+    $currentProvider,
+    getComposerSelectionGeneration,
+    getCurrentModelSource,
+    markComposerSelectionManual,
+    setCurrentModel,
+    setCurrentModelSource,
+    setCurrentProvider,
+} from "@hermes/store/session";
 
 type EngineId = string;
 
@@ -98,7 +111,7 @@ export function AgentEnginePill({ compact = false, disabled }: { compact?: boole
     }
 
     const sessionEngine: EngineId | null = runtimeId
-        ? runtimeId.startsWith(KronosCodeSessionPrefix)
+        ? (runtimeId.startsWith(KronosCodeSessionPrefix) || runtimeId.startsWith("openmausbot:"))
             ? (window.hermesDesktop.agentBackends.getSessionBackend?.(runtimeId) ?? "kronoscode")
             : "hermes"
         : null;
@@ -106,7 +119,7 @@ export function AgentEnginePill({ compact = false, disabled }: { compact?: boole
     const shown = sessionEngine ?? hostEngines.active;
     const selectedEngine = hostEngines.engines.find((engine) => engine.id === shown) ?? {
         id: shown,
-        label: shown === "hermes" ? "KronTerm Agent" : shown === "kronoscode" ? "KronosCode" : shown,
+        label: shown === "openmausbot" ? "Bot" : shown === "hermes" ? "KronTerm Agent" : shown === "kronoscode" ? "KronosCode" : shown,
         description: "ACP agent",
         available: true,
     };
@@ -122,6 +135,7 @@ export function AgentEnginePill({ compact = false, disabled }: { compact?: boole
                 <DropdownMenuTrigger asChild>
                     <button
                         aria-label={`Agent: ${label}`}
+                        data-hermes-agent-picker=""
                         className={cn(
                             "flex cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-(--chrome-action-hover)",
                             compact && "size-(--composer-control-size)"
@@ -151,7 +165,45 @@ export function AgentEnginePill({ compact = false, disabled }: { compact?: boole
                     </p>
                 )}
                 <DropdownMenuRadioGroup
-                    onValueChange={(value) => window.hermesDesktop?.agentBackends?.setActive(value)}
+                    onValueChange={(value) => {
+                        const backends = window.hermesDesktop?.agentBackends;
+                        const previousEngine = backends?.getActive();
+                        if (value === previousEngine) return;
+                        const previousModel = $currentModel.get();
+                        const previousProvider = $currentProvider.get();
+                        const previousSource = getCurrentModelSource();
+                        backends?.setActive(value);
+                        if (runtimeId) return;
+                        setCurrentModel("");
+                        setCurrentProvider("");
+                        markComposerSelectionManual();
+                        setCurrentModelSource("default");
+                        const generation = getComposerSelectionGeneration();
+                        void requestModelOptions({ refresh: true })
+                            .then((options) => {
+                                if (
+                                    backends?.getActive() !== value ||
+                                    $activeSessionId.get() ||
+                                    getComposerSelectionGeneration() !== generation
+                                )
+                                    return;
+                                setCurrentModel(options.model ?? "");
+                                setCurrentProvider(options.provider ?? "");
+                            })
+                            .catch((error) => {
+                                if (
+                                    backends?.getActive() !== value ||
+                                    $activeSessionId.get() ||
+                                    getComposerSelectionGeneration() !== generation
+                                )
+                                    return;
+                                backends.setActive(previousEngine);
+                                setCurrentModel(previousModel);
+                                setCurrentProvider(previousProvider);
+                                setCurrentModelSource(previousSource);
+                                notifyError(error, "Could not load this engine's models");
+                            });
+                    }}
                     value={hostEngines.active}
                 >
                     {hostEngines.engines.map((engine) => (

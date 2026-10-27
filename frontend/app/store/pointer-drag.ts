@@ -1,6 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { cursorMotionPoint } from "@/util/computer-cursor-motion";
+
 type Point = { x: number; y: number };
 
 export async function sendPointerDrag(
@@ -18,12 +20,13 @@ export async function sendPointerDrag(
         await send({ type: "mouseDown", ...point, button, clickCount: 1 });
         // Chromium and drag handlers need time to process the press before movement begins.
         await pause(48);
-        const steps = Math.max(12, Math.min(60, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 8)));
+        const steps = Math.max(12, Math.min(24, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 16)));
         for (let step = 1; step <= steps; step++) {
             const ratio = step / steps;
+            const path = cursorMotionPoint(start, end, ratio);
             point = {
-                x: Math.round(start.x + (end.x - start.x) * ratio),
-                y: Math.round(start.y + (end.y - start.y) * ratio),
+                x: Math.round(path.x),
+                y: Math.round(path.y),
             };
             await send({ type: "mouseMove", ...point, button, modifiers: [`${button}buttondown`] });
             onMove(point);

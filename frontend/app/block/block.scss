@@ -1,4 +1,4 @@
-// Copyright 2024, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 .block {
@@ -19,12 +19,10 @@
             cursor: pointer;
             place-items: center;
             border: 1px solid rgb(from var(--border-color) r g b / 0.56);
-            background: rgb(from var(--surface-raised-color) r g b / 0.82);
-            box-shadow: 0 8px 24px rgb(0 0 0 / 0.22);
+            background: var(--surface-raised-color);
             color: var(--text-secondary-color);
             font-size: 12px;
             opacity: 0.66;
-            backdrop-filter: blur(8px);
             transition:
                 opacity 140ms ease,
                 background 140ms ease,
@@ -174,7 +172,6 @@
 
         &.agent-widget-active {
             position: relative;
-            box-shadow: inset 0 0 0 1px rgb(from var(--accent-color) r g b / 0.72);
         }
 
         &.agent-widget-active::before {
@@ -214,11 +211,7 @@
                 font: var(--header-font);
                 border: 0;
                 border-bottom: 1px solid rgb(from var(--border-color) r g b / 0.24);
-                background: linear-gradient(
-                    180deg,
-                    rgb(from var(--surface-raised-color) r g b / 0.34),
-                    rgb(from var(--surface-base-color) r g b / 0.12)
-                );
+                background: var(--surface-base-color);
                 position: relative;
 
                 &[data-surface="hermes"] .block-frame-traffic-lights {
@@ -296,9 +289,8 @@
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
-                    font-size: 10px;
-                    font-weight: 600;
-                    letter-spacing: 0.02em;
+                    font-size: 11px;
+                    font-weight: 500;
 
                     &.is-compact {
                         max-width: 52px;
@@ -309,7 +301,7 @@
                 &[data-surface="term"] .block-frame-surface-identity,
                 &[data-surface="preview"] .block-frame-surface-identity,
                 &[data-surface="codeeditor"] .block-frame-surface-identity {
-                    color: rgb(from var(--accent-color) r g b / 0.88);
+                    color: var(--text-secondary-color);
                 }
 
                 .block-frame-text {
@@ -830,5 +822,16 @@
     font-family: var(--font-default);
     button {
         font-family: var(--font-default);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .block {
+        .widget-focus-arrow,
+        .block-frame-fold-btn,
+        &.block-folded,
+        &.block-folded .block-frame-default-inner {
+            transition: none;
+        }
     }
 }

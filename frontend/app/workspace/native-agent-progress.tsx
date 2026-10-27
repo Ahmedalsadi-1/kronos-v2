@@ -6,6 +6,7 @@ import type { TermViewModel } from "@/app/view/term/term-model";
 import { getBlockComponentModel } from "@/store/global";
 import { CheckCircle2, Circle, PauseCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
     isAgentActivityActive,
     subscribeAgentActivityStream,
@@ -14,6 +15,7 @@ import {
 import { terminalAgentBackend } from "../../types/native-notch";
 
 export function NativeAgentProgress({ blockId }: { blockId: string }) {
+    const [dismissed, setDismissed] = useState(false);
     const [backend, setBackend] = useState("");
     const [steps, setSteps] = useState<LiveAgentSurfaceActivity[]>([]);
     useEffect(() => {
@@ -36,12 +38,13 @@ export function NativeAgentProgress({ blockId }: { blockId: string }) {
             off();
         };
     }, [blockId]);
-    if (!backend && !steps.length) return null;
+    if (dismissed || (!backend && !steps.length)) return null;
     const active = steps.length ? isAgentActivityActive(steps[steps.length - 1].phase) : Boolean(backend);
-    return (
+    return createPortal(
         <aside
             aria-label="Agent task progress"
-            className="mr-28 flex shrink-0 items-center gap-4 border-b border-white/10 bg-[#141416] px-4 py-3"
+            data-live-block-occluder=""
+            className="fixed right-4 bottom-4 z-[10000] flex w-96 max-w-[calc(100vw-2rem)] items-start gap-4 rounded-md border border-border bg-background px-4 py-3 text-foreground shadow-lg"
         >
             <div aria-hidden="true" className={`native-agent-face ${active ? "is-working" : ""}`}>
                 <i />
@@ -49,7 +52,7 @@ export function NativeAgentProgress({ blockId }: { blockId: string }) {
                 <span>•••</span>
             </div>
             <div className="min-w-0 flex-1 text-xs">
-                <p className="mb-2 font-medium capitalize text-violet-200">
+                <p className="mb-2 font-medium capitalize">
                     {backend === "opencode" ? "OpenCode" : backend || "Agent activity"}
                 </p>
                 {steps.length ? (
@@ -60,17 +63,26 @@ export function NativeAgentProgress({ blockId }: { blockId: string }) {
                         return (
                             <div
                                 key={`${step.timestamp}:${index}`}
-                                className="mb-1 flex items-center gap-2 text-white/65"
+                                className="mb-1 flex items-center gap-2 text-muted-foreground"
                             >
-                                <Icon size={12} className={complete ? "text-green-400" : "text-violet-300"} />
+                                <Icon size={12} aria-hidden="true" className="shrink-0" />
                                 <span className="truncate">{step.detail ?? step.action}</span>
                             </div>
                         );
                     })
                 ) : (
-                    <p className="text-white/60">Working in terminal…</p>
+                    <p className="text-muted-foreground">Working in terminal…</p>
                 )}
             </div>
-        </aside>
+            <button
+                type="button"
+                className="cursor-pointer rounded-md bg-primary px-4 py-2 text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                aria-label="Close agent activity"
+                onClick={() => setDismissed(true)}
+            >
+                Close
+            </button>
+        </aside>,
+        document.body
     );
 }

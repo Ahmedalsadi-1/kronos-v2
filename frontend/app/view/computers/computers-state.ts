@@ -113,9 +113,9 @@ export class ComputersController {
 
     async act(
         action: ComputerTargetAction["action"] | "takeover" | "resume",
-        input: Pick<ComputerTargetAction, "x" | "y" | "text" | "key" | "endX" | "endY" | "orientation"> = {}
+        input: Pick<ComputerTargetAction, "x" | "y" | "text" | "key" | "endX" | "endY" | "orientation" | "button"> = {}
     ) {
-        if (["tap", "type", "key", "swipe", "home", "back"].includes(action)) {
+        if (["tap", "type", "key", "swipe", "home", "back", "button"].includes(action)) {
             if (this.pendingInputs >= 16) {
                 this.update({ error: "Device input queue is full." });
                 return;
@@ -143,7 +143,7 @@ export class ComputersController {
 
     private async performAction(
         action: ComputerTargetAction["action"] | "takeover" | "resume",
-        input: Pick<ComputerTargetAction, "x" | "y" | "text" | "key" | "endX" | "endY" | "orientation"> = {}
+        input: Pick<ComputerTargetAction, "x" | "y" | "text" | "key" | "endX" | "endY" | "orientation" | "button"> = {}
     ) {
         const target = this.state.targets.find((item) => item.id == this.state.selectedId);
         if (!target || this.state.busy || this.disposed) return;
@@ -229,7 +229,7 @@ export class ComputersController {
             this.update({
                 snapshot: { target, imageDataUrl: result.data.imageDataUrl, capturedAt: result.data.capturedAt },
             });
-            this.frameTimer = setTimeout(() => void this.readFrame(session, generation), 500);
+            this.frameTimer = setTimeout(() => void this.readFrame(session, generation), 100);
         } catch (error) {
             if (generation != this.streamGeneration) return;
             this.disconnect();

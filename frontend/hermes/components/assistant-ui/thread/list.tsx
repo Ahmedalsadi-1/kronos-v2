@@ -756,7 +756,7 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
         />
       )}
       <div
-        className="size-full overflow-x-hidden overflow-y-auto overscroll-contain"
+        className="m-(--conversation-turn-gap) h-[calc(100%-2*var(--conversation-turn-gap))] w-[calc(100%-2*var(--conversation-turn-gap))] overflow-x-hidden overflow-y-auto overscroll-contain"
         data-following={isAtBottom ? 'true' : 'false'}
         data-slot="aui_thread-viewport"
         ref={scrollRef as React.RefCallback<HTMLDivElement>}

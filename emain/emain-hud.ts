@@ -43,7 +43,7 @@ type NotchPreviewSource = {
     active?: boolean;
 };
 
-type NativeHudApp = "files" | "terminal" | "web" | "widget" | "apps" | "machines" | "android" | "iphone";
+type NativeHudApp = "files" | "terminal" | "web" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots";
 
 type NativeHudSurface = {
     backgrounded?: boolean;
@@ -588,9 +588,13 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
                 } else if (["machines", "android", "iphone"].includes(event.action)) {
                     surface.pendingDockView = "linux-vms";
                     requestNativeHudLaunch(window.webContents.id, event.action as NativeHudApp);
-                } else if (["web", "files", "terminal", "widget", "apps"].includes(event.action)) {
+                } else if (["web", "files", "terminal", "widget", "apps", "workflowcanvas", "bots"].includes(event.action)) {
                     surface.pendingDockView =
-                        event.action === "files"
+                        event.action === "workflowcanvas"
+                            ? "plugin:kronterm.openhuman-workflow/canvas"
+                            : event.action === "bots"
+                              ? "bots"
+                              : event.action === "files"
                             ? "preview"
                             : event.action === "terminal"
                               ? "term"

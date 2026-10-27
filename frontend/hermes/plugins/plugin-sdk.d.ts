@@ -1,17 +1,5 @@
-// Stub type declarations for @hermes/plugin-sdk.
-// This module is not used at runtime in the KronTerm shim — only the plugin
-// source files reference it for type-checking.
+// Copyright 2026, Command Line Inc.
+// SPDX-License-Identifier: Apache-2.0
 
-export interface PluginContext {
-    [key: string]: unknown
-}
-
-export interface PluginManifest {
-    id: string
-    name: string
-    version: string
-    [key: string]: unknown
-}
-
-export function registerPlugin(manifest: PluginManifest, context: PluginContext): void
-export function usePluginContext(): PluginContext
+// Keep plugin types aligned with the SDK used by the renderer alias.
+export * from "../sdk/index";

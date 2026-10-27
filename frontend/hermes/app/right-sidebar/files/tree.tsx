@@ -11,7 +11,7 @@ import { type RepoChangeKind, repoChangeKindForPath } from "@hermes/store/coding
 import { $renamingPath, beginInlineRename } from "@hermes/store/file-actions";
 import { $revealInTreeRequest } from "@hermes/store/layout";
 
-import { FileEntryContextMenu, InlineRenameInput, isRenameShortcut } from "../file-actions";
+import { FileEntryActionsMenu, FileEntryContextMenu, InlineRenameInput, isRenameShortcut } from "../file-actions";
 
 import { getFileTreeDndManager } from "./dnd-manager";
 import type { TreeNode } from "./use-project-tree";
@@ -43,6 +43,8 @@ interface ProjectTreeProps {
     onNodeOpenChange: (id: string, open: boolean) => void;
     onPreviewFile?: (path: string) => void;
     openState: Record<string, boolean>;
+    selectedPath?: string;
+    isDirty?: (path: string) => boolean;
 }
 
 export function ProjectTree({
@@ -55,6 +57,8 @@ export function ProjectTree({
     onNodeOpenChange,
     onPreviewFile,
     openState,
+    selectedPath,
+    isDirty,
 }: ProjectTreeProps) {
     markRightPanePerf("project-tree-render");
 
@@ -81,6 +85,23 @@ export function ProjectTree({
     }, []);
 
     useResizeObserver(syncTreeSize, containerRef);
+
+    useEffect(() => {
+        if (selectedPath && size.height > 0 && treeRef.current?.get(selectedPath)) {
+            treeRef.current.select(selectedPath, { focus: false });
+        }
+    }, [selectedPath, data, size.height]);
+
+    useEffect(() => {
+        if (!selectedPath || !treeRef.current) return;
+        for (const [id, open] of Object.entries(openState)) {
+            const node = treeRef.current.get(id);
+            if (node && node.isOpen !== open) {
+                if (open) treeRef.current.open(id);
+                else treeRef.current.close(id);
+            }
+        }
+    }, [selectedPath, openState, data, size.height]);
 
     const handleToggle = useCallback(
         (id: string) => {
@@ -211,6 +232,7 @@ export function ProjectTree({
                             onAttachFolder={onActivateFolder}
                             onPreviewFile={onPreviewFile}
                             relativeTo={cwd}
+                            dirty={isDirty?.(props.node.id)}
                         />
                     )}
                 </Tree>
@@ -267,11 +289,13 @@ function ProjectTreeRow({
     onPreviewFile,
     relativeTo,
     style,
+    dirty,
 }: NodeRendererProps<TreeNode> & {
     onAttachFile: (path: string) => void;
     onAttachFolder: (path: string) => void;
     onPreviewFile?: (path: string) => void;
     relativeTo?: null | string;
+    dirty?: boolean;
 }) {
     const renamingPath = useStore($renamingPath);
     const path = node.data?.id ?? "";
@@ -340,6 +364,15 @@ function ProjectTreeRow({
 
                 event.dataTransfer.effectAllowed = "copy";
                 event.dataTransfer.setData("application/x-hermes-paths", payload);
+                event.dataTransfer.setData(
+                    "application/x-kronterm-os-resource",
+                    JSON.stringify({
+                        id: `local:${node.data.id}`,
+                        kind: isFolder ? "folder" : "file",
+                        name: node.data.name,
+                        resource: node.data.id,
+                    })
+                );
                 event.dataTransfer.setData("text/plain", node.data.id);
             }}
             ref={dragHandle}
@@ -370,6 +403,15 @@ function ProjectTreeRow({
                 <span className={cn("min-w-0 flex-1 truncate", changeKind && CHANGE_TINT[changeKind])}>
                     {node.data.name}
                 </span>
+            )}
+            {dirty && <span aria-label="Unsaved changes">•</span>}
+            {!isPlaceholder && !editing && (
+                <FileEntryActionsMenu
+                    isDirectory={isFolder}
+                    name={node.data.name}
+                    path={node.data.id}
+                    relativeTo={relativeTo}
+                />
             )}
         </div>
     );

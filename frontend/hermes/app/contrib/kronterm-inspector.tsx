@@ -8,6 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@hermes/components/ui/dropdown-menu";
+import { attachPathToComposer } from "@hermes/lib/composer-file-context";
 import { desktopFsProfile } from "@hermes/lib/desktop-fs";
 import {
     $krontermInspectorCompact,
@@ -45,7 +46,7 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
-import { KrontermFileEditor } from "./kronterm-file-editor";
+import { KrontermFilePreview } from "./kronterm-file-preview";
 import "./kronterm-inspector.css";
 
 const Sections = {
@@ -127,6 +128,7 @@ export function KrontermInspector() {
     useEffect(() => () => $krontermInspectorHasFiles.set(false), []);
 
     const selectSection = (section: KrontermInspectorSection) => {
+        $krontermInspectorCompact.set(false);
         setTabs((current) => (current.includes(section) ? current : [...current, section]));
         $krontermInspectorSection.set(section);
         $krontermInspectorOpen.set(true);
@@ -371,7 +373,7 @@ export function KrontermInspector() {
                         hidden={view !== section}
                         className="kronterm-inspector-pane"
                     >
-                        <KrontermFileEditor
+                        <KrontermFilePreview
                             path={section.slice(5)}
                             onDirtyChange={(dirty) =>
                                 setDirtyFiles((current) =>
@@ -395,9 +397,9 @@ export function KrontermInspector() {
                 ) : (
                     <RightSidebarPane
                         cwd={effectiveCwd}
-                        onActivateFile={activateFile}
+                        onActivateFile={(path) => attachPathToComposer(path, effectiveCwd)}
                         onOpenFile={activateFile}
-                        onActivateFolder={() => {}}
+                        onActivateFolder={(path) => attachPathToComposer(path, effectiveCwd, true)}
                     />
                 )}
             </div>

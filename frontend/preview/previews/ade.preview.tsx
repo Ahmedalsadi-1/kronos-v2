@@ -83,6 +83,7 @@ export function AdePreview() {
             </div>
             <NativeFileWorkbench blockId={model.blockId} previewModel={model}>
                 <CodeEditor
+                    treeCodeAppearance
                     key={path}
                     blockId={model.blockId}
                     readonly={false}

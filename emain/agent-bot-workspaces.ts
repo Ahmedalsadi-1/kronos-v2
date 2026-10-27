@@ -38,8 +38,12 @@ export class BotWorkspaceRegistry {
             await backend.metadata(`workspace:${id}`, { "agent:botid": bot.id, "agent:source": "openmausbot" });
             workspace = await backend.get(id);
         }
-        const tabId = workspace.activetabid || workspace.tabids?.[0] || (await backend.tab(workspace.oid));
-        await backend.metadata(`tab:${tabId}`, { "layout:mode": "os", "agent:botid": bot.id });
+        const existingTabId = workspace.activetabid || workspace.tabids?.[0];
+        const tabId = existingTabId || (await backend.tab(workspace.oid));
+        await backend.metadata(`tab:${tabId}`, {
+            ...(!existingTabId || !workspace.meta?.["agent:desktopready"] ? { "layout:mode": "os" } : {}),
+            "agent:botid": bot.id,
+        });
         const blocks = await backend.blocks(tabId);
         const roles = [
             { role: "terminal", view: "term", controller: "shell", ...(bot.cwd ? { "cmd:cwd": bot.cwd } : {}) },

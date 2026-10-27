@@ -23,9 +23,10 @@ import {
 import { registerLinuxDesktopTools } from "./linux-desktop-tools.js";
 import { registerProductivityTools } from "./productivity-tools.js";
 import { SharedSkillCatalog } from "./shared-skills.js";
+import { SurfaceOperatingProtocol } from "./surface-operating-protocol.js";
 import { isToolAllowedBySurfaceCapability } from "./surface-policy.js";
 import { appWorkflow, searchTools } from "./tool-discovery.js";
-import { executeTool, toolExecutionDiagnostics } from "./tool-execution.js";
+import { executeTool, normalizeToolResult, toolExecutionDiagnostics } from "./tool-execution.js";
 import { WorkflowCommandShape } from "./workflow-command-schema.js";
 import { WshBridge } from "./wsh-bridge.js";
 export { setComputerTargetToolBridge } from "./computer-target-tools.js";
@@ -349,6 +350,7 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
     }),
     widget_press: (a) => ({ action: "press", detail: `Key ${(a.keys ?? []).join("+")}` }),
     widget_scroll_to: (a) => ({ action: "scroll", detail: "Scrolling to element" }),
+    widget_scroll: (a) => ({ action: "scroll", detail: `Scroll ${a.amount} pixels` }),
     widget_drag: (a) => ({ action: "drag", detail: `Drag (${a.startX},${a.startY}) → (${a.endX},${a.endY})` }),
     widget_long_press: (a) => ({ action: "click", detail: `Long press ${a.elementRef ?? ""}` }),
     widget_get_value: (a) => ({ action: "inspect", detail: `Get value of ${a.elementRef ?? ""}` }),
@@ -473,6 +475,7 @@ const WidgetFocusActions = new Set([
     "widget_type",
     "widget_press",
     "widget_scroll_to",
+    "widget_scroll",
     "widget_drag",
     "widget_long_press",
     "widget_set_value",
@@ -519,7 +522,7 @@ function wrapActivity(toolName: string, blockIdArg?: string) {
                             maxAttempts: 1,
                         },
                         async () => {
-                            const value = await fn(args);
+                            const value = normalizeToolResult(await fn(args));
                             if (value?.isError) {
                                 throw new Error(value.content?.[0]?.text ?? `${toolName} failed`);
                             }
@@ -655,7 +658,7 @@ async function callKronComputerUse(
             surfaceId: app,
             action: (action === "screenshot" ? "observe" : action) as InteractionAction,
             point,
-            targetRef: typeof args.element_index === "string" ? args.element_index : undefined,
+            targetRef: args.element_index != null ? String(args.element_index) : undefined,
             maxAttempts: toolName === "get_app_state" || toolName === "list_apps" ? 2 : 1,
         },
         async () => {
@@ -674,7 +677,7 @@ async function callKronComputerUse(
                 }
             },
             verify: async (result) => ({
-                observedBefore: observedBefore || toolName !== "click",
+                observedBefore,
                 verifiedAfter: toolName === "get_app_state" || toolName === "list_apps",
                 status: toolName === "get_app_state" || toolName === "list_apps" ? "verified" : "acknowledged",
                 previewImageUrl: kronComputerUsePreviewImageUrl(result),
@@ -699,6 +702,8 @@ async function callKronComputerUse(
 
 const kronTermGuide = `# KronTerm Surface Capability
 
+${SurfaceOperatingProtocol}
+
 You have KronTerm workspace tools available through this MCP connection. Hermes and KronosCode use the same live surface contracts. Use the complete live kron-term MCP manifest to inspect and control KronTerm; this guide routes the tool families but does not narrow the advertised toolset.
 
 ## Tool usage policy
@@ -713,7 +718,7 @@ You have KronTerm workspace tools available through this MCP connection. Hermes 
 
 ## Surface decision table
 
-For a managed sandbox task, call sandbox_task_start with the exact user-assigned reservation, observed generation and stable taskId. Save sessionId and explicitly call sandbox_task_finish after success, failure or cancellation. This stops only desktops started by the task while ownership remains valid; it never silently reclaims human control or stops a pre-existing desktop. These are lifecycle tools, not an automatic task scheduler. For phones, use device_list, device_screenshot and the generation-fenced device_* tools; physical devices need their existing ADB/Appium connection, and device_shutdown is for emulators/simulators only.
+For a managed sandbox task, call sandbox_task_start with the exact user-assigned reservation, observed generation and stable taskId. Save sessionId and explicitly call sandbox_task_finish after success, failure or cancellation. This stops the reserved desktop while ownership remains valid, including a desktop that was already running when the task started; it never silently reclaims human control. These are lifecycle tools, not an automatic task scheduler. For phones, use device_list, device_screenshot and the generation-fenced device_* tools; physical devices need their existing ADB/Appium connection, and device_shutdown is for emulators/simulators only.
 For managed Linux CUA desktops, use linux_desktop_list and operate only on the desktop explicitly assigned to your agent ID. Use its current controlGeneration for screenshots and actions. If the user takes control, wait for explicit reassignment/resume in the UI; never forge an assigned agent ID. Capture after each interaction.
 For iOS Simulator or configured Appium phone sessions, use device_list then device_screenshot, followed by device_* controls with the observed controlGeneration. Never substitute host or sandbox pointer tools for a device. When automationPaused is true, wait for explicit user resume in Computers & Devices; refreshing discovery does not authorize resuming mutations. Capture again to verify each interaction.
 
@@ -733,8 +738,8 @@ For iOS Simulator or configured Appium phone sessions, use device_list then devi
 
 ## Workflow
 
-1. Call \`surface_status\` if a tool fails or before the first operation.
-2. Call \`workspace_snapshot\` to learn whether the active surface is widgets, tabs, canvas, or OS, whether HUD is enabled, and obtain ordered live block IDs, focus, visibility, and geometry.
+1. Call \`surface_status\` for connection failures or explicit availability questions. Start normal workspace work with \`workspace_snapshot\`; inspect an explicit block directly.
+2. For workspace layout work, call \`workspace_snapshot\` to learn whether the active surface is widgets, tabs, canvas, or OS, whether HUD is enabled, and obtain ordered live block IDs, focus, visibility, and geometry. Reuse a fresh snapshot already obtained.
 3. Call \`workspace_screenshot\` when the overall visual arrangement matters; call \`widget_screenshot\` for one widget.
 4. Use the control advertised for the active presentation: split actions in widgets, sequential focus/order in tabs, world-space geometry/fit/arrange in canvas, and typed \`workspace_os_action\` in OS. Native HUD island bounds use desktop pixels from \`hud_list_islands\`.
 5. For content interaction, call \`widget_snapshot\` before using element refs.
@@ -896,16 +901,20 @@ server.tool(
     "Click a native desktop app element by accessibility index or screenshot coordinates. When to use: native macOS apps outside KronTerm only; call kron_computer_get_app_state first and prefer elementIndex over coordinates. When NOT to use: KronTerm blocks (use widget_click) or the sandbox VM (use linux_desktop_click).",
     {
         app: z.string().min(1).describe("App name or bundle identifier"),
-        elementIndex: z.string().optional().describe("Element index from kron_computer_get_app_state"),
-        x: z.number().optional().describe("X coordinate in screenshot pixels"),
-        y: z.number().optional().describe("Y coordinate in screenshot pixels"),
+        elementIndex: z.string().min(1).optional().describe("Element index from kron_computer_get_app_state"),
+        x: z.number().finite().nonnegative().optional().describe("X coordinate in screenshot pixels"),
+        y: z.number().finite().nonnegative().optional().describe("Y coordinate in screenshot pixels"),
         clickCount: z.number().int().min(1).max(3).optional().describe("Click count (default: 1)"),
         mouseButton: z.enum(["left", "right", "middle"]).optional().describe("Mouse button (default: left)"),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     async ({ app, elementIndex, x, y, clickCount, mouseButton }) => {
-        if ((x == null) !== (y == null)) {
-            return { content: [{ type: "text", text: "Provide both x and y, or neither." }], isError: true };
+        const hasCoordinates = x != null && y != null;
+        if ((x == null) !== (y == null) || Boolean(elementIndex) === hasCoordinates) {
+            return {
+                content: [{ type: "text", text: "Provide exactly one click target: elementIndex or both x and y." }],
+                isError: true,
+            };
         }
         try {
             return await callKronComputerUse(
@@ -2251,7 +2260,13 @@ server.tool(
     "Configure a KronTerm browser widget's behavior by setting one or more of its supported meta keys: web:zoom (number as string), web:partition (session isolation key), web:useragent (default | mobile:iphone | mobile:android), pinnedurl (homepage lock), url (navigate). Changing useragent or partition reloads the page.",
     {
         blockId: z.string().describe("Web block ID"),
-        zoom: z.string().optional().describe('Zoom factor, e.g. "1.25"'),
+        zoom: z
+            .string()
+            .refine((value) => Number.isFinite(Number(value)) && Number(value) >= 0.1 && Number(value) <= 5, {
+                message: "Zoom factor must be a number from 0.1 to 5",
+            })
+            .optional()
+            .describe('Zoom factor from "0.1" to "5"; "1" resets to 100%'),
         partition: z.string().optional().describe("Session partition key for cookie isolation"),
         userAgentType: z.enum(["default", "mobile:iphone", "mobile:android"]).optional(),
         pinnedUrl: z.string().optional().describe("Pinned homepage URL; empty string clears it"),
@@ -2784,6 +2799,7 @@ const widgetSequenceActionSchema = z
             "type",
             "press",
             "scroll_to",
+            "scroll",
             "drag",
             "set_value",
             "clear",
@@ -2803,10 +2819,19 @@ const widgetSequenceActionSchema = z
         endY: z.number().optional(),
         value: z.string().optional(),
         option: z.string().optional(),
+        amount: z.number().int().min(-10000).max(10000).optional(),
+        originX: z.number().int().nonnegative().optional(),
+        originY: z.number().int().nonnegative().optional(),
     })
     .superRefine((value, context) => {
         const requiresRef = ["set_value", "clear", "select", "toggle"].includes(value.action);
         const hasCoordinates = value.x != null && value.y != null;
+        if (value.action === "scroll" && value.amount == null) {
+            context.addIssue({ code: "custom", message: "scroll requires amount" });
+        }
+        if (value.action === "scroll" && (value.originX == null) !== (value.originY == null)) {
+            context.addIssue({ code: "custom", message: "scroll origin requires both originX and originY" });
+        }
         if ((value.action === "click" || value.action === "hover") && Boolean(value.elementRef) === hasCoordinates) {
             context.addIssue({
                 code: "custom",
@@ -2878,6 +2903,9 @@ server.tool(
                         break;
                     case "scroll_to":
                         result = await wsh.widgetScrollTo(blockId, action.elementRef, action.x, action.y);
+                        break;
+                    case "scroll":
+                        result = await wsh.widgetScroll(blockId, action.amount ?? 0, action.originX, action.originY);
                         break;
                     case "drag":
                         result = await wsh.widgetDrag(
@@ -3146,6 +3174,27 @@ server.tool(
         try {
             const result = await wsh.widgetPress(blockId, keys);
             return { content: [{ type: "text", text: result }] };
+        } catch (err: any) {
+            return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "widget_scroll",
+    "Scroll a browser or widget by vertical pixels using wheel input. Positive amount scrolls down, negative scrolls up. Optional originX and originY target a nested scroll region in widget CSS pixels. Observe the target first; inspect the result before choosing further actions.",
+    {
+        blockId: z.string().describe("Block ID"),
+        amount: z.number().int().min(-10000).max(10000).describe("Vertical wheel delta in pixels"),
+        originX: z.number().int().nonnegative().optional(),
+        originY: z.number().int().nonnegative().optional(),
+    },
+    wrapActivity("widget_scroll")(async ({ blockId, amount, originX, originY }) => {
+        if ((originX == null) !== (originY == null)) {
+            return { content: [{ type: "text", text: "Provide both originX and originY or neither." }], isError: true };
+        }
+        try {
+            return { content: [{ type: "text", text: await wsh.widgetScroll(blockId, amount, originX, originY) }] };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }

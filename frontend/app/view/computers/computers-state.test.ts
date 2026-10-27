@@ -194,7 +194,7 @@ describe("ComputersController", () => {
             expect(controller.state.snapshot.imageDataUrl).toBe("frame1");
             await controller.act("tap", { x: 0.5, y: 0.5 });
             expect(controller.state.snapshot.imageDataUrl).toBe("frame1");
-            await vi.advanceTimersByTimeAsync(500);
+            await vi.advanceTimersByTimeAsync(100);
             expect(controller.state.snapshot.imageDataUrl).toBe("frame2");
             controller.dispose();
             await vi.advanceTimersByTimeAsync(1000);

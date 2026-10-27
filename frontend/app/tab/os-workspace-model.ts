@@ -741,6 +741,29 @@ export function computeOSWindowLayout(
     state: OSModeState,
     blockId: string,
     view: string,
+    viewport: { width: number; height: number; rightInset?: number },
+    phoneAspect?: number
+): OSWindowLayout {
+    const layout = computeOSWindowLayoutBase(state, blockId, view, viewport);
+    if (!(phoneAspect > 0)) return layout;
+    const bounds = layout.bounds;
+    const width = Math.min(bounds.width, bounds.height * phoneAspect);
+    const height = width / phoneAspect;
+    return {
+        ...layout,
+        bounds: {
+            x: bounds.x + (bounds.width - width) / 2,
+            y: bounds.y + (bounds.height - height) / 2,
+            width,
+            height,
+        },
+    };
+}
+
+function computeOSWindowLayoutBase(
+    state: OSModeState,
+    blockId: string,
+    view: string,
     viewport: { width: number; height: number; rightInset?: number }
 ): OSWindowLayout {
     // a block can render one frame before reconcile registers its window

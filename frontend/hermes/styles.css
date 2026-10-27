@@ -2960,6 +2960,7 @@ button[data-slot="aui_msg-reactions"] svg {
      applying it here just strands a dead zone at the end of the thread that
      grows as you type. Room for the bar comes from the clearance instead. */
     --thread-viewport-height: 100%;
+    --composer-width: 30rem;
 }
 
 /* NOTHING in HUD mode declares `-webkit-app-region: drag`. The window manager
@@ -3331,12 +3332,26 @@ html:has([data-hud-shell]) [data-slot="popover-content"] {
     overflow-y: auto;
 }
 
-html:has([data-hermes-overlay-layer]) :is([data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="tooltip-content"], [data-slot="context-menu-content"]) {
-    z-index: 1250;
+html:has([data-hermes-app]) {
+    --z-over-modal: 5000;
+    --z-over-modal-content: 5010;
 }
 
-html:has([data-hermes-overlay-layer]) [data-slot="dialog-overlay"] { z-index: 1260; }
-html:has([data-hermes-overlay-layer]) [data-slot="dialog-content"] { z-index: 1270; }
+html:has([data-hermes-app]) :is([data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="tooltip-content"], [data-slot="context-menu-content"]) {
+    z-index: 5020;
+}
+
+html:has([data-hermes-app]) [data-slot="dialog-overlay"] { z-index: 5000; }
+html:has([data-hermes-app]) [data-slot="dialog-content"] { z-index: 5010; }
+html:has([data-hermes-app]) [data-overlay-surface] { z-index: 5010; }
+
+[data-hermes-command-palette] {
+    --foreground: #a3a3a3;
+    --popover: var(--color-black);
+    --border: var(--color-white);
+    background: var(--color-black) !important;
+    color: #a3a3a3;
+}
 
 /* Hide the scrollbar — a HUD with a visible track stops reading as an overlay. */
 [data-hud-shell] [data-slot="composer-bounds"] * {
@@ -3365,11 +3380,11 @@ html:has([data-hermes-overlay-layer]) [data-slot="dialog-content"] { z-index: 12
 }
 
 [data-hermes-app] [data-slot="composer-root"] {
-    border-radius: 1.5rem;
+    border-radius: 0;
 }
 
 [data-hermes-app] [data-slot="composer-surface"] {
-    border-radius: 1.5rem !important;
+    border-radius: 0 !important;
     border-color: var(--hermes-composer-stroke) !important;
     background: color-mix(in srgb, var(--hermes-composer-solid) 94%, transparent) !important;
     box-shadow:
@@ -3390,7 +3405,7 @@ html:has([data-hermes-overlay-layer]) [data-slot="dialog-content"] { z-index: 12
 }
 
 [data-hermes-app] [data-slot="composer-fade"] button {
-    border-radius: 999px;
+    border-radius: 0;
 }
 
 [data-hermes-app] [data-slot="composer-fade"] button:focus-visible {
@@ -3658,7 +3673,7 @@ html:has([data-hud-app]) [data-settings-content] > div {
 [data-coucou-hud] [data-hud-native-notch] [data-slot="composer-surface"] {
     background: var(--coucou-card) !important;
     border: 1px solid var(--coucou-border) !important;
-    border-radius: 16px !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
 }
 
@@ -3744,7 +3759,85 @@ html:has([data-hud-app]) [data-settings-content] > div {
 }
 
 [data-hud-shell] [data-slot="composer-root"][data-floating-hud] [data-slot="composer-surface"] {
-    border-radius: 22px !important;
+    border-radius: 0 !important;
+}
+
+/* Chat geometry is shared by embedded HUD, docked panel, and portaled menus. */
+[data-hermes-app],
+[data-hermes-app] *,
+[data-hermes-app] *::before,
+[data-hermes-app] *::after,
+.hermes-workspace-panel,
+[data-hermes-portal],
+[data-hermes-portal] *,
+[data-hermes-portal] *::before,
+[data-hermes-portal] *::after {
+    border-radius: 0 !important;
+}
+
+.hermes-workspace-panel [data-hud-shell] {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    pointer-events: auto;
+}
+
+.hermes-workspace-panel [data-hud-app] {
+    pointer-events: auto;
+}
+
+.hermes-workspace-panel [data-hermes-chat-header] {
+    display: flex !important;
+    position: relative !important;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 36px;
+    height: 36px;
+    padding-inline: 8px;
+    pointer-events: auto;
+}
+
+.hermes-workspace-panel [data-hermes-chat-header] > div:first-child {
+    min-width: 0;
+    max-width: calc(100% - 40px) !important;
+}
+
+.hermes-workspace-panel .hermes-panel-agent-picker {
+    display: flex;
+}
+
+.hermes-workspace-panel:has([data-hermes-chat-header]) [data-slot="composer-fade"] [data-hermes-agent-picker] {
+    display: none;
+}
+
+.hermes-workspace-panel [data-hud-shell]:has([data-hermes-chat-header]) [data-slot="composer-bounds"] {
+    top: 36px !important;
+}
+
+.hermes-workspace-panel [data-slot="composer-bounds"] {
+    top: 0 !important;
+    bottom: var(--hud-bar-height, var(--composer-fallback-height)) !important;
+    height: auto !important;
+    opacity: 1 !important;
+    translate: none !important;
+    scale: none !important;
+    filter: none !important;
+    pointer-events: auto !important;
+    transition: none !important;
+}
+
+.hermes-workspace-panel [data-hud-glass],
+.hermes-workspace-panel [data-hud-dock],
+.hermes-workspace-panel [data-hud-resize] {
+    display: none !important;
+}
+
+.hermes-workspace-panel {
+    background: var(--main-bg-color, #111);
 }
 
 [data-floating-hud] [data-slot="composer-surface"] {
@@ -3794,4 +3887,17 @@ html:has([data-coucou-hud]) [data-notification-stack] {
 html:has([data-coucou-hud]) [data-notification-stack] [data-slot="alert"] {
     max-height: min(140px, 32vh);
     overflow-y: auto;
+}
+
+/* The fluid is the requested chat identity; its contrast stays below the transcript. */
+.hermes-fluid-fallback {
+    background:
+        radial-gradient(ellipse at 25% 100%, rgb(92 131 126 / 45%), transparent 65%),
+        radial-gradient(ellipse at 90% 10%, rgb(137 130 114 / 30%), transparent 70%),
+        var(--ui-chat-surface-background);
+}
+@media (prefers-contrast: more), (forced-colors: active) {
+    .hermes-fluid-backdrop {
+        display: none;
+    }
 }

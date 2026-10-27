@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import { RpcApi } from "../../frontend/app/store/wshclientapi";
 import { ElectronWshClient } from "../emain-wsh";
 import { withKronosCodeAttachArgs } from "../kronoscode-runtime";
-import { KronTermSurfaceSystemPrompt } from "../kronterm-surface-prompt";
+import { KronTermAcpSurfaceSystemPrompt } from "../kronterm-surface-prompt";
 import { availableKronTermToolNames, startKronTermToolServer } from "../kronterm-tool-server";
 import { detectInstalledAgents, spawnAcpAgent } from "./acp-connector";
 import {
@@ -67,9 +67,9 @@ interface AcpAgentManagerOptions {
 
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
 const DEFAULT_RECONNECT_DELAY_MS = 2000;
-const SharedSkillDirectories = [".agents/skills", ".kronoscode/skills", ".hermes/skills"];
+const SharedSkillDirectories = [".agents/skills", ".kronoscode/skills", ".hermes/skills", ".kilocode/skills"];
 
-const waveSurfaceBootstrap = KronTermSurfaceSystemPrompt;
+const waveSurfaceBootstrap = KronTermAcpSurfaceSystemPrompt;
 
 type AcpSessionMcpNameValue = {
     name: string;
@@ -336,6 +336,7 @@ export class AcpAgentManager extends EventEmitter {
 
         if (updateType === "config_option_update") {
             this.configOptions = update.update.configOptions || [];
+            this.setConfigModels();
             this.emitEvent("config_option", update.update);
             return;
         }
@@ -358,6 +359,25 @@ export class AcpAgentManager extends EventEmitter {
             requestId,
             confirmation,
             toolCall: params.toolCall,
+        });
+    }
+
+    private modelConfigOption(): any {
+        return this.configOptions.find((option: any) => option?.category === "model" || option?.id === "model");
+    }
+
+    private setConfigModels(): void {
+        const option = this.modelConfigOption();
+        if (!option || !Array.isArray(option.options)) return;
+        const flatten = (items: any[]): any[] =>
+            items.flatMap((item) =>
+                Array.isArray(item?.options)
+                    ? flatten(item.options)
+                    : [{ id: item?.value, label: item?.name ?? item?.value }]
+            );
+        this.setSessionModels({
+            currentModelId: option.currentValue ?? option.selectedValue,
+            availableModels: flatten(option.options),
         });
     }
 
@@ -398,8 +418,9 @@ export class AcpAgentManager extends EventEmitter {
     }
 
     private supportsMcpType(type: "stdio" | "http" | "sse"): boolean {
-        if (type === "stdio" && (this.backend === "hermes" || this.backend === "kronoscode")) {
-            return true;
+        if (type === "stdio") {
+            // ACP v1 requires stdio; older agents omit this nonstandard capability flag.
+            return this.capabilities?.mcpCapabilities?.stdio !== false;
         }
         return Boolean(this.capabilities?.mcpCapabilities?.[type]);
     }
@@ -518,9 +539,13 @@ export class AcpAgentManager extends EventEmitter {
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_URL", value: toolServer.nativeUrl });
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_TOKEN", value: toolServer.token });
             }
-            const sharedSkillDirs = SharedSkillDirectories.map((directory) =>
-                path.join(this.workspace, directory)
-            ).filter((directory) => fs.existsSync(directory));
+            const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
+            const sharedSkillDirs = Array.from(new Set([
+                ...(process.env.KRONTERM_SHARED_SKILL_DIRS ?? "").split(path.delimiter).filter(Boolean),
+                ...SharedSkillDirectories.map((directory) => path.join(this.workspace, directory)),
+                path.resolve(import.meta.dirname, "../..", ".agents/skills"),
+                ...(resourcesPath ? [path.join(resourcesPath, "kronterm-skills")] : []),
+            ].filter((directory) => fs.existsSync(directory) && fs.statSync(directory).isDirectory())));
             if (sharedSkillDirs.length > 0) {
                 surfaceEnv.push({ name: "KRONTERM_SHARED_SKILL_DIRS", value: sharedSkillDirs.join(path.delimiter) });
             }
@@ -628,6 +653,7 @@ export class AcpAgentManager extends EventEmitter {
         this.modes = sessionResult?.modes ?? this.modes;
         this.configOptions = sessionResult?.configOptions ?? this.configOptions;
         this.setSessionModels(sessionResult?.models);
+        this.setConfigModels();
         this.currentMode = this.currentMode ?? this.modes?.currentModeId ?? this.modes?.availableModes?.[0]?.id ?? null;
         if (this.modes || this.configOptions.length > 0) {
             this.emitEvent("config_option", {
@@ -733,12 +759,14 @@ export class AcpAgentManager extends EventEmitter {
             });
             if (Array.isArray(result?.configOptions)) {
                 this.configOptions = result.configOptions;
+                this.setConfigModels();
                 return { configOptions: this.configOptions };
             }
         }
         this.configOptions = this.configOptions.map((option: any) =>
             option?.id === opts.configId ? { ...option, currentValue: opts.value, selectedValue: opts.value } : option
         );
+        this.setConfigModels();
         return { configOptions: this.configOptions };
     }
 
@@ -747,6 +775,15 @@ export class AcpAgentManager extends EventEmitter {
     }
 
     async setModel(opts: AcpIpcSetModelRequest): Promise<{ modelInfo: AcpModelInfo | null }> {
+        const modelOption = this.modelConfigOption();
+        if (modelOption) {
+            await this.setConfigOption({
+                conversationId: opts.conversationId,
+                configId: modelOption.id,
+                value: opts.modelId,
+            });
+            return this.getModelInfo();
+        }
         if (this.transport?.isInitialized()) {
             await this.transport.sendRequest("session/set_model", {
                 sessionId: this.sessionId,

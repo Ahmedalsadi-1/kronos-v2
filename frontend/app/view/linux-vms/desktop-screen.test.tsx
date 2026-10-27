@@ -9,6 +9,7 @@ import { DesktopScreen } from "./desktop-screen";
 
 const Api = vi.hoisted(() => ({ listLinuxDesktops: vi.fn(), performLinuxDesktopAction: vi.fn() }));
 vi.mock("@/store/global", () => ({ getApi: () => Api }));
+vi.mock("@/app/view/agent-surface-cursor", () => ({ AgentSurfaceCursor: () => null }));
 vi.mock("@/app/components/system-ui", () => ({
     SystemButton: ({ children, size, ...props }) => <button {...props}>{children}</button>,
 }));

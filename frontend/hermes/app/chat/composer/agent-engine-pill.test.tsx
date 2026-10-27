@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
+import * as modelOptions from "@hermes/lib/model-options";
+import { $currentModel, $currentProvider, setCurrentModel, setCurrentProvider } from "@hermes/store/session";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentEnginePill } from "./agent-engine-pill";
 
-const mocks = vi.hoisted(() => ({ runtimeId: null as string, active: "codex" }));
+const mocks = vi.hoisted(() => ({
+    runtimeId: null as string,
+    active: "codex",
+    onEngineChange: undefined as (value: string) => void,
+}));
 vi.mock("@nanostores/react", () => ({ useStore: () => mocks.runtimeId }));
 vi.mock("@hermes/app/chat/session-view", () => ({ useSessionView: () => ({ $runtimeId: {} }) }));
 vi.mock("@hermes/components/ui/button", () => ({
@@ -16,7 +22,10 @@ vi.mock("@hermes/components/ui/dropdown-menu", () => ({
     DropdownMenuTrigger: ({ children }: any) => children,
     DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
     DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuRadioGroup: ({ children }: any) => children,
+    DropdownMenuRadioGroup: ({ children, onValueChange }: any) => {
+        mocks.onEngineChange = onValueChange;
+        return children;
+    },
     DropdownMenuRadioItem: ({ children, value, disabled }: any) => (
         <button data-engine={value} disabled={disabled}>
             {children}
@@ -32,6 +41,7 @@ afterEach(async () => {
     mocks.runtimeId = null;
     mocks.active = "codex";
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 async function mount() {
@@ -39,6 +49,9 @@ async function mount() {
     window.hermesDesktop = {
         agentBackends: {
             getActive: () => mocks.active,
+            setActive: (value: string) => {
+                mocks.active = value;
+            },
             getSessionBackend: () => "codex",
             onActiveChange: () => () => {},
             list: async () => [
@@ -55,6 +68,28 @@ async function mount() {
 }
 
 describe("agent engine pill", () => {
+    it("replaces the draft model with the selected engine's current model", async () => {
+        await mount();
+        vi.spyOn(modelOptions, "requestModelOptions").mockResolvedValue({
+            model: "engine-model",
+            provider: "opencode",
+            providers: [],
+        });
+        await act(async () => mocks.onEngineChange("opencode"));
+        expect($currentModel.get()).toBe("engine-model");
+        expect($currentProvider.get()).toBe("opencode");
+    });
+
+    it("restores the prior engine and model when discovery fails", async () => {
+        await mount();
+        setCurrentModel("previous-model");
+        setCurrentProvider("previous-provider");
+        vi.spyOn(modelOptions, "requestModelOptions").mockRejectedValue(new Error("Agent unavailable"));
+        await act(async () => mocks.onEngineChange("opencode"));
+        expect(mocks.active).toBe("codex");
+        expect($currentModel.get()).toBe("previous-model");
+        expect($currentProvider.get()).toBe("previous-provider");
+    });
     it("shows logos in the compact pill and detected choices, with unavailable agents disabled", async () => {
         await mount();
         const trigger = container.querySelector('[aria-label="Agent: Codex"]');

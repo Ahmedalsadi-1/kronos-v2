@@ -9,8 +9,8 @@ test("budgets distinguish observations, mutations, waits and explicit long opera
     assert.equal(toolTimeoutMs("acp_run_agent", { timeoutSeconds: 600 }, false), 605000);
     assert.equal(toolTimeoutMs("linux_desktop_start", {}, false), 180000);
     assert.equal(toolTimeoutMs("sandbox_task_start", {}, false), 180000);
-    assert.equal(toolTimeoutMs("kron_computer_background_workspace_start", {}, false), 120000);
-    assert.equal(toolTimeoutMs("kron_computer_background_workspace_observe", {}, true), 120000);
+    assert.equal(toolTimeoutMs("kron_computer_background_workspace_start", {}, false), 125000);
+    assert.equal(toolTimeoutMs("kron_computer_background_workspace_observe", {}, true), 125000);
 });
 
 test("embedded unsuccessful results never report success", async () => {
@@ -103,4 +103,25 @@ test("already cancelled requests never execute", async () => {
     );
     assert.equal(calls, 0);
     assert.equal(result.isError, true);
+});
+
+test("recognizes explicit failures in top-level, structured and textual envelopes", () => {
+    for (const result of [
+        { ok: false },
+        { met: false },
+        { structuredContent: { ok: false, message: "target unavailable" }, content: [] },
+        { content: [{ type: "text", text: '{"ok":false,"error":"failed"}' }] },
+    ])
+        assert.equal(normalizeToolResult(result).isError, true, JSON.stringify(result));
+    assert.equal(
+        normalizeToolResult({ content: [{ type: "text", text: "The page explains Error: syntax" }] }).isError,
+        undefined
+    );
+});
+
+test("transport budgets cover the advertised native and VM operation deadlines", () => {
+    assert.ok(toolTimeoutMs("kron_computer_get_app_state", {}, true) >= 120000);
+    assert.ok(toolTimeoutMs("kron_computer_click", {}, false) >= 120000);
+    assert.ok(toolTimeoutMs("linux_desktop_exec", {}, false) >= 95000);
+    assert.ok(toolTimeoutMs("linux_desktop_screenshot", {}, true) >= 45000);
 });

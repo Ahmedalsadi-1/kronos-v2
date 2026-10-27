@@ -39,10 +39,20 @@ interface CodeEditorProps {
     language?: string;
     fileName?: string;
     onChange?: (text: string) => void;
+    treeCodeAppearance?: boolean;
     onMount?: (monacoPtr: MonacoTypes.editor.IStandaloneCodeEditor, monaco: typeof MonacoModule) => () => void;
 }
 
-export function CodeEditor({ blockId, text, language, fileName, readonly, onChange, onMount }: CodeEditorProps) {
+export function CodeEditor({
+    blockId,
+    text,
+    language,
+    fileName,
+    readonly,
+    onChange,
+    onMount,
+    treeCodeAppearance = false,
+}: CodeEditorProps) {
     const appearance = useCoucouWorkbenchAppearance();
     const divRef = useRef<HTMLDivElement>(null);
     const unmountRef = useRef<() => void>(null);
@@ -54,19 +64,25 @@ export function CodeEditor({ blockId, text, language, fileName, readonly, onChan
     const uuidRef = useRef(crypto.randomUUID()).current;
     useEffect(() => {
         MonacoModule.editor.defineTheme("kronterm-coucou-editor", {
-            base: appearance["--coucou-surface"] === "#000000" ? "vs-dark" : "vs",
+            base: treeCodeAppearance || appearance["--coucou-surface"] === "#000000" ? "vs-dark" : "vs",
             inherit: true,
-            rules: [],
+            rules: treeCodeAppearance
+                ? [
+                      { token: "keyword", foreground: "c67880" },
+                      { token: "string", foreground: "9ac7e3" },
+                      { token: "delimiter", foreground: "c7cbd2" },
+                  ]
+                : [],
             colors: {
-                "editor.background": String(appearance["--coucou-surface"]),
-                "editor.foreground": String(appearance["--coucou-label"]),
+                "editor.background": treeCodeAppearance ? "#101114" : String(appearance["--coucou-surface"]),
+                "editor.foreground": treeCodeAppearance ? "#e4e4e7" : String(appearance["--coucou-label"]),
                 "editorCursor.foreground": String(appearance["--coucou-accent"]),
                 "editorLineNumber.foreground": String(appearance["--coucou-secondary"]),
                 "editorLineNumber.activeForeground": String(appearance["--coucou-label"]),
             },
         });
         MonacoModule.editor.setTheme("kronterm-coucou-editor");
-    }, [appearance]);
+    }, [appearance, treeCodeAppearance]);
     let editorPath: string;
     if (fileName) {
         const separator = fileName.startsWith("/") ? "" : "/";
@@ -129,8 +145,20 @@ export function CodeEditor({ blockId, text, language, fileName, readonly, onChan
         opts.wordWrap = wordWrap ? "on" : "off";
         opts.fontSize = fontSize;
         opts.copyWithSyntaxHighlighting = false;
+        if (treeCodeAppearance) {
+            opts.fontSize = 13;
+            opts.lineHeight = 22;
+            opts.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+            opts.lineNumbers = "off";
+            opts.glyphMargin = false;
+            opts.folding = false;
+            opts.lineDecorationsWidth = 0;
+            opts.renderLineHighlight = "none";
+            opts.padding = { top: 16, bottom: 16 };
+            opts.minimap.enabled = false;
+        }
         return opts;
-    }, [minimapEnabled, stickyScrollEnabled, wordWrap, fontSize, readonly]);
+    }, [minimapEnabled, stickyScrollEnabled, wordWrap, fontSize, readonly, treeCodeAppearance]);
 
     return (
         <div className="flex flex-col w-full h-full overflow-hidden items-center justify-center">

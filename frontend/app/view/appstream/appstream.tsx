@@ -1,10 +1,7 @@
 import { reportDesktopPetActivity } from "@/app/aipanel/desktop-pet-activity";
 import { getSettingsKeyAtom } from "@/app/store/global";
-import { ActionMarker } from "@/app/view/action-marker";
-import { AppStreamFrameSizeEvent, type AppStreamFrameSize } from "@/app/view/appstream/appstream-events";
-import { useAgentOverlays } from "@/app/view/use-agent-overlays";
-import { WaterFlowOverlay } from "@/app/view/waterflow-overlay";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
+import { AppStreamFrameSizeEvent, type AppStreamFrameSize } from "@/app/view/appstream/appstream-events";
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeAgentActivityStream } from "../../../types/agent-activity";
@@ -17,6 +14,32 @@ type CanvasPoint = { x: number; y: number };
 
 const DefaultStreamFps = 6;
 const DefaultStreamQuality = 80;
+
+export function appStreamKeyChord(
+    event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">
+): string {
+    const names: Record<string, string> = {
+        Enter: "Return",
+        " ": "space",
+        ArrowLeft: "Left",
+        ArrowRight: "Right",
+        ArrowUp: "Up",
+        ArrowDown: "Down",
+        Backspace: "BackSpace",
+        "+": "plus",
+        "=": "equal",
+        "-": "minus",
+    };
+    return [
+        event.metaKey && "super",
+        event.ctrlKey && "ctrl",
+        event.altKey && "alt",
+        event.shiftKey && "shift",
+        names[event.key] ?? event.key,
+    ]
+        .filter(Boolean)
+        .join("+");
+}
 
 function clampCanvasCoordinate(value: number, max: number): number {
     return Math.min(Math.max(0, value), Math.max(0, max - 1));
@@ -44,9 +67,10 @@ export function clientPointToCanvasPoint(
             y: Math.round(clampCanvasCoordinate((localY - (rect.height - renderedHeight) / 2) / scale, canvasHeight)),
         };
     }
+    const scale = fitMode === "actual" ? 1 : Math.min(rect.width / canvasWidth, rect.height / canvasHeight);
     return {
-        x: Math.round(clampCanvasCoordinate(localX * (canvasWidth / rect.width), canvasWidth)),
-        y: Math.round(clampCanvasCoordinate(localY * (canvasHeight / rect.height), canvasHeight)),
+        x: Math.round(clampCanvasCoordinate((localX - (rect.width - canvasWidth * scale) / 2) / scale, canvasWidth)),
+        y: Math.round(clampCanvasCoordinate((localY - (rect.height - canvasHeight * scale) / 2) / scale, canvasHeight)),
     };
 }
 
@@ -57,22 +81,23 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
     const transport = useAtomValue(model.transportAtom);
     const captureFallbackReason = useAtomValue(model.captureFallbackReasonAtom);
     const error = useAtomValue(model.errorAtom);
+    const inputError = useAtomValue(model.inputErrorAtom);
     const appName = useAtomValue(model.appNameAtom);
-    const nativeSurfaceV2Enabled = useAtomValue(getSettingsKeyAtom("feature:nativesurfacev2")) ?? false;
+    const nativeSurfaceV2Enabled = useAtomValue(getSettingsKeyAtom("feature:nativesurfacev2")) ?? true;
+    const [allowSnapshots, setAllowSnapshots] = useState(false);
     const surfaceRef = useRef<HTMLDivElement>(null);
     const [surfaceVisible, setSurfaceVisible] = useState(!document.hidden);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
-    const cursorPosRef = useRef({ x: -1, y: -1 });
     const dragStartRef = useRef<CanvasPoint | null>(null);
     const suppressClickRef = useRef(false);
+    const wheelRef = useRef({ x: 0, y: 0, timer: undefined as ReturnType<typeof setTimeout> });
     const streamingRef = useRef(false);
     const lastPreviewImageUrlRef = useRef<string>(undefined);
     const fitMode = "fit" as StreamFitMode;
     const fps = DefaultStreamFps;
     const quality = DefaultStreamQuality;
     const frameSizeRef = useRef<{ width: number; height: number } | undefined>(undefined);
-    const { waterflowActive, markers } = useAgentOverlays("desktop");
 
     useEffect(() => {
         let intersects = true;
@@ -121,12 +146,21 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
     useEffect(() => {
         model.startStream(nativeSurfaceV2Enabled).catch(console.error);
         return () => {
+            clearTimeout(wheelRef.current.timer);
+            wheelRef.current.x = wheelRef.current.y = 0;
+            wheelRef.current.timer = undefined;
             model.dispose();
         };
     }, [model, nativeSurfaceV2Enabled]);
 
     useEffect(() => {
-        if (!surfaceVisible || !streamUrl || status !== "streaming" || transport !== "legacy-snapshot") {
+        if (
+            !surfaceVisible ||
+            !streamUrl ||
+            status !== "streaming" ||
+            transport !== "legacy-snapshot" ||
+            (nativeSurfaceV2Enabled && !allowSnapshots)
+        ) {
             streamingRef.current = false;
             if (transport === "legacy-snapshot") {
                 lastPreviewImageUrlRef.current = undefined;
@@ -172,26 +206,12 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
                         frameSizeRef.current?.height !== img.naturalHeight
                     ) {
                         frameSizeRef.current = { width: img.naturalWidth, height: img.naturalHeight };
+                        model.frameSize = frameSizeRef.current;
                         window.dispatchEvent(
                             new CustomEvent<AppStreamFrameSize>(AppStreamFrameSizeEvent, {
                                 detail: { blockId: model.blockId, width: img.naturalWidth, height: img.naturalHeight },
                             })
                         );
-                    }
-
-                    const cursor = cursorPosRef.current;
-                    if (cursor.x >= 0 && cursor.y >= 0) {
-                        ctx.beginPath();
-                        ctx.arc(cursor.x, cursor.y, 14, 0, Math.PI * 2);
-                        ctx.fillStyle = "rgba(30, 144, 255, 0.14)";
-                        ctx.fill();
-                        ctx.strokeStyle = "rgba(30, 144, 255, 0.9)";
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.arc(cursor.x, cursor.y, 3, 0, Math.PI * 2);
-                        ctx.fillStyle = "#1E90FF";
-                        ctx.fill();
                     }
 
                     if (!disposed) {
@@ -215,7 +235,18 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
             abortController.abort();
             streamingRef.current = false;
         };
-    }, [appName, fps, model.blockId, quality, status, streamUrl, surfaceVisible, transport]);
+    }, [
+        allowSnapshots,
+        appName,
+        fps,
+        model.blockId,
+        nativeSurfaceV2Enabled,
+        quality,
+        status,
+        streamUrl,
+        surfaceVisible,
+        transport,
+    ]);
 
     useEffect(() => {
         if (mediaStream == null) return;
@@ -249,6 +280,7 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
                 return;
             }
             frameSizeRef.current = { width: video.videoWidth, height: video.videoHeight };
+            model.frameSize = frameSizeRef.current;
             window.dispatchEvent(
                 new CustomEvent<AppStreamFrameSize>(AppStreamFrameSizeEvent, {
                     detail: { blockId: model.blockId, width: video.videoWidth, height: video.videoHeight },
@@ -280,6 +312,7 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
         };
 
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
+        video.addEventListener("resize", publishFrameSize);
         if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
             handleLoadedMetadata();
         }
@@ -287,6 +320,7 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
         return () => {
             disposed = true;
             video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+            video.removeEventListener("resize", publishFrameSize);
             if (previewTimer != null) {
                 window.clearInterval(previewTimer);
             }
@@ -318,14 +352,15 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
                 return;
             }
             const point = getStreamPoint(clientX, clientY, target);
-            cursorPosRef.current = point;
-            void model.sendClick(point.x, point.y);
+            void model.sendClick(point.x, point.y).catch(() => {});
         },
         [getStreamPoint, model]
     );
 
     const handlePointerDown = useCallback(
         (e: React.PointerEvent<HTMLElement>) => {
+            if (e.button !== 0) return;
+            suppressClickRef.current = false;
             e.currentTarget.focus();
             dragStartRef.current = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -341,18 +376,23 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
             const end = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
             if (Math.hypot(end.x - start.x, end.y - start.y) < 6) return;
             suppressClickRef.current = true;
-            void model.sendDrag(start.x, start.y, end.x, end.y);
+            void model.sendDrag(start.x, start.y, end.x, end.y).catch(() => {});
         },
         [getStreamPoint, model]
     );
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLElement>) => {
+            if (e.nativeEvent.isComposing || e.key === "Process" || e.key === "Dead") return;
+            if (["Meta", "Control", "Alt", "Shift"].includes(e.key)) return;
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") return;
             e.preventDefault();
-            const keys = [e.metaKey && "Meta", e.ctrlKey && "Control", e.altKey && "Alt", e.shiftKey && "Shift", e.key]
-                .filter(Boolean)
-                .join("+");
-            void model.sendKeyPress(keys);
+            if ([...e.key].length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                void model.sendType(e.key).catch(() => {});
+                return;
+            }
+            const keys = appStreamKeyChord(e);
+            void model.sendKeyPress(keys).catch(() => {});
         },
         [model]
     );
@@ -360,23 +400,23 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
     const handlePaste = useCallback(
         (e: React.ClipboardEvent<HTMLElement>) => {
             e.preventDefault();
-            void model.sendPaste(e.clipboardData.getData("text"));
+            void model.sendPaste(e.clipboardData.getData("text")).catch(() => {});
         },
         [model]
     );
 
-    const handleMouseMove = useCallback(
-        (e: React.MouseEvent<HTMLElement>) => {
-            cursorPosRef.current = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
+    const handleCompositionEnd = useCallback(
+        (e: React.CompositionEvent<HTMLElement>) => {
+            if (e.data) void model.sendType(e.data).catch(() => {});
         },
-        [getStreamPoint]
+        [model]
     );
 
     const handleContextMenu = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
             e.preventDefault();
             const point = getStreamPoint(e.clientX, e.clientY, e.currentTarget);
-            void model.sendClick(point.x, point.y, "right");
+            void model.sendClick(point.x, point.y, "right").catch(() => {});
         },
         [getStreamPoint, model]
     );
@@ -384,14 +424,29 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
     const handleWheel = useCallback(
         (e: React.WheelEvent<HTMLElement>) => {
             e.preventDefault();
-            const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-            const delta = horizontal ? e.deltaX : e.deltaY;
-            const direction = horizontal ? (delta > 0 ? "right" : "left") : delta > 0 ? "down" : "up";
-            const scrollCount = Math.min(8, Math.max(1, Math.round(Math.abs(delta) / 80)));
-            void model.sendScroll(direction, scrollCount);
+            const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1;
+            const wheel = wheelRef.current;
+            wheel.x += e.deltaX * unit;
+            wheel.y += e.deltaY * unit;
+            if (wheel.timer != null) return;
+            wheel.timer = setTimeout(() => {
+                wheel.timer = undefined;
+                const horizontal = Math.abs(wheel.x) > Math.abs(wheel.y);
+                const delta = horizontal ? wheel.x : wheel.y;
+                wheel.x = wheel.y = 0;
+                if (!delta) return;
+                const direction = horizontal ? (delta > 0 ? "right" : "left") : delta > 0 ? "down" : "up";
+                const scrollCount = Math.min(24, Math.max(0.03, Math.abs(delta) / 80));
+                void model.sendScroll(direction, scrollCount).catch(() => {});
+            }, 32);
         },
         [model]
     );
+
+    const handlePointerCancel = useCallback(() => {
+        dragStartRef.current = null;
+        suppressClickRef.current = false;
+    }, []);
 
     if (status === "starting") {
         return (
@@ -426,8 +481,43 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
         );
     }
 
+    if (transport === "legacy-snapshot" && nativeSurfaceV2Enabled && !allowSnapshots) {
+        return (
+            <div className="flex h-full items-center justify-center bg-black p-4 text-sm text-white">
+                <div className="max-w-sm space-y-3">
+                    <p>Live capture is unavailable for {appName}.</p>
+                    <p className="text-xs text-white/70">
+                        {captureFallbackReason || "Connect a live window stream to interact smoothly."}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            className="cursor-pointer rounded border border-white/20 px-3 py-2 focus-visible:outline"
+                            onClick={() => void model.retryLiveCapture()}
+                        >
+                            Retry live capture
+                        </button>
+                        <button
+                            className="cursor-pointer rounded border border-white/20 px-3 py-2 focus-visible:outline"
+                            onClick={() => setAllowSnapshots(true)}
+                        >
+                            Use slow snapshot mode
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div ref={surfaceRef} className="relative flex h-full w-full flex-col bg-black overflow-hidden">
+            {inputError ? (
+                <div
+                    role="status"
+                    className="shrink-0 border-b border-white/10 bg-black px-3 py-1 text-xs text-red-300"
+                >
+                    {inputError}
+                </div>
+            ) : null}
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
                 {transport === "native-media" && mediaStream != null ? (
                     <video
@@ -437,38 +527,44 @@ export function AppStreamView({ model }: ViewComponentProps<AppStreamViewModel>)
                         playsInline
                         autoPlay
                         aria-label={`${appName} live application stream`}
-                        className="block max-h-full max-w-full cursor-default object-contain outline-none"
+                        className="block max-h-full max-w-full cursor-default object-contain focus-visible:outline focus-visible:outline-accent"
                         onClick={(e) => handleClick(e.clientX, e.clientY, e.currentTarget)}
-                        onMouseMove={handleMouseMove}
                         onContextMenu={handleContextMenu}
                         onPointerDown={handlePointerDown}
                         onPointerUp={handlePointerUp}
+                        onPointerCancel={handlePointerCancel}
                         onWheel={handleWheel}
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
+                        onCompositionEnd={handleCompositionEnd}
                     />
                 ) : (
                     <canvas
                         ref={canvasRef}
                         tabIndex={0}
                         aria-label={`${appName} compatibility application stream`}
-                        className="block max-h-full max-w-full cursor-none object-contain outline-none"
+                        className="block max-h-full max-w-full cursor-default object-contain focus-visible:outline focus-visible:outline-accent"
                         onClick={(e) => handleClick(e.clientX, e.clientY, e.currentTarget)}
-                        onMouseMove={handleMouseMove}
                         onContextMenu={handleContextMenu}
                         onPointerDown={handlePointerDown}
                         onPointerUp={handlePointerUp}
+                        onPointerCancel={handlePointerCancel}
                         onWheel={handleWheel}
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
+                        onCompositionEnd={handleCompositionEnd}
                     />
                 )}
                 {nativeSurfaceV2Enabled && captureFallbackReason ? (
-                    <div className="pointer-events-none absolute right-3 top-3 rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-[10px] text-white/70 backdrop-blur-md">
-                        Compatibility capture
-                    </div>
+                    <button
+                        className="absolute right-3 top-3 cursor-pointer rounded border border-white/10 bg-black/60 px-2.5 py-1 text-[10px] text-white/80 focus-visible:outline"
+                        title={captureFallbackReason}
+                        onClick={() => void model.retryLiveCapture()}
+                    >
+                        Retry live capture
+                    </button>
                 ) : null}
-                <AgentSurfaceCursor surface="desktop" blockId={model.blockId} />
+                <AgentSurfaceCursor surface="desktop" blockId={model.blockId} coordinates="capture" />
             </div>
         </div>
     );

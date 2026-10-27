@@ -1,0 +1,7 @@
+upstream/node_modules/
+upstream/dist/
+upstream/dist-server/
+upstream/.omb-scratch/
+upstream/test-results/
+upstream/.vite/
+upstream/*.tsbuildinfo

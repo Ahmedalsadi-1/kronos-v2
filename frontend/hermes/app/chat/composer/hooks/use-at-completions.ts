@@ -114,7 +114,12 @@ function classify(entry: CompletionEntry): {
             // invariant is held by deriving both ends from refChipLabel. Without
             // this the list said `desktop/`, the editor said `apps/desktop/`, and
             // the chip said `desktop` — three names for one folder.
-            display: rest ? refChipLabel(kind, rest) : textValue(entry.display, `@${kind}:`),
+            display:
+                kind === "widget" && entry.display
+                    ? textValue(entry.display)
+                    : rest
+                      ? refChipLabel(kind, rest)
+                      : textValue(entry.display, `@${kind}:`),
             meta: textValue(entry.meta),
         };
     }

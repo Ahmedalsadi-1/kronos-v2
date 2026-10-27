@@ -738,10 +738,10 @@ function registerGlobalKeys() {
     });
     globalKeyMap.set("Cmd:Shift:a", () => {
         const presentation = hermesSurfaceController.getSnapshot().presentation;
-        if (presentation === "panel") {
+        if (presentation === "panel" || presentation === "hud") {
             hermesSurfaceController.dismiss();
         } else {
-            hermesSurfaceController.requestOpenPanel();
+            hermesSurfaceController.requestOpenChat();
         }
         return true;
     });
@@ -750,7 +750,7 @@ function registerGlobalKeys() {
     const toggleCommandPalette = () => {
         const presentation = hermesSurfaceController.getSnapshot().presentation;
         if (presentation === "closed") {
-            hermesSurfaceController.requestOpenPanel();
+            hermesSurfaceController.requestOpenChat();
         }
         if (isKronTermWidgetHost()) {
             openCommandPalette();

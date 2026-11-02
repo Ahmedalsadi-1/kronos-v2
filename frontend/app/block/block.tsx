@@ -1,6 +1,7 @@
-import { TapflowModel } from "@/app/view/tapflow/tapflow-model";
 import { BotsModel } from "@/app/view/bots/bots";
+import { TapflowModel } from "@/app/view/tapflow/tapflow-model";
 import { WorkflowCanvasModel } from "@/app/view/workflowcanvas/workflowcanvas-model";
+import { WorkflowViewModel } from "@/app/workspace/workflow-view";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -82,6 +83,7 @@ BlockRegistry.set("preview", PreviewModel);
 BlockRegistry.set("web", WebViewModel);
 BlockRegistry.set("waveai", WaveAiModel);
 BlockRegistry.set("warpagent", WarpAgentViewModel);
+BlockRegistry.set("workflow", WorkflowViewModel);
 BlockRegistry.set("cpuplot", SysinfoViewModel);
 BlockRegistry.set("sysinfo", SysinfoViewModel);
 BlockRegistry.set("vdom", VDomModel);

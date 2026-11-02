@@ -19,11 +19,11 @@ import { WaveEnv, WaveEnvContext } from "@/app/waveenv/waveenv";
 import { makeWaveEnvImpl } from "@/app/waveenv/waveenvimpl";
 import type { NodeModel } from "@/layout/lib/types";
 import { atoms, getApi } from "@/store/global";
+import { getFileTreeDndManager } from "@hermes/app/right-sidebar/files/dnd-manager";
 import { atom, Provider, useAtomValue } from "jotai";
 import { Hand, Maximize2, Minimize2, X } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import "./native-island-chrome.css";
 
 function makeNativeIslandNodeModel(blockId: string): NodeModel {
@@ -62,7 +62,7 @@ export function NativeIslandProviders({ children, tabId }: { children: ReactNode
         <Provider store={globalStore}>
             <WaveEnvContext.Provider value={waveEnvRef.current}>
                 <TabModelContext.Provider value={tabModel}>
-                    <DndProvider backend={HTML5Backend}>{children}</DndProvider>
+                    <DndProvider manager={getFileTreeDndManager()}>{children}</DndProvider>
                 </TabModelContext.Provider>
             </WaveEnvContext.Provider>
         </Provider>

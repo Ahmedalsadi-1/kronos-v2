@@ -77,3 +77,9 @@ website/.next/
 /.hyperframes/
 /.playwright-cli/
 /orca/
+
+# Generated original workflow component bundle
+/public/workflow-native/
+
+# Local Electron verification bundle
+/.tmp/KronTermWorkflowDev.app/

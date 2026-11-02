@@ -480,10 +480,10 @@ if (isKronTermWidgetHost()) {
             },
             {
                 id: "kronterm-sandbox",
-                label: "Sandbox",
+                label: "Computer",
                 icon: <TitlebarIcon name="desktop" />,
                 onSelect: () => krontermCreateWidget("sandbox"),
-                title: "Open sandbox desktop",
+                title: "Open Computer widget",
             },
             {
                 id: "kronterm-chat",
@@ -831,9 +831,12 @@ export function ContribController() {
     if (hudMode || (!webMode && isHudWindow())) {
         return (
             <ContribWiring>
-                <div data-hud-app={dockedChat ? undefined : ""} className="flex h-full min-h-0 w-full flex-col">
+                <div
+                    data-hud-app={dockedChat ? undefined : ""}
+                    className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
+                >
                     {!dockedChat && <HudNavigation />}
-                    <div className="relative min-h-0 flex-1">
+                    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                         <HudShell />
                     </div>
                 </div>

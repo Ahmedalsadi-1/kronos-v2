@@ -187,6 +187,7 @@ import {
     listNativeHudIslands,
     nativeDesktopHudActive,
     nativeHudWidgetRoute,
+    nativeHudTaskContext,
     openNativeHudIsland,
     openNativeHudIslandForTab,
     parseNotchPetTarget,
@@ -209,6 +210,22 @@ describe("native KronTerm HUD windows", () => {
         mocks.getNowPlaying.mockResolvedValue(undefined);
         mocks.controlNowPlaying.mockResolvedValue(undefined);
     });
+    test("keeps direct renderer commands on their owning tab while HUD commands follow the active tab", () => {
+        const owner = mocks.ownerWindow as typeof mocks.ownerWindow & { activeTabView?: { waveTabId: string } };
+        const previous = owner.activeTabView;
+        owner.activeTabView = { waveTabId: "different-active-tab" };
+        try {
+            expect(nativeHudTaskContext(42)).toMatchObject({ tabId: "tab-1", workspaceId: "workspace-1" });
+            setNativeHudMode(42, true, "existing-chat");
+            const hud = mocks.windows[0];
+            expect(nativeHudTaskContext(hud.webContents.id)).toMatchObject({ tabId: "different-active-tab", workspaceId: "workspace-1" });
+        } finally {
+            if (previous) owner.activeTabView = previous;
+            else delete owner.activeTabView;
+            setNativeHudMode(42, false);
+        }
+    });
+
     test("routes notch playback commands to the displayed source and refreshes its state", async () => {
         const media = {
             id: "com.spotify.client",

@@ -1,4 +1,18 @@
+import { getCanvasToolbarSlot } from "@/app/lib/react-grab-canvas-toolbar";
 import { WorkspaceService } from "@/app/store/services";
+import { createPortal } from "react-dom";
+import { OSCanvasEntity } from "./os-canvas-entity";
+import { osCanvasOwnsDelete, osWidgetOwnsWheel } from "./os-canvas-input";
+import { OSOriginalWorkflow } from "./os-original-workflow";
+import {
+    applyOSWorkflowSelection,
+    getOSCanvasEntityBounds,
+    getOSSceneZIndices,
+    getPersistedOSSceneOrder,
+    selectOSSceneEntity,
+} from "./os-scene-order";
+import { resolveWorkflowCameraIntent, workflowEventMatchesTab, workflowOwnsWheel } from "./os-workflow-host";
+import { activateOSWorkflowCanvas, keepWorkflowNodeVisible } from "./os-workflow-layout";
 import { OSSpaceIdentities, OSWorkspaceSetup } from "./os-workspace-setup";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -8,7 +22,6 @@ import { BlockChromeProvider } from "@/app/block/block-chrome-context";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
 import { PersistentBlock as BlockView } from "@/app/block/persistent-block";
 import { AppIcon } from "@/app/components/app-icon";
-import { DockNav } from "@/app/components/dock-nav";
 import {
     SystemButton,
     SystemMaterial,
@@ -17,21 +30,45 @@ import {
     SystemUIProvider,
     SystemWindowFrame,
 } from "@/app/components/system-ui";
+import {
+    Battery,
+    BatteryCharging,
+    BatteryLow,
+    Bell,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    Focus,
+    FolderOpen,
+    Grid2X2,
+    Hand,
+    Link2,
+    List,
+    Maximize2,
+    Minimize2,
+    MousePointer2,
+    PanelBottom,
+    PanelLeft,
+    PanelRight,
+    Plus,
+    Search,
+    Settings2,
+    Circle as ShapeCircle,
+    Diamond as ShapeDiamond,
+    Square as ShapeSquare,
+    StickyNote,
+    Unlink,
+    Wifi,
+    WifiOff,
+    X,
+} from "@/app/components/system-ui/os-icons";
 import { hasViewIcon, KronPetIcon, viewIconId } from "@/app/components/view-icons";
 import {
     fitSpatialViewportToBounds,
     spatialBoundsForRects,
     zoomSpatialViewportAtPoint,
 } from "@/app/spatial/spatial-engine";
-import {
-    getBuiltinViewDescriptors,
-    launchSystemApp,
-    mergeAppDescriptors,
-    rankInstalledApps,
-    systemAppIdForBlock,
-    useInstalledAppDescriptors,
-    type AppDescriptor,
-} from "@/app/store/app-registry";
+import { systemAppIdForBlock, useInstalledAppDescriptors } from "@/app/store/app-registry";
 import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
 import {
@@ -41,6 +78,7 @@ import {
     type OSResourceReference,
 } from "@/app/store/os-resource-service";
 import { OSSystemModel } from "@/app/store/os-system";
+import { waveEventSubscribeSingle } from "@/app/store/wps";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
@@ -77,41 +115,6 @@ import {
 import { $sidebarOpen, toggleSidebarOpen } from "@hermes/store/layout";
 import { useStore } from "@nanostores/react";
 import { atom, useAtomValue } from "jotai";
-import {
-    Battery,
-    BatteryCharging,
-    BatteryLow,
-    Bell,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    FileText,
-    Focus,
-    FolderOpen,
-    GitBranch,
-    Grid2X2,
-    Hand,
-    Link2,
-    List,
-    Maximize2,
-    Minimize2,
-    MousePointer2,
-    PackageOpen,
-    PanelBottom,
-    PanelLeft,
-    PanelRight,
-    Plus,
-    Search,
-    Settings2,
-    Circle as ShapeCircle,
-    Diamond as ShapeDiamond,
-    Square as ShapeSquare,
-    StickyNote,
-    Unlink,
-    Wifi,
-    WifiOff,
-    X,
-} from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import {
     memo,
@@ -131,7 +134,7 @@ import { OSAppDragMimeType, readOSAppDragPayload, type OSAppDragPayload } from "
 import { osDesktopInsetsForWidth, OSDesktopLayer } from "./os-desktop";
 import { OSDesktopWidgetsStorageKey, readOSDockPins, writeOSDockPins, type OSDockPin } from "./os-desktop-model";
 import { useOSNowPlaying } from "./os-now-playing";
-import { OSSpaceOverview } from "./os-space-overview";
+import { OSSpaceOverview, useOSSpaceSnapshot } from "./os-space-overview";
 import { getOSNavigationTarget, placeOSCanvasObject, validateOSSurfaceControl } from "./os-surface-control";
 import { OSSystemCenterPanel, type OSSystemCenter } from "./os-system-centers";
 import { getOSTabGroup } from "./os-tab-groups";
@@ -193,7 +196,6 @@ function resizeBoundsFromEdge(bounds: DragBounds, edge: OSResizeEdge, dx: number
 }
 
 const OSSaveDelayMs = 180;
-const OSDockInstalledAppLimit = 6;
 // The connected shell plus its breathing room; arranged windows start below it.
 const OSShellReservedHeight = 64;
 
@@ -242,20 +244,23 @@ function makeOSRecoverySnapshot(state: OSModeState) {
         camera: state.camera,
         windows: state.windows,
         zOrder: state.zOrder,
+        sceneOrder: getPersistedOSSceneOrder(state),
         groups: state.groups,
         tabGroups: state.tabGroups,
-        objects: state.objects.map((object) => ({
-            id: object.id,
-            kind: object.kind,
-            x: object.x,
-            y: object.y,
-            width: object.width,
-            height: object.height,
-            fromObjectId: object.fromObjectId,
-            toObjectId: object.toObjectId,
-            appId: object.appId,
-            artifactId: object.artifactId,
-        })),
+        objects: state.objects
+            .filter((object) => object.kind !== "workflow-node")
+            .map((object) => ({
+                id: object.id,
+                kind: object.kind,
+                x: object.x,
+                y: object.y,
+                width: object.width,
+                height: object.height,
+                fromObjectId: object.fromObjectId,
+                toObjectId: object.toObjectId,
+                appId: object.appId,
+                artifactId: object.artifactId,
+            })),
         scene: state.scene,
         desktopLayout: state.desktopLayout,
         previousScene: state.previousScene,
@@ -384,6 +389,7 @@ const OSBlockWindow = memo(
         onDock,
         onDetach,
         onTitleContextMenu,
+        surfaceInput,
     }: {
         descriptor: BlockDescriptor;
         layout: OSWindowLayout;
@@ -407,6 +413,11 @@ const OSBlockWindow = memo(
         onDock: (blockId: string, side: "left" | "right") => void;
         onDetach: (blockId: string) => void;
         onTitleContextMenu?: (event: React.MouseEvent, blockId: string) => void;
+        surfaceInput: {
+            capturePointer: boolean;
+            onPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => void;
+            onWheel: (event: ReactWheelEvent<HTMLDivElement>) => void;
+        };
     }) => {
         const blockAtom = useMemo(
             () => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", descriptor.blockId)),
@@ -414,10 +425,11 @@ const OSBlockWindow = memo(
         );
         const block = useAtomValue(blockAtom);
         const phoneWindow =
-            descriptor.view === "linux-vms" &&
-            ["android", "iphone"].includes(String(block?.meta?.["machine:kind"])) &&
-            !block?.meta?.["machine:settings"] &&
-            !block?.meta?.["machine:picker"];
+            descriptor.view === "computers" ||
+            (descriptor.view === "linux-vms" &&
+                ["android", "iphone"].includes(String(block?.meta?.["machine:kind"])) &&
+                !block?.meta?.["machine:settings"] &&
+                !block?.meta?.["machine:picker"]);
         const [toolbarHost, setToolbarHost] = useState<HTMLDivElement>(null);
         const nodeModel = useMemo(
             () =>
@@ -433,11 +445,58 @@ const OSBlockWindow = memo(
             globalStore.set(nodeModel.isFocused as any, selected);
         }, [nodeModel, selected]);
 
+        const windowElement = useRef<HTMLElement>(null);
+        useEffect(() => {
+            const element = windowElement.current;
+            if (!element || !phoneWindow) return;
+            const drag = (event: PointerEvent) => {
+                const target = event.target as HTMLElement;
+                if (
+                    target.closest("[data-live-blockid]")?.getAttribute("data-live-blockid") !== descriptor.blockId ||
+                    !target.closest("[data-os-window-drag]") ||
+                    target.closest("button,input,select,a,textarea")
+                )
+                    return;
+                onTitlePointerDown(
+                    {
+                        button: event.button,
+                        pointerId: event.pointerId,
+                        clientX: event.clientX,
+                        clientY: event.clientY,
+                        target: event.target,
+                        currentTarget: element,
+                        preventDefault: () => event.preventDefault(),
+                        stopPropagation: () => event.stopPropagation(),
+                    } as unknown as ReactPointerEvent,
+                    descriptor.blockId,
+                    layout
+                );
+            };
+            const windowControl = (event: MouseEvent) => {
+                const target = event.target as HTMLElement;
+                if (target.closest("[data-live-blockid]")?.getAttribute("data-live-blockid") !== descriptor.blockId)
+                    return;
+                const button = target.closest(".kt-device-window-controls button");
+                if (!button) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (button.classList.contains("is-close")) onClose(descriptor.blockId);
+                else if (button.classList.contains("is-minimize")) onCollapse(descriptor.blockId);
+                else if (button.classList.contains("is-maximize")) onToggleFocus(descriptor.blockId);
+            };
+            document.addEventListener("pointerdown", drag, true);
+            document.addEventListener("click", windowControl, true);
+            return () => {
+                document.removeEventListener("pointerdown", drag, true);
+                document.removeEventListener("click", windowControl, true);
+            };
+        }, [phoneWindow, descriptor.blockId, layout, onTitlePointerDown, onClose, onCollapse, onToggleFocus]);
         const { bounds } = layout;
         const agentWorking = agentPresence != null;
         const transitionDuration = reducedMotion || interacting ? "0ms" : "240ms";
         return (
             <section
+                ref={windowElement}
                 className={cn(
                     "os-window",
                     phoneWindow && "is-phone-window",
@@ -512,7 +571,14 @@ const OSBlockWindow = memo(
                                 <div
                                     ref={setToolbarHost}
                                     className="os-window-context"
-                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onPointerDown={(event) => {
+                                        if (
+                                            (event.target as HTMLElement).closest(
+                                                "button, input, textarea, select, a, [contenteditable='true'], [role='button']"
+                                            )
+                                        )
+                                            event.stopPropagation();
+                                    }}
                                     onDoubleClick={(event) => event.stopPropagation()}
                                 />
                                 <div className="os-window-controls">
@@ -588,7 +654,7 @@ const OSBlockWindow = memo(
                                         Opening {descriptor.title}…
                                     </div>
                                 )}
-                                <BlockView nodeModel={nodeModel} preview={false} />
+                                <BlockView nodeModel={nodeModel} preview={false} surfaceInput={surfaceInput} />
                             </BlockChromeProvider>
                         </div>
                     </div>
@@ -607,144 +673,6 @@ const OSBlockWindow = memo(
     }
 );
 OSBlockWindow.displayName = "OSBlockWindow";
-
-const OSCanvasEntity = memo(
-    ({
-        object,
-        selected,
-        zoom,
-        onSelect,
-        onMove,
-        onResize,
-        onDelete,
-        onOpenResource,
-    }: {
-        object: OSCanvasObject;
-        selected: boolean;
-        onSelect: (id: string) => void;
-        zoom: number;
-        onMove: (id: string, x: number, y: number) => void;
-        onResize: (id: string, width: number, height: number) => void;
-        onDelete: (id: string) => void;
-        onOpenResource: (object: OSCanvasObject) => void;
-    }) => {
-        const startRef = useRef<{ clientX: number; clientY: number; x: number; y: number } | undefined>(undefined);
-        const resizeRef = useRef<{ clientX: number; clientY: number; width: number; height: number } | undefined>(
-            undefined
-        );
-        if (object.kind === "connector") return null;
-        const isResource = ["file", "folder", "repository", "url", "generated-artifact"].includes(object.kind);
-        const ResourceIcon =
-            object.kind === "repository"
-                ? GitBranch
-                : object.kind === "folder"
-                  ? FolderOpen
-                  : object.kind === "url"
-                    ? Link2
-                    : object.kind === "generated-artifact"
-                      ? PackageOpen
-                      : FileText;
-        return (
-            <article
-                className={cn(
-                    "os-canvas-object",
-                    `is-${object.kind}`,
-                    `color-${object.color ?? "amber"}`,
-                    selected && "is-selected"
-                )}
-                style={{ left: object.x, top: object.y, width: object.width, height: object.height }}
-                onPointerDown={(event) => {
-                    event.stopPropagation();
-                    onSelect(object.id);
-                }}
-            >
-                <div
-                    className="os-canvas-object-handle"
-                    onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onSelect(object.id);
-                        startRef.current = { clientX: event.clientX, clientY: event.clientY, x: object.x, y: object.y };
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                    }}
-                    onPointerMove={(event) => {
-                        if (!startRef.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
-                        onMove(
-                            object.id,
-                            startRef.current.x + (event.clientX - startRef.current.clientX) / zoom,
-                            startRef.current.y + (event.clientY - startRef.current.clientY) / zoom
-                        );
-                    }}
-                    onPointerUp={(event) => {
-                        startRef.current = undefined;
-                        event.currentTarget.releasePointerCapture(event.pointerId);
-                    }}
-                >
-                    <span>{object.kind === "note" ? "Note" : object.kind}</span>
-                    <button type="button" onClick={() => onDelete(object.id)} aria-label="Delete canvas object">
-                        <X />
-                    </button>
-                </div>
-                {object.kind === "note" && <p>{object.text || "New note"}</p>}
-                {isResource && (
-                    <button
-                        type="button"
-                        className="os-canvas-reference"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onSelect(object.id);
-                        }}
-                        onDoubleClick={(event) => {
-                            event.stopPropagation();
-                            onOpenResource(object);
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key !== "Enter") return;
-                            event.preventDefault();
-                            onOpenResource(object);
-                        }}
-                        title={object.resource ? `Open ${object.resource}` : undefined}
-                    >
-                        <ResourceIcon aria-hidden="true" />
-                        <span>
-                            <strong>{object.text || object.kind}</strong>
-                            <small>{object.resource}</small>
-                        </span>
-                    </button>
-                )}
-                <button
-                    type="button"
-                    className="os-canvas-object-resize"
-                    aria-label="Resize canvas object"
-                    onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        resizeRef.current = {
-                            clientX: event.clientX,
-                            clientY: event.clientY,
-                            width: object.width,
-                            height: object.height,
-                        };
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                    }}
-                    onPointerMove={(event) => {
-                        if (!resizeRef.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
-                        onResize(
-                            object.id,
-                            Math.max(96, resizeRef.current.width + (event.clientX - resizeRef.current.clientX) / zoom),
-                            Math.max(72, resizeRef.current.height + (event.clientY - resizeRef.current.clientY) / zoom)
-                        );
-                    }}
-                    onPointerUp={(event) => {
-                        resizeRef.current = undefined;
-                        event.currentTarget.releasePointerCapture(event.pointerId);
-                    }}
-                />
-            </article>
-        );
-    }
-);
-OSCanvasEntity.displayName = "OSCanvasEntity";
 
 type OSBatteryState = { level: number; charging: boolean };
 type BatteryManagerLike = OSBatteryState & EventTarget;
@@ -815,7 +743,6 @@ function OSModeShell({
     workspaces,
     currentWorkspaceId,
     blocks,
-    installedApps,
     collapsedIds,
     showCollapsedDock,
     sceneKind,
@@ -823,10 +750,8 @@ function OSModeShell({
     osView,
     onSetOSView,
     onFocusApp,
-    onCreateAppStream,
     onWorkspace,
     onCreateWorkspace,
-    onCreateBlock,
     onRestore,
     onPinResource,
     onOverview,
@@ -836,7 +761,6 @@ function OSModeShell({
     workspaces: Array<{ id: string; name: string }>;
     currentWorkspaceId: string;
     blocks: BlockDescriptor[];
-    installedApps: AppDescriptor[];
     collapsedIds: string[];
     showCollapsedDock: boolean;
     sceneKind: OSModeState["scene"]["kind"];
@@ -844,10 +768,8 @@ function OSModeShell({
     osView: KronTermOSView;
     onSetOSView: (view: KronTermOSView) => void;
     onFocusApp: (blockId: string) => void;
-    onCreateAppStream: (appid: string, appname: string) => void;
     onWorkspace: (id: string) => void;
     onCreateWorkspace: () => void;
-    onCreateBlock: (view: string) => void;
     onRestore: (blockId: string) => void;
     onPinResource: (resource: OSResourceReference) => void;
     onOverview: () => void;
@@ -866,6 +788,7 @@ function OSModeShell({
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
+
     const sidebarOpen = useStore($sidebarOpen);
     const inspectorOpen = useStore($krontermInspectorOpen);
     const hudMode = useSyncExternalStore(
@@ -878,14 +801,6 @@ function OSModeShell({
         const timer = window.setInterval(() => setClock(new Date()), 30_000);
         return () => window.clearInterval(timer);
     }, []);
-    const appDescriptors = useMemo(() => {
-        const builtins = mergeAppDescriptors(getBuiltinViewDescriptors(blocks), [], blocks);
-        const pinned = builtins.filter((descriptor) => descriptor.pinned);
-        const runningExtras = builtins.filter(
-            (descriptor) => !descriptor.pinned && descriptor.runningBlockIds.length > 0
-        );
-        return [...pinned, ...runningExtras, ...installedApps.slice(0, OSDockInstalledAppLimit)];
-    }, [blocks, installedApps]);
     const toggleHermesChat = useCallback(() => {
         if (hermesSurface.presentation === "hud") {
             hermesSurfaceController.dismiss();
@@ -921,46 +836,6 @@ function OSModeShell({
         return () => window.removeEventListener(SystemCenterOpenEvent, handleSystemCenterOpen);
     }, []);
 
-    const launchApp = useCallback(
-        (descriptor: AppDescriptor) => {
-            if (descriptor.view === "preview" || descriptor.view === "codeeditor") {
-                $krontermInspectorSection.set("files");
-                $krontermInspectorOpen.set(true);
-                return;
-            }
-            void launchSystemApp(descriptor, {
-                focusBlock: onFocusApp,
-                createView: onCreateBlock,
-                createAppStream: onCreateAppStream,
-            });
-        },
-        [onFocusApp, onCreateBlock, onCreateAppStream]
-    );
-
-    const appDock = (
-        <div className="os-dock-bay" data-live-block-occluder="">
-            <DockNav
-                aria-label="Applications"
-                items={[
-                    ...appDescriptors.map((descriptor) => ({
-                        id: descriptor.id,
-                        label: descriptor.name,
-                        icon: <AppIcon icon={descriptor.icon} />,
-                        running: descriptor.runningBlockIds.length > 0,
-                        active: descriptor.runningBlockIds.includes(activeBlockId ?? ""),
-                        onClick: () => launchApp(descriptor),
-                    })),
-                    {
-                        id: "more-applications",
-                        label: "More applications",
-                        icon: <Plus />,
-                        onClick: toggleCommandCenter,
-                    },
-                ]}
-            />
-        </div>
-    );
-
     return (
         <>
             <SystemMaterial
@@ -987,7 +862,7 @@ function OSModeShell({
                         <PanelLeft />
                     </SystemButton>
                     <nav className="os-workspaces" aria-label="Workspaces">
-                        {workspaces.slice(0, 4).map((workspace, index) => (
+                        {workspaces.map((workspace, index) => (
                             <button
                                 type="button"
                                 key={workspace.id}
@@ -1003,6 +878,7 @@ function OSModeShell({
                             <Plus />
                         </button>
                     </nav>
+                    <div id={`workflow-shell-controls-${shellTabId}`} className="flex shrink-0 items-center gap-1" />
                     <div id={`hermes-hud-shell-${shellTabId}`} className="os-shell-chat" />
                 </div>
                 <SystemToolbar className="os-shell-right" aria-label="System controls">
@@ -1253,7 +1129,6 @@ function OSModeShell({
                     </div>
                 )}
             </SystemMaterial>
-            {appDock}
         </>
     );
 }
@@ -1335,6 +1210,33 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const stateRef = useRef(state);
     const rootRef = useRef<HTMLDivElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
+    const [workflowPanelLayout, setWorkflowPanelLayout] = useState({ top: 0, right: 0, bottom: 0 });
+    const [selectorOwnsToolbar, setSelectorOwnsToolbar] = useState(() =>
+        document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-owner")
+    );
+    const [selectorToolsSlot, setSelectorToolsSlot] = useState<HTMLElement>(() => getCanvasToolbarSlot());
+    const [selectorExpanded, setSelectorExpanded] = useState(() =>
+        document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-expanded")
+    );
+    const [fallbackToolsOpen, setFallbackToolsOpen] = useState(false);
+    const [workflowFocusTarget, setWorkflowFocusTarget] = useState<HTMLDivElement>(null);
+    const [workflowFocusVisible, setWorkflowFocusVisible] = useState(false);
+    const [workflowConfigOpen, setWorkflowConfigOpen] = useState(false);
+    const onWorkflowFocusVisibility = useCallback((visible: boolean, editing: boolean) => {
+        setWorkflowFocusVisible(visible);
+        setWorkflowConfigOpen(editing);
+    }, []);
+    const canvasToolsOpen = selectorOwnsToolbar ? selectorExpanded : fallbackToolsOpen;
+    const closeCanvasTools = () => {
+        setFallbackToolsOpen(false);
+        window.dispatchEvent(new CustomEvent("kronterm:canvas-toolbar-close"));
+    };
+    const [workflowToolsTarget, setWorkflowToolsTarget] = useState<HTMLDivElement>(null);
+    const [workflowWorldTarget, setWorkflowWorldTarget] = useState<HTMLDivElement>(null);
+    const sceneZIndices = useMemo(
+        () => getOSSceneZIndices(state),
+        [state.sceneOrder, state.zOrder, state.objects, state.windows]
+    );
     const persistTimerRef = useRef<number | undefined>(undefined);
     const checkpointTimerRef = useRef<number | undefined>(undefined);
     const [measuredViewport, setViewport] = useState({ width: 1440, height: 900 });
@@ -1352,6 +1254,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const pendingWorkspaceId = useRef<string>(undefined);
     const [tool, setTool] = useState<OSCanvasTool>("select");
     const [connectorStartId, setConnectorStartId] = useState<string | undefined>(undefined);
+    const [canvasHint, setCanvasHint] = useState("");
     const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; tabId?: string }>>([]);
     const [dragBounds, setDragBounds] = useState<Record<string, DragBounds>>({});
     const [dockPreview, setDockPreview] = useState<DockPreview | undefined>(undefined);
@@ -1367,12 +1270,14 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
               clientX: number;
               clientY: number;
               bounds: DragBounds;
+              latestBounds?: DragBounds;
               scale: number;
           }
         | undefined
     >(undefined);
     const reducedMotion = useReducedMotion() ?? false;
     const currentWorkspace = useAtomValue(atoms.workspace);
+    useOSSpaceSnapshot(currentWorkspace?.oid, state, viewportRef);
     const systemModel = OSSystemModel.getInstance();
     const systemLoadState = useAtomValue(systemModel.loadStateAtom);
     const systemLayerEnabled = useAtomValue(getSettingsKeyAtom("feature:systemlayer" as never)) ?? true;
@@ -1382,21 +1287,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const viewsKey = descriptors.map((descriptor) => (descriptor.resolved ? descriptor.view : "?")).join(":");
 
     const installedAppDescriptors = useInstalledAppDescriptors();
-    const installedDescriptorsWithRunning = useMemo(
-        () =>
-            rankInstalledApps(
-                installedAppDescriptors.map((descriptor) => ({
-                    ...descriptor,
-                    runningBlockIds: descriptors
-                        .filter(
-                            (block) =>
-                                block.appStreamAppId != null && block.appStreamAppId === descriptor.installedAppId
-                        )
-                        .map((block) => block.blockId),
-                }))
-            ),
-        [installedAppDescriptors, descriptors]
-    );
 
     useEffect(() => {
         if (!currentWorkspace?.oid) return;
@@ -1441,24 +1331,28 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     useEffect(() => {
         let cancelled = false;
-        void RpcApi.WorkspaceListCommand(TabRpcClient, {})
-            .then((items) => {
-                if (cancelled) return;
-                setWorkspaces(
-                    (items ?? []).map((item, index) => ({
-                        id: item.workspacedata.oid,
-                        tabId: item.workspacedata.activetabid || item.workspacedata.tabids?.[0],
-                        name: item.workspacedata.name || `Workspace ${index + 1}`,
-                    }))
-                );
-            })
-            .catch(() => {
-                if (!cancelled) setWorkspaces([]);
-            });
+        const refresh = () =>
+            void RpcApi.WorkspaceListCommand(TabRpcClient, {})
+                .then((items) => {
+                    if (cancelled) return;
+                    setWorkspaces(
+                        (items ?? []).map((item, index) => ({
+                            id: item.workspacedata.oid,
+                            tabId: item.workspacedata.activetabid || item.workspacedata.tabids?.[0],
+                            name: item.workspacedata.name || `Workspace ${index + 1}`,
+                        }))
+                    );
+                })
+                .catch(() => {
+                    if (!cancelled) setWorkspaces([]);
+                });
+        refresh();
+        const unsubscribe = waveEventSubscribeSingle({ eventType: "workspace:update", handler: refresh });
         return () => {
             cancelled = true;
+            unsubscribe();
         };
-    }, [state.scene.kind]);
+    }, [state.scene.kind, currentWorkspace?.oid]);
 
     const persist = useCallback(
         (nextState: OSModeState) => {
@@ -1467,7 +1361,14 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 persistTimerRef.current = undefined;
                 void RpcApi.SetMetaCommand(TabRpcClient, {
                     oref: WOS.makeORef("tab", tabId),
-                    meta: { "layout:mode": "os", "layout:os": nextState } as unknown as MetaType,
+                    meta: {
+                        "layout:mode": "os",
+                        "layout:os": {
+                            ...nextState,
+                            sceneOrder: getPersistedOSSceneOrder(nextState),
+                            objects: nextState.objects.filter((object) => object.kind !== "workflow-node"),
+                        },
+                    } as unknown as MetaType,
                 });
                 if (currentWorkspace?.oid) {
                     if (checkpointTimerRef.current != null) window.clearTimeout(checkpointTimerRef.current);
@@ -1499,6 +1400,68 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         [persist]
     );
 
+    const hasSelectedWorkflowNode = state.objects.some(
+        (object) => object.id === state.selectedEntityId && object.kind === "workflow-node"
+    );
+    useEffect(() => {
+        if (!hasSelectedWorkflowNode) return;
+        const current = stateRef.current;
+        const node = current.objects.find((object) => object.id === current.selectedEntityId);
+        if (!node) return;
+        const camera = keepWorkflowNodeVisible(current.camera, node, measuredViewport);
+        if (camera !== current.camera) setAndPersist((next) => ({ ...next, camera }));
+    }, [hasSelectedWorkflowNode, state.selectedEntityId, measuredViewport, setAndPersist]);
+
+    const selectCanvasObject = useCallback(
+        (id: string) => {
+            setCanvasHint("");
+            if (tool !== "connector") {
+                setAndPersist((current) => selectOSSceneEntity(current, id));
+                return;
+            }
+            if (!connectorStartId) {
+                setConnectorStartId(id);
+                setAndPersist((current) => selectOSSceneEntity(current, id));
+                return;
+            }
+            if (connectorStartId !== id) {
+                const objects = stateRef.current.objects;
+                if (
+                    [connectorStartId, id].every((key) =>
+                        objects.some((object) => object.id === key && object.kind === "workflow-node")
+                    )
+                ) {
+                    setCanvasHint("Connect workflow nodes using their input and output ports.");
+                } else {
+                    setAndPersist((current) =>
+                        selectOSSceneEntity(
+                            {
+                                ...current,
+                                objects: [
+                                    ...current.objects,
+                                    {
+                                        id: `connector-${crypto.randomUUID()}`,
+                                        kind: "connector",
+                                        x: 0,
+                                        y: 0,
+                                        width: 1,
+                                        height: 1,
+                                        fromObjectId: connectorStartId,
+                                        toObjectId: id,
+                                    },
+                                ],
+                            },
+                            id
+                        )
+                    );
+                }
+            }
+            setConnectorStartId(undefined);
+            setTool("select");
+        },
+        [tool, connectorStartId, setAndPersist]
+    );
+
     useEffect(() => {
         setAndPersist((current) =>
             arrangeOSLaunchedWindows(
@@ -1509,6 +1472,24 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         );
     }, [blockIdsKey, viewsKey]);
 
+    useEffect(() => {
+        const selectWorkflowObject = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (!workflowEventMatchesTab(detail, tabId)) return;
+            if (detail?.id) {
+                if (
+                    stateRef.current.objects.some(
+                        (object) => object.id === detail.id && object.kind === "workflow-node"
+                    )
+                )
+                    selectCanvasObject(detail.id);
+                return;
+            }
+            setAndPersist((current) => applyOSWorkflowSelection(current, detail?.id));
+        };
+        window.addEventListener("kronterm:workflow-selection", selectWorkflowObject);
+        return () => window.removeEventListener("kronterm:workflow-selection", selectWorkflowObject);
+    }, [tabId, selectCanvasObject, setAndPersist]);
     const dispatch = useCallback(
         (action: OSSpatialAction) => {
             setAndPersist((current) => reduceOSModeState(current, action));
@@ -1610,6 +1591,11 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     const updateObject = useCallback(
         (objectId: string, patch: Partial<OSCanvasObject>) => {
+            if (stateRef.current.objects.some((object) => object.id === objectId && object.kind === "workflow-node")) {
+                const detail = { tabId, objectId, patch, result: undefined as { success: boolean; message: string } };
+                window.dispatchEvent(new CustomEvent("kronterm:workflow-object-command", { detail }));
+                return detail.result ?? { success: false, message: "Workflow editor is not ready." };
+            }
             const definedPatch = Object.fromEntries(
                 Object.entries(patch).filter(([, value]) => value != null)
             ) as Partial<OSCanvasObject>;
@@ -1620,12 +1606,23 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 ),
                 selectedEntityId: objectId,
             }));
+            return { success: true, message: "Updated OS object." };
         },
-        [setAndPersist]
+        [setAndPersist, tabId]
     );
 
     const deleteObject = useCallback(
         (objectId: string) => {
+            if (stateRef.current.objects.some((object) => object.id === objectId && object.kind === "workflow-node")) {
+                const detail = {
+                    tabId,
+                    objectId,
+                    remove: true,
+                    result: undefined as { success: boolean; message: string },
+                };
+                window.dispatchEvent(new CustomEvent("kronterm:workflow-object-command", { detail }));
+                return detail.result ?? { success: false, message: "Workflow editor is not ready." };
+            }
             setAndPersist((current) => ({
                 ...current,
                 objects: current.objects.filter(
@@ -1635,7 +1632,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 selectedEntityId: current.selectedEntityId === objectId ? undefined : current.selectedEntityId,
             }));
         },
-        [setAndPersist]
+        [setAndPersist, tabId]
     );
 
     const fitAll = useCallback(() => {
@@ -1650,19 +1647,83 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         setAndPersist((current) => ({ ...current, camera: fitSpatialViewportToBounds(bounds, viewport, 120, 1) }));
     }, [setAndPersist, viewport]);
 
+    useEffect(() => {
+        const slot = () => setSelectorToolsSlot(getCanvasToolbarSlot());
+        window.addEventListener("kronterm:canvas-toolbar-slot", slot);
+        slot();
+        const ownership = () => {
+            setSelectorOwnsToolbar(document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-owner"));
+            setSelectorExpanded(document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-expanded"));
+        };
+        const action = (event: Event) => {
+            const current = stateRef.current;
+            const rect = rootRef.current?.getBoundingClientRect();
+            if (current.view !== "canvas" || current.scene.kind !== "freeform" || !rect?.width || !rect.height) return;
+            const name = (event as CustomEvent).detail?.action;
+            if (name === "select" || name === "pan" || name === "connector") {
+                setConnectorStartId(undefined);
+                setCanvasHint(name === "connector" ? "Select two objects to connect." : "");
+                setTool(name === "pan" ? "hand" : name);
+                return;
+            }
+            if (["note", "rectangle", "ellipse", "diamond"].includes(name)) {
+                addObject(name);
+                return;
+            }
+            if (name === "fit-all") {
+                fitAll();
+                return;
+            }
+            if (name === "workflow-nodes") {
+                window.dispatchEvent(
+                    new CustomEvent("kronterm:workflow-inspector", {
+                        detail: { tabId, section: "workflow-nodes" },
+                    })
+                );
+                return;
+            }
+            const nativeSelectors: Record<string, string> = {
+                "workflow-fit": '[data-test-id="zoom-to-fit"]',
+                "zoom-in": '[data-test-id="zoom-in-button"]',
+                "zoom-out": '[data-test-id="zoom-out-button"]',
+                tidy: '[data-test-id="tidy-up-button"]',
+                "workflow-note": '[data-test-id="add-sticky-button"]',
+                "workflow-focus": '[data-test-id="toggle-focus-panel-button"]',
+                "workflow-assistant":
+                    '[data-test-id="instance-ai-canvas-action-button"], [data-test-id="ask-assistant-canvas-action-button"]',
+            };
+            const selector = nativeSelectors[name];
+            if (!selector) return;
+            const button = workflowToolsTarget?.shadowRoot?.querySelector<HTMLButtonElement>(selector);
+            if (button) button.click();
+            else setCanvasHint("Open a workflow to use this control.");
+        };
+        window.addEventListener("kronterm:canvas-toolbar-owner", ownership);
+        window.addEventListener("kronterm:canvas-toolbar-action", action);
+        ownership();
+        return () => {
+            window.removeEventListener("kronterm:canvas-toolbar-slot", slot);
+            window.removeEventListener("kronterm:canvas-toolbar-owner", ownership);
+            window.removeEventListener("kronterm:canvas-toolbar-action", action);
+        };
+    }, [addObject, fitAll, tabId, workflowToolsTarget]);
+
     const focusBlock = useCallback(
         (blockId: string) => {
+            if (tool === "connector") {
+                selectCanvasObject(blockId);
+                return;
+            }
             setAndPersist((current) =>
                 current.scene.kind === "focused" && current.scene.blockId !== blockId
                     ? reduceOSModeState(current, { type: "os.window.focus", blockId })
                     : {
-                          ...current,
-                          selectedEntityId: blockId,
+                          ...selectOSSceneEntity(current, blockId),
                           zOrder: [...current.zOrder.filter((id) => id !== blockId), blockId],
                       }
             );
         },
-        [setAndPersist]
+        [setAndPersist, tool, selectCanvasObject]
     );
 
     const primaryBlockId =
@@ -1691,11 +1752,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 window.dispatchEvent(new CustomEvent("kronterm:open-plugin-widget", { detail: { view: "bots" } }));
                 return;
             }
-            if (view === "preview" || view === "codeeditor") {
-                $krontermInspectorSection.set("files");
-                $krontermInspectorOpen.set(true);
-                return;
-            }
             dispatch({ type: "os.view.set", view: "canvas" });
             const existing = descriptors.find((block) => block.view === view);
             if (existing) {
@@ -1705,7 +1761,10 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 dispatch({ type: "spatial.focus", blockId: existing.blockId });
                 return;
             }
-            return RpcApi.CreateBlockCommand(TabRpcClient, { tabid: tabId, blockdef: { meta: { view } } });
+            return RpcApi.CreateBlockCommand(TabRpcClient, {
+                tabid: tabId,
+                blockdef: { meta: { view, ...(view === "preview" ? { file: "~" } : {}) } },
+            });
         },
         [descriptors, dispatch, tabId]
     );
@@ -1793,8 +1852,12 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const osWorkArea = useCallback(() => {
         const insets = osDesktopInsetsForWidth(viewport.width, desktopWidgetsEnabled);
         if (viewport.width > 900 && desktopWidgetsEnabled) insets.right = viewport.rightInset;
-        return computeOSWorkArea(viewport, { top: OSShellReservedHeight, bottom: 0, ...insets });
-    }, [desktopWidgetsEnabled, viewport]);
+        return computeOSWorkArea(viewport, {
+            top: workflowPanelLayout.top > 0 ? 0 : OSShellReservedHeight,
+            bottom: 0,
+            ...insets,
+        });
+    }, [desktopWidgetsEnabled, viewport, workflowPanelLayout.top]);
 
     const placeWindow = useCallback(
         (blockId: string, placement: OSWindowPlacement) => {
@@ -1960,6 +2023,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
+            if (workflowOwnsWheel(event.composedPath())) return;
+            if (
+                event
+                    .composedPath()
+                    .some((target) => target instanceof HTMLElement && target.hasAttribute("data-workflow-native-host"))
+            )
+                return;
             // ⌃⌥ + arrow is the common desktop tiling chord and rarely bound by terminals or pages.
             if (!event.ctrlKey || !event.altKey || event.metaKey || event.shiftKey) return;
             const current = stateRef.current;
@@ -2057,9 +2127,21 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             kind: "move" | "resize",
             edge: OSResizeEdge = "se"
         ) => {
-            if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+            if (
+                event.button !== 0 ||
+                (event.target as HTMLElement).closest(
+                    "button, input, textarea, select, a, [contenteditable='true'], [role='button']"
+                )
+            )
+                return;
+            if (tool === "connector") {
+                event.stopPropagation();
+                selectCanvasObject(blockId);
+                return;
+            }
             event.preventDefault();
             event.stopPropagation();
+            focusBlock(blockId);
             const scale = stateRef.current.scene.kind === "freeform" ? stateRef.current.camera.zoom : 1;
             interactionRef.current = {
                 kind,
@@ -2074,7 +2156,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             setDragBounds((current) => ({ ...current, [blockId]: layout.bounds }));
             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
         },
-        []
+        [focusBlock, tool, selectCanvasObject]
     );
 
     const handleRootPointerMove = useCallback(
@@ -2087,6 +2169,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     interaction.kind === "move"
                         ? { ...interaction.bounds, x: interaction.bounds.x + dx, y: interaction.bounds.y + dy }
                         : resizeBoundsFromEdge(interaction.bounds, interaction.edge, dx, dy);
+                interaction.latestBounds = bounds;
                 setDragBounds((current) => ({ ...current, [interaction.blockId]: bounds }));
                 if (interaction.kind === "move") {
                     const rootBounds = viewportRef.current?.getBoundingClientRect();
@@ -2145,7 +2228,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         (event: ReactPointerEvent<HTMLDivElement>) => {
             const interaction = interactionRef.current;
             if (interaction?.pointerId === event.pointerId) {
-                const finalBounds = dragBounds[interaction.blockId] ?? interaction.bounds;
+                const finalBounds = interaction.latestBounds ?? interaction.bounds;
                 if (dockPreview?.blockId === interaction.blockId) {
                     dispatch({
                         type: "spatial.dock",
@@ -2194,6 +2277,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     const handleWheel = useCallback(
         (event: ReactWheelEvent<HTMLDivElement>) => {
+            if (event.defaultPrevented || workflowOwnsWheel(event.nativeEvent.composedPath())) return;
+            if (osWidgetOwnsWheel(event.nativeEvent.composedPath(), event.ctrlKey || event.metaKey, tool === "hand"))
+                return;
             if (stateRef.current.scene.kind === "overview") {
                 event.preventDefault();
                 const visible = stateRef.current.zOrder.filter((id) => !stateRef.current.windows[id]?.collapsed);
@@ -2227,11 +2313,73 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 }));
             }
         },
-        [dispatch, setAndPersist]
+        [dispatch, setAndPersist, tool]
+    );
+
+    const captureCanvasPan = useCallback(
+        (event: ReactPointerEvent<HTMLDivElement>) => {
+            const current = stateRef.current;
+            const viewportElement = viewportRef.current;
+            if (
+                !viewportElement ||
+                current.scene.kind !== "freeform" ||
+                (event.button !== 1 && (tool !== "hand" || event.button !== 0))
+            )
+                return;
+            if (workflowOwnsWheel(event.nativeEvent.composedPath())) return;
+            event.preventDefault();
+            event.stopPropagation();
+            panRef.current = {
+                pointerId: event.pointerId,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                x: current.camera.x,
+                y: current.camera.y,
+            };
+            viewportElement.setPointerCapture(event.pointerId);
+        },
+        [tool]
+    );
+    const surfaceInput = useMemo(
+        () => ({ capturePointer: tool === "hand", onPointerDownCapture: captureCanvasPan, onWheel: handleWheel }),
+        [captureCanvasPan, handleWheel, tool]
     );
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
+            if (event.defaultPrevented) return;
+            if (event.key === "Escape" && connectorStartId) {
+                setConnectorStartId(undefined);
+                setCanvasHint("");
+                setTool("select");
+                return;
+            }
+            if (
+                ["Backspace", "Delete"].includes(event.key) &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey &&
+                osCanvasOwnsDelete(event.composedPath(), rootRef.current, event.defaultPrevented)
+            ) {
+                const current = stateRef.current;
+                if (
+                    current.scene.kind === "freeform" &&
+                    current.objects.some(
+                        (object) => object.id === current.selectedEntityId && object.kind !== "workflow-node"
+                    )
+                ) {
+                    event.preventDefault();
+                    deleteObject(current.selectedEntityId);
+                    return;
+                }
+            }
+            if (workflowOwnsWheel(event.composedPath())) return;
+            if (
+                event
+                    .composedPath()
+                    .some((target) => target instanceof HTMLElement && target.hasAttribute("data-workflow-native-host"))
+            )
+                return;
             const target = event.target as HTMLElement;
             if (target.closest("input, textarea, select, [contenteditable='true'], [role='application']")) return;
             const current = stateRef.current;
@@ -2277,7 +2425,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [dispatch]);
+    }, [dispatch, connectorStartId, deleteObject]);
 
     useEffect(
         () =>
@@ -2407,7 +2555,10 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         if (!input.blockid || !stateRef.current.windows[input.blockid])
                             return { success: false, message: "OS window not found." };
                         dispatch({ type: "os.view.set", view: "canvas" });
-                        dispatch({ type: "spatial.focus", blockId: input.blockid });
+                        dispatch({
+                            type: input.action === "spatial.focus" ? "spatial.focus" : "os.window.focus",
+                            blockId: input.blockid,
+                        });
                         return { success: true, message: "Focused OS window." };
                     }
                     if (input.action === "move" || input.action === "spatial.move") {
@@ -2471,6 +2622,17 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         return { success: true, message: "Focused adjacent OS window." };
                     }
                     if (input.action === "connect_objects") {
+                        const bothWorkflowNodes = [input.fromobjectid, input.toobjectid].every((id) =>
+                            stateRef.current.objects.some(
+                                (object) => object.id === id && object.kind === "workflow-node"
+                            )
+                        );
+                        if (bothWorkflowNodes)
+                            return {
+                                success: false,
+                                message:
+                                    "Connect workflow nodes through their input and output ports to create an executable connection.",
+                            };
                         const connector: OSCanvasObject = {
                             id: `connector-${crypto.randomUUID()}`,
                             kind: "connector",
@@ -2486,14 +2648,16 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             objects: [...current.objects, connector],
                             selectedEntityId: connector.id,
                         }));
-                        return { success: true, message: "Connected OS objects." };
+                        return {
+                            success: true,
+                            message: "Added an OS annotation connector. Workflow execution uses node ports.",
+                        };
                     }
                     if (input.action === "delete_object" && input.objectid) {
-                        deleteObject(input.objectid);
-                        return { success: true, message: "Deleted OS object." };
+                        return deleteObject(input.objectid) ?? { success: true, message: "Deleted OS object." };
                     }
                     if (input.action === "update_object" && input.objectid) {
-                        updateObject(input.objectid, {
+                        return updateObject(input.objectid, {
                             x: input.x,
                             y: input.y,
                             width: input.width,
@@ -2501,7 +2665,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             text: input.text,
                             color: input.color as OSCanvasColor,
                         });
-                        return { success: true, message: "Updated OS object." };
                     }
                     return { success: false, message: `Unsupported OS action: ${input.action}` };
                 },
@@ -2587,9 +2750,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     reducedMotion && "reduced-motion"
                 )}
                 style={
-                    inspectorWidth
-                        ? ({ "--os-inspector-dragged-width": `${inspectorWidth}px` } as CSSProperties)
-                        : undefined
+                    {
+                        "--os-inspector-dragged-width": inspectorWidth ? `${inspectorWidth}px` : undefined,
+                        "--os-workflow-top": `${workflowPanelLayout.top}px`,
+                        "--os-workflow-right": `${workflowPanelLayout.right}px`,
+                        "--os-workflow-bottom": `${workflowPanelLayout.bottom}px`,
+                        "--os-workflow-controls-gutter": "0px",
+                    } as CSSProperties
                 }
                 tabIndex={-1}
                 onPointerMove={handleRootPointerMove}
@@ -2684,13 +2851,11 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     workspaces={workspaces}
                     currentWorkspaceId={currentWorkspace?.oid ?? ""}
                     blocks={descriptors}
-                    installedApps={installedDescriptorsWithRunning}
                     collapsedIds={blockIds.filter((id) => state.windows[id]?.collapsed)}
                     showCollapsedDock={!desktopWidgetsEnabled || viewport.width <= 900}
                     sceneKind={state.scene.kind}
                     onWorkspace={(workspaceId) => getApi().switchWorkspace(workspaceId)}
                     onCreateWorkspace={() => setWorkspaceSetupOpen(true)}
-                    onCreateBlock={handleCreateBlock}
                     onRestore={(blockId) => dispatch({ type: "spatial.restore", blockId })}
                     onPinResource={pinResource}
                     onOverview={() => dispatch({ type: "spatial.showOverview" })}
@@ -2703,7 +2868,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         dispatch({ type: "os.view.set", view: "canvas" });
                         dispatch({ type: "spatial.focus", blockId });
                     }}
-                    onCreateAppStream={handleCreateAppStream}
                 />
                 {state.scene.kind === "overview" && (
                     <OSSpaceOverview
@@ -2711,6 +2875,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         workspaces={workspaces}
                         currentWorkspaceId={currentWorkspace?.oid ?? ""}
                         state={state}
+                        onDelete={(workspaceId) => getApi().deleteWorkspace(workspaceId)}
                         onSwitch={(workspaceId) => getApi().switchWorkspace(workspaceId)}
                         onCreate={() => setWorkspaceSetupOpen(true)}
                         onConfigure={() => {
@@ -2838,81 +3003,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         </button>
                     </nav>
                 )}
-                {systemLayerEnabled && state.view === "canvas" && state.scene.kind === "freeform" && (
-                    <SystemToolbar className="os-canvas-toolbar" aria-label="Canvas tools">
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            selected={tool === "select"}
-                            onClick={() => setTool("select")}
-                            aria-label="Select"
-                            title="Select"
-                        >
-                            <MousePointer2 />
-                        </SystemButton>
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            selected={tool === "hand"}
-                            onClick={() => setTool("hand")}
-                            aria-label="Pan Canvas"
-                            title="Pan Canvas"
-                        >
-                            <Hand />
-                        </SystemButton>
-                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            onClick={() => addObject("note")}
-                            aria-label="Add note"
-                            title="Add note"
-                        >
-                            <StickyNote />
-                        </SystemButton>
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            onClick={() => addObject("rectangle")}
-                            aria-label="Add rectangle"
-                            title="Add rectangle"
-                        >
-                            <ShapeSquare />
-                        </SystemButton>
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            onClick={() => addObject("ellipse")}
-                            aria-label="Add ellipse"
-                            title="Add ellipse"
-                        >
-                            <ShapeCircle />
-                        </SystemButton>
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            onClick={() => addObject("diamond")}
-                            aria-label="Add decision"
-                            title="Add decision"
-                        >
-                            <ShapeDiamond />
-                        </SystemButton>
-                        <SystemButton
-                            type="button"
-                            size="small"
-                            selected={tool === "connector"}
-                            onClick={() => setTool("connector")}
-                            aria-label="Connect objects"
-                            title="Connect objects"
-                        >
-                            <Link2 />
-                        </SystemButton>
-                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
-                        <SystemButton type="button" size="small" onClick={fitAll} aria-label="Fit all" title="Fit all">
-                            <Focus />
-                        </SystemButton>
-                    </SystemToolbar>
-                )}
                 {state.view === "file" && (
                     <OSWidgetsFileView
                         blocks={descriptors.map((descriptor) => ({
@@ -2937,9 +3027,52 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         onAttachResource={attachOSResourceToKronos}
                     />
                 )}
+                <div className="os-workflow-panels">
+                    <OSOriginalWorkflow
+                        onPanelLayout={setWorkflowPanelLayout}
+                        tabId={tabId}
+                        onChat={() => hermesSurfaceController.requestOpenChat()}
+                        workspaceId={currentWorkspace?.oid}
+                        camera={state.camera}
+                        toolsTarget={workflowToolsTarget}
+                        focusTarget={workflowFocusTarget}
+                        onFocusVisibility={onWorkflowFocusVisibility}
+                        worldTarget={workflowWorldTarget}
+                        viewportTarget={viewportRef.current}
+                        objectOrder={sceneZIndices}
+                        selectedObjectId={state.selectedEntityId}
+                        visible={state.view === "canvas" && state.scene.kind === "freeform"}
+                        onCameraIntent={(intent) =>
+                            setAndPersist((current) => ({
+                                ...current,
+                                camera: resolveWorkflowCameraIntent(intent, current.camera, viewport),
+                            }))
+                        }
+                        onObjects={(objects) =>
+                            setState((current) => {
+                                const next = {
+                                    ...current,
+                                    selectedEntityId:
+                                        current.selectedEntityId?.startsWith("workflow:") &&
+                                        !objects.some((object) => object.id === current.selectedEntityId)
+                                            ? undefined
+                                            : current.selectedEntityId,
+                                    objects: [
+                                        ...current.objects.filter((object) => object.kind !== "workflow-node"),
+                                        ...objects,
+                                    ],
+                                };
+                                stateRef.current = next;
+                                return next;
+                            })
+                        }
+                        onActivate={() => setAndPersist(activateOSWorkflowCanvas)}
+                    />
+                </div>
                 <div
-                    className="os-mode-viewport"
+                    className={cn("os-mode-viewport", workflowPanelLayout.top > 0 && "has-workflow-panels")}
                     ref={viewportRef}
+                    onPointerDownCapture={captureCanvasPan}
                     onDragOver={(event) => {
                         if (
                             event.dataTransfer.types.includes(OSAppDragMimeType) ||
@@ -2995,6 +3128,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     }}
                     onPointerDown={(event) => {
                         if (
+                            state.scene.kind === "freeform" &&
+                            event.target === event.currentTarget &&
+                            tool === "select" &&
+                            event.button === 0
+                        ) {
+                            setAndPersist((current) => ({ ...current, selectedEntityId: undefined }));
+                            return;
+                        }
+                        if (
                             state.scene.kind !== "freeform" ||
                             event.target !== event.currentTarget ||
                             (tool !== "hand" && event.button !== 1)
@@ -3021,6 +3163,173 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         showDesktopContextMenu(event);
                     }}
                 >
+                    {systemLayerEnabled && state.view === "canvas" && state.scene.kind === "freeform" && (
+                        <>
+                            {!selectorOwnsToolbar && (
+                                <SystemButton
+                                    className="os-canvas-tools-trigger"
+                                    aria-label="Elements selector"
+                                    aria-expanded={canvasToolsOpen}
+                                    onClick={() => setFallbackToolsOpen(!fallbackToolsOpen)}
+                                >
+                                    <MousePointer2 />
+                                </SystemButton>
+                            )}
+                            <CanvasToolsPortal target={selectorToolsSlot}>
+                                <div
+                                    role="group"
+                                    aria-label="Elements selector tools"
+                                    className={cn(
+                                        "os-canvas-tool-rail",
+                                        workflowPanelLayout.top > 0 && "has-workflow-tools",
+                                        !canvasToolsOpen && "is-closed",
+                                        selectorToolsSlot && "is-in-selector"
+                                    )}
+                                    aria-hidden={!canvasToolsOpen}
+                                    data-live-block-occluder=""
+                                >
+                                    <SystemToolbar
+                                        className="os-canvas-toolbar"
+                                        aria-label="Canvas tools"
+                                        data-live-block-occluder=""
+                                    >
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            selected={tool === "select"}
+                                            onClick={() => {
+                                                setConnectorStartId(undefined);
+                                                setCanvasHint("");
+                                                setTool("select");
+                                            }}
+                                            aria-label="Select"
+                                            title="Select"
+                                        >
+                                            <MousePointer2 />
+                                        </SystemButton>
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            selected={tool === "hand"}
+                                            onClick={() => {
+                                                setConnectorStartId(undefined);
+                                                setCanvasHint("");
+                                                setTool("hand");
+                                            }}
+                                            aria-label="Pan Canvas"
+                                            title="Pan Canvas"
+                                        >
+                                            <Hand />
+                                        </SystemButton>
+                                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            onClick={() => addObject("note")}
+                                            aria-label="Add note"
+                                            title="Add note"
+                                        >
+                                            <StickyNote />
+                                        </SystemButton>
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            onClick={() => addObject("rectangle")}
+                                            aria-label="Add rectangle"
+                                            title="Add rectangle"
+                                        >
+                                            <ShapeSquare />
+                                        </SystemButton>
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            onClick={() => addObject("ellipse")}
+                                            aria-label="Add ellipse"
+                                            title="Add ellipse"
+                                        >
+                                            <ShapeCircle />
+                                        </SystemButton>
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            onClick={() => addObject("diamond")}
+                                            aria-label="Add decision"
+                                            title="Add decision"
+                                        >
+                                            <ShapeDiamond />
+                                        </SystemButton>
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            selected={tool === "connector"}
+                                            onClick={() => {
+                                                setConnectorStartId(undefined);
+                                                setCanvasHint("Select two objects to connect.");
+                                                setTool("connector");
+                                            }}
+                                            aria-label="Connect objects"
+                                            title="Connect objects"
+                                        >
+                                            <Link2 />
+                                        </SystemButton>
+                                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
+                                        <SystemButton
+                                            type="button"
+                                            size="small"
+                                            onClick={fitAll}
+                                            aria-label="Fit all"
+                                            title="Fit all"
+                                        >
+                                            <Focus />
+                                        </SystemButton>
+                                    </SystemToolbar>
+                                    <div
+                                        ref={setWorkflowToolsTarget}
+                                        className="os-original-canvas-tools"
+                                        data-workflow-tool-rail=""
+                                    />
+                                    <SystemButton
+                                        size="small"
+                                        aria-label="Close elements selector"
+                                        onClick={closeCanvasTools}
+                                    >
+                                        <X />
+                                    </SystemButton>
+                                </div>
+                            </CanvasToolsPortal>
+                            <CanvasToolsPortal target={document.body}>
+                                <section
+                                    className={cn(
+                                        "kt-system-ui os-canvas-focus-frame",
+                                        workflowConfigOpen && "is-editing"
+                                    )}
+                                    hidden={!workflowFocusVisible}
+                                    aria-label="Workflow focus panel"
+                                    data-live-block-occluder=""
+                                >
+                                    <div className="os-canvas-tools-heading">
+                                        <span>{workflowConfigOpen ? "Node configuration" : "Focus panel"}</span>
+                                        <SystemButton
+                                            size="small"
+                                            aria-label="Close workflow focus panel"
+                                            onClick={() =>
+                                                window.dispatchEvent(
+                                                    workflowConfigOpen
+                                                        ? new CustomEvent("kronterm:workflow-close-node-config")
+                                                        : new CustomEvent("kronterm:canvas-toolbar-action", {
+                                                              detail: { action: "workflow-focus" },
+                                                          })
+                                                )
+                                            }
+                                        >
+                                            <X />
+                                        </SystemButton>
+                                    </div>
+                                    <div ref={setWorkflowFocusTarget} className="os-canvas-focus-slot" />
+                                </section>
+                            </CanvasToolsPortal>
+                        </>
+                    )}
                     {desktopWidgetsEnabled && state.view === "canvas" && state.scene.kind !== "overview" && (
                         <OSDesktopLayer
                             media={media}
@@ -3038,14 +3347,21 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         />
                     )}
                     <div className="os-mode-world" style={{ transform: worldTransform }}>
+                        <div
+                            ref={setWorkflowWorldTarget}
+                            role="group"
+                            aria-label="Workflow objects on the OS canvas"
+                            data-workflow-native-host=""
+                            data-workflow-world=""
+                            hidden={state.view !== "canvas" || state.scene.kind !== "freeform"}
+                            style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+                        />
                         {state.scene.kind === "freeform" && (
                             <>
                                 <svg className="os-connectors" aria-hidden="true">
                                     {connectorObjects.map((connector) => {
-                                        const from = state.objects.find(
-                                            (object) => object.id === connector.fromObjectId
-                                        );
-                                        const to = state.objects.find((object) => object.id === connector.toObjectId);
+                                        const from = getOSCanvasEntityBounds(state, connector.fromObjectId);
+                                        const to = getOSCanvasEntityBounds(state, connector.toObjectId);
                                         if (!from || !to) return null;
                                         return (
                                             <line
@@ -3058,50 +3374,23 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                         );
                                     })}
                                 </svg>
-                                {state.objects.map((object) => (
-                                    <OSCanvasEntity
-                                        key={object.id}
-                                        object={object}
-                                        selected={state.selectedEntityId === object.id}
-                                        zoom={state.camera.zoom}
-                                        onSelect={(id) => {
-                                            if (tool === "connector") {
-                                                if (!connectorStartId) {
-                                                    setConnectorStartId(id);
-                                                    setAndPersist((current) => ({ ...current, selectedEntityId: id }));
-                                                    return;
-                                                }
-                                                if (connectorStartId !== id) {
-                                                    setAndPersist((current) => ({
-                                                        ...current,
-                                                        objects: [
-                                                            ...current.objects,
-                                                            {
-                                                                id: `connector-${crypto.randomUUID()}`,
-                                                                kind: "connector",
-                                                                x: 0,
-                                                                y: 0,
-                                                                width: 1,
-                                                                height: 1,
-                                                                fromObjectId: connectorStartId,
-                                                                toObjectId: id,
-                                                            },
-                                                        ],
-                                                        selectedEntityId: id,
-                                                    }));
-                                                }
-                                                setConnectorStartId(undefined);
-                                                setTool("select");
-                                                return;
-                                            }
-                                            setAndPersist((current) => ({ ...current, selectedEntityId: id }));
-                                        }}
-                                        onMove={(id, x, y) => updateObject(id, { x, y })}
-                                        onResize={(id, width, height) => updateObject(id, { width, height })}
-                                        onDelete={deleteObject}
-                                        onOpenResource={openResource}
-                                    />
-                                ))}
+                                {state.objects
+                                    .filter((object) => object.kind !== "workflow-node")
+                                    .map((object) => (
+                                        <OSCanvasEntity
+                                            key={object.id}
+                                            object={object}
+                                            selected={state.selectedEntityId === object.id}
+                                            zIndex={sceneZIndices[object.id]}
+                                            zoom={state.camera.zoom}
+                                            onSelect={selectCanvasObject}
+                                            onMove={(id, x, y) => updateObject(id, { x, y })}
+                                            onResize={(id, width, height) => updateObject(id, { width, height })}
+                                            onDelete={deleteObject}
+                                            onTextChange={(id, text) => updateObject(id, { text })}
+                                            onOpenResource={openResource}
+                                        />
+                                    ))}
                             </>
                         )}
                         {descriptors.map((descriptor) => {
@@ -3113,7 +3402,11 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                 <OSBlockWindow
                                     key={descriptor.blockId}
                                     descriptor={descriptor}
-                                    layout={layout}
+                                    layout={
+                                        state.scene.kind === "freeform"
+                                            ? { ...layout, zIndex: sceneZIndices[descriptor.blockId] }
+                                            : layout
+                                    }
                                     selected={
                                         state.selectedEntityId === descriptor.blockId ||
                                         (state.scene.kind === "focused" &&
@@ -3127,6 +3420,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                     reducedMotion={reducedMotion}
                                     interacting={!!dragBounds[descriptor.blockId]}
                                     onFocus={focusBlock}
+                                    surfaceInput={surfaceInput}
                                     onTitlePointerDown={(event, blockId, nextLayout) =>
                                         beginWindowInteraction(event, blockId, nextLayout, "move")
                                     }
@@ -3147,6 +3441,14 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             );
                         })}
                     </div>
+                    {canvasHint && (
+                        <p
+                            role="status"
+                            className="absolute bottom-24 left-1/2 z-[1800] -translate-x-1/2 bg-background px-3 py-2 text-sm text-foreground pointer-events-none"
+                        >
+                            {canvasHint}
+                        </p>
+                    )}
                     {dockPreview && (
                         <div
                             className={cn("os-dock-preview", `is-${dockPreview.side}`)}
@@ -3181,3 +3483,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 }
 
 export { OSModeView };
+
+function CanvasToolsPortal({ target, children }: { target: HTMLElement; children: React.ReactNode }) {
+    return target ? createPortal(children, target) : children;
+}

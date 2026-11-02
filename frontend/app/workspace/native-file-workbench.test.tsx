@@ -116,6 +116,53 @@ async function mount() {
     return { metaFilePath, newFileContent };
 }
 
+it("edits the explorer folder path inline and cancels without navigating", async () => {
+    await mount();
+    const editPath = async () => {
+        await act(async () =>
+            (container.querySelector('[aria-label="Open folder path"]') as HTMLButtonElement).click()
+        );
+        const input = container.querySelector('[aria-label="Folder path"]') as HTMLInputElement;
+        expect(input.value).toBe("/project");
+        expect(document.activeElement).toBe(input);
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "  /other/project  ");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        return input;
+    };
+    const cancelled = await editPath();
+    await act(async () => cancelled.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(mocks.model.goHistory).not.toHaveBeenCalled();
+    const submitted = await editPath();
+    await act(async () => submitted.form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(mocks.model.goHistory).toHaveBeenCalledWith("/other/project");
+    expect(mocks.model.updateOpenFileModalAndError).not.toHaveBeenCalled();
+});
+
+it("searches unopened folders and opens a result", async () => {
+    await mount();
+    mocks.model.env.rpc.FileReadCommand.mockImplementation(async (_client, { info }) => ({
+        entries:
+            info.path === "/project"
+                ? [{ path: "/project/src", name: "src", isdir: true }]
+                : [{ path: "/project/src/needle.ts", name: "needle.ts", isdir: false }],
+    }));
+    const input = container.querySelector('[aria-label="Search project files"]') as HTMLInputElement;
+    expect(input.closest("label").hidden).toBe(false);
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "needle");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+    });
+    const result = container.querySelector('[aria-label="File search results"] button') as HTMLButtonElement;
+    expect(result.textContent).toContain("src/needle.ts");
+    await act(async () => result.click());
+    expect(mocks.model.goHistory).toHaveBeenCalledWith("/project/src/needle.ts");
+});
+
 it("copies the current unsaved file content and exposes workspace controls on demand", async () => {
     const writeText = vi.fn(async () => {});
     const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");

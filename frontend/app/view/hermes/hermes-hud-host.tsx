@@ -30,6 +30,7 @@ import { HermesChatMount } from "./hermes-chat-mount";
 import { installHermesDesktopShim } from "./hermes-desktop-shim";
 import { HermesHudFrame, HermesHudOverlay } from "./hermes-hud-overlay";
 import { HermesHudStreamCard } from "./hermes-hud-stream-card";
+import { HermesLoadBoundary } from "./hermes-load-boundary";
 import { hermesSurfaceController } from "./hermes-surface-controller";
 import { useKrontermHudMode } from "./kronterm-hud-mode";
 import { KrontermHudModeCard } from "./kronterm-hud-mode-card";
@@ -229,9 +230,13 @@ export function HermesHudHost({
                 targetId={dockedChat ? KrontermInspectorChatTargetId : `hermes-chat-${surface.presentation}-${tabId}`}
             >
                 {connectionReady ? (
-                    <Suspense fallback={<div className="hermes-workspace-panel-state">Loading KronTerm Agent…</div>}>
-                        <LazyHermesApp hudMode dockedChat={dockedChat} />
-                    </Suspense>
+                    <HermesLoadBoundary>
+                        <Suspense
+                            fallback={<div className="hermes-workspace-panel-state">Loading KronTerm Agent…</div>}
+                        >
+                            <LazyHermesApp hudMode dockedChat={dockedChat} />
+                        </Suspense>
+                    </HermesLoadBoundary>
                 ) : (
                     <HermesConnectionState error={error} retry={retry} />
                 )}
@@ -246,7 +251,10 @@ export function HermesHudHost({
                         ))}
                     {placement === "floating" && <KrontermVoiceHudCard onClose={() => undefined} />}
                     <HermesHudFrame placement={placement} geometry={{ x, y, width, height }}>
-                        <div id={`hermes-chat-hud-${tabId}`} className="pointer-events-auto h-full min-h-0" />
+                        <div
+                            id={`hermes-chat-hud-${tabId}`}
+                            className="pointer-events-auto h-full min-h-0 min-w-0 overflow-hidden"
+                        />
                     </HermesHudFrame>
                 </HermesHudOverlay>
             )}

@@ -11,12 +11,16 @@ export function AgentSurfaceCursor({
     surfaceId,
     coordinates = "local",
     webviewRef,
+    surfaceEffects = true,
+    visible = true,
 }: {
     blockId?: string;
     surface?: string;
     surfaceId?: string;
     coordinates?: "local" | "normalized" | "capture";
     webviewRef?: RefObject<Electron.WebviewTag>;
+    surfaceEffects?: boolean;
+    visible?: boolean;
 }) {
     const { cursorPoint, cursorActive, clickFlashCount, cursorLabel } = useAgentOverlays(surface, blockId, surfaceId);
     const cursorOwner = `${surface ?? "surface"}:${blockId ?? "block"}:${surfaceId ?? ""}`;
@@ -25,28 +29,42 @@ export function AgentSurfaceCursor({
     const lastClick = useRef<number>(undefined);
     useEffect(() => {
         let lastReport = -Infinity;
-        controller.current = mountAgentCursor(element.current, undefined, undefined, (point) => {
-            const now = performance.now();
-            if (now - lastReport < 40) return;
-            lastReport = now;
-            const host = element.current;
-            const rect = host.getBoundingClientRect();
-            const scaleX = host.clientWidth ? rect.width / host.clientWidth : 1;
-            const scaleY = host.clientHeight ? rect.height / host.clientHeight : 1;
-            getApi()?.reportAgentCursor?.(
-                { x: rect.left + point.x * scaleX, y: rect.top + point.y * scaleY },
-                cursorOwner
-            );
-        });
+        controller.current = mountAgentCursor(
+            element.current,
+            undefined,
+            undefined,
+            (point) => {
+                const now = performance.now();
+                if (now - lastReport < 40) return;
+                lastReport = now;
+                const host = element.current;
+                const rect = host.getBoundingClientRect();
+                const scaleX = host.clientWidth ? rect.width / host.clientWidth : 1;
+                const scaleY = host.clientHeight ? rect.height / host.clientHeight : 1;
+                getApi()?.reportAgentCursor?.(
+                    { x: rect.left + point.x * scaleX, y: rect.top + point.y * scaleY },
+                    cursorOwner
+                );
+            },
+            undefined,
+            surfaceEffects
+        );
         return () => {
             controller.current?.destroy();
             getApi()?.reportAgentCursor?.(null, cursorOwner);
         };
-    }, [cursorOwner]);
+    }, [cursorOwner, surfaceEffects]);
     const reducedMotion = useReducedAgentMotion();
-    useBrowserAgentCursor(webviewRef, cursorPoint, cursorActive, cursorLabel, clickFlashCount, reducedMotion);
+    useBrowserAgentCursor(
+        webviewRef,
+        cursorPoint,
+        visible && cursorActive,
+        cursorLabel,
+        clickFlashCount,
+        reducedMotion
+    );
     useEffect(() => {
-        if (!cursorActive || !cursorPoint || !element.current) {
+        if (!visible || !cursorActive || !cursorPoint || !element.current) {
             controller.current?.clear();
             getApi()?.reportAgentCursor?.(null, cursorOwner);
             lastClick.current = undefined;
@@ -83,13 +101,17 @@ export function AgentSurfaceCursor({
             const renderedHeight = coordinates === "capture" ? height * scale : rect.height;
             target = {
                 x: rect.left - parent.left + (rect.width - renderedWidth) / 2 + (cursorPoint.x / width) * renderedWidth,
-                y: rect.top - parent.top + (rect.height - renderedHeight) / 2 + (cursorPoint.y / height) * renderedHeight,
+                y:
+                    rect.top -
+                    parent.top +
+                    (rect.height - renderedHeight) / 2 +
+                    (cursorPoint.y / height) * renderedHeight,
             };
         }
         const click = clickFlashCount != null && clickFlashCount !== lastClick.current;
         lastClick.current = clickFlashCount;
         controller.current?.update(target, cursorLabel, click, reducedMotion);
-    }, [cursorActive, cursorPoint, reducedMotion, coordinates, clickFlashCount, cursorLabel, cursorOwner]);
+    }, [cursorActive, cursorPoint, reducedMotion, coordinates, clickFlashCount, cursorLabel, cursorOwner, visible]);
     return (
         <div
             ref={element}

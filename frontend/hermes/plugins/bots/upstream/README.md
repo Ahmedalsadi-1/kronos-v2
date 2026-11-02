@@ -14,3 +14,10 @@ The existing OpenMausBot VM runtime and viewer remain available independently.
 
 Upstream is archived; ongoing development moved into Hermes Desktop. Update this
 snapshot deliberately and review its SDK and gateway requirements before shipping.
+
+KronTerm additionally mounts its native Bot Sections component in the existing
+roster. Empty sections and collapse state persist locally; membership continues
+to use upstream `ui_meta` so existing groups and group chats stay compatible.
+Agents may write `<hermesHome>/bot-sections.json` with `sections` and `assign`
+fields. The roster polls that file while mounted; manual moves remain until its
+contents change. Section commands are registered while the roster is mounted.

@@ -12,7 +12,14 @@ import { resolveAgentWsh } from "./agent-runtime-paths";
 import { installHermesWorkflowPack } from "./hermes-workflow-packs";
 import { getKronosCodeBinaryCandidates, KronosCodeRuntime, withKronosCodeAttachArgs } from "./kronoscode-runtime";
 import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
-import { startKronTermToolServer, type KronTermToolServerDescriptor } from "./kronterm-tool-server";
+import {
+    kronTermToolManifest,
+    startKronTermToolServer,
+    type KronTermToolServerDescriptor,
+} from "./kronterm-tool-server";
+import { prepareWorkflowProfile, runHermesWorkflowWorker } from "./n8n-hermes-worker";
+import { N8nRuntime } from "./n8n-runtime";
+import type { N8nWorkspace, N8nWorkspaceCommand } from "./n8n-workspace";
 export { resolveAgentWsh as resolveHermesWsh } from "./agent-runtime-paths";
 
 const StartupTimeoutMs = 90_000;
@@ -20,6 +27,7 @@ const HealthTimeoutMs = 10_000;
 const RestartDelaysMs = [1_000, 3_000, 10_000];
 const StableRuntimeMs = 60_000;
 const ApiTimeoutMs = 15_000;
+const SurfaceTokenTimeoutMs = 10_000;
 const SurfaceRefreshLeadMs = 10 * 60 * 1000;
 const ExecFile = promisify(execFile);
 const PluginPreparations = new Map<string, Promise<string>>();
@@ -32,6 +40,13 @@ type KronTermSkillRootOptions = {
 };
 
 export type HermesSurfaceContext = {
+    n8nWorkerId?: string;
+    n8nEditorId?: number;
+    n8nWorkflowId?: string;
+    sandboxComputerId?: string;
+    agentRuntime?: "hermes";
+    delegationScope?: "sandbox" | "widgets" | "inherit";
+    toolSessionId?: string;
     nativeCallerId?: string;
     workflowRunId?: string;
     tabId?: string;
@@ -130,8 +145,13 @@ async function resolveManagedHermesLauncher(binary: string): Promise<string> {
 async function resolveHermesBinary(): Promise<string> {
     const homeDir = os.homedir();
     const executable = process.platform === "win32" ? "hermes.exe" : "hermes";
+    const preparedRoot = path.join(homeDir, ".kronterm", "runtimes", "hermes-0.22.5");
+    const preparedBinary = fs.existsSync(path.join(preparedRoot, "ready.json"))
+        ? path.join(preparedRoot, "source", ".venv", process.platform === "win32" ? "Scripts" : "bin", executable)
+        : undefined;
     const candidates = [
         process.env.KRONTERM_HERMES_BIN,
+        preparedBinary,
         process.env.HERMES_BIN,
         path.join(
             homeDir,
@@ -261,6 +281,12 @@ async function stageHermesBundledPlugins(
             }
         }
         await fs.promises.cp(adapterSource, path.join(staging, "kronterm-tools"), { recursive: true, force: true });
+        for (const name of ["orgo-computer", "advanced-delegation"]) {
+            const source = path.join(path.dirname(adapterSource), name);
+            if (!fs.existsSync(source)) continue;
+            await fs.promises.rm(path.join(staging, name), { recursive: true, force: true });
+            await fs.promises.cp(source, path.join(staging, name), { recursive: true, force: true });
+        }
         assertCurrent();
         try {
             await fs.promises.rename(target, backup);
@@ -350,8 +376,8 @@ export function makeKronTermToolEnvironment(
 export function makeHermesManagedConfig(toolServer?: KronTermToolServerDescriptor): Record<string, unknown> {
     return {
         delegation: {
-            provider: "copilot-acp",
-            model: "copilot-acp",
+            backend: "kronterm_smart",
+            max_concurrent_children: 2,
         },
         agent: {
             system_prompt: KronTermSurfaceSystemPrompt,
@@ -398,6 +424,7 @@ export function makeHermesRuntimeEnvironment(
             ? {
                   HERMES_MANAGED_DIR: options.managedDir,
                   HERMES_BUNDLED_PLUGINS: path.join(options.managedDir, "plugins"),
+                  KRONTERM_TOOL_MANIFEST_FILE: path.join(options.managedDir, "tool-manifest.json"),
               }
             : {}),
         ...(options.toolServer
@@ -406,7 +433,7 @@ export function makeHermesRuntimeEnvironment(
                   KRONTERM_NATIVE_TOOL_TOKEN: options.toolServer.token,
               }
             : {}),
-        ...(options.enableKronTermTools ? { HERMES_TUI_TOOLSETS: "kronterm,hermes-cli,desktop_ui" } : {}),
+        ...(options.enableKronTermTools ? { HERMES_TUI_TOOLSETS: "kronterm,delegation" } : {}),
         ...options.toolEnvironment,
         ...(options.kronosCodeBinary
             ? {
@@ -432,6 +459,9 @@ export function makeHermesRuntimeEnvironment(
 
 class ManagedHermesRuntime extends EventEmitter {
     private child: ChildProcessWithoutNullStreams | null = null;
+    private n8n = new N8nRuntime();
+    private workflowWidgets: N8nWorkspace;
+    private workflowWorkers = new AbortController();
     private connection: HermesConnectionDescriptor | null = null;
     private startPromise: Promise<HermesConnectionDescriptor> | null = null;
     private restartTimer: NodeJS.Timeout | null = null;
@@ -549,10 +579,28 @@ class ManagedHermesRuntime extends EventEmitter {
             import("../frontend/app/store/wshclientapi"),
             import("./emain-wsh"),
         ]);
-        const token = await RpcApi.CreateSurfaceTokenCommand(ElectronWshClient, {
-            tabid: context.tabId,
-            blockid: context.blockId ?? "",
-        });
+        let token: CommandCreateSurfaceTokenRtnData;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                token = await RpcApi.CreateSurfaceTokenCommand(
+                    ElectronWshClient,
+                    {
+                        tabid: context.tabId,
+                        blockid: context.blockId ?? "",
+                    },
+                    { timeout: SurfaceTokenTimeoutMs }
+                );
+                break;
+            } catch (error) {
+                if (
+                    generation !== this.surfaceGeneration ||
+                    attempt > 0 ||
+                    !/EC-TIME|timeout|disconnected|no route/i.test(String(error))
+                )
+                    throw error;
+                console.log("[hermes] surface capability transport interrupted; retrying");
+            }
+        }
         if (generation !== this.surfaceGeneration) {
             return;
         }
@@ -603,9 +651,60 @@ class ManagedHermesRuntime extends EventEmitter {
         this.restartTimer.unref();
     }
 
-    async api<T = unknown>(request: HermesApiRequest): Promise<T> {
+    async n8nCommand(
+        input: N8nWorkspaceCommand,
+        context: HermesSurfaceContext,
+        signal?: AbortSignal
+    ): Promise<unknown> {
+        if (!this.workflowWidgets) {
+            const { N8nWorkspace } = await import("./n8n-workspace");
+            this.workflowWidgets ??= new N8nWorkspace(this.n8n, async (task, scope, abort) => {
+                this.n8n.assertScope(scope);
+                await prepareWorkflowProfile(<T>(request: HermesApiRequest) => this.api<T>(request));
+                const connection = await this.ensure();
+                return runHermesWorkflowWorker(connection, task, scope, abort);
+            });
+        }
+        const abort = signal ? AbortSignal.any([signal, this.workflowWorkers.signal]) : this.workflowWorkers.signal;
+        return this.workflowWidgets.command(input, context, abort);
+    }
+
+    async api<T = unknown>(request: HermesApiRequest, callerContext?: HermesSurfaceContext): Promise<T> {
         if (request.body != null && request.upload != null) {
             throw new Error("Hermes API requests cannot contain both JSON and an upload.");
+        }
+        if (request.path === "/api/kronterm/n8n/command") {
+            if (
+                request.method !== "POST" ||
+                request.upload != null ||
+                !request.body ||
+                typeof request.body !== "object"
+            )
+                throw new Error("Workflow commands require a JSON POST.");
+            return this.n8nCommand(
+                request.body as N8nWorkspaceCommand,
+                callerContext ?? this.surfaceContext
+            ) as Promise<T>;
+        }
+        if (request.path === "/api/kronterm/n8n") {
+            if (request.upload != null || request.body != null)
+                throw new Error("n8n runtime requests do not accept a body.");
+            if (request.method === "POST") {
+                const context = callerContext
+                    ? {
+                          ...(callerContext.tabId === this.surfaceContext?.tabId ? this.surfaceContext : {}),
+                          ...callerContext,
+                      }
+                    : this.surfaceContext;
+                return (await this.n8nCommand({ operation: "open", surface: "canvas" }, context)) as T;
+            }
+            if (request.method === "DELETE") {
+                this.workflowWorkers.abort();
+                this.workflowWorkers = new AbortController();
+                return this.n8n.stop() as T;
+            }
+            if (request.method == null || request.method === "GET") return this.n8n.status() as T;
+            throw new Error("Unsupported n8n runtime request.");
         }
         if (request.path === "/api/kronterm/workflow-packs/install") {
             if (request.method !== "POST" || request.upload != null) {
@@ -694,7 +793,10 @@ class ManagedHermesRuntime extends EventEmitter {
         const token = randomBytes(32).toString("base64url");
         const capabilityFile = this.capabilityFilePath();
         const managedDir = this.managedConfigDir();
-        const toolServer = await startKronTermToolServer(() => this.surfaceContext, "hermes");
+        const toolServer = await startKronTermToolServer(
+            () => ({ ...this.surfaceContext, agentRuntime: "hermes" }),
+            "hermes"
+        );
         if (generation !== this.startupGeneration) {
             throw new Error("Hermes startup was cancelled.");
         }
@@ -708,6 +810,11 @@ class ManagedHermesRuntime extends EventEmitter {
             assertCurrent
         );
         assertCurrent();
+        fs.writeFileSync(
+            path.join(managedDir, "tool-manifest.json"),
+            JSON.stringify({ tools: kronTermToolManifest() }),
+            { encoding: "utf8", mode: 0o600 }
+        );
         fs.writeFileSync(
             path.join(managedDir, "config.yaml"),
             JSON.stringify(makeHermesManagedConfig(toolServer), null, 2),
@@ -879,6 +986,9 @@ class ManagedHermesRuntime extends EventEmitter {
     }
 
     stop(): void {
+        this.workflowWorkers.abort();
+        this.workflowWorkers = new AbortController();
+        this.n8n.stop();
         this.stopping = true;
         this.startupGeneration += 1;
         this.delegationConnection = null;

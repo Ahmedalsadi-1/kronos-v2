@@ -82,7 +82,7 @@
     flex: 1;
 }
 .kt-device-workspace.has-settings .kt-device-grid {
-    margin-right: 252px;
+    margin-right: 212px;
 }
 .kt-device-workspace.is-single .kt-device-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -177,10 +177,10 @@
     top: 76px;
     right: 12px;
     z-index: 5;
-    width: 232px;
+    width: 208px;
     max-height: calc(100% - 88px);
     overflow: auto;
-    padding: 12px;
+    padding: 8px;
     backdrop-filter: blur(16px);
 }
 .kt-device-settings header {
@@ -253,3 +253,101 @@
     backdrop-filter: none;
     background: var(--kt-content, #222);
 }
+
+.kt-device-workspace .kt-phone-button {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+.kt-device-settings {
+    background: color-mix(in srgb, var(--kt-content, #202124) 72%, transparent);
+}
+
+.kt-device-window-controls {
+    display: flex;
+    width: min(100%, 310px);
+    justify-content: flex-end;
+    cursor: grab;
+    touch-action: none;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--kt-content, #202124) 60%, transparent);
+}
+.kt-device-window-controls button {
+    border: 0;
+}
+.kt-device-live[hidden] {
+    display: none;
+}
+.kt-device-tile:has(.kt-device-live[hidden]) {
+    min-height: 0;
+    align-self: start;
+}
+.kt-device-tile.is-expanded {
+    grid-column: 1 / -1;
+    min-height: 600px;
+}
+.kt-device-tile.is-expanded .kt-device-live {
+    height: 520px;
+}
+.kt-device-workspace-bar select {
+    max-width: 250px;
+    min-height: 32px;
+    color: inherit;
+    background: var(--kt-content, #222);
+    border-radius: 8px;
+}
+
+.kt-device-workspace.is-single .kt-device-settings {
+    right: max(8px, calc(50% - 370px));
+}
+.kt-device-settings {
+    border-radius: 14px;
+}
+.kt-device-settings {
+    top: 96px;
+    left: calc(50% + 90px);
+    right: auto;
+}
+.kt-device-workspace.is-single .kt-device-settings {
+    left: calc(50% + 160px);
+    right: auto;
+}
+@container (max-width: 560px) {
+    .kt-device-workspace .kt-device-settings {
+        left: auto;
+        right: 8px;
+    }
+}
+
+.kt-device-farm-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.kt-device-workspace-bar .kt-device-farm-size input {
+    width: 56px;
+}
+.kt-device-window-controls {display:flex;align-items:center;gap:7px;flex-shrink:0;padding:4px;}
+.kt-device-window-controls button {display:grid;place-items:center;width:13px;height:13px;min-width:13px;padding:0;border:0;border-radius:50%;color:#262626;cursor:pointer;}
+.kt-device-window-controls .is-close {background:#ff5f57;}
+.kt-device-window-controls .is-minimize {background:#febc2e;}
+.kt-device-window-controls .is-maximize {background:#28c840;}
+.kt-device-window-controls button svg {opacity:0;}
+.kt-device-window-controls:hover button svg,.kt-device-window-controls button:focus-visible svg {opacity:1;}
+.kt-device-workspace.window-minimized {height:44px!important;min-height:44px!important;overflow:hidden;}
+.kt-device-workspace.window-minimized > :not(header) {display:none!important;}
+.kt-device-workspace.window-maximized {position:fixed;inset:56px 12px 12px;z-index:60000;width:auto!important;height:auto!important;background:var(--main-bg-color,#111);}
+.kt-device-workspace-titlebar {display:flex;align-items:center;gap:12px;min-height:36px;width:100%;padding:4px 10px;background:var(--kt-content,#202124);border-bottom:1px solid var(--kt-separator,#444);border-radius:10px 10px 0 0;cursor:grab;touch-action:none;user-select:none;}
+.kt-device-workspace-titlebar:active {cursor:grabbing;}
+.kt-device-workspace-titlebar strong {font-size:12px;font-weight:500;}
+.kt-device-workspace-bar {align-self:stretch;justify-content:flex-start;border-radius:8px;box-shadow:none;gap:6px;padding:6px;}
+.kt-device-workspace-bar > label:first-child {flex:1;min-width:120px;}
+.kt-device-workspace-bar select {width:100%;max-width:100%;}
+.kt-device-workspace.window-minimized > .kt-device-workspace-titlebar {display:flex!important;}
+.kt-device-workspace {padding:0 8px 8px;gap:8px;}
+.kt-device-workspace-titlebar {width:calc(100% + 16px);margin:0 -8px;}
+.kt-device-workspace.window-minimized {padding:0;}
+.kt-device-workspace.window-minimized .kt-device-workspace-titlebar {width:100%;margin:0;}

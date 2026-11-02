@@ -62,7 +62,16 @@ const config = {
         {
             from: "integrations/openmausbot/upstream",
             to: "openmausbot",
-            filter: ["dist/**/*", "dist-server/**/*", "LICENSE", "NOTICE", "LICENSING.md", "third_party/**/*", "package.json", "skills/**/*"],
+            filter: [
+                "dist/**/*",
+                "dist-server/**/*",
+                "LICENSE",
+                "NOTICE",
+                "LICENSING.md",
+                "third_party/**/*",
+                "package.json",
+                "skills/**/*",
+            ],
         },
         { from: "scripts/import-workflow-pack.py", to: "workflow-packs/import-workflow-pack.py" },
         {
@@ -98,6 +107,21 @@ const config = {
             from: "dist/mcp-kron-term",
             to: "mcp-kron-term",
             filter: ["dist/**/*", "package.json"],
+        },
+        {
+            from: "agents/hermes/plugins/advanced-delegation",
+            to: "hermes-plugins/advanced-delegation",
+            filter: ["**/*", "!tests/**", "!**/__pycache__/**"],
+        },
+        {
+            from: "agents/hermes/plugins/orgo-computer",
+            to: "hermes-plugins/orgo-computer",
+            filter: ["**/*", "!tests/**", "!**/__pycache__/**"],
+        },
+        {
+            from: "agents/hermes/computer-kit",
+            to: "hermes-computer-kit",
+            filter: ["**/*", "!**/__pycache__/**"],
         },
         {
             from: "dist/hermes-plugins",

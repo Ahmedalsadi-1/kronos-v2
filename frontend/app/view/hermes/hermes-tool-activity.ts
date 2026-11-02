@@ -14,6 +14,7 @@ export type HermesToolActivityPhase = "running" | "succeeded" | "failed";
 
 export type HermesToolActivity = {
     phase: HermesToolActivityPhase;
+    foreground?: boolean;
     toolId?: string;
     name: string;
     args?: Record<string, unknown>;

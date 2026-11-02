@@ -15,6 +15,8 @@
  * bot-initiated sends use `hermes -p <bot> chat --in ~ -c "Bot Chat"`.
  */
 
+import { BotSections } from '@hermes/bot-sections/bot-sections'
+import { $botSections } from '@hermes/bot-sections/model'
 import * as sdk from '@hermes/plugin-sdk'
 import {
   atom,
@@ -2229,7 +2231,7 @@ function groupRoster(roster, metaByName) {
 
 /** Existing group names, alphabetical — feeds the Move-to-group dialog. */
 function knownGroups(metaByName) {
-  const names = new Set()
+  const names = new Set($botSections.get().names)
 
   for (const meta of Object.values(metaByName || {})) {
     const group = (meta?.group || '').trim()
@@ -5913,7 +5915,7 @@ function GroupChatWorkspace({ group, members }) {
   })
 }
 
-function BotsPane() {
+export function BotsPane() {
   const { data, error, isLoading, refetch } = useRoster()
   const gatewayState = useValue(host.state.gateway)
   const gatewayUp = gatewayState === 'open'
@@ -6081,6 +6083,9 @@ function BotsPane() {
             children: staleNotice
           })
         : null,
+      roster.length === 0
+        ? jsx(BotSections, { bots: [], allBots: roster, meta: allMeta, context: pluginCtx, saveMeta: saveBotMeta, renderBot: () => null })
+        : null,
       isLoading && !roster.length
         ? jsx('div', {
             className: 'flex flex-1 items-center justify-center',
@@ -6122,45 +6127,40 @@ function BotsPane() {
                   className: 'hermes-bots-roster min-h-0 flex-1',
                   children: jsx('div', {
                     className: 'grid w-full min-w-0 gap-0.5 px-1.5 pb-2',
-                    children: groupRoster(filteredRoster, allMeta).flatMap(section => [
-                      section.group
-                        ? jsxs('div', {
-                            className: 'mt-2 flex items-center gap-2 px-1 pb-0.5 first:mt-0.5',
-                            children: [
-                              jsx('span', {
-                                className:
-                                  'shrink-0 text-[0.625rem] font-semibold uppercase tracking-wider text-(--ui-text-quaternary)',
-                                children: section.group
-                              }),
-                              jsx('div', { className: 'h-px min-w-0 flex-1 bg-(--ui-stroke-secondary)' }),
-                              groupNeedsYou[section.group]
-                                ? jsx('span', {
-                                    className:
-                                      'shrink-0 rounded-full bg-(--ui-accent,#4f9cf9) px-1.5 text-[0.6rem] font-semibold text-white',
-                                    title: 'A bot in this room needs your input',
-                                    children: 'needs you'
-                                  })
-                                : null,
-                              section.bots.length > 1 && section.bots.length <= GROUP_CHAT_MAX_MEMBERS
-                                ? jsx('button', {
-                                    type: 'button',
-                                    className:
-                                      'shrink-0 rounded px-1 text-[0.625rem] font-medium text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground',
-                                    title: `Open the ${section.group} group chat`,
-                                    onClick: () => {
-                                      $groupNeedsYou.set({ ...$groupNeedsYou.get(), [section.group]: false })
-                                      $groupChatWorkspace.set(section.group)
-                                    },
-                                    children: 'Open chat'
-                                  })
-                                : null
-                            ]
-                          }, `group:${section.group}`)
-                        : null,
-                      ...section.bots.map(bot =>
-                        jsx(BotRow, { bot, onDelete: setDeleting, onEdit: setEditing, onGroup: setGrouping }, bot.name)
-                      )
-                    ])
+                    children: jsx(BotSections, {
+                      bots: filteredRoster,
+                      allBots: roster,
+                      meta: allMeta,
+                      context: pluginCtx,
+                      saveMeta: saveBotMeta,
+                      onRenameSection: (previous, next) => {
+                        if (previous === next) return
+                        const rooms = { ...$groupChats.get() }
+                        const room = rooms[previous]
+                        if (room) {
+                          delete rooms[previous]
+                          $groupChats.set(rooms)
+                          updateGroupChat(next, () => ({ ...room, epoch: (room.epoch || 0) + 1, running: false }))
+                        }
+                        const needsYou = { ...$groupNeedsYou.get() }
+                        needsYou[next] = needsYou[previous] || false
+                        delete needsYou[previous]
+                        $groupNeedsYou.set(needsYou)
+                      },
+                      renderBot: bot => jsx(BotRow, { bot, onDelete: setDeleting, onEdit: setEditing, onGroup: setGrouping }, bot.name),
+                      renderGroupAction: (group, bots) => bots.length > 1 && bots.length <= GROUP_CHAT_MAX_MEMBERS
+                        ? jsx('button', {
+                            type: 'button',
+                            className: 'shrink-0 cursor-pointer rounded px-1 text-[0.625rem] text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)',
+                            title: `Open the ${group} group chat`,
+                            onClick: () => {
+                              $groupNeedsYou.set({ ...$groupNeedsYou.get(), [group]: false })
+                              $groupChatWorkspace.set(group)
+                            },
+                            children: groupNeedsYou[group] ? 'Needs you · Open chat' : 'Open chat'
+                          })
+                        : null
+                    })
                   })
                 }),
       jsx('div', {

@@ -10,6 +10,7 @@ import { Tip } from "@hermes/components/ui/tooltip";
 import { useI18n } from "@hermes/i18n";
 import { chatMessageText } from "@hermes/lib/chat-messages";
 import { useHermesShellMode } from "@hermes/lib/kronterm-host";
+import { $hudComposerPosition, resolveHudComposerEdge } from "@hermes/store/composer-position";
 import { closeHud } from "@hermes/store/hud";
 import { $activeSessionAwaitingInput } from "@hermes/store/prompts";
 import { $busy, $messages } from "@hermes/store/session";
@@ -179,6 +180,7 @@ export function HudShell() {
     const view = appViewForPath(location.pathname);
     const pageOpen = view !== "chat" && !isOverlayView(view);
     const { embedded, dockedChat } = useHermesShellMode();
+    const composerPosition = useStore($hudComposerPosition);
     const { t } = useI18n();
     const [recent, holdBand] = useRecentActivity();
     const hasUserMessage = useStore($hasUserMessage);
@@ -388,7 +390,7 @@ export function HudShell() {
         <div
             className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
             data-hud-embedded={embedded ? "" : undefined}
-            data-hud-edge={edge}
+            data-hud-edge={resolveHudComposerEdge(edge, embedded, Boolean(dockedChat), composerPosition)}
             data-hud-recent={recent || held ? "" : undefined}
             data-hud-shell={dockedChat ? undefined : ""}
             data-kronterm-side-chat={dockedChat ? "" : undefined}
@@ -431,20 +433,6 @@ export function HudShell() {
                             variant="ghost"
                         >
                             <TitlebarIcon name="screen-normal" />
-                        </Button>
-                    </Tip>
-
-                    <Tip label="Dock KronTerm Agent in the workspace">
-                        <Button
-                            aria-label="Dock KronTerm Agent in the workspace"
-                            className={`${titlebarButtonClass} absolute z-20`}
-                            data-hud-dock=""
-                            onClick={() => void window.hermesDesktop?.hud?.dock?.()}
-                            size="icon-titlebar"
-                            type="button"
-                            variant="ghost"
-                        >
-                            <TitlebarIcon name="layout-sidebar-left" />
                         </Button>
                     </Tip>
 

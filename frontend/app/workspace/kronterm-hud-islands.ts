@@ -26,6 +26,7 @@ export type KronTermHudApp =
 export type HudLaunchOptions = {
     machineKind?: "desktop" | "android" | "iphone";
     machineSettings?: boolean;
+    machineTarget?: string;
     machinePicker?: boolean;
     appId?: string;
     appName?: string;
@@ -72,6 +73,7 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
             ? {
                   "machine:kind": options.machineKind ?? "desktop",
                   "machine:settings": !!options.machineSettings,
+                  "machine:target": options.machineTarget,
                   "machine:picker": !!options.machinePicker,
               }
             : {}),
@@ -89,6 +91,11 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
             (model) =>
                 model?.viewType === definition.view &&
                 typeof model.blockId === "string" &&
+                (!(app === "machines" || app === "sandbox") ||
+                    !options.machineTarget ||
+                    globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", model.blockId)))?.meta?.[
+                        "machine:target"
+                    ] === options.machineTarget) &&
                 (app !== "appstream" ||
                     globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", model.blockId)))?.meta?.[
                         "appstream:appid"
@@ -109,6 +116,7 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
                 meta: {
                     "machine:kind": options.machineKind ?? "desktop",
                     "machine:settings": !!options.machineSettings,
+                    "machine:target": options.machineTarget,
                     "machine:picker": !!options.machinePicker,
                 } as MetaType,
             });
@@ -119,6 +127,12 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
     for (const candidate of options.forceNew ? [] : kronTermHudController.getSnapshot().islandBlockIds) {
         const block = (await ObjectService.GetObject(`block:${candidate}`)) as Block;
         if (block?.meta?.view !== definition.view) continue;
+        if (
+            (app === "machines" || app === "sandbox") &&
+            options.machineTarget &&
+            block.meta["machine:target"] !== options.machineTarget
+        )
+            continue;
         if (app === "appstream" && block.meta["appstream:appid"] !== options.appId) continue;
         if (options.file && definition.view === "preview") {
             await RpcApi.SetMetaCommand(TabRpcClient, {
@@ -132,6 +146,7 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
                 meta: {
                     "machine:kind": options.machineKind ?? "desktop",
                     "machine:settings": !!options.machineSettings,
+                    "machine:target": options.machineTarget,
                     "machine:picker": !!options.machinePicker,
                 } as MetaType,
             });

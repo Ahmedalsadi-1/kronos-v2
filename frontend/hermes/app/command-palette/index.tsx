@@ -105,6 +105,7 @@ import { prettyName } from '../settings/helpers'
 import { makeKronTermSettingsViewId, useKronTermSettingsHost } from '../settings/kronterm-settings-host'
 
 import { usePaletteContributions } from './contrib'
+import { useWorkflowPaletteItems } from './workflow-items'
 import { MarketplaceThemePage } from './marketplace-theme-page'
 import { PetInlineToggle, PetPalettePage } from './pet-palette-page'
 
@@ -542,6 +543,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   const { availableThemes, mode, resolvedMode, setMode, setTheme, themeName } = useTheme()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState<string | null>(null)
+  const workflowItems = useWorkflowPaletteItems(open && !page, useDeferredValue(search))
 
   // The Update row names the same install the statusbar names — same target
   // selection, same resolver. Reduced to the label string: an in-flight apply
@@ -793,7 +795,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             : []),
           ...(window.hermesDesktop?.krontermSurfaces?.openMachines
             ? (['desktop', 'android', 'iphone'] as const).flatMap((kind) => {
-                const label = kind === 'desktop' ? 'Sandbox' : kind === 'android' ? 'Android' : 'iPhone'
+                const label = kind === 'desktop' ? 'Computer' : kind === 'android' ? 'Android' : 'iPhone'
                 return [
                   {
                     id: `machine-${kind}`,
@@ -1301,8 +1303,13 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   // likely thing meant. Everything above is either always-present chrome or a
   // list the search itself asked for.
   const groups = useMemo(
-    () => [...baseGroups, ...searchGroups, ...branchGroup],
-    [baseGroups, branchGroup, searchGroups]
+    () => [
+      ...baseGroups,
+      ...(workflowItems.nodes.length ? [{ heading: 'Workflow nodes', items: workflowItems.nodes.map(item => ({ ...item, icon: Network })) }] : []),
+      ...(workflowItems.widgets.length ? [{ heading: 'Workspace widgets', items: workflowItems.widgets.map(item => ({ ...item, icon: AppWindow })) }] : []),
+      ...searchGroups, ...branchGroup
+    ],
+    [baseGroups, branchGroup, searchGroups, workflowItems.nodes, workflowItems.widgets]
   )
 
   // Nested palette pages (VS Code-style submenus). Reusable: add an entry here
@@ -1481,6 +1488,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             value={search}
           />
           <CommandList className="dt-portal-scrollbar max-h-[404px] text-[84px] border-white bg-black text-[#a3a3a3]">
+            {!page && workflowItems.error && <p role="alert" className="px-3 py-2 text-sm text-destructive">{workflowItems.error}</p>}
             {/* Server-driven pages render their own list; the rest show groups. */}
             {page === 'pets' ? (
               <PetPalettePage

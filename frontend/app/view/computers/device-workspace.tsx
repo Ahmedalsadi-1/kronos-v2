@@ -3,7 +3,7 @@
 
 import { getApi } from "@/store/global";
 import type { ComputerTarget, ComputerTargetAction } from "@/types/computer-targets";
-import { Camera, Home, Power, RefreshCw, RotateCw, Settings2, Volume2, X } from "lucide-react";
+import { Camera, Home, Maximize2, Minus, Power, RefreshCw, RotateCw, Settings2, Volume2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ComputersPanel } from "./computers";
 import { ComputersController, type ComputersApi, type ComputersState } from "./computers-state";
@@ -14,27 +14,165 @@ export function DeviceWorkspace({
     state,
     controller,
     preferredPlatform = "ios",
+    initialTargetId,
+    onCloseWidget,
     api = getApi(),
 }: {
     state: ComputersState;
     controller: ComputersController;
     preferredPlatform?: "ios" | "android";
+    initialTargetId?: string;
+    onCloseWidget?: () => void;
     api?: ComputersApi;
 }) {
+    const [windowState, setWindowState] = useState<"normal" | "minimized" | "maximized">("normal");
+    const [closed, setClosed] = useState(false);
     const [mode, setMode] = useState<"single" | "farm">("single");
-    const [selected, setSelected] = useState("");
+    const [selected, setSelected] = useState(initialTargetId ?? "");
     const [settings, setSettings] = useState(false);
     const [query, setQuery] = useState("");
+    const [farmSize, setFarmSize] = useState<number>(() => {
+        try {
+            const saved = Number(window.localStorage.getItem("kronterm:device-farm-size"));
+            return Number.isSafeInteger(saved) && saved > 0 ? saved : null;
+        } catch {
+            return null;
+        }
+    });
+    const [closedTargets, setClosedTargets] = useState<string[]>([]);
+    const choose = (id: string) => {
+        setClosedTargets((ids) => ids.filter((item) => item !== id));
+        setSelected(id);
+    };
+    const preferred = state.targets.filter((target) => target.kind.startsWith(preferredPlatform));
+    const iphones = preferred.filter((target) => /^iPhone\b/i.test(target.name));
+    const candidates = preferredPlatform === "ios" && iphones.length ? iphones : preferred;
+    const defaultTarget = candidates.find((target) => ["booted", "connected"].includes(target.status)) ?? candidates[0];
     const selectedId = state.targets.some((target) => target.id === selected)
         ? selected
-        : (state.targets.find((target) => target.kind.startsWith(preferredPlatform))?.id ?? state.targets[0]?.id);
+        : (defaultTarget?.id ?? state.targets[0]?.id);
+    useEffect(() => {
+        const refresh = () => {
+            if (!document.hidden) void controller.refresh();
+        };
+        const timer = setInterval(refresh, 5000);
+        window.addEventListener("focus", refresh);
+        return () => {
+            clearInterval(timer);
+            window.removeEventListener("focus", refresh);
+        };
+    }, [controller]);
+    const rank = (target: ComputerTarget) =>
+        (target.id === selectedId ? -100 : 0) +
+        (/^iPad\b/i.test(target.name) ? 10 : 0) +
+        (["booted", "connected"].includes(target.status) ? -1 : 0);
+    const orderedTargets = [...state.targets].sort((a, b) => rank(a) - rank(b));
+    const farmTargets = orderedTargets
+        .filter(
+            (target) =>
+                !closedTargets.includes(target.id) &&
+                `${target.name} ${target.runtime}`.toLowerCase().includes(query.toLowerCase())
+        )
+        .slice(0, farmSize ?? state.targets.length);
     return (
         <section
-            className={`kt-device-workspace is-${mode}${settings ? " has-settings" : ""}`}
+            className={`kt-device-workspace is-${mode} window-${closed ? "minimized" : windowState}${settings ? " has-settings" : ""}`}
             aria-label="Device workspace"
         >
-            <header className="kt-device-workspace-bar">
-                <strong>{mode === "farm" ? "Device farm" : "Devices"}</strong>
+            <header className="kt-device-workspace-titlebar" data-os-window-drag="">
+                <div className="kt-device-window-controls" role="group" aria-label="Device workspace window controls">
+                    <button
+                        type="button"
+                        className="is-close"
+                        aria-label="Close device workspace"
+                        onClick={() => {
+                            if (onCloseWidget) onCloseWidget();
+                            else setClosed(true);
+                        }}
+                    >
+                        <X size={9} />
+                    </button>
+                    <button
+                        type="button"
+                        className="is-minimize"
+                        aria-label={
+                            windowState === "minimized" || closed
+                                ? "Restore device workspace"
+                                : "Minimize device workspace"
+                        }
+                        onClick={() => {
+                            setClosed(false);
+                            setWindowState(windowState === "minimized" || closed ? "normal" : "minimized");
+                        }}
+                    >
+                        <Minus size={9} />
+                    </button>
+                    <button
+                        type="button"
+                        className="is-maximize"
+                        aria-label={
+                            windowState === "maximized" ? "Restore device workspace size" : "Maximize device workspace"
+                        }
+                        onClick={() => {
+                            setClosed(false);
+                            setWindowState(windowState === "maximized" ? "normal" : "maximized");
+                        }}
+                    >
+                        <Maximize2 size={9} />
+                    </button>
+                </div>
+                <strong>Devices</strong>
+            </header>
+            <div className="kt-device-workspace-bar">
+                <label>
+                    <span className="sr-only">Device list</span>
+                    <select
+                        aria-label="Device list"
+                        value={selectedId ?? ""}
+                        onChange={(event) => choose(event.target.value)}
+                    >
+                        {!state.targets.length && <option value="">No devices</option>}
+                        {state.targets.map((target) => (
+                            <option key={target.id} value={target.id}>
+                                {target.name} · {target.kind.startsWith("android") ? "Android" : "iPhone"} ·{" "}
+                                {target.status}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                {mode === "farm" && (
+                    <label className="kt-device-farm-size">
+                        Phones
+                        <input
+                            aria-label="Farm size"
+                            type="number"
+                            min={1}
+                            max={Math.max(1, state.targets.length)}
+                            value={Math.min(farmSize ?? state.targets.length, state.targets.length) || 1}
+                            onChange={(event) => {
+                                const value = Number(event.target.value);
+                                if (!Number.isSafeInteger(value) || value < 1) return;
+                                const next = Math.min(value, state.targets.length || 1);
+                                setFarmSize(next);
+                                try {
+                                    window.localStorage.setItem("kronterm:device-farm-size", String(next));
+                                } catch {
+                                    /* Storage can be disabled in embedded views. */
+                                }
+                            }}
+                        />
+                        <button
+                            onClick={() => {
+                                setFarmSize(null);
+                                try {
+                                    window.localStorage.removeItem("kronterm:device-farm-size");
+                                } catch {}
+                            }}
+                        >
+                            All
+                        </button>
+                    </label>
+                )}
                 {mode === "farm" && (
                     <input
                         aria-label="Search devices"
@@ -53,7 +191,7 @@ export function DeviceWorkspace({
                 <button aria-label="Refresh devices" disabled={state.loading} onClick={() => void controller.refresh()}>
                     <RefreshCw size={15} />
                 </button>
-            </header>
+            </div>
             {state.error && (
                 <p role="alert" className="kt-device-discovery-error">
                     {state.error}
@@ -67,15 +205,16 @@ export function DeviceWorkspace({
                 </p>
             )}
             <div className="kt-device-grid">
-                {state.targets.map((target) => (
+                {orderedTargets.map((target) => (
                     <DeviceTile
                         key={target.id}
                         target={target}
                         api={api}
                         visible={
-                            mode === "single"
+                            !closedTargets.includes(target.id) &&
+                            (mode === "single"
                                 ? target.id === selectedId
-                                : `${target.name} ${target.runtime}`.toLowerCase().includes(query.toLowerCase())
+                                : farmTargets.some((item) => item.id === target.id))
                         }
                         selected={target.id === selectedId}
                         settings={settings && target.id === selectedId}
@@ -87,7 +226,8 @@ export function DeviceWorkspace({
                         onCloseSettings={() => setSettings(false)}
                         onRefresh={() => void controller.refresh()}
                         targets={state.targets}
-                        onChoose={setSelected}
+                        onChoose={choose}
+                        onClose={onCloseWidget ?? (() => setClosedTargets((ids) => [...ids, target.id]))}
                     />
                 ))}
             </div>
@@ -107,6 +247,7 @@ function DeviceTile({
     onRefresh,
     targets,
     onChoose,
+    onClose,
 }: {
     target: ComputerTarget;
     api: ComputersApi;
@@ -119,6 +260,7 @@ function DeviceTile({
     onRefresh: () => void;
     targets: ComputerTarget[];
     onChoose: (id: string) => void;
+    onClose: () => void;
 }) {
     const targetRef = useRef(target);
     targetRef.current = target;
@@ -136,6 +278,13 @@ function DeviceTile({
                 setState
             )
     );
+    const [landscape, setLandscape] = useState(false);
+    const [minimized, setMinimized] = useState(false);
+
+    const [expanded, setExpanded] = useState(false);
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const drag = useRef<{ x: number; y: number; left: number; top: number }>(null);
+    const streaming = visible && !minimized;
     const running = target.status === "booted" || target.status === "connected";
     const can = (action: ComputerTargetAction["action"]) => target.capabilities.includes(action);
     useEffect(() => {
@@ -145,23 +294,85 @@ function DeviceTile({
     useEffect(() => {
         let active = true;
         void controller.refresh().then(() => {
-            if (active && visible && running) void controller.connect();
+            if (active && streaming && running) void controller.connect();
         });
-        if (!visible || !running) controller.disconnect();
+        if (!streaming || !running) controller.disconnect();
         return () => {
             active = false;
         };
-    }, [controller, visible, running, target.controlGeneration]);
+    }, [controller, streaming, running, target]);
     const perform = async (action: ComputerTargetAction["action"], input = {}) => {
         await controller.act(action, input);
         onRefresh();
+        if (action === "rotate" && !controller.state.error) setLandscape(!landscape);
         if (action === "boot" && ["booted", "connected"].includes(controller.state.targets[0]?.status))
             void controller.connect();
     };
     return (
-        <article className="kt-device-tile" hidden={!visible} data-selected={selected} aria-label={target.name}>
+        <article
+            className={`kt-device-tile${expanded ? " is-expanded" : ""}`}
+            hidden={!visible}
+            data-selected={selected}
+            aria-label={target.name}
+            style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+        >
+            <div
+                className="kt-device-window-controls"
+                onPointerDown={(event) => {
+                    if ((event.target as HTMLElement).closest("button")) return;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    drag.current = { x: event.clientX, y: event.clientY, left: position.x, top: position.y };
+                }}
+                onPointerMove={(event) => {
+                    if (!drag.current) return;
+                    setPosition({
+                        x: drag.current.left + event.clientX - drag.current.x,
+                        y: drag.current.top + event.clientY - drag.current.y,
+                    });
+                }}
+                onPointerUp={() => {
+                    drag.current = null;
+                }}
+                onPointerCancel={() => {
+                    drag.current = null;
+                }}
+            >
+                <button
+                    aria-label={`Close ${target.name}`}
+                    onClick={() => {
+                        onClose();
+                        onCloseSettings();
+                    }}
+                >
+                    <X size={14} />
+                </button>
+                <button
+                    aria-label={`Minimize ${target.name}`}
+                    aria-pressed={minimized}
+                    onClick={() => setMinimized(!minimized)}
+                >
+                    <Minus size={14} />
+                </button>
+                <button
+                    aria-label={`Expand ${target.name}`}
+                    aria-pressed={expanded}
+                    onClick={() => {
+                        setMinimized(false);
+                        setExpanded(!expanded);
+                    }}
+                >
+                    <Maximize2 size={14} />
+                </button>
+            </div>
             <header className="kt-device-titlebar">
-                <button className="kt-device-identity" onClick={onSelect} aria-pressed={selected}>
+                <button
+                    className="kt-device-identity"
+                    onClick={() => {
+                        setMinimized(false);
+                        onSelect();
+                    }}
+                    aria-pressed={selected}
+                >
                     <span
                         className="kt-device-power-dot"
                         data-on={running}
@@ -175,11 +386,38 @@ function DeviceTile({
                         <small>{target.runtime}</small>
                     </span>
                 </button>
+                {(
+                    [
+                        ["home", "Home", Home],
+                        ["screenshot", "Capture screen", Camera],
+                        ["rotate", "Rotate device", RotateCw],
+                    ] as const
+                ).map(
+                    ([action, label, Icon]) =>
+                        can(action) && (
+                            <button
+                                key={action}
+                                aria-label={`${label} · ${target.name}`}
+                                title={label}
+                                disabled={state.busy || !running}
+                                onClick={() =>
+                                    void perform(
+                                        action,
+                                        action === "rotate"
+                                            ? { orientation: landscape ? "portrait" : "landscape-left" }
+                                            : {}
+                                    )
+                                }
+                            >
+                                <Icon size={15} />
+                            </button>
+                        )
+                )}
                 <button aria-label={`Settings for ${target.name}`} aria-expanded={settings} onClick={onSettings}>
                     <Settings2 size={15} />
                 </button>
             </header>
-            <div className="kt-device-live">
+            <div className="kt-device-live" hidden={minimized}>
                 {state.snapshot?.imageDataUrl ? (
                     <ComputersPanel state={state} controller={controller} compact />
                 ) : (
@@ -208,6 +446,7 @@ function DeviceTile({
                     </PhoneFrame>
                 )}
             </div>
+            {target.availabilityReason && <p role="status">{target.availabilityReason}</p>}
             {state.error && <p role="alert">{state.error}</p>}
             {settings && (
                 <aside
@@ -253,7 +492,9 @@ function DeviceTile({
                                         onClick={() =>
                                             void perform(
                                                 action,
-                                                action === "rotate" ? { orientation: "landscape-left" } : {}
+                                                action === "rotate"
+                                                    ? { orientation: landscape ? "portrait" : "landscape-left" }
+                                                    : {}
                                             )
                                         }
                                     >
@@ -296,6 +537,16 @@ function DeviceTile({
                         >
                             <Power size={16} />
                             {running ? "Power off" : "Start device"}
+                        </button>
+                    )}
+                    {(target.automationPaused || target.controlOwner === "agent") && (
+                        <button
+                            onClick={() =>
+                                void controller.act(target.automationPaused ? "resume" : "takeover").then(onRefresh)
+                            }
+                            disabled={state.busy}
+                        >
+                            {target.automationPaused ? "Resume Kronos" : "Take control"}
                         </button>
                     )}
                     <p>Labs · {target.kind.includes("device") ? "Connected phone" : "Simulator"}</p>

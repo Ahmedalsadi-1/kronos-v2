@@ -1,0 +1,171 @@
+{
+  "ok": true,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 14
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 2,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 17.5,
+        "selector": "#editor-screen > div:nth-of-type(3) > img:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 398.08,
+          "top": 269.48,
+          "right": 2007.96,
+          "bottom": 1074.73,
+          "width": 1609.88,
+          "height": 805.24
+        },
+        "containerSelector": "#editor-screen > div:nth-of-type(3)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 487.46,
+          "top": 326.91,
+          "right": 1820.64,
+          "bottom": 993.97,
+          "width": 1333.19,
+          "height": 667.06
+        },
+        "overflow": {
+          "left": 89.38,
+          "right": 187.32,
+          "top": 57.43,
+          "bottom": 80.76
+        },
+        "dataAttributes": {
+          "data-hf-render-id": "hf-media-6",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/directed/editor.html",
+        "bbox": {
+          "x": 398.08,
+          "y": 269.48,
+          "width": 1609.88,
+          "height": 805.24
+        },
+        "firstSeen": 17.5,
+        "lastSeen": 17.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          17.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 37.5,
+        "selector": "#v-browser-indicators",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 295.26,
+          "top": 310.77,
+          "right": 1762.64,
+          "bottom": 1032.36,
+          "width": 1467.38,
+          "height": 721.6
+        },
+        "containerSelector": "#browser-screen > div:nth-of-type(3)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 309.92,
+          "top": 313.46,
+          "right": 1747.97,
+          "bottom": 1022.63,
+          "width": 1438.05,
+          "height": 709.18
+        },
+        "overflow": {
+          "left": 14.66,
+          "right": 14.67,
+          "top": 2.69,
+          "bottom": 9.73
+        },
+        "dataAttributes": {
+          "data-hf-render-id": "v-browser-indicators",
+          "data-start": "0",
+          "data-duration": "3",
+          "data-track-index": "1",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "compositions/directed/browser.html",
+        "bbox": {
+          "x": 295.26,
+          "y": 310.77,
+          "width": 1467.38,
+          "height": 721.6
+        },
+        "firstSeen": 37.5,
+        "lastSeen": 37.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          37.5
+        ]
+      }
+    ],
+    "duration": 45,
+    "samples": [
+      2.5,
+      7.5,
+      12.5,
+      17.5,
+      22.5,
+      27.5,
+      32.5,
+      37.5,
+      42.5
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 2,
+    "truncated": false
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      2.5,
+      12.5,
+      22.5,
+      32.5,
+      42.5
+    ],
+    "checked": 42,
+    "passed": 42
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 360
+  }
+}

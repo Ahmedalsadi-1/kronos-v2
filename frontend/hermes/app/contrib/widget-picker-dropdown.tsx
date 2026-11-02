@@ -31,7 +31,7 @@ const AVAILABLE_WIDGETS: WidgetDef[] = [
     { id: "browser", label: "Browser", icon: "globe", view: "web", description: "New browser" },
     { id: "files", label: "Files", icon: "folder", view: "preview", description: "New file explorer" },
     { id: "gittree", label: "Git Tree", icon: "code-branch", view: "preview", description: "Browse repository" },
-    { id: "sandbox", label: "Sandbox", icon: "desktop", view: "sandbox", description: "Isolated Linux desktop" },
+    { id: "sandbox", label: "Computer", icon: "desktop", view: "sandbox", description: "Live computer viewer" },
     { id: "sysinfo", label: "Sysinfo", icon: "chart-line", view: "sysinfo", description: "System information" },
     { id: "apps", label: "Apps", icon: "shapes", view: "installedapps", description: "Installed applications" },
     {

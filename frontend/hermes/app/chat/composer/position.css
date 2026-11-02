@@ -1,0 +1,21 @@
+[data-chat-surface][data-composer-position="top"] {
+    --thread-last-message-clearance: 2rem;
+    --thread-viewport-height: 100%;
+}
+[data-chat-surface][data-composer-position="top"] > [data-slot="composer-bounds"] {
+    order: 1;
+}
+[data-chat-surface][data-composer-position="top"] > [data-slot="composer-dock"]:not([data-popped-out]) {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    transform: none;
+    flex-shrink: 0;
+    align-self: center;
+}
+[data-chat-surface][data-composer-position="top"] [data-slot="aui_intro"] {
+    padding-bottom: 0;
+}
+[data-chat-surface][data-composer-position="top"] div:has(> [data-slot="aui_intro"]) {
+    padding-top: 0;
+}

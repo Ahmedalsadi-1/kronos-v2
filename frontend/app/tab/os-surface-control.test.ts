@@ -66,6 +66,17 @@ describe("OS surface targets", () => {
             "object not found"
         );
     });
+
+    it("moves canonical workflow nodes but rejects unsupported canvas-only edits", () => {
+        const current = state();
+        current.objects = [{ id: "workflow:flow:node", kind: "workflow-node", x: 20, y: 40, width: 100, height: 100 }];
+        const request: WorkspaceSurfaceControlInput = { action: "update_object", objectid: "workflow:flow:node" };
+        expect(validateOSSurfaceControl(current, { ...request, x: 0, y: 0 })).toBeUndefined();
+        expect(validateOSSurfaceControl(current, { ...request, x: NaN })).toContain("geometry");
+        expect(validateOSSurfaceControl(current, request)).toContain("coordinates");
+        for (const patch of [{ width: 120 }, { height: 120 }, { text: "Fake rename" }, { color: "blue" }])
+            expect(validateOSSurfaceControl(current, { ...request, ...patch })).toContain("node editor");
+    });
 });
 
 describe("OS observation coordinates", () => {
@@ -99,9 +110,16 @@ describe("shared Canvas controls in OS", () => {
     });
     it("requires live distinct connector endpoints and navigates by window location", () => {
         const current = state();
-        current.objects = [{ id: "a", kind: "note", x: 0, y: 0, width: 20, height: 20 }, { id: "b", kind: "note", x: 80, y: 0, width: 20, height: 20 }];
-        expect(validateOSSurfaceControl(current, { action: "connect_objects", fromobjectid: "a", toobjectid: "b" })).toBeUndefined();
-        expect(validateOSSurfaceControl(current, { action: "connect_objects", fromobjectid: "a", toobjectid: "deleted" })).toContain("live objects");
+        current.objects = [
+            { id: "a", kind: "note", x: 0, y: 0, width: 20, height: 20 },
+            { id: "b", kind: "note", x: 80, y: 0, width: 20, height: 20 },
+        ];
+        expect(
+            validateOSSurfaceControl(current, { action: "connect_objects", fromobjectid: "a", toobjectid: "b" })
+        ).toBeUndefined();
+        expect(
+            validateOSSurfaceControl(current, { action: "connect_objects", fromobjectid: "a", toobjectid: "deleted" })
+        ).toContain("live objects");
         current.selectedEntityId = "browser";
         current.windows.browser.bounds = { x: 0, y: 0, width: 400, height: 300 };
         current.windows.terminal.bounds = { x: 500, y: 0, width: 400, height: 300 };

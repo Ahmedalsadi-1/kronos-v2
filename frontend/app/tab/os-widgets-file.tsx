@@ -27,7 +27,7 @@ import {
     PackagePlus,
     Pin,
     Search,
-} from "lucide-react";
+} from "@/app/components/system-ui/os-icons";
 import { memo, useEffect, useMemo, useState } from "react";
 
 import { OSAppDragMimeType, readOSAppDragPayload } from "./os-app-stream";

@@ -261,6 +261,8 @@ contextBridge.exposeInMainWorld("api", {
     },
     requestAgentTakeover: (sessionId?: string) => ipcRenderer.send("request-agent-takeover", sessionId),
     manageNativeTaskGroups: (input) => ipcRenderer.invoke("native-task-groups:manage", input),
+    manageComputerPlugins: (command) => ipcRenderer.invoke("computer-plugins:manage", command),
+    sandboxComputerAccess: (input) => ipcRenderer.invoke("computer-access", input),
     listLinuxDesktops: () => ipcRenderer.invoke("linux-desktops:list"),
     listMacVms: () => ipcRenderer.invoke("macos-vms:list"),
     startMacVm: (name: string) => ipcRenderer.invoke("macos-vms:start", { name }),
@@ -328,6 +330,7 @@ contextBridge.exposeInMainWorld("api", {
     hermesGetConnection: (context?: { tabId?: string; blockId?: string }) =>
         ipcRenderer.invoke("hermes-get-connection", context),
     hermesApi: (input) => ipcRenderer.invoke("hermes-api", input),
+    getKronTermAccountStatus: () => ipcRenderer.invoke("kronterm-account-status"),
     onHermesConnection: (callback) => {
         const handler = (_event: Electron.IpcRendererEvent, payload: HermesConnectionDescriptor) => callback(payload);
         ipcRenderer.on("hermes-connection", handler);

@@ -4,7 +4,8 @@ export const $krontermSidebarTarget = atom<HTMLElement>(null);
 export const $krontermInspectorTarget = atom<HTMLElement>(null);
 export const $krontermInspectorOpen = atom(false);
 export const $krontermInspectorHasFiles = atom(false);
-export type KrontermInspectorSection = "files" | "changes" | "chat" | "diff" | `file:${string}`;
+export type KrontermInspectorSection =
+    "files" | "changes" | "chat" | "workflows" | "workflow-nodes" | "workflow-executions" | "diff" | `file:${string}`;
 export const $krontermInspectorSection = atom<KrontermInspectorSection>("files");
 export const $krontermInspectorExpanded = atom(false);
 

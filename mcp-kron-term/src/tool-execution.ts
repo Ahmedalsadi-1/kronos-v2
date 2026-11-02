@@ -19,6 +19,7 @@ export type ToolOperation = {
 export const ToolOperationContext = new AsyncLocalStorage<ToolOperation>();
 
 export function toolTimeoutMs(name: string, args: Record<string, unknown>, readOnly: boolean): number {
+    if (name.startsWith("sandbox_vm_")) return name === "sandbox_vm_status" ? 30_000 : 120_000;
     if (name.startsWith("kron_computer_")) return 125_000;
     if (
         ["linux_desktop_exec", "linux_desktop_apps", "linux_desktop_launch_app", "linux_desktop_open_url"].includes(
@@ -28,7 +29,7 @@ export function toolTimeoutMs(name: string, args: Record<string, unknown>, readO
         return 100_000;
     if (name === "sandbox_task_finish") return 60_000;
     if (name.startsWith("linux_desktop_") && name !== "linux_desktop_start") return 60_000;
-    if (name === "acp_run_agent") return Math.min(600, Math.max(15, Number(args.timeoutSeconds) || 180)) * 1000 + 5000;
+    if (name === "acp_run_agent" || name === "n8n_run_agent") return Math.min(600, Math.max(15, Number(args.timeoutSeconds) || 180)) * 1000 + 5000;
     if (name === "linux_desktop_start" || name === "sandbox_task_start") return 180_000;
     if (name === "widget_wait_for") return Math.min(60_000, Math.max(100, Number(args.timeoutMs) || 10_000)) + 2000;
     return readOnly ? 10_000 : 30_000;

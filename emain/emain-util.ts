@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import * as electron from "electron";
@@ -98,16 +98,35 @@ export function handleCtrlShiftState(sender: Electron.WebContents, waveEvent: Wa
     }
 }
 
+export function isDevRendererNavigation(
+    value: string,
+    rendererUrl = process.env.ELECTRON_RENDERER_URL,
+    packaged = electron.app.isPackaged
+): boolean {
+    if (packaged) return false;
+    try {
+        const target = new URL(value);
+        if (target.pathname !== "/index.html" || target.username || target.password) return false;
+        const loopback = (url: URL) =>
+            ["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+        if (!loopback(target)) return false;
+        if (rendererUrl != null) {
+            const configured = new URL(rendererUrl);
+            return (
+                loopback(configured) &&
+                !configured.username &&
+                !configured.password &&
+                target.origin === configured.origin
+            );
+        }
+        return target.protocol === "http:" && ["5173", "5174"].includes(target.port) && target.hostname !== "[::1]";
+    } catch {
+        return false;
+    }
+}
+
 export function shNavHandler(event: Electron.Event<Electron.WebContentsWillNavigateEventParams>, url: string) {
-    const isDev = !electron.app.isPackaged;
-    if (
-        isDev &&
-        (url.startsWith("http://127.0.0.1:5173/index.html") ||
-            url.startsWith("http://localhost:5173/index.html") ||
-            url.startsWith("http://127.0.0.1:5174/index.html") ||
-            url.startsWith("http://localhost:5174/index.html"))
-    ) {
-        // this is a dev-mode hot-reload, ignore it
+    if (isDevRendererNavigation(url)) {
         console.log("allowing hot-reload of index.html");
         return;
     }

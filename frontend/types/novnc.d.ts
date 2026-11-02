@@ -126,7 +126,8 @@ declare module "@novnc/novnc" {
             options?: boolean | EventListenerOptions
         ): void;
 
-        readonly viewOnly: boolean;
+        viewOnly: boolean;
+        background: string;
         qualityLevel: number;
         compressionLevel: number;
         scaleViewport: boolean;

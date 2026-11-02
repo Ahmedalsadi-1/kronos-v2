@@ -15,12 +15,14 @@ import {
     useRef,
     useState,
     useSyncExternalStore,
+    type PointerEventHandler,
     type ReactNode,
+    type WheelEventHandler,
 } from "react";
 import { Block } from "./block";
 import { BlockChromeProvider, useBlockChrome, useBlockToolbarHost, type BlockChromeMode } from "./block-chrome-context";
 import type { BlockProps } from "./blocktypes";
-import { intersectSurfaceRects, makeSurfaceClipPath } from "./persistent-block-geometry";
+import { collectSurfaceOccluders, intersectSurfaceRects, makeSurfaceClipPath } from "./persistent-block-geometry";
 
 export function makePersistentNodeModel(initial: NodeModel) {
     const binding = atom(initial) as PrimitiveAtom<NodeModel>;
@@ -37,6 +39,12 @@ export function makePersistentNodeModel(initial: NodeModel) {
     return { model, update: (next: NodeModel) => globalStore.set(binding, next) };
 }
 
+export type PersistentBlockSurfaceInput = {
+    capturePointer?: boolean;
+    onPointerDownCapture?: PointerEventHandler<HTMLDivElement>;
+    onWheel?: WheelEventHandler<HTMLDivElement>;
+};
+
 type Entry = {
     id: string;
     binding: ReturnType<typeof makePersistentNodeModel>;
@@ -45,6 +53,7 @@ type Entry = {
     toolbarHost?: HTMLElement;
     appearance: SystemAppearanceSnapshot;
     overlay?: ReactNode;
+    surfaceInput?: PersistentBlockSurfaceInput;
 };
 
 function makeRegistry() {
@@ -129,25 +138,7 @@ function LiveBlock({ entry }: { entry: Entry }) {
                         visibleRect = intersectSurfaceRects(visibleRect, ancestor.getBoundingClientRect());
                     }
                 }
-                const ownerZ = ownerWindow ? Number.parseInt(getComputedStyle(ownerWindow).zIndex) || 0 : 0;
-                // Detached live surfaces must respect their scene's stacking and clipping boundaries.
-                const occluders = [
-                    ...sceneRoot.querySelectorAll<HTMLElement>(
-                        osRoot ? ".os-window, [data-live-block-occluder]" : "[data-live-block-occluder]"
-                    ),
-                ]
-                    .filter((candidate) => {
-                        if (candidate === ownerWindow || ownerWindow?.contains(candidate) || candidate.contains(slot))
-                            return false;
-                        const style = getComputedStyle(candidate);
-                        if (style.visibility === "hidden" || style.display === "none" || style.opacity === "0")
-                            return false;
-                        return (
-                            candidate.hasAttribute("data-live-block-occluder") ||
-                            (Number.parseInt(style.zIndex) || 0) > ownerZ
-                        );
-                    })
-                    .map((candidate) => candidate.getBoundingClientRect());
+                const occluders = collectSurfaceOccluders(sceneRoot, slot, ownerWindow, Boolean(osRoot));
                 clipPath = makeSurfaceClipPath(rect, visibleRect, occluders, slot.offsetWidth, slot.offsetHeight);
             }
             // The live DOM stays in this plane; only its geometry follows the presentation slot.
@@ -222,13 +213,26 @@ function LiveBlock({ entry }: { entry: Entry }) {
             ref={host}
             data-live-blockid={entry.id}
             className="h-full w-full"
-            onPointerDownCapture={() => entry.binding.model.focusNode()}
-            onWheel={(event) => event.stopPropagation()}
+            onPointerDownCapture={(event) => {
+                entry.surfaceInput?.onPointerDownCapture?.(event);
+                if (!event.defaultPrevented) entry.binding.model.focusNode();
+            }}
+            onWheel={(event) => {
+                entry.surfaceInput?.onWheel?.(event);
+                event.stopPropagation();
+            }}
         >
             <SystemAppearanceContext.Provider value={entry.appearance}>
                 <BlockChromeProvider mode={entry.chrome} toolbarHost={entry.toolbarHost}>
                     <Block nodeModel={entry.binding.model} preview={false} />
                     {entry.overlay}
+                    {entry.surfaceInput?.capturePointer && (
+                        <div
+                            data-live-block-pan-capture=""
+                            className="absolute inset-0 z-[2147483647] pointer-events-auto cursor-grab"
+                            aria-hidden="true"
+                        />
+                    )}
                 </BlockChromeProvider>
             </SystemAppearanceContext.Provider>
         </div>
@@ -261,7 +265,9 @@ export function PersistentBlockProvider({ children, blockIds }: { children: Reac
     );
 }
 
-export function PersistentBlock(props: BlockProps & { overlay?: ReactNode }) {
+export function PersistentBlock(
+    props: BlockProps & { overlay?: ReactNode; surfaceInput?: PersistentBlockSurfaceInput }
+) {
     const registry = useContext(RegistryContext);
     const chrome = useBlockChrome();
     const appearance = useSystemAppearance();
@@ -282,6 +288,7 @@ export function PersistentBlock(props: BlockProps & { overlay?: ReactNode }) {
         entry.appearance = appearance;
         entry.toolbarHost = toolbarHost;
         entry.overlay = props.overlay;
+        entry.surfaceInput = props.surfaceInput;
         registry.changed();
         return () => {
             if (entry.slot === owner) {
@@ -289,7 +296,7 @@ export function PersistentBlock(props: BlockProps & { overlay?: ReactNode }) {
                 registry.changed();
             }
         };
-    }, [registry, props.nodeModel, props.preview, chrome, toolbarHost, appearance, props.overlay]);
+    }, [registry, props.nodeModel, props.preview, chrome, toolbarHost, appearance, props.overlay, props.surfaceInput]);
     if (!registry || props.preview)
         return (
             <>

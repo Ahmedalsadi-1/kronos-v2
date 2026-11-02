@@ -25,7 +25,6 @@ import { useStatusSnapshot } from "../shell/hooks/use-status-snapshot";
 import { useStatusbarItems } from "../shell/hooks/use-statusbar-items";
 import { ModelMenuPanel } from "../shell/model-menu-panel";
 import { StatusbarControls } from "../shell/statusbar-controls";
-import { WorkflowsView } from "../workflows";
 
 import { latestChatActions, latestSidebarActions } from "./latest-actions";
 import { setStatusbarItemGroup, useStatusbarContributions } from "./panes";
@@ -167,7 +166,7 @@ export const ChatRoutesSurface = memo(function ChatRoutesSurface({
             <Route element={page(<ArtifactsView setStatusbarItemGroup={setStatusbarItemGroup} />)} path="artifacts" />
             <Route element={null} path="agents" />
             <Route element={null} path="command-center" />
-            <Route element={page(<WorkflowsView />)} path="workflows" />
+            <Route element={chatView} path="workflows" />
             <Route element={<RemovedProductivityRedirect />} path="productivity" />
             <Route element={null} path="cron" />
             <Route element={null} path="profiles" />

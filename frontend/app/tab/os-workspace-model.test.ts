@@ -269,7 +269,7 @@ describe("OS workspace state", () => {
         const layout = computeOSWindowLayout(state, "term", "term", { width: 1280, height: 800 });
         expect(layout.presentation).toBe("overview");
         expect(layout.opacity).toBe(1);
-        expect(layout.bounds.y).toBeGreaterThanOrEqual(250);
+        expect(layout.bounds.y).toBeGreaterThanOrEqual(328);
         expect(layout.bounds.y + layout.bounds.height).toBeLessThanOrEqual(740);
         expect(state.windows.term.collapsed).toBe(true);
         state = reduceOSModeState(state, { type: "spatial.restoreScene" });
@@ -506,4 +506,42 @@ describe("OS launch choreography", () => {
             )
         ).toBe(next);
     });
+});
+
+it("keeps freeform workflow objects and camera visible when an OS tool focuses a widget", () => {
+    const state = makeInitialOSModeState(
+        tab({ "layout:os": { scene: { kind: "freeform" }, desktopLayout: "freeform" } }),
+        ["browser", "term"]
+    );
+    state.camera = { x: 185, y: -75, zoom: 0.65 };
+    state.objects = [{ id: "workflow:flow:node", kind: "workflow-node", x: 300, y: 240, width: 100, height: 100 }];
+    state.sceneOrder = ["browser", "workflow:flow:node", "term"];
+    state.windows.browser.collapsed = true;
+    const next = reduceOSModeState(state, { type: "os.window.focus", blockId: "browser" });
+    expect(next.scene).toBe(state.scene);
+    expect(next.desktopLayout).toBe("freeform");
+    expect(next.camera).toBe(state.camera);
+    expect(next.objects).toBe(state.objects);
+    expect(next.windows.browser.bounds).toBe(state.windows.browser.bounds);
+    expect(next.windows.term).toBe(state.windows.term);
+    expect(next.windows.browser.collapsed).toBe(false);
+    expect(next.selectedEntityId).toBe("browser");
+    expect(next.zOrder.at(-1)).toBe("browser");
+    expect(next.sceneOrder).toEqual(["workflow:flow:node", "term", "browser"]);
+    expect(computeOSWindowLayout(next, "browser", "web", { width: 1440, height: 900 }).presentation).toBe("freeform");
+    expect(reduceOSModeState(state, { type: "spatial.focus", blockId: "browser" }).scene).toEqual({
+        kind: "focused",
+        blockId: "browser",
+    });
+});
+
+it("retains carousel focus when freeform was not the chosen desktop layout", () => {
+    const state = {
+        ...makeInitialOSModeState(tab(), ["browser", "term"]),
+        scene: { kind: "freeform" } as const,
+        desktopLayout: "focused" as const,
+    };
+    const next = reduceOSModeState(state, { type: "os.window.focus", blockId: "browser" });
+    expect(next.scene).toEqual({ kind: "focused", blockId: "browser" });
+    expect(next.desktopLayout).toBe("focused");
 });

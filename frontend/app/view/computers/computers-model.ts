@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { globalStore } from "@/app/store/jotaiStore";
 import { getApi } from "@/store/global";
 import { atom } from "jotai";
@@ -15,9 +16,11 @@ export class ComputersViewModel implements ViewModel {
     stateAtom = atom<ComputersState>({ targets: [], selectedId: "", loading: true, busy: false, error: "" });
     controller: ComputersController;
     blockId: string;
+    nodeModel: BlockNodeModel;
 
-    constructor({ blockId }: ViewModelInitType, api: ComputersApi = getApi()) {
+    constructor({ blockId, nodeModel }: ViewModelInitType, api: ComputersApi = getApi()) {
         this.blockId = blockId;
+        this.nodeModel = nodeModel;
         this.controller = new ComputersController(api, (state) => globalStore.set(this.stateAtom, state));
         void this.controller.refresh();
     }

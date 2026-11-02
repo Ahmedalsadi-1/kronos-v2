@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getApi } from "@/store/global";
-import { Code2, Compass, FolderOpen, PenLine } from "lucide-react";
+import { Code2, Compass, FolderOpen, PenLine } from "@/app/components/system-ui/os-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OSChannelSetupDraft } from "./os-channel-setup";
 

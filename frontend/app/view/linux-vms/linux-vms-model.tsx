@@ -1,7 +1,9 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { SystemUIProvider } from "@/app/components/system-ui";
+import { uxCloseBlock } from "@/app/store/keymodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { WOS } from "@/store/global";
@@ -17,9 +19,11 @@ export class LinuxVmsViewModel implements ViewModel {
     viewName: Atom<string>;
     noPadding = atom(true);
     blockId: string;
+    nodeModel: BlockNodeModel;
 
-    constructor({ blockId }: ViewModelInitType) {
+    constructor({ blockId, nodeModel }: ViewModelInitType) {
         this.blockId = blockId;
+        this.nodeModel = nodeModel;
         this.blockAtom = WOS.getWaveObjectAtom<Block>(`block:${blockId}`);
         this.viewName = atom((get) => {
             const kind = get(this.blockAtom)?.meta?.["machine:kind"];
@@ -29,7 +33,7 @@ export class LinuxVmsViewModel implements ViewModel {
                   ? "Android"
                   : kind == "iphone"
                     ? "iPhone"
-                    : "Sandbox";
+                    : "Computer";
         });
     }
 
@@ -79,6 +83,7 @@ export function LinuxVmsView({ model, contentRef }: ViewComponentProps<LinuxVmsV
                 ) : (
                     <LinuxVmsPanel
                         blockId={model.blockId}
+                        onCloseWidget={() => uxCloseBlock(model.blockId, () => model.nodeModel?.onClose())}
                         initialSection={section}
                         settings={settings}
                         targetId={block?.meta?.["machine:target"] as string}

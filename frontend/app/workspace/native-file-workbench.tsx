@@ -119,11 +119,16 @@ function NativeFileTabs({
     const [busy, setBusy] = useState(false);
     const [copied, setCopied] = useState(false);
     const [controlsOpen, setControlsOpen] = useState(false);
+    const [editingFolderPath, setEditingFolderPath] = useState(false);
+    const [folderPath, setFolderPath] = useState("");
     const copyTimeout = useRef<ReturnType<typeof setTimeout>>(null);
     useEffect(() => () => clearTimeout(copyTimeout.current), []);
     const navigationBusy = useRef(false);
     const [inventory, setInventory] = useState<NotchExplorerEntry[]>([]);
     const [filter, setFilter] = useState("");
+    const [searchResults, setSearchResults] = useState<NotchExplorerEntry[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [searchError, setSearchError] = useState("");
     const [treeLoading, setTreeLoading] = useState(true);
     const [explorerOpen, setExplorerOpen] = useState(true);
     const [explorerWidth, setExplorerWidth] = useState(250);
@@ -142,6 +147,66 @@ function NativeFileTabs({
     const diffEpoch = useRef(0);
     const changesEpoch = useRef(0);
     const tree = useRef({ root: "", entries: new Map<string, FileInfo[]>(), expanded: new Set<string>() });
+    const searchRoot = tree.current.root;
+    useEffect(() => {
+        const query = filter.trim().toLowerCase();
+        if (!query || !searchRoot) {
+            setSearchResults([]);
+            setSearching(false);
+            setSearchError("");
+            return;
+        }
+        let cancelled = false;
+        setSearching(true);
+        setSearchError("");
+        setSearchResults([]);
+        const timer = window.setTimeout(async () => {
+            const queue = [searchRoot];
+            const visited = new Set<string>();
+            const results: NotchExplorerEntry[] = [];
+            const excluded = new Set(["node_modules", ".git", ".next", "vendor", "dist", "build"]);
+            let failures = 0;
+            while (queue.length && !cancelled) {
+                const folders = queue.splice(0, 4).filter((folder) => !visited.has(folder));
+                await Promise.all(
+                    folders.map(async (folder) => {
+                        visited.add(folder);
+                        try {
+                            const listing = await model.env.rpc.FileReadCommand(TabRpcClient, {
+                                info: { path: await model.formatRemoteUri(folder, globalStore.get) },
+                            });
+                            if (cancelled) return;
+                            for (const file of listing.entries ?? []) {
+                                if (!file.name || file.name === "." || file.name === "..") continue;
+                                if (file.path.slice(searchRoot.length).toLowerCase().includes(query)) {
+                                    results.push({
+                                        path: file.path,
+                                        name: file.name,
+                                        directory: file.isdir === true,
+                                        depth: 0,
+                                        expanded: false,
+                                    });
+                                }
+                                if (file.isdir && !excluded.has(file.name) && !visited.has(file.path))
+                                    queue.push(file.path);
+                            }
+                        } catch {
+                            failures++;
+                        }
+                    })
+                );
+                if (!cancelled) setSearchResults([...results].sort((a, b) => a.path.localeCompare(b.path)));
+            }
+            if (!cancelled) {
+                setSearching(false);
+                if (failures) setSearchError("Some folders could not be searched.");
+            }
+        }, 120);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [filter, searchRoot, model, connection]);
     const requestEpoch = useRef(0);
     const currentPath = useRef(path);
     currentPath.current = path;
@@ -599,14 +664,47 @@ function NativeFileTabs({
                     style={{ width: `clamp(140px, ${explorerWidth}px, 60%)` }}
                 >
                     <div className="ade-explorer-path" title={tree.current.root}>
-                        <button
-                            type="button"
-                            aria-label="Open folder path"
-                            onClick={() => model.updateOpenFileModalAndError(true)}
-                        >
-                            <FolderOpen size={15} aria-hidden="true" />
-                            <span>{path === "~" ? `~ (${tree.current.root})` : tree.current.root || path}</span>
-                        </button>
+                        {editingFolderPath ? (
+                            <form
+                                className="min-w-0 flex-1"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    const next = folderPath.trim();
+                                    if (!next || busy) return;
+                                    setEditingFolderPath(false);
+                                    void open(next);
+                                }}
+                            >
+                                <input
+                                    aria-label="Folder path"
+                                    className="w-full min-w-0 rounded border border-current/30 bg-transparent px-1 py-1 text-xs outline-offset-2"
+                                    autoFocus
+                                    value={folderPath}
+                                    onFocus={(event) => event.currentTarget.select()}
+                                    onChange={(event) => setFolderPath(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Escape") {
+                                            event.preventDefault();
+                                            setEditingFolderPath(false);
+                                        }
+                                    }}
+                                    onBlur={() => setEditingFolderPath(false)}
+                                />
+                            </form>
+                        ) : (
+                            <button
+                                type="button"
+                                aria-label="Open folder path"
+                                title="Edit folder path"
+                                onClick={() => {
+                                    setFolderPath(tree.current.root || path || "~");
+                                    setEditingFolderPath(true);
+                                }}
+                            >
+                                <FolderOpen size={15} aria-hidden="true" />
+                                <span>{path === "~" ? `~ (${tree.current.root})` : tree.current.root || path}</span>
+                            </button>
+                        )}
                         <button type="button" aria-label="Fold file explorer" onClick={() => setExplorerOpen(false)}>
                             <PanelLeftClose size={16} />
                         </button>
@@ -740,18 +838,29 @@ function NativeFileTabs({
                     </div>
                     {sidebar === "files" ? (
                         <>
-                            <label
-                                hidden={!controlsOpen}
-                                className="ade-filter mx-2 mb-2 flex items-center gap-2 rounded px-2 py-1.5"
-                            >
+                            <label className="ade-filter mx-2 mb-2 flex items-center gap-2 rounded px-2 py-1.5">
                                 <Search size={13} aria-hidden="true" />
                                 <input
                                     className="min-w-0 flex-1 bg-transparent text-xs outline-none"
-                                    aria-label="Filter loaded project files"
-                                    placeholder="Filter loaded files"
+                                    aria-label="Search project files"
+                                    placeholder="Search files…"
                                     value={filter}
                                     onChange={(event) => setFilter(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Escape") setFilter("");
+                                        if (event.key === "Enter" && searchResults[0]) void open(searchResults[0].path);
+                                    }}
                                 />
+                                {filter && (
+                                    <button
+                                        type="button"
+                                        className="cursor-pointer"
+                                        aria-label="Clear file search"
+                                        onClick={() => setFilter("")}
+                                    >
+                                        <X size={13} />
+                                    </button>
+                                )}
                             </label>
                             <div className="min-h-0 flex-1 overflow-auto pb-3" aria-busy={treeLoading}>
                                 {treeLoading && (
@@ -782,7 +891,38 @@ function NativeFileTabs({
                                             : "This folder is empty. Create a file to start editing."}
                                     </p>
                                 )}
-                                {!connection && !treeLoading && inventory.length > 0 && (
+                                {filter.trim() && (
+                                    <div aria-label="File search results">
+                                        <p className="ade-secondary px-3 py-1 text-xs" role="status">
+                                            {searching
+                                                ? `Searching… ${searchResults.length} found`
+                                                : `${searchResults.length} results`}
+                                        </p>
+                                        {searchError && (
+                                            <p className="px-3 text-xs" role="alert">
+                                                {searchError}
+                                            </p>
+                                        )}
+                                        {searchResults.map((entry) => (
+                                            <button
+                                                key={entry.path}
+                                                type="button"
+                                                className="ade-tree-row flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs"
+                                                title={entry.path}
+                                                onClick={() => void open(entry.path)}
+                                            >
+                                                {entry.directory ? <Folder size={14} /> : <FileCode2 size={14} />}
+                                                <span className="min-w-0 truncate">
+                                                    {entry.path.slice(searchRoot.length + 1)}
+                                                </span>
+                                            </button>
+                                        ))}
+                                        {!searching && !searchResults.length && (
+                                            <p className="ade-secondary px-3 text-xs">No matching files.</p>
+                                        )}
+                                    </div>
+                                )}
+                                {!filter.trim() && !connection && !treeLoading && inventory.length > 0 && (
                                     <AdeProjectTree
                                         entries={inventory}
                                         root={tree.current.root}
@@ -818,7 +958,8 @@ function NativeFileTabs({
                                         onRefresh={() => explorerAction(":refresh")}
                                     />
                                 )}
-                                {connection &&
+                                {!filter.trim() &&
+                                    connection &&
                                     inventory
                                         .filter(
                                             (entry) =>
@@ -872,15 +1013,6 @@ function NativeFileTabs({
                                                 )}
                                             </button>
                                         ))}
-                                {filter &&
-                                    inventory.length > 0 &&
-                                    !inventory.some((entry) =>
-                                        entry.path.toLowerCase().includes(filter.toLowerCase())
-                                    ) && (
-                                        <p className="ade-secondary px-3 text-xs">
-                                            No loaded files match. Clear the filter or expand a folder.
-                                        </p>
-                                    )}
                             </div>
                         </>
                     ) : (

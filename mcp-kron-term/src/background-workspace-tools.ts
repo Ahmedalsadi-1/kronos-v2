@@ -338,11 +338,32 @@ export class NativeBackgroundWorkspaces {
                 )
                     throw new Error("Native launcher returned an invalid app identity.");
                 workspace.apps.push(app);
-                await this.prepareWindows(app, workspace);
-                await this.enroll(app, workspace);
                 workspace.snapshot = undefined;
+                try {
+                    await this.prepareWindows(app, workspace);
+                    await this.enroll(app, workspace);
+                } catch (error) {
+                    workspace.paused = true;
+                    return {
+                        sessionId: workspace.id,
+                        app,
+                        launched: true,
+                        windowsVerified: false,
+                        paused: true,
+                        problem: error instanceof Error ? error.message : String(error),
+                        nextAction: "The app has launched. Do not retry launch. Review its windows before resuming.",
+                        limitation: Limitation,
+                    };
+                }
                 if (result.isActive) workspace.paused = true;
-                return { sessionId: workspace.id, app, paused: workspace.paused, limitation: Limitation };
+                return {
+                    sessionId: workspace.id,
+                    app,
+                    launched: true,
+                    windowsVerified: true,
+                    paused: workspace.paused,
+                    limitation: Limitation,
+                };
             }
             if (operation === "pause") {
                 workspace.paused = true;

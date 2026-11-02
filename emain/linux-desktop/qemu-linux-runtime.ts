@@ -6,7 +6,8 @@ import { join } from "node:path";
 import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "../../frontend/types/linux-desktops";
 import { normalizeToolResult, ToolOperationContext } from "../../mcp-kron-term/src/tool-execution";
 import { runLinuxDesktopCommand } from "./command-runner";
-import { linuxVmQemuArgs, makeLinuxVmCloudInit, makeLinuxVmMetadata } from "./qemu-provision";
+import { linuxVmQemuArgs, LinuxVmVncSetup, makeLinuxVmCloudInit, makeLinuxVmMetadata } from "./qemu-provision";
+import { QemuVncBridge } from "./qemu-vnc-bridge";
 import { DATA_DIR } from "./upstream/openmaus/kronterm-adapter";
 
 const VmId = "linux-vm:ubuntu";
@@ -39,15 +40,38 @@ export class QemuLinuxDesktopRuntime {
     private screenshotPromise: Promise<LinuxDesktopActionResult>;
     private queuedCount = 0;
     private statusCache: { desktop: LinuxDesktop; time: number };
+    private guestHealth: { pid: number; checkedAt: number };
     private idleTimer: ReturnType<typeof setTimeout>;
     private startupGrace = false;
+    private viewerUrl = "";
+    private viewerSetup: Promise<void>;
+    private viewerRetryAt = 0;
+    private viewerError = "";
+    private vncBridge = new QemuVncBridge(undefined, () => this.scheduleIdle());
+
+    private configureViewer() {
+        if (this.viewerUrl || this.viewerSetup || Date.now() < this.viewerRetryAt) return;
+        this.viewerSetup = (async () => {
+            await this.ssh(LinuxVmVncSetup, 300_000);
+            this.viewerUrl = await this.vncBridge.open(this.sshArgs());
+            this.viewerError = "";
+        })()
+            .catch((error) => {
+                this.viewerError = `Computer connection setup failed: ${error instanceof Error ? error.message : error}`;
+                this.viewerRetryAt = Date.now() + 15_000;
+            })
+            .finally(() => {
+                this.viewerSetup = undefined;
+                this.statusCache = undefined;
+            });
+    }
 
     private scheduleIdle(ms = 300_000) {
         this.startupGrace = ms > 300_000;
         clearTimeout(this.idleTimer);
         this.idleTimer = setTimeout(() => {
             const action: LinuxDesktopAction = {
-                desktopId: VmId,
+                desktopId: this.vmId,
                 action: "stop",
                 expectedGeneration: this.generation,
                 assignedAgentId: this.assignedAgentId,
@@ -61,7 +85,10 @@ export class QemuLinuxDesktopRuntime {
     constructor(
         private runner = runLinuxDesktopCommand,
         private platform = process.platform,
-        private architecture = process.arch
+        private architecture = process.arch,
+        private vmId = VmId,
+        private directory = Directory,
+        private sshPort = SshPort
     ) {}
 
     private async exists(file: string): Promise<boolean> {
@@ -71,44 +98,43 @@ export class QemuLinuxDesktopRuntime {
     }
     private async pid(): Promise<number> {
         try {
-            const pid = Number((await readFile(join(Directory, "qemu.pid"), "utf8")).trim());
+            const pid = Number((await readFile(join(this.directory, "qemu.pid"), "utf8")).trim());
             if (!Number.isInteger(pid) || pid < 2) return undefined;
             process.kill(pid, 0);
             const { stdout } = await this.runner("ps", ["-p", String(pid), "-o", "command="], 3000);
-            return stdout.includes("qemu-system-aarch64") && stdout.includes(join(Directory, "ubuntu.qcow2"))
+            return stdout.includes("qemu-system-aarch64") && stdout.includes(join(this.directory, "ubuntu.qcow2"))
                 ? pid
                 : undefined;
         } catch {
             return undefined;
         }
     }
+    private sshArgs(command?: string): string[] {
+        return [
+            "-i",
+            join(this.directory, "id_ed25519"),
+            "-p",
+            String(this.sshPort),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ControlMaster=auto",
+            "-o",
+            "ControlPersist=60",
+            "-o",
+            `ControlPath=${join(this.directory, "ssh-control")}`,
+            "-o",
+            "ConnectTimeout=3",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            `UserKnownHostsFile=${join(this.directory, "known_hosts")}`,
+            "cua@127.0.0.1",
+            ...(command == null ? [] : [command]),
+        ];
+    }
     private async ssh(command: string, timeout = 15_000) {
-        return this.runner(
-            "ssh",
-            [
-                "-i",
-                join(Directory, "id_ed25519"),
-                "-p",
-                String(SshPort),
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "ControlMaster=auto",
-                "-o",
-                "ControlPersist=60",
-                "-o",
-                `ControlPath=${join(Directory, "ssh-control")}`,
-                "-o",
-                "ConnectTimeout=3",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                `UserKnownHostsFile=${join(Directory, "known_hosts")}`,
-                "cua@127.0.0.1",
-                command,
-            ],
-            timeout
-        );
+        return this.runner("ssh", this.sshArgs(command), timeout);
     }
     async list(): Promise<LinuxDesktop[]> {
         if (this.statusCache && Date.now() - this.statusCache.time < 2000) {
@@ -124,7 +150,7 @@ export class QemuLinuxDesktopRuntime {
         if (this.platform !== "darwin" || this.architecture !== "arm64") {
             return [
                 {
-                    id: VmId,
+                    id: this.vmId,
                     name: "Ubuntu Virtual Machine",
                     provider: "cua-qemu",
                     runtime: "QEMU · ARM64",
@@ -136,35 +162,49 @@ export class QemuLinuxDesktopRuntime {
                     controlOwner: this.owner,
                     controlGeneration: this.generation,
                     assignedAgentId: this.assignedAgentId,
-                    workspacePath: Directory,
+                    workspacePath: this.directory,
                 },
             ];
         }
         const prepared =
-            (await this.exists(join(Directory, "ubuntu.qcow2"))) && (await this.exists(join(Directory, "seed.iso")));
-        const running = Boolean(await this.pid());
-        let ready = false;
-        if (running) {
+            (await this.exists(join(this.directory, "ubuntu.qcow2"))) &&
+            (await this.exists(join(this.directory, "seed.iso")));
+        const runningPid = await this.pid();
+        const running = Boolean(runningPid);
+        if (this.guestHealth?.pid !== runningPid) this.guestHealth = undefined;
+        let ready = running && this.guestHealth != null && Date.now() - this.guestHealth.checkedAt < 15_000;
+        if (running && !ready) {
             try {
                 await this.ssh(
-                    "DISPLAY=:1 /usr/local/bin/cua-driver status --socket /run/kronterm-cua/kronterm-cua.sock",
+                    (this.guestHealth == null
+                        ? '(cloud-init status --wait >/dev/null 2>&1 || test "$?" = 2) && '
+                        : "") +
+                        "DISPLAY=:1 /usr/local/bin/cua-driver status --socket /run/kronterm-cua/kronterm-cua.sock",
                     15_000
                 );
                 ready = true;
-            } catch {}
+                this.guestHealth = { pid: runningPid, checkedAt: Date.now() };
+            } catch {
+                this.guestHealth = undefined;
+            }
+        }
+        if (ready) this.configureViewer();
+        if (!running) {
+            this.vncBridge.close();
+            this.viewerUrl = "";
         }
         const desktops: LinuxDesktop[] = [
             {
-                id: VmId,
+                id: this.vmId,
                 name: "Ubuntu Virtual Machine",
                 provider: "cua-qemu",
                 runtime: "QEMU · ARM64 · 2 CPU · 2 GB",
                 status: running ? "running" : prepared ? "stopped" : "missing",
                 ready,
                 imagePrepared: prepared,
-                viewerUrl: "",
+                viewerUrl: ready ? this.viewerUrl : "",
                 problem: ready
-                    ? undefined
+                    ? this.viewerError || (this.viewerUrl ? undefined : "Configuring the VM computer connection…")
                     : this.progress ||
                       (running
                           ? "Ubuntu is starting and installing its desktop and CUA driver."
@@ -174,7 +214,7 @@ export class QemuLinuxDesktopRuntime {
                 controlOwner: this.owner,
                 controlGeneration: this.generation,
                 assignedAgentId: this.assignedAgentId,
-                workspacePath: Directory,
+                workspacePath: this.directory,
             },
         ];
         this.statusCache = { desktop: desktops[0], time: Date.now() };
@@ -184,7 +224,7 @@ export class QemuLinuxDesktopRuntime {
         return desktops;
     }
     private id(id: string) {
-        if (id !== VmId) throw new Error("Unknown Linux VM.");
+        if (id !== this.vmId) throw new Error("Unknown Linux VM.");
     }
     async assign(id: string, agentId: string, generation: number) {
         this.id(id);
@@ -268,8 +308,8 @@ export class QemuLinuxDesktopRuntime {
     private async prepare(check: () => void) {
         if (await this.pid()) throw new Error("Stop the VM before preparing its disk.");
         check();
-        await mkdir(Directory, { recursive: true, mode: 0o700 });
-        const base = join(Directory, "ubuntu-base.qcow2");
+        await mkdir(this.directory, { recursive: true, mode: 0o700 });
+        const base = join(this.directory, "ubuntu-base.qcow2");
         if (!(await this.exists(base))) {
             this.progress = "Downloading Ubuntu ARM64 (620 MB)…";
             await this.runner("curl", ["--fail", "--location", BaseUrl, "-o", `${base}.part`], 20 * 60_000);
@@ -279,15 +319,33 @@ export class QemuLinuxDesktopRuntime {
         const hash = await this.runner("shasum", ["-a", "256", base], 120_000);
         if (!hash.stdout.startsWith(CloudImageSha))
             throw new Error("Ubuntu image checksum does not match the pinned release.");
-        if (!(await this.exists(join(Directory, "id_ed25519"))))
-            await this.runner("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", join(Directory, "id_ed25519")]);
-        const publicKey = await readFile(join(Directory, "id_ed25519.pub"), "utf8");
+        if (!(await this.exists(join(this.directory, "id_ed25519"))))
+            await this.runner("ssh-keygen", [
+                "-q",
+                "-t",
+                "ed25519",
+                "-N",
+                "",
+                "-f",
+                join(this.directory, "id_ed25519"),
+            ]);
+        const publicKey = await readFile(join(this.directory, "id_ed25519.pub"), "utf8");
         check();
-        const seed = join(Directory, "cidata");
+        const seed = join(this.directory, "cidata");
         await mkdir(seed, { recursive: true, mode: 0o700 });
-        await writeFile(join(seed, "user-data"), makeLinuxVmCloudInit(publicKey));
+        let wallpaper: Buffer;
+        for (const asset of ["../frontend/guest/liquid-chrome.png", "../../public/guest/liquid-chrome.png"]) {
+            try {
+                wallpaper = await readFile(new URL(asset, import.meta.url));
+                break;
+            } catch (error) {
+                if (error.code !== "ENOENT") throw error;
+            }
+        }
+        if (wallpaper == null) throw new Error("The bundled computer wallpaper is missing. Rebuild KronTerm.");
+        await writeFile(join(seed, "user-data"), makeLinuxVmCloudInit(publicKey, wallpaper.toString("base64")));
         await writeFile(join(seed, "meta-data"), makeLinuxVmMetadata());
-        if (!(await this.exists(join(Directory, "ubuntu.qcow2")))) {
+        if (!(await this.exists(join(this.directory, "ubuntu.qcow2")))) {
             await this.runner("qemu-img", [
                 "create",
                 "-f",
@@ -296,16 +354,16 @@ export class QemuLinuxDesktopRuntime {
                 "qcow2",
                 "-b",
                 base,
-                join(Directory, "ubuntu.qcow2"),
+                join(this.directory, "ubuntu.qcow2"),
                 "20G",
             ]);
         }
-        await rm(join(Directory, "seed.iso"), { force: true });
+        await rm(join(this.directory, "seed.iso"), { force: true });
         check();
         await this.runner("hdiutil", [
             "makehybrid",
             "-o",
-            join(Directory, "seed.iso"),
+            join(this.directory, "seed.iso"),
             "-joliet",
             "-iso",
             "-default-volume-name",
@@ -323,27 +381,32 @@ export class QemuLinuxDesktopRuntime {
             if (["prepare", "create", "start", "stop", "remove"].includes(action.action)) this.statusCache = undefined;
             if (action.action === "prepare") await this.prepare(() => this.check(action, agent));
             else if (action.action === "create" || action.action === "start") {
-                if (!(await this.exists(join(Directory, "seed.iso")))) throw new Error("Prepare the VM first.");
+                if (!(await this.exists(join(this.directory, "seed.iso")))) throw new Error("Prepare the VM first.");
                 if (!(await this.pid())) {
                     this.check(action, agent);
-                    await this.runner("qemu-system-aarch64", linuxVmQemuArgs(Directory, SshPort), 30_000);
+                    await this.runner("qemu-system-aarch64", linuxVmQemuArgs(this.directory, this.sshPort), 30_000);
                     this.scheduleIdle(1_200_000);
                 }
             } else if (action.action === "stop") {
+                this.guestHealth = undefined;
                 const pid = await this.pid();
                 this.check(action, agent);
                 if (pid) process.kill(pid, "SIGTERM");
+                await this.viewerSetup;
+                this.vncBridge.close();
+                this.viewerUrl = "";
+                this.viewerRetryAt = 0;
                 clearTimeout(this.idleTimer);
                 this.idleTimer = undefined;
                 this.statusCache = undefined;
             } else if (action.action === "remove") {
                 if (await this.pid()) throw new Error("Stop the VM before removing it.");
                 this.check(action, agent);
-                await rm(join(Directory, "ubuntu.qcow2"), { force: true });
+                await rm(join(this.directory, "ubuntu.qcow2"), { force: true });
                 this.check(action, agent);
-                await rm(join(Directory, "seed.iso"), { force: true });
+                await rm(join(this.directory, "seed.iso"), { force: true });
                 this.check(action, agent);
-                await rm(join(Directory, "known_hosts"), { force: true });
+                await rm(join(this.directory, "known_hosts"), { force: true });
             } else {
                 const desktop = (await this.list())[0];
                 this.check(action, agent);

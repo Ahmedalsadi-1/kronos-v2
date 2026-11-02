@@ -13,6 +13,7 @@ import { globalStore } from "@/app/store/jotaiStore";
 import { getTabModelByTabId, TabModelContext } from "@/app/store/tab-model";
 import { WaveEnvContext } from "@/app/waveenv/waveenv";
 import { makeWaveEnvImpl } from "@/app/waveenv/waveenvimpl";
+import { KronTermAccountGate } from "@/app/workspace/kronterm-account-gate";
 import { Workspace } from "@/app/workspace/workspace";
 import { getLayoutModelForStaticTab } from "@/layout/lib/layoutModelHooks";
 import { ContextMenuModel } from "@/store/contextmenu";
@@ -22,13 +23,13 @@ import { getElemAsStr } from "@/util/focusutil";
 import * as keyutil from "@/util/keyutil";
 import { PLATFORM } from "@/util/platformutil";
 import * as util from "@/util/util";
+import { getFileTreeDndManager } from "@hermes/app/right-sidebar/files/dnd-manager";
 import clsx from "clsx";
 import debug from "debug";
 import { Provider, useAtomValue } from "jotai";
 import "overlayscrollbars/overlayscrollbars.css";
 import { useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { AppBackground } from "./app-bg";
 import { CenteredDiv } from "./element/quickelems";
 import { MinimalUiController } from "./minimal-ui";
@@ -308,8 +309,9 @@ const AppInner = () => {
             <AppFocusHandler />
             <AppSettingsUpdater />
             <BadgeAutoClearing />
-            <DndProvider backend={HTML5Backend}>
+            <DndProvider manager={getFileTreeDndManager()}>
                 <Workspace />
+                <KronTermAccountGate />
             </DndProvider>
         </div>
     );

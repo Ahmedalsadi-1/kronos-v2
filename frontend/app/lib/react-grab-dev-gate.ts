@@ -1,5 +1,11 @@
+import { registerCanvasToolbar } from "./react-grab-canvas-toolbar";
+
 export function shouldEnableReactGrab(dev: boolean, enableFlag: string | undefined): boolean {
     return dev && enableFlag !== "false";
+}
+
+export function selectReactGrabApi(module: Pick<typeof import("react-grab"), "getGlobalApi" | "init">) {
+    return module.getGlobalApi() ?? module.init({ telemetry: false });
 }
 
 let initialized = false;
@@ -9,8 +15,9 @@ export function initializeReactGrab(): void {
     if (!shouldEnableReactGrab(import.meta.env.DEV, import.meta.env.VITE_ENABLE_REACT_GRAB)) return;
     initialized = true;
     void Promise.all([import("react-grab"), import("react-grab/styles.css")])
-        .then(([{ init }]) => {
-            const api = init({ telemetry: false });
+        .then(([reactGrab]) => {
+            const api = selectReactGrabApi(reactGrab);
+            const releaseCanvasToolbar = registerCanvasToolbar(api);
             const syncBrowserOwner = () => {
                 const browserOwnsTool = document.documentElement.hasAttribute("data-kronterm-browser-tool-owner");
                 if (browserOwnsTool) api.deactivate();
@@ -18,6 +25,12 @@ export function initializeReactGrab(): void {
             };
             syncBrowserOwner();
             window.addEventListener("kronterm-browser-tool-owner", syncBrowserOwner);
+            import.meta.hot?.dispose(() => {
+                window.removeEventListener("kronterm-browser-tool-owner", syncBrowserOwner);
+                releaseCanvasToolbar();
+                api.unregisterPlugin("kronterm-input-ownership");
+                initialized = false;
+            });
             api.registerPlugin({
                 name: "kronterm-input-ownership",
                 hooks: {

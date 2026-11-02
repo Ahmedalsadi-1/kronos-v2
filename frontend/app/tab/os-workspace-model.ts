@@ -3,6 +3,7 @@ import { resolveBlockView } from "@/app/block/retired-chat-view";
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SpatialRect, SpatialViewport } from "@/app/spatial/spatial-engine";
+import { raiseOSSceneOrder, reconcileOSSceneOrder } from "./os-scene-order";
 import { getOSTabGroup, reconcileOSTabGroups, reduceOSTabs, type OSTabAction, type OSTabGroup } from "./os-tab-groups";
 
 const OSLayoutVersion = 4;
@@ -58,7 +59,8 @@ export type OSCanvasObjectKind =
     | "rectangle"
     | "ellipse"
     | "diamond"
-    | "connector";
+    | "connector"
+    | "workflow-node";
 export type OSCanvasColor = "amber" | "blue" | "green" | "rose" | "slate";
 
 export type KronTermOSView = "canvas" | "file";
@@ -81,6 +83,7 @@ export type OSModeState = {
     camera: SpatialViewport;
     windows: Record<string, OSWindowState>;
     zOrder: string[];
+    sceneOrder?: string[];
     groups: Record<string, OSWindowGroup>;
     tabGroups?: OSTabGroup[];
     objects: OSCanvasObject[];
@@ -359,6 +362,7 @@ export function makeInitialOSModeState(
                 },
             windows,
             zOrder,
+            sceneOrder: stored?.sceneOrder,
             groups: stored?.groups ?? {},
             tabGroups: stored?.tabGroups ?? [],
             objects: stored?.objects ?? normalizeSeedObjects(seed.objects),
@@ -433,6 +437,7 @@ export function reconcileOSModeState(
         version: OSLayoutVersion,
         windows,
         zOrder,
+        sceneOrder: reconcileOSSceneOrder(state.sceneOrder, zOrder, state.objects),
         groups,
         scene,
         tabGroups: reconcileOSTabGroups(state.tabGroups, blockIds),
@@ -487,15 +492,18 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         return reduceOSTabs(state, action);
     if (action.type === "spatial.focus" || action.type === "os.window.focus") {
         if (!state.windows[action.blockId]) return state;
+        const keepCanvas =
+            action.type === "os.window.focus" && state.scene.kind === "freeform" && state.desktopLayout === "freeform";
         return {
             ...state,
-            scene: { kind: "focused", blockId: action.blockId },
-            desktopLayout: "focused",
+            scene: keepCanvas ? state.scene : { kind: "focused", blockId: action.blockId },
+            desktopLayout: keepCanvas ? state.desktopLayout : "focused",
             selectedEntityId: action.blockId,
             tabGroups: state.tabGroups?.map((group) =>
                 group.blockIds.includes(action.blockId) ? { ...group, activeBlockId: action.blockId } : group
             ),
             zOrder: [...state.zOrder.filter((id) => id !== action.blockId), action.blockId],
+            sceneOrder: raiseOSSceneOrder(state, [action.blockId]),
             windows: { ...state.windows, [action.blockId]: { ...state.windows[action.blockId], collapsed: false } },
         };
     }
@@ -532,6 +540,7 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
             scene: { kind: "freeform" },
             selectedEntityId: action.type === "os.window.setBounds" ? action.blockId : state.selectedEntityId,
             zOrder: [...state.zOrder.filter((id) => !raised.includes(id)), ...raised],
+            sceneOrder: raiseOSSceneOrder(state, raised),
         };
     }
     if (
@@ -654,6 +663,7 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
             scene: { kind: "focused", blockId: action.blockId },
             selectedEntityId: action.blockId,
             zOrder: [...state.zOrder.filter((id) => id !== action.blockId), action.blockId],
+            sceneOrder: raiseOSSceneOrder(state, [action.blockId]),
             windows: {
                 ...state.windows,
                 [action.blockId]: {
@@ -790,7 +800,7 @@ function computeOSWindowLayoutBase(
         const rows = Math.ceil(count / cols);
         const gapX = 36;
         const gapY = 32;
-        const topInset = 250;
+        const topInset = 328;
         const cellWidth = Math.min(560, (viewport.width - 160 - gapX * (cols - 1)) / cols);
         const cellHeight = Math.min(420, (viewport.height - topInset - 60 - gapY * (rows - 1)) / rows);
         const gridWidth = cols * cellWidth + (cols - 1) * gapX;

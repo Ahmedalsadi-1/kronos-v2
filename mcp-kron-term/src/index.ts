@@ -22,6 +22,8 @@ import {
 } from "./kron-computer-use.js";
 import { registerLinuxDesktopTools } from "./linux-desktop-tools.js";
 import { registerProductivityTools } from "./productivity-tools.js";
+import { registerN8nTools } from "./n8n-tools.js";
+import { registerSandboxComputerTools } from "./sandbox-computer-tools.js";
 import { SharedSkillCatalog } from "./shared-skills.js";
 import { SurfaceOperatingProtocol } from "./surface-operating-protocol.js";
 import { isToolAllowedBySurfaceCapability } from "./surface-policy.js";
@@ -32,6 +34,8 @@ import { WshBridge } from "./wsh-bridge.js";
 export { setComputerTargetToolBridge } from "./computer-target-tools.js";
 export { setLinuxDesktopToolBridge } from "./linux-desktop-tools.js";
 export { setProductivityToolBridge } from "./productivity-tools.js";
+export { setN8nWorkflowBridge } from "./n8n-tools.js";
+export { setSandboxComputerBridge } from "./sandbox-computer-tools.js";
 
 let wsh = new WshBridge();
 const kronComputerUse = new KronComputerUseClient();
@@ -59,7 +63,9 @@ registerBackgroundWorkspaceTools(
     async () => (await wsh.getDiscoverySurfaceCapability())?.tabId ?? "local-process"
 );
 registerLinuxDesktopTools(server);
+registerSandboxComputerTools(server);
 registerProductivityTools(server);
+registerN8nTools(server);
 
 server.tool(
     "kron_computer_annotate",
@@ -2953,12 +2959,13 @@ server.tool(
 
 server.tool(
     "widget_snapshot",
-    "Get all interactive elements in a block with positions, roles, and names. Call this FIRST to see what's on screen.",
+    "Capture a screenshot and interactive elements with positions, roles, and names. Call this FIRST to see what's on screen.",
     { blockId: z.string().describe("Block ID to inspect") },
     wrapActivity("widget_snapshot")(async ({ blockId }) => {
         try {
             const result = await wsh.widgetSnapshot(blockId);
-            return { content: [{ type: "text", text: result }] };
+            const { screenshot, ...snapshot } = JSON.parse(result);
+            return { content: screenshotContent(screenshot, JSON.stringify(snapshot)) };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }

@@ -4,6 +4,8 @@ import { triggerHaptic } from "@hermes/lib/haptics";
 
 /** Hold anywhere on the HUD composer before the bar becomes draggable. Short
  *  enough to feel like grabbing it, long enough that a click still clicks. */
+export const HudComposerMoveEvent = "hermes:hud-composer-move";
+
 const LONG_PRESS_MS = 140;
 /** Slop before the hold is read as a text selection instead of a grab. */
 const MOVE_TOLERANCE = 8;
@@ -135,6 +137,13 @@ export function useHudComposerDrag(enabled: boolean) {
 
             state.lastX = event.screenX;
             state.lastY = event.screenY;
+
+            const move = new CustomEvent(HudComposerMoveEvent, {
+                bubbles: true,
+                cancelable: true,
+                detail: { x: dx, y: dy },
+            });
+            if (!state.target.dispatchEvent(move)) return;
 
             window.hermesDesktop?.hud?.moveBy?.({
                 x: dx,

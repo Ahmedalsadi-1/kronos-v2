@@ -8,7 +8,18 @@ import { describe, expect, test, vi } from "vitest";
 
 // hermes-runtime imports the tool server, whose module chain pulls in Electron main modules
 vi.mock("./kronterm-tool-server", () => ({
+    kronTermToolManifest: () => [],
     startKronTermToolServer: vi.fn(),
+}));
+vi.mock("./authkey", () => ({ revokeManagedRuntimeRequests: vi.fn(), refreshManagedRuntimeSocketHeaders: vi.fn() }));
+const surfaceTokens = vi.hoisted(() => ({ issue: vi.fn() }));
+vi.mock("../frontend/app/store/wshclientapi", () => ({ RpcApi: { CreateSurfaceTokenCommand: surfaceTokens.issue } }));
+vi.mock("./emain-wsh", () => ({ ElectronWshClient: {} }));
+const n8nEditor = vi.hoisted(() => ({ open: vi.fn(async () => "block created: n8n-editor") }));
+vi.mock("./kronterm-native-tool-bridge", () => ({
+    KronTermNativeToolBridge: class {
+        openWeb = n8nEditor.open;
+    },
 }));
 
 import {
@@ -66,6 +77,55 @@ describe("Hermes shared backend recovery", () => {
 });
 
 describe("Hermes API routing", () => {
+    test("uses the HUD sender's workspace when the Hermes surface has only a tab", async () => {
+        const runtime = HermesRuntime as any;
+        const original = runtime.surfaceContext;
+        const start = vi.spyOn(runtime, "n8nCommand").mockResolvedValue({ running: true });
+        runtime.surfaceContext = { tabId: "tab", hostMode: "kronterm" };
+        try {
+            await HermesRuntime.api(
+                { path: "/api/kronterm/n8n", method: "POST" },
+                { tabId: "tab", workspaceId: "workspace" }
+            );
+            expect(start).toHaveBeenCalledWith(
+                { operation: "open", surface: "canvas" },
+                { tabId: "tab", workspaceId: "workspace", hostMode: "kronterm" }
+            );
+        } finally {
+            runtime.surfaceContext = original;
+            start.mockRestore();
+        }
+    });
+
+    test("handles n8n start, status, and stop in Electron without forwarding to Hermes HTTP", async () => {
+        const runtime = HermesRuntime as any;
+        const context = { workspaceId: "workspace", tabId: "tab" };
+        const original = runtime.surfaceContext;
+        const status = { running: true, url: "http://127.0.0.1:5678" };
+        const start = vi.spyOn(runtime, "n8nCommand").mockResolvedValue(status);
+        const inspect = vi.spyOn(runtime.n8n, "status").mockReturnValue(status);
+        const stop = vi.spyOn(runtime.n8n, "stop").mockReturnValue({ running: false });
+        const ensure = vi.spyOn(runtime, "ensure").mockRejectedValue(new Error("Must not contact Hermes"));
+        runtime.surfaceContext = context;
+        try {
+            await expect(HermesRuntime.api({ path: "/api/kronterm/n8n", method: "POST" })).resolves.toEqual(status);
+            expect(start).toHaveBeenCalledWith({ operation: "open", surface: "canvas" }, context);
+            await expect(HermesRuntime.api({ path: "/api/kronterm/n8n" })).resolves.toEqual(status);
+            expect(inspect).toHaveBeenCalledOnce();
+            await expect(HermesRuntime.api({ path: "/api/kronterm/n8n", method: "DELETE" })).resolves.toEqual({
+                running: false,
+            });
+            expect(stop).toHaveBeenCalledOnce();
+            expect(ensure).not.toHaveBeenCalled();
+        } finally {
+            runtime.surfaceContext = original;
+            start.mockRestore();
+            inspect.mockRestore();
+            stop.mockRestore();
+            ensure.mockRestore();
+        }
+    });
+
     test("keeps renderer requests on the managed backend and adds profile scope", () => {
         expect(makeHermesApiUrl("http://127.0.0.1:62554", "/api/config?explicit=1", "research").toString()).toBe(
             "http://127.0.0.1:62554/api/config?explicit=1&profile=research"
@@ -144,14 +204,14 @@ describe("Hermes KronTerm runtime environment", () => {
         expect(env.HERMES_KRONTERM_NATIVE_TOOL_URL).toBe("http://127.0.0.1:9119/native");
         expect(env.KRONTERM_NATIVE_TOOL_TOKEN).toBe("tool-server-token");
         expect(env).not.toHaveProperty("HERMES_KRONTERM_TOOL_BRIDGE_COMMAND");
-        expect(env.HERMES_TUI_TOOLSETS).toBe("kronterm,hermes-cli,desktop_ui");
+        expect(env.HERMES_TUI_TOOLSETS).toBe("kronterm,delegation");
         expect(env.KRONTERM_SURFACE_CAPABILITY_FILE).toBe("/tmp/kronos-capability.json");
     });
 
-    test("pins KronosCoder while leaving the persistent tool server optional", () => {
+    test("uses scoped delegation while leaving the persistent tool server optional", () => {
         const config = makeHermesManagedConfig() as any;
 
-        expect(config.delegation).toEqual({ provider: "copilot-acp", model: "copilot-acp" });
+        expect(config.delegation).toEqual({ backend: "kronterm_smart", max_concurrent_children: 2 });
         expect(config.tools).toEqual({
             tool_search: { enabled: "off" },
         });
@@ -255,6 +315,8 @@ describe("Hermes bundled tool discovery", () => {
         const target = path.join(root, "managed", "plugins");
         fs.mkdirSync(path.join(base, "copilot-provider"), { recursive: true });
         fs.mkdirSync(adapter);
+        fs.mkdirSync(path.join(root, "orgo-computer"));
+        fs.writeFileSync(path.join(root, "orgo-computer", "plugin.yaml"), "name: orgo-computer");
         fs.writeFileSync(path.join(base, "copilot-provider", "plugin.yaml"), "kind: backend");
         fs.writeFileSync(path.join(adapter, "plugin.yaml"), "name: kronterm-tools\nkind: backend");
         vi.stubEnv("HERMES_BUNDLED_PLUGINS", base);
@@ -265,6 +327,9 @@ describe("Hermes bundled tool discovery", () => {
             expect(fs.readFileSync(path.join(target, "copilot-provider", "plugin.yaml"), "utf8")).toBe("kind: backend");
             expect(fs.readFileSync(path.join(target, "kronterm-tools", "plugin.yaml"), "utf8")).toContain(
                 "name: kronterm-tools"
+            );
+            expect(fs.readFileSync(path.join(target, "orgo-computer", "plugin.yaml"), "utf8")).toContain(
+                "name: orgo-computer"
             );
             await prepareHermesBundledPlugins("/missing/hermes", target, adapter);
         } finally {
@@ -487,6 +552,69 @@ describe("Hermes bounded recovery", () => {
             signal.mockRestore();
             vi.clearAllTimers();
             vi.useRealTimers();
+        }
+    });
+});
+
+describe("Hermes surface capability connection deadline", () => {
+    test("uses a bounded token RPC and retries one interrupted transport without bypassing issuance", async () => {
+        vi.useFakeTimers();
+        const runtime = HermesRuntime as any;
+        const previous = {
+            surfaceContext: runtime.surfaceContext,
+            surfaceGeneration: runtime.surfaceGeneration,
+            surfaceCapabilityReady: runtime.surfaceCapabilityReady,
+            surfaceRefreshTimer: runtime.surfaceRefreshTimer,
+        };
+        const mkdir = vi.spyOn(fs, "mkdirSync").mockReturnValue(undefined);
+        const write = vi.spyOn(fs, "writeFileSync").mockReturnValue(undefined);
+        const chmod = vi.spyOn(fs, "chmodSync").mockReturnValue(undefined);
+        surfaceTokens.issue
+            .mockReset()
+            .mockRejectedValueOnce(new Error("EC-TIME: timeout waiting for response"))
+            .mockResolvedValueOnce({
+                token: "test-capability",
+                tabid: "tab",
+                blockid: "",
+                expiresat: Date.now() + 3600000,
+            });
+        runtime.surfaceContext = { tabId: "tab" };
+        runtime.surfaceGeneration = 7;
+        runtime.surfaceCapabilityReady = false;
+        try {
+            await runtime.refreshSurfaceCapability(7);
+            expect(surfaceTokens.issue).toHaveBeenCalledTimes(2);
+            expect(surfaceTokens.issue.mock.calls.every((call) => call[2]?.timeout === 10000)).toBe(true);
+            expect(write).toHaveBeenCalledOnce();
+            expect(runtime.surfaceCapabilityReady).toBe(true);
+        } finally {
+            clearTimeout(runtime.surfaceRefreshTimer);
+            Object.assign(runtime, previous);
+            mkdir.mockRestore();
+            write.mockRestore();
+            chmod.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+    test("does not retry or establish capability after an authorization failure", async () => {
+        const runtime = HermesRuntime as any;
+        const previous = {
+            surfaceContext: runtime.surfaceContext,
+            surfaceGeneration: runtime.surfaceGeneration,
+            surfaceCapabilityReady: runtime.surfaceCapabilityReady,
+        };
+        surfaceTokens.issue
+            .mockReset()
+            .mockRejectedValue(new Error("surface tokens may only be issued for Electron sessions"));
+        runtime.surfaceContext = { tabId: "tab" };
+        runtime.surfaceGeneration = 8;
+        runtime.surfaceCapabilityReady = false;
+        try {
+            await expect(runtime.refreshSurfaceCapability(8)).rejects.toThrow("Electron sessions");
+            expect(surfaceTokens.issue).toHaveBeenCalledOnce();
+            expect(runtime.surfaceCapabilityReady).toBe(false);
+        } finally {
+            Object.assign(runtime, previous);
         }
     });
 });

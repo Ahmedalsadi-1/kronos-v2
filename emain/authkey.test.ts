@@ -48,3 +48,57 @@ it("limits the upstream owner capability to registered renderers and strips it f
     revokeManagedRuntimeRequests("http://127.0.0.1:9012");
     expect(request("http://127.0.0.1:9012/api/groups", 42)["X-OpenMausBot-Desktop-Owner"]).toBeUndefined();
 });
+
+it("restricts workflow socket credentials to its registered sender and push endpoint", () => {
+    configureAuthKeyRequestInjection({
+        webRequest: {
+            onBeforeSendHeaders: (_filter: any, handler: any) => {
+                hooks.handler = handler;
+            },
+        },
+    } as any);
+    const origin = "ws://127.0.0.1:56321";
+    grantManagedRuntimeRequests(origin, "browser-id", "workflow-browser", 42, {
+        Origin: "http://127.0.0.1:56321",
+        Cookie: "fixture-session",
+    });
+    const request = (url: string, sender: number, resourceType: string) => {
+        let headers: any;
+        hooks.handler({ url, webContentsId: sender, resourceType, requestHeaders: {} }, (value: any) => {
+            headers = value.requestHeaders;
+        });
+        return headers;
+    };
+    expect(request(origin + "/rest/push?pushRef=test", 42, "webSocket")).toMatchObject({
+        Cookie: "fixture-session",
+        Origin: "http://127.0.0.1:56321",
+    });
+    expect(request(origin + "/other", 42, "webSocket").Cookie).toBeUndefined();
+    expect(request(origin + "/rest/push", 43, "webSocket").Cookie).toBeUndefined();
+    expect(request("ws://example.com/rest/push", 42, "webSocket").Cookie).toBeUndefined();
+    revokeManagedRuntimeRequests(origin);
+    expect(request(origin + "/rest/push", 42, "webSocket").Cookie).toBeUndefined();
+});
+
+it("revokes all workflow grants when their renderer is destroyed", async () => {
+    const { revokeManagedRuntimeSender } = await import("./authkey");
+    configureAuthKeyRequestInjection({
+        webRequest: {
+            onBeforeSendHeaders: (_filter: any, handler: any) => {
+                hooks.handler = handler;
+            },
+        },
+    } as any);
+    const origin = "ws://127.0.0.1:56322";
+    grantManagedRuntimeRequests(origin, "browser-id", "workflow-browser", 42, { Cookie: "fixture-session" });
+    revokeManagedRuntimeSender(42);
+    let headers: any;
+    hooks.handler(
+        { url: origin + "/rest/push", webContentsId: 42, resourceType: "webSocket", requestHeaders: {} },
+        (result: any) => {
+            headers = result.requestHeaders;
+        }
+    );
+    expect(headers.Cookie).toBeUndefined();
+    expect(headers["browser-id"]).toBeUndefined();
+});

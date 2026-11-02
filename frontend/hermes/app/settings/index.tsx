@@ -32,12 +32,14 @@ import { OverlayMain, OverlayNav, type OverlayNavGroup, OverlaySplitLayout } fro
 import { OverlayView } from "../overlays/overlay-view";
 import { SKILLS_ROUTE } from "../routes";
 
+import { ComputersSettings } from "@hermes/computer/computers-settings";
 import { AboutSettings } from "./about-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { BillingSettings } from "./billing";
 import { ConfigSettings } from "./config-settings";
 import { ConnectionsSettings } from "./connections-settings";
 import { SECTIONS } from "./constants";
+import { DelegationSettings } from "./delegation-settings";
 import { GatewaySettings } from "./gateway-settings";
 import { KeybindSettings } from "./keybind-settings";
 import { KEYS_VIEWS, KeysSettings, type KeysView } from "./keys-settings";
@@ -248,6 +250,20 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
                 onSelect: () => setActiveView("keys"),
             },
             {
+                active: activeView === "delegation",
+                icon: Network,
+                id: "delegation",
+                label: "Delegation",
+                onSelect: () => setActiveView("delegation"),
+            },
+            {
+                active: activeView === "computers",
+                icon: Monitor,
+                id: "computers",
+                label: "Computers",
+                onSelect: () => setActiveView("computers"),
+            },
+            {
                 active: activeView === "plugins",
                 icon: Package,
                 id: "plugins",
@@ -368,6 +384,10 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
                         <NotificationsSettings />
                     ) : activeView === "billing" ? (
                         <BillingSettings />
+                    ) : activeView === "delegation" ? (
+                        <DelegationSettings />
+                    ) : activeView === "computers" ? (
+                        <ComputersSettings />
                     ) : activeView === "plugins" ? (
                         <PluginsSettings />
                     ) : (

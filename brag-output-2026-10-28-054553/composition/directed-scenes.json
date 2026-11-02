@@ -1,0 +1,80 @@
+[
+  {
+    "id": "intro",
+    "start": 0,
+    "duration": 3,
+    "label": "COUCOU + KRONTERM"
+  },
+  {
+    "id": "bots",
+    "start": 3,
+    "duration": 4,
+    "label": "BOT PROFILES"
+  },
+  {
+    "id": "sessions",
+    "start": 7,
+    "duration": 3,
+    "label": "BOTS + SESSIONS"
+  },
+  {
+    "id": "workspace",
+    "start": 10,
+    "duration": 5,
+    "label": "OS WIDGETS + COMPACT HUD"
+  },
+  {
+    "id": "editor",
+    "start": 15,
+    "duration": 4,
+    "label": "FILE EDITOR"
+  },
+  {
+    "id": "vm",
+    "start": 19,
+    "duration": 3,
+    "label": "COMPUTER ASSIGNMENT"
+  },
+  {
+    "id": "chat",
+    "start": 22,
+    "duration": 2,
+    "label": "SIDE-PANEL CHAT"
+  },
+  {
+    "id": "tools",
+    "start": 24,
+    "duration": 4,
+    "label": "BROWSER + TERMINAL"
+  },
+  {
+    "id": "parallel",
+    "start": 28,
+    "duration": 4,
+    "label": "AGENTS SIDE BY SIDE"
+  },
+  {
+    "id": "notch",
+    "start": 32,
+    "duration": 4,
+    "label": "NOTCH WORKSPACE"
+  },
+  {
+    "id": "browser",
+    "start": 36,
+    "duration": 3,
+    "label": "BROWSER USE + INDICATORS"
+  },
+  {
+    "id": "phone",
+    "start": 39,
+    "duration": 3,
+    "label": "PHONE CONTROL LABS"
+  },
+  {
+    "id": "outro",
+    "start": 42,
+    "duration": 3,
+    "label": "KRONTERM"
+  }
+]

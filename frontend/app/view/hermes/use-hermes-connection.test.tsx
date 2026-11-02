@@ -51,6 +51,7 @@ beforeEach(() => {
 afterEach(async () => {
     await act(async () => root.unmount());
     element.remove();
+    vi.useRealTimers();
 });
 
 describe("HUD connection recovery", () => {
@@ -117,5 +118,44 @@ describe("HUD connection recovery", () => {
         await act(async () => Mocks.listener({ baseUrl: "http://127.0.0.1:9119", token: "new-token" }));
         expect(element.querySelector('[role="alert"]')).toBeNull();
         expect(element.textContent).toContain("Hermes conversation");
+    });
+});
+
+describe("bounded Hermes connection wait", () => {
+    test("offers Retry after a stalled invoke and accepts a late valid connection", async () => {
+        vi.useFakeTimers();
+        let resolve: (connection: unknown) => void;
+        Mocks.connect.mockReturnValue(
+            new Promise((done) => {
+                resolve = done;
+            })
+        );
+        await act(async () => root.render(<HermesRuntimeChat tabId="workspace" />));
+        await act(async () => {
+            vi.advanceTimersByTime(29999);
+        });
+        expect(element.textContent).toContain("Starting Kronos");
+        await act(async () => {
+            vi.advanceTimersByTime(1);
+        });
+        expect(element.querySelector('[role="alert"]')?.textContent).toContain("taking longer");
+        expect(element.querySelector("button")?.textContent).toContain("Retry");
+        await act(async () => resolve({ baseUrl: "http://127.0.0.1:9119", token: "late-token" }));
+        expect(element.textContent).toContain("Hermes conversation");
+        expect(Mocks.configure).toHaveBeenCalledWith({ baseUrl: "http://127.0.0.1:9119", token: "late-token" });
+    });
+    test("cleans the deadline and ignores reconnect events after unmount", async () => {
+        vi.useFakeTimers();
+        Mocks.connect.mockReturnValue(new Promise(() => {}));
+        await act(async () => root.render(<HermesRuntimeChat tabId="workspace" />));
+        const listener = Mocks.listener;
+        await act(async () => root.render(null));
+        await act(async () => {
+            vi.advanceTimersByTime(30000);
+            listener({ baseUrl: "http://127.0.0.1:9119", token: "late-token" });
+        });
+        expect(Mocks.configure).not.toHaveBeenCalled();
+        expect(Mocks.unsubscribe).toHaveBeenCalledOnce();
+        expect(vi.getTimerCount()).toBe(0);
     });
 });

@@ -1,4 +1,6 @@
+import { grantManagedRuntimeRequests, revokeManagedRuntimeSender } from "./authkey";
 import { agentBotCommand, openBotDesktop, openMausBotConnection } from "./openmausbot-runtime";
+import { hasKronTermAccount, workflowAccount } from "./workflow-account";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -47,7 +49,7 @@ import {
     registerAudioCallbacks,
     runAudioEngine,
 } from "./emain-audio";
-import { handleNativeHudRendererReady, isTrustedNativeHudSender } from "./emain-hud";
+import { handleNativeHudRendererReady, isTrustedNativeHudSender, nativeHudTaskContext } from "./emain-hud";
 import { sendLspMessage, startLanguageServer, stopLanguageServer } from "./emain-lsp";
 import {
     getDesktopPetClickThroughStatus,
@@ -82,6 +84,8 @@ import { registerNativeTaskGroupsIpc } from "./native-task-groups-ipc";
 import { registerProductivityIpc } from "./productivity-ipc";
 import { managedAppBlocked } from "./productivity-runtime";
 import { registerSystemAppearanceIpc } from "./system-appearance-ipc";
+
+const ManagedWorkflowSenders = new WeakSet<Electron.WebContents>();
 
 const electronApp = electron.app;
 
@@ -353,12 +357,16 @@ export function initIpcHandlers() {
         return agentBotCommand(event.sender, command);
     });
     electron.ipcMain.handle("open-bot-desktop", (event, botId: string) => {
-        if ((!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id)) || typeof botId !== "string")
+        if (
+            (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id)) ||
+            typeof botId !== "string"
+        )
             throw new Error("Invalid bot desktop caller");
         return openBotDesktop(event.sender, botId);
     });
     electron.ipcMain.handle("open-agent-workspace", (event) => {
-        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id)) throw new Error("Unknown workspace renderer");
+        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
+            throw new Error("Unknown workspace renderer");
         return openMausBotConnection(event.sender);
     });
     registerMacVmIpc();
@@ -1158,7 +1166,37 @@ export function initIpcHandlers() {
         return HermesRuntime.ensureSurface(context);
     });
 
-    electron.ipcMain.handle("hermes-api", async (_event, input: HermesApiRequest) => {
+    electron.ipcMain.handle("kronterm-account-status", (event) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
+            throw new Error("Unknown workspace renderer");
+        return { configured: hasKronTermAccount(), encryptionAvailable: electron.safeStorage.isEncryptionAvailable() };
+    });
+
+    electron.ipcMain.handle("hermes-api", async (event, input: HermesApiRequest) => {
+        if (input?.path === "/api/kronterm/n8n" || input?.path === "/api/kronterm/n8n/command") {
+            if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id)) {
+                throw new Error("Unknown workspace renderer");
+            }
+            const context = { ...nativeHudTaskContext(event.sender.id), n8nEditorId: event.sender.id };
+            const result = await HermesRuntime.api<any>(input, context);
+            const operation = (input.body as any)?.operation;
+            if (operation === "editor-session") {
+                if (!ManagedWorkflowSenders.has(event.sender)) {
+                    ManagedWorkflowSenders.add(event.sender);
+                    const senderId = event.sender.id;
+                    event.sender.once("destroyed", () => revokeManagedRuntimeSender(senderId));
+                }
+                grantManagedRuntimeRequests(result.backendUrl, "browser-id", result.browserId, event.sender.id);
+                grantManagedRuntimeRequests(
+                    result.backendUrl.replace(/^http/, "ws"),
+                    "browser-id",
+                    result.browserId,
+                    event.sender.id,
+                    { Origin: new URL(result.backendUrl).origin, Cookie: await workflowAccount(result.backendUrl) }
+                );
+            }
+            return result;
+        }
         return HermesRuntime.api(input);
     });
 

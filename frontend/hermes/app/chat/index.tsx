@@ -55,6 +55,7 @@ import { ChatDropOverlay } from './chat-drop-overlay'
 import { ChatSwapOverlay } from './chat-swap-overlay'
 import { ChatBar, ChatBarFallback } from './composer'
 import { AgentEnginePill } from './composer/agent-engine-pill'
+import { ComposerPositionSurface } from './composer/position'
 import { requestComposerInsert } from './composer/focus'
 import { droppedFileInlineRefs } from './composer/inline-refs'
 import { useComposerScope } from './composer/scope'
@@ -558,7 +559,7 @@ export const ChatView = memo(function ChatView({
   const overlayKind: DragKind = dragKind === 'files' ? 'files' : sessionDragging && !sessionEdgeHover ? 'session' : null
 
   return (
-    <div
+    <ComposerPositionSurface
       className={cn(
         'relative isolate flex h-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)',
         className
@@ -682,6 +683,6 @@ export const ChatView = memo(function ChatView({
           </Suspense>
         )}
       </ChatRuntimeBoundary>
-    </div>
+    </ComposerPositionSurface>
   )
 })

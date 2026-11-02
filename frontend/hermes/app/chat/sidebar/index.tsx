@@ -31,6 +31,8 @@ import { resolveProfileColor } from "@hermes/lib/profile-color";
 import { sessionMatchesSearch } from "@hermes/lib/session-search";
 import { normalizeSessionSource, sessionSourceLabel } from "@hermes/lib/session-source";
 import { cn } from "@hermes/lib/utils";
+import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
+import { BotsPane } from "@hermes/plugins/bots/upstream/hermes-bot-mode.js";
 import { $cronJobs } from "@hermes/store/cron";
 import { $bindings } from "@hermes/store/keybinds";
 import {
@@ -1502,6 +1504,7 @@ export function ChatSidebar({
                                                 "cursor-default hover:border-transparent hover:bg-transparent hover:text-inherit"
                                         )}
                                         onClick={() => {
+                                            if (item.id === "workflows") $workflowSidebarMode.set("workflows");
                                             // A plain new session lands in whatever profile the live
                                             // gateway is on (= the active switcher context). null →
                                             // no swap. The switcher header is the single place to
@@ -1575,6 +1578,10 @@ export function ChatSidebar({
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
+
+                <div className="h-[30vh] min-h-40 max-h-80 shrink-0 overflow-hidden border-b border-(--ui-stroke-secondary) pb-2">
+                    <BotsPane />
+                </div>
 
                 {showSessionSections && (
                     <div className="shrink-0 px-2 pb-1 pt-1">

@@ -1,5 +1,12 @@
 import type { AppStreamInput } from "./appstream";
-import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "./linux-desktops";
+import type {
+    ComputerManagerCommand,
+    ComputerManagerState,
+    LinuxDesktop,
+    LinuxDesktopAction,
+    LinuxDesktopActionResult,
+    SandboxComputerAccess,
+} from "./linux-desktops";
 import type { MacVmConnection, MacVmInventory } from "./macos-vms";
 import type { NativeTaskGroupAction, NativeTaskGroupPreview, NativeTaskGroupsSnapshot } from "./native-task-groups";
 // Copyright 2026, Command Line Inc.
@@ -107,6 +114,7 @@ declare global {
     };
 
     type HermesSurfaceContext = {
+        sandboxComputerId?: string;
         tabId?: string;
         blockId?: string;
         workspaceId?: string;
@@ -245,7 +253,9 @@ declare global {
     };
 
     type ElectronApi = {
-        agentBotCommand: (command: import("./agent-bot").AgentBotCommand) => Promise<import("./agent-bot").AgentBotResult>;
+        agentBotCommand: (
+            command: import("./agent-bot").AgentBotCommand
+        ) => Promise<import("./agent-bot").AgentBotResult>;
         openBotDesktop: (
             botId: string
         ) => Promise<{ botId: string; workspaceId: string; tabId: string; blockIds: string[] }>;
@@ -274,7 +284,17 @@ declare global {
         }) => Promise<boolean>; // open-native-hud-island
         setNativeHudIslandVisibility: (blockId: string, visible: boolean) => Promise<boolean>; // set-native-hud-island-visibility
         requestNativeHudLaunch: (
-            app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots"
+            app:
+                | "web"
+                | "files"
+                | "terminal"
+                | "widget"
+                | "apps"
+                | "machines"
+                | "android"
+                | "iphone"
+                | "workflowcanvas"
+                | "bots"
         ) => void; // request-native-hud-launch
         getHudWidgetRoute: (blockId: string) => Promise<string>;
         getNativeHudIslandPresentation: () => Promise<"docked" | "detached">; // get-native-hud-island-presentation
@@ -329,7 +349,17 @@ declare global {
         closeNativeHudSurface: () => void; // close-native-hud-surface
         onNativeHudLaunch: (
             callback: (
-                app: "web" | "files" | "terminal" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots",
+                app:
+                    | "web"
+                    | "files"
+                    | "terminal"
+                    | "widget"
+                    | "apps"
+                    | "machines"
+                    | "android"
+                    | "iphone"
+                    | "workflowcanvas"
+                    | "bots",
                 forceNew?: boolean
             ) => void
         ) => () => void; // native-hud-launch
@@ -466,6 +496,14 @@ declare global {
         manageNativeTaskGroups: (
             input: NativeTaskGroupAction | { operation: "list" }
         ) => Promise<ComputerTargetsResult<NativeTaskGroupsSnapshot | NativeTaskGroupPreview>>; // native-task-groups:manage
+        manageComputerPlugins: (
+            command: ComputerManagerCommand
+        ) => Promise<ComputerTargetsResult<ComputerManagerState>>;
+        sandboxComputerAccess: (input?: {
+            desktopId?: string;
+            enabled?: boolean;
+            sessionIds?: string[];
+        }) => Promise<SandboxComputerAccess>;
         listLinuxDesktops: () => Promise<ComputerTargetsResult<LinuxDesktop[]>>;
         listMacVms: () => Promise<ComputerTargetsResult<MacVmInventory>>;
         startMacVm: (name: string) => Promise<ComputerTargetsResult<MacVmConnection>>;
@@ -643,6 +681,7 @@ declare global {
         onLspMessage: (callback: (msg: { sessionId: string; content: string }) => void) => () => void;
 
         hermesGetConnection: (context?: HermesSurfaceContext) => Promise<HermesConnectionDescriptor>; // hermes-get-connection
+        getKronTermAccountStatus: () => Promise<{ configured: boolean; encryptionAvailable: boolean }>;
         hermesApi: <T = unknown>(input: HermesApiIpcRequest) => Promise<T>; // hermes-api
         onHermesConnection: (callback: (connection: HermesConnectionDescriptor) => void) => () => void; // hermes-connection
         onHermesRuntimeFailure: (callback: (failure: { message: string }) => void) => () => void; // hermes-runtime-failure

@@ -6,6 +6,8 @@ export const BASE_SETTINGS_VIEWS: readonly SettingsView[] = [
     "providers",
     "gateway",
     "connections",
+    "computers",
+    "delegation",
     "keybinds",
     "keys",
     "notifications",

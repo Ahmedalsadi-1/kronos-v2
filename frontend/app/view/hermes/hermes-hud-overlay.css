@@ -1,0 +1,75 @@
+/* Copyright 2026, KronTerm. SPDX-License-Identifier: Apache-2.0 */
+[data-hermes-frame-fit] {
+    background: var(--color-black, #000);
+    box-shadow: 0 8px 28px #0004;
+}
+[data-hermes-frame-fit] [data-hermes-chat-mount] {
+    box-sizing: border-box;
+    padding-top: 0;
+}
+.os-shell-chat [data-hermes-frame-fit] [data-hud-shell][data-hud-embedded] [data-hud-glass] {
+    display: none !important;
+}
+.os-shell-chat [data-hermes-frame-fit] [data-hud-shell][data-hud-embedded] [data-slot="composer-bounds"] {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: calc(100% - 56px) !important;
+    transform: none !important;
+    translate: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: var(--color-black, #000) !important;
+    box-shadow: none !important;
+    --thread-viewport-height: 100%;
+    --thread-last-message-clearance: 8px;
+}
+.os-shell-chat
+    [data-hermes-frame-fit][data-hermes-frame-edge="top"]
+    [data-hud-shell][data-hud-embedded]
+    [data-slot="composer-bounds"] {
+    top: 56px !important;
+    bottom: 0 !important;
+}
+.os-shell-chat
+    [data-hermes-frame-fit][data-hermes-frame-edge="bottom"]
+    [data-hud-shell][data-hud-embedded]
+    [data-slot="composer-bounds"] {
+    top: 0 !important;
+    bottom: 56px !important;
+}
+.os-shell-chat [data-hermes-frame-fit] [data-hud-shell][data-hud-edge] [data-slot="composer-dock"] {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+}
+[data-hermes-frame-fit] [data-hud-shell] {
+    --hud-band-inset: 0px;
+}
+.os-shell-chat [data-hermes-frame-fit] [data-hud-shell][data-hud-has-user-message] [data-slot="composer-bounds"] {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    filter: none !important;
+    scale: 1 !important;
+}
+[data-hermes-frame-fit]:has([data-hud-shell]:not([data-hud-has-user-message])) {
+    height: 56px !important;
+}
+
+[data-chat-placement="island"] [data-slot="composer-input-layout"] {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "input input" "menu controls";
+}
+[data-chat-placement="island"] [data-slot="composer-root"],
+[data-chat-placement="island"] [data-slot="composer-surface"] {
+    border-radius: 12px !important;
+}
+[data-chat-placement="island"] [data-slot="composer-rich-input"] {
+    width: 100%;
+    min-width: 0;
+}
+[data-hud-surface-controls] {
+    pointer-events: auto;
+}

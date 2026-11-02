@@ -81,10 +81,10 @@ const BuiltinViewApps: Array<{
     {
         view: "sandbox",
         kind: "sandbox",
-        aliases: ["linux", "vm", "isolated"],
+        aliases: ["linux", "vm", "isolated", "computer", "vnc", "remote desktop"],
         category: "System",
-        capabilities: ["terminal", "network", "files"],
-        launchPolicy: "multi-window",
+        capabilities: ["screen-capture"],
+        launchPolicy: "singleton",
     },
     { view: "videostudio", aliases: ["video", "timeline", "video studio"], category: "Productivity" },
     { view: "audiostudio", aliases: ["audio", "transcript", "captions"], category: "Productivity" },

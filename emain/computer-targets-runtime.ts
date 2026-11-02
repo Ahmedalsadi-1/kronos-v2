@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -115,6 +116,30 @@ export class ComputerTargetsRuntime {
                 );
             } catch (error) {
                 simulatorError = error instanceof Error ? error : new Error("Simulator tools are unavailable.");
+                if (existsSync("/opt/homebrew/bin/baguette")) {
+                    try {
+                        const records = (await this.execute("/opt/homebrew/bin/baguette", ["list"]))
+                            .split("\n")
+                            .filter((line) => line.startsWith("{"))
+                            .map((line) => JSON.parse(line));
+                        targets = parseComputerTargets(
+                            JSON.stringify({
+                                devices: {
+                                    iOS: records
+                                        .filter((record) => record.runtime?.startsWith("iOS"))
+                                        .map((record) => ({ ...record, isAvailable: false })),
+                                },
+                            })
+                        ).map((target) => ({
+                            ...target,
+                            runtime: records.find((record) => record.udid === target.id)?.runtime ?? target.runtime,
+                            availabilityReason:
+                                "Full Xcode is unavailable. Saved simulator records cannot boot or stream until Xcode and its iOS runtime are configured.",
+                        }));
+                    } catch {
+                        /* The primary discovery error remains authoritative. */
+                    }
+                }
             }
         } else {
             simulatorError = new Error("iOS Simulator requires macOS with full Xcode installed.");

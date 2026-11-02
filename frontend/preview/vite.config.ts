@@ -28,6 +28,8 @@ export default defineConfig({
     resolve: {
         alias: {
             "@hermes/plugin-sdk": path.resolve(__dirname, "../hermes/sdk/index.ts"),
+            "@hermes/shared": path.resolve(__dirname, "../hermes-shared"),
+            "@hermes": path.resolve(__dirname, "../hermes"),
         },
     },
     build: {

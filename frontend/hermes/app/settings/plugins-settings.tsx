@@ -420,6 +420,7 @@ export function PluginsSettings() {
     const { t } = useI18n();
     const p = t.settings.plugins;
     const records = useStore($pluginRecords);
+    const navigate = useNavigate();
     const { search } = useLocation();
     const params = new URLSearchParams(search);
     const selectedPlugin = params.get("plugin") ?? undefined;
@@ -431,6 +432,22 @@ export function PluginsSettings() {
 
     return (
         <SettingsContent>
+            {window.hermesDesktop?.krontermSurfaces?.computerManager && (
+                <SettingsSection icon={Monitor} title="Computer providers">
+                    <p className="mb-2 text-xs text-(--ui-text-tertiary)">
+                        Manage Ubuntu VMs and OpenMausBot local computer plugins, runtime setup, and independent
+                        computers.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="textStrong"
+                        size="sm"
+                        onClick={() => navigate("/settings?tab=computers")}
+                    >
+                        Open Computer settings
+                    </Button>
+                </SettingsSection>
+            )}
             <SettingsSection icon={Monitor} meta={p.count(rows.length)} title={p.title}>
                 <p className="mb-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
                     {p.blurb}

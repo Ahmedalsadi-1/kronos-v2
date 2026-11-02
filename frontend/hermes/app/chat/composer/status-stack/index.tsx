@@ -1,7 +1,8 @@
 import { useStore } from '@nanostores/react'
-import { type ReactNode, useEffect, useMemo } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 
+import { SubagentTheater } from '@hermes/app/agents/subagent-theater'
 import { blurComposerInput } from '@hermes/app/chat/composer/focus'
 import { AGENTS_ROUTE } from '@hermes/app/routes'
 import { BillingBanner } from '@hermes/components/billing-banner'
@@ -26,8 +27,8 @@ import {
 } from '@hermes/store/composer-status'
 import { refreshSessionGoal } from '@hermes/store/goals'
 import { $previewStatusBySession, dismissPreviewArtifact } from '@hermes/store/preview-status'
+import { $subagentsBySession } from '@hermes/store/subagents'
 import { $threadScrolledUp } from '@hermes/store/thread-scroll'
-import { openSessionInNewWindow } from '@hermes/store/windows'
 
 import { PreviewStatusRow } from './preview-row'
 import { StatusItemRow } from './status-row'
@@ -95,6 +96,8 @@ export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackPro
   // across unrelated writes, so the slice hook bails out unless OUR session's
   // items actually changed.
   const items = useSessionSlice($statusItemsBySession, sessionId)
+  const subagents = useSessionSlice($subagentsBySession, sessionId)
+  const [selectedSubagentId, setSelectedSubagentId] = useState<string>()
   const previews = useSessionSlice($previewStatusBySession, sessionId)
   const scrolledUp = useStore($threadScrolledUp)
   const billing = useStore($billingBlock)
@@ -128,8 +131,7 @@ export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackPro
 
   const openAgents = () => navigate(AGENTS_ROUTE)
 
-  const openSubagent = (item: ComposerStatusItem) =>
-    item.sessionId ? void openSessionInNewWindow(item.sessionId, { watch: true }) : openAgents()
+  const openSubagent = (item: ComposerStatusItem) => setSelectedSubagentId(item.id)
 
   // Preview links live as child rows of the background group — a localhost dev
   // server and its preview are the same thing — so they no longer float as an
@@ -230,41 +232,52 @@ export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackPro
   // so the dock's own measurement (--composer-measured-height) already covers
   // it and the thread clears both with one number.
 
+  const theater = selectedSubagentId ? (
+    <SubagentTheater
+      agents={subagents}
+      initialAgentId={selectedSubagentId}
+      onClose={() => setSelectedSubagentId(undefined)}
+    />
+  ) : null
+
   if (!visible) {
-    return null
+    return theater
   }
 
   return (
-    <div
-      // In flow in the dock column, directly above the composer. The dock is
-      // bottom-anchored, so this grows upward over the thread without needing
-      // to be positioned — and it shares the dock's left edge for free.
-      className="flex max-h-[40vh] min-h-0 flex-col overflow-y-auto"
-      data-slot="composer-status-stack"
-      onPointerDownCapture={() => blurComposerInput()}
-    >
-      {/* The card paints the shared --composer-fill (rest / scrolled / focused
+    <>
+      {theater}
+      <div
+        // In flow in the dock column, directly above the composer. The dock is
+        // bottom-anchored, so this grows upward over the thread without needing
+        // to be positioned — and it shares the dock's left edge for free.
+        className="flex max-h-[40vh] min-h-0 flex-col overflow-y-auto"
+        data-slot="composer-status-stack"
+        onPointerDownCapture={() => blurComposerInput()}
+      >
+        {/* The card paints the shared --composer-fill (rest / scrolled / focused
           all match the composer surface by construction); on scroll we only
           ghost the CONTENT — element opacity on the card would kill the blur.
           Rounded top, square bottom; the bottom border is TRANSPARENT — the
           composer surface's visible top border (which sits at a higher z) is the
           single shared seam, so the two read as one fused capsule. */}
-      {sections.length > 0 && (
-        <div
-          className={cn(
-            composerDockCard('top'),
-            // Inset (mx-2) so the stack reads slightly narrower than the composer
-            // surface below it — the original look.
-            'mx-2 overflow-hidden rounded-b-none border-b border-b-transparent pt-0.5',
-            'transition-opacity duration-200 ease-out',
-            scrolledUp ? 'opacity-30 group-hover/composer:opacity-100' : 'opacity-100'
-          )}
-        >
-          {sections.map(section => (
-            <div key={section.key}>{section.node}</div>
-          ))}
-        </div>
-      )}
-    </div>
+        {sections.length > 0 && (
+          <div
+            className={cn(
+              composerDockCard('top'),
+              // Inset (mx-2) so the stack reads slightly narrower than the composer
+              // surface below it — the original look.
+              'mx-2 overflow-hidden rounded-b-none border-b border-b-transparent pt-0.5',
+              'transition-opacity duration-200 ease-out',
+              scrolledUp ? 'opacity-30 group-hover/composer:opacity-100' : 'opacity-100'
+            )}
+          >
+            {sections.map(section => (
+              <div key={section.key}>{section.node}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   )
 }

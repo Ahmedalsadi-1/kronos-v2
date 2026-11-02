@@ -1,3 +1,5 @@
+import { DelegationPolicy } from "./delegation-policy";
+import { DeviceFarmRuntime } from "./device-farm-runtime";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -14,10 +16,18 @@ import {
     setKronTermToolBridge,
     setLinuxDesktopToolBridge,
     setProductivityToolBridge,
+    setN8nWorkflowBridge,
+    setSandboxComputerBridge,
     warmKronComputerUse,
 } from "../mcp-kron-term/src/index";
 import { isToolAllowedBySurfaceCapability } from "../mcp-kron-term/src/surface-policy";
 import type { SurfaceCapability } from "../mcp-kron-term/src/wsh-bridge";
+import {
+    hasSandboxComputerGrants,
+    resolveComputerChatContext,
+    withSandboxComputerScope,
+} from "./computer-access-policy";
+import { GuestBrowser, GuestFiles, guestPython } from "./computer-plugins/guest-commands";
 import { getComputerTargetsRuntime } from "./computer-targets-runtime";
 import { notifyDesktopPetSurfaceActivity } from "./emain-pet";
 import type { HermesSurfaceContext } from "./hermes-runtime";
@@ -26,6 +36,7 @@ import { getLinuxDesktopsRuntime } from "./linux-desktops-runtime";
 import { commandProductivity, queryProductivity } from "./productivity-runtime";
 import { SandboxTaskRuntime } from "./sandbox-task-runtime";
 import { resolveToolRequestContext, withToolRequestContext } from "./tool-request-context";
+import { workflowWorkerContext } from "./n8n-worker-scope";
 
 export type KronTermToolServerDescriptor = {
     url: string;
@@ -58,11 +69,14 @@ function requestKey(id: RequestId): string {
 }
 
 function surfaceCapability(context: HermesSurfaceContext | null): SurfaceCapability | undefined {
+    context = withSandboxComputerScope(context);
     if (!context?.tabId) {
         return undefined;
     }
     return {
         token: "electron-owned",
+        sandboxComputerId: context.sandboxComputerId,
+        delegationScope: context.delegationScope,
         nativeCallerId: context.nativeCallerId,
         tabId: context.tabId,
         blockId: context.blockId,
@@ -146,6 +160,15 @@ class ScopedMcpTransport implements Transport {
         if (method === "tools/call" && record.id != null) {
             const params = record.params as { name?: unknown } | undefined;
             const name = typeof params?.name === "string" ? params.name : "";
+            const caller = resolveToolRequestContext(this.contextProvider);
+            if (caller?.agentRuntime === "hermes" && hasSandboxComputerGrants() && !caller.toolSessionId) {
+                void this.inner.send({
+                    jsonrpc: "2.0",
+                    id: record.id as RequestId,
+                    error: { code: -32601, message: "Computer mode requires the session-scoped native adapter." },
+                });
+                return;
+            }
             if (
                 !name ||
                 !isToolAllowedBySurfaceCapability(
@@ -204,6 +227,9 @@ export function availableKronTermToolNames(context: HermesSurfaceContext): strin
 
 export class KronTermToolServer {
     private contextProvider: SurfaceContextProvider;
+    private delegations = new DelegationPolicy(async (id) =>
+        (await getLinuxDesktopsRuntime().list()).find((desktop) => desktop.id === id)
+    );
     private server: Server | null = null;
     private startPromise: Promise<KronTermToolServerDescriptor> | null = null;
     private token = randomBytes(32).toString("base64url");
@@ -298,6 +324,13 @@ export class KronTermToolServer {
             }
         };
         const sandboxTasks = new SandboxTaskRuntime(linux);
+        setN8nWorkflowBridge({
+            invoke: async (operation, input, signal) => {
+                const context = resolveToolRequestContext(this.contextProvider);
+                const { HermesRuntime } = await import("./hermes-runtime");
+                return HermesRuntime.n8nCommand({ ...input, operation } as import("./n8n-workspace").N8nWorkspaceCommand, context, signal);
+            },
+        });
         setLinuxDesktopToolBridge({
             list: () => linux.list(),
             perform: (action) =>
@@ -305,12 +338,95 @@ export class KronTermToolServer {
             startTask: (args) => sandboxTasks.start(args),
             finishTask: (sessionId) => sandboxTasks.finish(sessionId),
         });
+        setSandboxComputerBridge(async (tool, args, signal) => {
+            if (signal?.aborted) throw new Error("Sandbox request was cancelled.");
+            const context = resolveToolRequestContext(this.contextProvider);
+            if (tool === "delegation_status")
+                return {
+                    backend: "kronterm_smart",
+                    scope: context?.delegationScope || (context?.sandboxComputerId ? "sandbox" : "inherit"),
+                    computerId: context?.sandboxComputerId,
+                    sandboxReady: context?.sandboxComputerId
+                        ? (await linux.list()).find((desktop) => desktop.id === context.sandboxComputerId)?.ready
+                        : false,
+                };
+            const id = context?.sandboxComputerId;
+            if (!id || !context.tabId) throw new Error("Enable Computer mode beside the agent selector first.");
+            const desktop = (await linux.list()).find((desktop) => desktop.id === id);
+            if (!desktop) throw new Error("The selected sandbox computer is unavailable.");
+            if (tool === "sandbox_vm_status") return desktop;
+            if (desktop.controlOwner !== "agent" || desktop.assignedAgentId !== `sandbox:${context.tabId}`)
+                throw new Error("Sandbox access was taken over or revoked. Enable Computer mode again to assign it.");
+            const action = tool === "sandbox_vm_desktop" ? args.action : "exec";
+            const command =
+                tool === "sandbox_vm_files"
+                    ? guestPython(GuestFiles, args)
+                    : tool === "sandbox_vm_browser"
+                      ? guestPython(GuestBrowser, args)
+                      : args.command;
+            if (tool === "sandbox_vm_files" && args.action === "write") {
+                const text = String(args.text || "");
+                if (Buffer.byteLength(text) > 1048576) throw new Error("File exceeds 1 MB.");
+                const temporaryPath = `${String(args.path)}.kronterm-${randomUUID()}.tmp`;
+                for (let offset = 0; offset < Math.max(1, text.length); offset += 2000) {
+                    if (signal?.aborted) throw new Error("Sandbox file write was cancelled.");
+                    await linux.performAgent({
+                        desktopId: id,
+                        action: "exec",
+                        command: guestPython(GuestFiles, {
+                            ...args,
+                            path: temporaryPath,
+                            action: offset === 0 ? "write" : "append",
+                            text: text.slice(offset, offset + 2000),
+                        }),
+                        assignedAgentId: desktop.assignedAgentId,
+                        expectedGeneration: desktop.controlGeneration,
+                    });
+                }
+                if (signal?.aborted) throw new Error("Sandbox file write was cancelled.");
+                await linux.performAgent({
+                    desktopId: id,
+                    action: "exec",
+                    command: guestPython(GuestFiles, { action: "commit", path: temporaryPath, target: args.path }),
+                    assignedAgentId: desktop.assignedAgentId,
+                    expectedGeneration: desktop.controlGeneration,
+                });
+                return { desktopId: id, path: args.path, written: Buffer.byteLength(text) };
+            }
+            return withFeedback(`vm:${id}`, "sandbox", { ...args, action: action as string }, () =>
+                linux.performAgent({
+                    ...args,
+                    desktopId: id,
+                    action: action as any,
+                    command: command as string,
+                    assignedAgentId: desktop.assignedAgentId,
+                    expectedGeneration: desktop.controlGeneration,
+                })
+            );
+        });
         const computers = getComputerTargetsRuntime();
         setProductivityToolBridge({ query: queryProductivity, command: commandProductivity });
+        const deviceFarm = new DeviceFarmRuntime(computers);
+        const deviceCaller = () => resolveToolRequestContext(this.contextProvider)?.nativeCallerId;
         setComputerTargetToolBridge({
             list: () => computers.list(),
             perform: (action) =>
-                withFeedback(`device:${action.targetId}`, "desktop", action, () => computers.performAgent(action)),
+                withFeedback(`device:${action.targetId}`, "desktop", action, () =>
+                    deviceFarm.perform(action, deviceCaller())
+                ),
+            manage: async (name, args) => {
+                if (name === "device_assign" || name === "device_batch_boot" || name === "device_batch_start") {
+                    const assignees = name === "device_assign" ? [args] : (args.devices as Record<string, unknown>[]);
+                    const registered = new Set(
+                        [...this.callers.values()].map((provider) => provider()?.nativeCallerId)
+                    );
+                    if (assignees.some((item) => !registered.has(item.assignee as string)))
+                        throw new Error(
+                            "Assignee is not a registered native caller. Create the agent and request its device_identity first."
+                        );
+                }
+                return deviceFarm.manage(name, args, deviceCaller());
+            },
         });
         setKronTermToolBridge(
             new KronTermNativeToolBridge(() => resolveToolRequestContext(() => this.contextProvider()))
@@ -433,38 +549,89 @@ export class KronTermToolServer {
                 method?: string;
                 name?: string;
                 arguments?: Record<string, unknown>;
+                sessionId?: string;
+                taskId?: string;
+                delegationToken?: string;
+                scope?: "sandbox" | "widgets" | "inherit";
+                taskCount?: number;
+                requiredTools?: string[];
+                childId?: string;
             };
-            const capability = surfaceCapability(resolveToolRequestContext(this.contextProvider));
-            const tools = registeredTools();
-            if (payload.method === "manifest" || payload.method === "list") {
-                const manifest = nativeToolManifest((name) =>
-                    payload.method === "manifest" ? true : isToolAllowedBySurfaceCapability(name, capability)
-                );
-                this.writeNativeResponse(response, { tools: manifest });
+            const caller = workflowWorkerContext(resolveToolRequestContext(this.contextProvider), payload.sessionId, payload.taskId);
+            if (payload.method === "delegate_finish") {
+                this.delegations.finish(payload.delegationToken, payload.childId, caller.nativeCallerId);
+                this.writeNativeResponse(response, { ok: true });
                 return;
             }
-            const name = payload.name ?? "";
-            const tool = tools[name];
-            if (payload.method !== "call" || !tool?.enabled || !isToolAllowedBySurfaceCapability(name, capability)) {
-                writeError(response, 404, `Tool ${name || "<unknown>"} is unavailable`);
-                return;
-            }
-            const args = tool.inputSchema
-                ? await tool.inputSchema.parseAsync(payload.arguments ?? {})
-                : (payload.arguments ?? {});
-            const controller = new AbortController();
-            const onClose = () => {
-                if (!response.writableEnded) controller.abort();
-            };
-            response.once("close", onClose);
-            try {
-                const result = await runWithAgentActivitySource("hermes", () =>
-                    Promise.resolve(tool.handler(args as Record<string, unknown>, { signal: controller.signal }))
-                );
-                if (!response.destroyed) this.writeNativeResponse(response, result);
-            } finally {
-                response.removeListener("close", onClose);
-            }
+            const scopedCaller = payload.delegationToken
+                ? await this.delegations.resolve(payload.delegationToken, caller.nativeCallerId)
+                : payload.method !== "manifest" && (payload.sessionId || payload.taskId || payload.method === "call")
+                  ? resolveComputerChatContext(caller, payload.sessionId, payload.taskId)
+                  : caller;
+            await withToolRequestContext(scopedCaller, async () => {
+                const capability = surfaceCapability(resolveToolRequestContext(this.contextProvider));
+                const tools = registeredTools();
+                if (payload.method === "delegate_prepare") {
+                    const jobContext = {
+                        ...scopedCaller,
+                        delegationScope: scopedCaller.delegationScope || payload.scope,
+                    };
+                    const names = nativeToolManifest((name) =>
+                        isToolAllowedBySurfaceCapability(name, surfaceCapability(jobContext))
+                    ).map((tool) => tool.name);
+                    this.writeNativeResponse(
+                        response,
+                        await this.delegations.prepare(
+                            scopedCaller,
+                            payload.scope,
+                            payload.taskCount || 1,
+                            payload.requiredTools,
+                            names
+                        )
+                    );
+                    return;
+                }
+                if (payload.method === "manifest" || payload.method === "list") {
+                    const manifest = nativeToolManifest((name) =>
+                        payload.method === "manifest" ? true : isToolAllowedBySurfaceCapability(name, capability)
+                    );
+                    this.writeNativeResponse(response, {
+                        tools: manifest,
+                        scope: {
+                            sandbox: !!scopedCaller.sandboxComputerId,
+                            computerId: scopedCaller.sandboxComputerId,
+                            delegation: scopedCaller.delegationScope,
+                        },
+                    });
+                    return;
+                }
+                const name = payload.name ?? "";
+                const tool = tools[name];
+                if (
+                    payload.method !== "call" ||
+                    !tool?.enabled ||
+                    !isToolAllowedBySurfaceCapability(name, capability)
+                ) {
+                    writeError(response, 404, `Tool ${name || "<unknown>"} is unavailable`);
+                    return;
+                }
+                const args = tool.inputSchema
+                    ? await tool.inputSchema.parseAsync(payload.arguments ?? {})
+                    : (payload.arguments ?? {});
+                const controller = new AbortController();
+                const onClose = () => {
+                    if (!response.writableEnded) controller.abort();
+                };
+                response.once("close", onClose);
+                try {
+                    const result = await runWithAgentActivitySource("hermes", () =>
+                        Promise.resolve(tool.handler(args as Record<string, unknown>, { signal: controller.signal }))
+                    );
+                    if (!response.destroyed) this.writeNativeResponse(response, result);
+                } finally {
+                    response.removeListener("close", onClose);
+                }
+            });
         } catch (error) {
             writeError(response, 400, error instanceof Error ? error.message : String(error));
         }
@@ -491,4 +658,8 @@ export function startKronTermToolServer(
 
 export function revokeKronTermToolCaller(owner: string): void {
     toolServer?.unregisterCaller(owner);
+}
+
+export function kronTermToolManifest() {
+    return nativeToolManifest(() => true);
 }

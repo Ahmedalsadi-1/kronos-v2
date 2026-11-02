@@ -17,7 +17,7 @@ export const WebModeLauncherWidgets: readonly KronTermLauncherWidget[] = [
     { id: "terminal", label: "Terminal", icon: "terminal", view: "term", description: "Open terminal" },
     { id: "browser", label: "Browser", icon: "globe", view: "web", description: "Open browser" },
     { id: "files", label: "Files", icon: "folder", view: "preview", description: "Open files" },
-    { id: "sandbox", label: "Sandbox", icon: "desktop", view: "sandbox", description: "Open sandbox desktop" },
+    { id: "sandbox", label: "Computer", icon: "desktop", view: "sandbox", description: "Open Computer widget" },
 ];
 
 const WebModeTitlebarToolIds = new Set(WebModeLauncherWidgets.map((widget) => `kronterm-${widget.id}`));
@@ -55,6 +55,13 @@ interface HermesWebPaneLauncherDependencies {
 const DefaultDependencies: HermesWebPaneLauncherDependencies = {
     createTerminal: ensureTerminal,
     dispatchKronTermWidget: (view) => {
+        const openComputer = window.hermesDesktop?.krontermSurfaces?.openMachines;
+        if (view === "sandbox" && openComputer) {
+            void openComputer("desktop").then((result) => {
+                if (!result.ok) console.error(result.error);
+            });
+            return;
+        }
         window.dispatchEvent(new CustomEvent("kronterm:create-widget", { detail: { view } }));
     },
     getPreviewTabs: () => $previewTabs.get(),

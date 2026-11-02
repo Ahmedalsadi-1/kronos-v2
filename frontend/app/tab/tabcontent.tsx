@@ -513,7 +513,7 @@ const TabContent = React.memo(
 
         return (
             <div
-                className={`flex flex-col flex-grow min-h-0 w-full items-center justify-center overflow-hidden relative ${noTopPadding ? "" : "pt-[3px]"} pr-[3px]`}
+                className={`flex flex-col flex-grow min-h-0 w-full items-center justify-center overflow-hidden relative ${layoutMode === "os" ? "workspace-compact-chrome" : `${noTopPadding ? "" : "pt-[3px]"} pr-[3px]`}`}
             >
                 <PersistentBlockProvider blockIds={tabData?.blockids ?? []}>
                     {layoutMode === "widgets" ? (

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>KronTerm | Work in your element</title>
+<script src="assets/gsap.min.js"></script>
+<script src="assets/audio-reactive.js"></script>
+<style>
+@font-face{font-family:Inter;src:url(assets/inter.woff2)}
+*{box-sizing:border-box}body{margin:0;background:#060708;color:#f5f5ef;font-family:Inter,sans-serif}#root{width:100%;height:100%;position:relative;overflow:hidden;background:#060708}.clip{position:absolute;inset:0} .content{position:absolute;inset:0;overflow:hidden}.kicker{position:absolute;left:80px;top:54px;font-size:24px;font-weight:600;letter-spacing:1px}.index{position:absolute;right:80px;top:54px;font-size:24px;color:#b7bab4}.foot{position:absolute;left:80px;bottom:48px;font-size:23px;color:#b7bab4}.lime{color:#a3e635}.line{position:absolute;left:80px;right:80px;top:99px;height:2px;background:#444a41}.scene-title{position:absolute;left:80px;top:135px;margin:0;font-size:110px;line-height:.95;letter-spacing:-7px;font-weight:850;z-index:5}.scene-title span{display:block}.cap{position:absolute;left:85px;bottom:110px;font-size:30px;letter-spacing:-.7px;z-index:5}.stage{position:absolute;inset:0;perspective:1700px;perspective-origin:50% 50%;overflow:hidden}.rig{position:absolute;left:960px;top:540px;transform-style:preserve-3d}.slab{position:absolute;left:-710px;top:-400px;width:1420px;height:800px;transform-style:preserve-3d}.face{position:absolute;inset:0;border:2px solid #62695c;border-radius:18px;overflow:hidden;background:#131715;backface-visibility:hidden}.face img,.face video{width:100%;height:100%;object-fit:cover;display:block}.edge{position:absolute;inset:0;border-radius:18px;background:#242c23;border:1px solid #738663}.e1{transform:translateZ(-8px)}.e2{transform:translateZ(-16px)}.e3{transform:translateZ(-24px)}.e4{transform:translateZ(-32px)}.face{transform:translateZ(1px)}.hook-top{position:absolute;left:80px;top:194px;font-size:220px;letter-spacing:-15px;line-height:.85;font-weight:900}.hook-bottom{position:absolute;left:80px;top:423px;font-size:204px;letter-spacing:-15px;line-height:.9;font-weight:900}.hook-bottom span{display:inline-block}.hook-note{position:absolute;left:85px;top:780px;font-size:31px}.hook-rule{position:absolute;left:86px;top:727px;width:1748px;height:12px;background:#a3e635;transform-origin:left center}.os-title{position:absolute;left:70px;top:122px;font-size:200px;letter-spacing:-13px;line-height:1;font-weight:900;z-index:0}.view-label{position:absolute;right:80px;bottom:48px;font-size:23px;color:#b7bab4}.focus-title{top:145px;font-size:108px}.hud-shell{position:absolute;left:-560px;top:-130px;width:1120px;height:418px;transform-style:preserve-3d}.hud-shell .face{border-color:#a3e635;border-radius:24px}.hud-shell img{object-fit:fill}.hud-edge{background:#414c28;border-color:#a3e635}.hud-copy{position:absolute;left:80px;top:153px;font-size:117px;line-height:.97;letter-spacing:-7px;font-weight:850;z-index:6}.hud-copy span{display:block}.hud-caption{position:absolute;left:85px;bottom:125px;font-size:30px}.callout{position:absolute;right:110px;bottom:150px;font-size:25px;color:#a3e635}.join-title{position:absolute;left:80px;top:147px;font-size:117px;letter-spacing:-8px;font-weight:850;z-index:5;line-height:.95}.join-title span{display:block}.end-title{position:absolute;left:80px;top:135px;font-size:155px;letter-spacing:-9px;font-weight:850;margin:0}.end-sub{position:absolute;left:86px;top:330px;font-size:43px;letter-spacing:-1.5px}.end-label{position:absolute;left:86px;bottom:100px;font-size:25px;color:#a3e635}.bracket{position:absolute;width:40px;height:40px;border-top:3px solid #a3e635;border-left:3px solid #a3e635;left:49px;top:126px}.end-plane{position:absolute;left:-580px;top:-326px;width:1160px;height:652px;transform-style:preserve-3d}.end-hud{position:absolute;left:-210px;top:145px;width:660px;height:246px;transform-style:preserve-3d}.end-hud img{object-fit:fill}.end-hud .face{border-color:#a3e635}.word{display:inline-block}.micro{position:absolute;right:80px;bottom:48px;font-size:23px;color:#b7bab4}
+.hook-top{letter-spacing:-6px}.hook-bottom{letter-spacing:-6px}.word{margin-right:18px}.scene-title,.hud-copy{letter-spacing:-3px}.os-title{font-size:150px;letter-spacing:-5px;z-index:5}.join-title{letter-spacing:-4px}.end-title{letter-spacing:-5px}.hud-shell{left:-500px;top:-120px;width:1000px;height:373px}#os-content{opacity:0}.cap{top:300px;bottom:auto}#focus-front{width:1130px;height:544px;left:-565px;top:-272px}#focus-front .face img{object-fit:fill}.end-hud{top:90px}#hud-callout{bottom:100px}.hud-caption{bottom:100px}
+.kicker,.index,.foot,.view-label,.micro,.end-label,.callout{font-size:28px}
+</style></head><body>
+<div data-hf-id="hf-l8s5" id="root" data-composition-id="kronterm-kinetic" data-width="1920" data-height="1080" data-duration="24" data-fps="30">
+<section data-hf-id="hf-ynxv" id="hook" class="clip" data-start="0" data-duration="3.01" data-track-index="0"><div data-hf-id="hf-mcm7" class="content">
+<div data-hf-id="hf-71dp" class="kicker">KronTerm</div><div data-hf-id="hf-cljy" class="index">OS + HERMES HUD</div><div data-hf-id="hf-np12" class="line"></div>
+<div data-hf-id="hf-ajmz" class="hook-top"><span data-hf-id="hf-t1n0" class="word">WORK</span> <span data-hf-id="hf-dn02" class="word">IN</span></div><div data-hf-id="hf-2ivb" class="hook-bottom"><span data-hf-id="hf-36nq" class="word">YOUR</span> <span data-hf-id="hf-ixz6" class="word lime">ELEMENT.</span></div><div data-hf-id="hf-e4xk" class="hook-rule"></div><div data-hf-id="hf-b3ee" class="hook-note">A command center for human + agent work.</div><div data-hf-id="hf-gzxf" class="foot">PRIVATE BETA / DEVELOPMENT PREVIEW</div>
+</div></section>
+<section data-hf-id="hf-g19t" id="os" style="position:absolute;inset:0"><div data-hf-id="hf-95b3" class="content" id="os-content">
+<div data-hf-id="hf-56l9" class="kicker">01 / SPATIAL DESKTOP</div><div data-hf-id="hf-sko8" class="index">KronTerm OS</div><div data-hf-id="hf-sogq" class="line"></div><div data-hf-id="hf-3bml" class="os-title">OS <span data-hf-id="hf-zz6t" class="lime">MODE.</span></div>
+<div data-hf-id="hf-tan6" class="stage"><div data-hf-id="hf-iuf7" class="rig" id="os-rig"><div data-hf-id="hf-qqd9" class="slab" id="os-slab"><div data-hf-id="hf-c5je" class="edge e4"></div><div data-hf-id="hf-vlfh" class="edge e3"></div><div data-hf-id="hf-utro" class="edge e2"></div><div data-hf-id="hf-3hnj" class="edge e1"></div><div data-hf-id="hf-ce6r" class="face"><video data-hf-id="hf-a1wm" id="desktop-motion" class="clip" src="assets/os-motion.mp4" data-start="3.01" data-duration="5.21" data-track-index="1" muted playsinline></video></div></div></div></div>
+<div data-hf-id="hf-dhmy" class="cap" id="os-caption">A workspace with room to move.</div><div data-hf-id="hf-aasc" class="foot">YOUR TOOLS. IN YOUR SPACE.</div><div data-hf-id="hf-x1wo" class="view-label">ACTUAL PRODUCT FOOTAGE</div>
+</div></section>
+<section data-hf-id="hf-l78t" id="focus" class="clip" data-start="8.22" data-duration="4.89" data-track-index="0"><div data-hf-id="hf-i7rz" class="content">
+<div data-hf-id="hf-liz5" class="kicker">02 / BRING WORK INTO FOCUS</div><div data-hf-id="hf-pa4t" class="index">Terminal / Browser / Editor</div><div data-hf-id="hf-t2rr" class="line"></div>
+<div data-hf-id="hf-6flw" class="scene-title focus-title"><span data-hf-id="hf-w915" id="focus-a">BRING WORK</span><span data-hf-id="hf-74m3" id="focus-b" class="lime">INTO FOCUS.</span></div>
+<div data-hf-id="hf-xa86" class="stage"><div data-hf-id="hf-8szh" class="rig" id="focus-rig"><div data-hf-id="hf-2eiq" class="slab" id="focus-back"><div data-hf-id="hf-jrcj" class="face"><img data-hf-id="hf-wugy" src="assets/os-desktop.png"></div></div><div data-hf-id="hf-27qs" class="slab" id="focus-front"><div data-hf-id="hf-2f2m" class="edge e4"></div><div data-hf-id="hf-uo98" class="edge e2"></div><div data-hf-id="hf-jd1i" class="face"><img data-hf-id="hf-snuj" src="assets/editor-cutout.png"></div></div></div></div>
+<div data-hf-id="hf-ky0m" class="foot">ONE PERSISTENT WORKSPACE.</div><div data-hf-id="hf-n4rc" class="view-label">OS MODE / CLOSE-UP</div>
+</div></section>
+<section data-hf-id="hf-u9go" id="hud" class="clip" data-start="13.11" data-duration="5.44" data-track-index="0"><div data-hf-id="hf-htgy" class="content">
+<div data-hf-id="hf-5uii" class="kicker">03 / HERMES HUD</div><div data-hf-id="hf-s49s" class="index">Agent control</div><div data-hf-id="hf-th2s" class="line"></div><div data-hf-id="hf-1r77" class="hud-copy"><span data-hf-id="hf-idn5" id="hud-a">YOUR AGENT.</span><span data-hf-id="hf-bjfk" id="hud-b" class="lime">WITHIN REACH.</span></div>
+<div data-hf-id="hf-xoj7" class="stage"><div data-hf-id="hf-rhqe" class="rig" id="hud-rig"><div data-hf-id="hf-6yg9" class="hud-shell" id="hud-object"><div data-hf-id="hf-o5mx" class="edge hud-edge e4"></div><div data-hf-id="hf-da5a" class="edge hud-edge e3"></div><div data-hf-id="hf-h89b" class="edge hud-edge e2"></div><div data-hf-id="hf-8kdg" class="edge hud-edge e1"></div><div data-hf-id="hf-iyqh" class="face"><img data-hf-id="hf-614o" src="assets/hud.png"></div></div></div></div>
+<div data-hf-id="hf-qr8m" class="hud-caption">Ask. Review. Keep moving.</div><div data-hf-id="hf-3bv4" class="callout" id="hud-callout">REAL HUD / REAL FILE CHANGE</div><div data-hf-id="hf-zg8r" class="foot">CONTROL STAYS IN YOUR FIELD OF VIEW.</div>
+</div></section>
+<section data-hf-id="hf-976u" id="join" class="clip" data-start="18.55" data-duration="2.45" data-track-index="0"><div data-hf-id="hf-hf5x" class="content">
+<div data-hf-id="hf-hfog" class="kicker">04 / CONNECTED WORKSPACE</div><div data-hf-id="hf-9nj6" class="index">OS + HUD</div><div data-hf-id="hf-tvdt" class="line"></div><div data-hf-id="hf-rlm5" class="join-title"><span data-hf-id="hf-gwkb">ONE FIELD</span><span data-hf-id="hf-02se" class="lime">OF VIEW.</span></div>
+<div data-hf-id="hf-y2u8" class="stage"><div data-hf-id="hf-t991" class="rig" id="join-rig"><div data-hf-id="hf-mexp" class="slab" id="join-desktop"><div data-hf-id="hf-2tdn" class="edge e4"></div><div data-hf-id="hf-thc5" class="edge e2"></div><div data-hf-id="hf-ikfg" class="face"><img data-hf-id="hf-speu" src="assets/os-desktop.png"></div></div><div data-hf-id="hf-8otd" class="end-hud" id="join-hud"><div data-hf-id="hf-rkal" class="edge hud-edge e4"></div><div data-hf-id="hf-i64f" class="face"><img data-hf-id="hf-598w" src="assets/hud.png"></div></div></div></div><div data-hf-id="hf-a7uq" class="foot">KronTerm / PRIVATE BETA</div>
+</div></section>
+<section data-hf-id="hf-5lff" id="end" class="clip" data-start="21" data-duration="3" data-track-index="0"><div data-hf-id="hf-k7b4" class="content">
+<div data-hf-id="hf-5xju" class="kicker">YOUR WORKSPACE. YOUR ELEMENT.</div><div data-hf-id="hf-t18i" class="index">KronTerm</div><div data-hf-id="hf-u9ou" class="line"></div><h1 data-hf-id="hf-bmd2" class="end-title">KronTerm<span data-hf-id="hf-uvz8" class="lime">.</span></h1><div data-hf-id="hf-xgvt" class="end-sub">Work in your element.</div><div data-hf-id="hf-w9ld" class="end-label">PRIVATE BETA</div>
+<div data-hf-id="hf-vap1" class="stage"><div data-hf-id="hf-277e" class="rig" id="end-rig"><div data-hf-id="hf-87fi" class="end-plane"><div data-hf-id="hf-37oo" class="edge e4"></div><div data-hf-id="hf-tvn6" class="edge e2"></div><div data-hf-id="hf-hrte" class="face"><img data-hf-id="hf-t3pv" src="assets/os-desktop.png"></div></div><div data-hf-id="hf-sers" class="end-hud" id="end-hud"><div data-hf-id="hf-sr7o" class="edge hud-edge e4"></div><div data-hf-id="hf-hdid" class="face"><img data-hf-id="hf-42bt" src="assets/hud.png"></div></div></div></div><div data-hf-id="hf-1rb6" class="foot">THE COMMAND CENTER FOR HUMAN + AGENT WORK</div><div data-hf-id="hf-qiqf" class="micro">OS MODE + HERMES HUD</div>
+</div></section>
+<audio data-hf-id="hf-r9mp" id="music" src="assets/music.mp3" data-start="0" data-duration="24" data-track-index="10" data-volume="0.62" data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0},{"t":0.3,"v":0.62},{"t":21.8,"v":0.62},{"t":24,"v":0}]}]}'></audio>
+<audio data-hf-id="hf-qiob" id="hit-open" src="assets/impact.ogg" data-start="3.01" data-duration="0.51" data-track-index="11" data-volume="0.4"></audio>
+<audio data-hf-id="hf-ul2e" id="hit-join" src="assets/impact.ogg" data-start="18.55" data-duration="0.51" data-track-index="11" data-volume="0.35"></audio>
+<audio data-hf-id="hf-71bb" id="hud-switch" src="assets/switch.ogg" data-start="13.11" data-duration="0.5" data-track-index="12" data-volume="0.3"></audio>
+</div>
+<script>
+const tl=gsap.timeline({paused:true});
+tl.set('#os-content',{opacity:1},3.01).set('#os-content',{opacity:0},8.22);
+tl.fromTo('.hook-top .word',{y:180,rotationX:-70,opacity:0},{y:0,rotationX:0,opacity:1,duration:.55,stagger:.1,ease:'power4.out'},.05);
+tl.fromTo('.hook-bottom .word',{x:400,opacity:0},{x:0,opacity:1,duration:.55,stagger:.14,ease:'expo.out'},.4);
+tl.fromTo('.hook-rule',{scaleX:0},{scaleX:1,duration:.7,ease:'power3.inOut'},.65);
+tl.fromTo('.hook-note',{y:25,opacity:0},{y:0,opacity:1,duration:.35},.85);
+tl.to('.hook-top',{x:-1500,duration:.46,ease:'power3.in'},2.55).to('.hook-bottom',{x:1650,duration:.46,ease:'power3.in'},2.55);
+// Beat-grid: desktop opens at 3.01; focus at 8.22; HUD at 13.11.
+tl.fromTo('#os-rig',{x:260,y:300,z:-1100,rotationX:35,rotationY:-30,rotationZ:-8},{x:140,y:100,z:-280,rotationX:13,rotationY:-13,rotationZ:-3,duration:1.15,ease:'power3.out'},3.01);
+tl.to('#os-rig',{x:60,y:165,z:-280,rotationX:2,rotationY:7,rotationZ:1,duration:3.25,ease:'sine.inOut'},4.16);
+tl.to('#os-rig',{x:-90,y:130,z:-180,rotationX:0,rotationY:0,rotationZ:0,duration:.81,ease:'power3.inOut'},7.41);
+tl.fromTo('.os-title',{x:-450,opacity:0},{x:0,opacity:1,duration:.55,ease:'expo.out'},3.01);
+tl.fromTo('#os-caption',{y:40,opacity:0},{y:0,opacity:1,duration:.5,ease:'power2.out'},3.55);
+tl.fromTo('#focus-rig',{x:380,y:270,z:-900,rotationX:18,rotationY:-31,rotationZ:5},{x:230,y:180,z:-570,rotationX:10,rotationY:-17,rotationZ:0,duration:1,ease:'power3.out'},8.22);
+tl.fromTo('#focus-front',{z:220,x:90,y:60},{z:360,x:130,y:80,duration:2.1,ease:'sine.inOut'},8.22);
+tl.fromTo('#focus-back',{x:-220,y:-50,z:-350,rotationY:12},{x:-300,y:-90,z:-450,rotationY:18,duration:3.5,ease:'sine.inOut'},8.22);
+tl.fromTo('#focus-a',{x:-500,opacity:0},{x:0,opacity:1,duration:.48,ease:'expo.out'},8.22);
+tl.fromTo('#focus-b',{x:500,opacity:0},{x:0,opacity:1,duration:.48,ease:'expo.out'},8.46);
+tl.to('#focus-rig',{x:40,y:140,z:-180,rotationX:0,rotationY:0,duration:1.8,ease:'power2.inOut'},11.2);
+tl.to('.focus-title',{y:-80,opacity:0,duration:.45},12.45);
+tl.fromTo('#hud-a',{y:90,opacity:0},{y:0,opacity:1,duration:.48,ease:'power4.out'},13.11);
+tl.fromTo('#hud-b',{x:-400,opacity:0},{x:0,opacity:1,duration:.5,ease:'power4.out'},13.35);
+tl.fromTo('#hud-rig',{x:550,y:360,z:-650,rotationX:48,rotationY:-28,rotationZ:-12},{x:120,y:150,z:-100,rotationX:16,rotationY:-13,rotationZ:-3,duration:1.1,ease:'power3.out'},13.11);
+tl.to('#hud-rig',{x:60,y:65,z:80,rotationX:3,rotationY:6,rotationZ:0,duration:2.85,ease:'sine.inOut'},14.21);
+tl.to('#hud-rig',{x:100,y:80,z:40,rotationX:-6,rotationY:15,rotationZ:2,duration:1.49,ease:'sine.inOut'},17.06);
+tl.fromTo('#hud-callout',{x:70,opacity:0},{x:0,opacity:1,duration:.45,ease:'power2.out'},14.2);
+// Beat-locked: the full workspace returns on the 18.55s strong cue.
+tl.fromTo('#join-rig',{x:450,y:240,z:-950,rotationX:25,rotationY:-30,rotationZ:4},{x:270,y:150,z:-470,rotationX:10,rotationY:-14,rotationZ:0,duration:.7,ease:'power4.out'},18.55);
+tl.fromTo('#join-hud',{z:650,x:-140,y:20},{z:320,x:0,y:0,duration:.8,ease:'power3.out'},18.55);
+tl.to('#join-rig',{x:230,y:145,z:-390,rotationX:7,rotationY:-9,duration:1.75,ease:'sine.inOut'},19.25);
+tl.fromTo('.join-title span',{x:-350,opacity:0},{x:0,opacity:1,duration:.5,stagger:.12,ease:'expo.out'},18.55);
+tl.fromTo('#end-rig',{x:440,y:210,z:-620,rotationX:10,rotationY:-21,rotationZ:2},{x:440,y:180,z:-530,rotationX:6,rotationY:-13,rotationZ:0,duration:.85,ease:'power3.out'},21);
+tl.fromTo('#end-hud',{z:470,x:-100},{z:340,x:-20,duration:.85,ease:'power3.out'},21);
+tl.fromTo('.end-title',{x:-130,opacity:0},{x:0,opacity:1,duration:.55,ease:'power4.out'},21);
+tl.fromTo('.end-sub',{y:35,opacity:0},{y:0,opacity:1,duration:.45,ease:'power2.out'},21.25);
+for(let i=0;i<bassFrames.length;i++){
+    tl.to('.line',{opacity:.55+bassFrames[i]*.4,duration:1/30,ease:'none'},i/30);
+}
+window.__timelines['kronterm-kinetic']=tl;
+</script></body></html>

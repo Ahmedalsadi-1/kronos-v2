@@ -988,12 +988,15 @@ export function nativeHudTaskContext(senderId: number) {
     const ownerId = surface?.ownerWebContentsId ?? senderId;
     const hud = nativeHudByOwner.get(ownerId);
     const tab = getWaveTabViewByWebContentsId(ownerId);
+    const ownerWindow = getWaveWindowByWebContentsId(ownerId);
+    const senderTabId = surface == null ? tab?.waveTabId ?? tab?.savedInitOpts?.tabId : undefined;
     return {
         tabId:
-            getWaveWindowByWebContentsId(ownerId)?.activeTabView?.waveTabId ??
+            senderTabId ??
+            ownerWindow?.activeTabView?.waveTabId ??
             hud?.initOpts?.tabId ??
             tab?.savedInitOpts?.tabId,
-        workspaceId: getWaveWindowByWebContentsId(ownerId)?.workspaceId,
+        workspaceId: ownerWindow?.workspaceId,
         blockId: hud?.selectedBlockId ?? surface?.blockId,
     };
 }

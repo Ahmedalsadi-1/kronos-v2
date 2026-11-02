@@ -1,0 +1,12 @@
+{
+    "name": "kronterm-tauri-os-prototype",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build:web": "node --max-old-space-size=8192 ../../node_modules/vite/bin/vite.js build --config vite.config.ts",
+        "build:native": "cargo build --release --manifest-path src-tauri/Cargo.toml && node scripts/bundle.mjs",
+        "start": "node scripts/launch.mjs tauri",
+        "start:electron": "node scripts/launch.mjs electron",
+        "test": "node --test scripts/*.test.mjs"
+    }
+}

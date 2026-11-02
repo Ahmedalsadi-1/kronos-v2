@@ -361,3 +361,49 @@ def test_parallel_availability_checks_share_one_inflight_refresh(monkeypatch):
     monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "replacement-token")
     assert plugin._tool_allowed("widget_snapshot")
     assert len(calls) == 2
+
+
+def test_sandbox_calls_use_runtime_session_identity_not_model_arguments(monkeypatch):
+    plugin = _load_plugin()
+    calls = []
+
+    def bridge(payload):
+        calls.append(payload)
+        return {"content": [{"type": "text", "text": "ok"}]}
+
+    monkeypatch.setattr(plugin, "_bridge_request", bridge)
+    plugin._handler("sandbox_vm_exec")(
+        {"command": "pwd", "sessionId": "forged-session"}, session_id="runtime-session", task_id="task-session"
+    )
+    assert calls[0]["sessionId"] == "runtime-session"
+    assert calls[0]["arguments"]["sessionId"] == "forged-session"
+
+
+def test_offline_manifest_registers_tools_during_bridge_outage(monkeypatch, tmp_path):
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KRONTERM_NATIVE_TOOL_URL", "http://127.0.0.1:9119/native")
+    monkeypatch.setenv("KRONTERM_NATIVE_TOOL_TOKEN", "test-token")
+    file = tmp_path / "manifest.json"
+    file.write_text(json.dumps({"tools": [{"name": "sandbox_vm_exec", "annotations": {"readOnlyHint": False}}]}))
+    monkeypatch.setenv("KRONTERM_TOOL_MANIFEST_FILE", str(file))
+    monkeypatch.setattr(plugin, "_bridge_request", lambda _: (_ for _ in ()).throw(AssertionError("network requested")))
+    assert plugin._manifest_tools()[0]["name"] == "sandbox_vm_exec"
+
+
+def test_availability_isolated_by_runtime_chat_and_delegated_lease(monkeypatch):
+    plugin = _load_plugin()
+    identity = ["chat:1"]
+    monkeypatch.setattr(plugin, "_runtime_identity", lambda: identity[0])
+    calls = []
+    def listing(_):
+        calls.append(identity[0])
+        return {"tools": [{"name": "sandbox_vm_exec" if plugin._job_scope.get() else identity[0]}]}
+    monkeypatch.setattr(plugin, "_bridge_request", listing)
+    assert plugin._allowed_tools() == {"chat:1"}
+    identity[0] = "chat:2"
+    assert plugin._allowed_tools() == {"chat:2"}
+    token = plugin._job_scope.set({"token": "private", "scope": "sandbox"})
+    assert plugin._allowed_tools() == {"sandbox_vm_exec"}
+    plugin._job_scope.reset(token)
+    assert plugin._allowed_tools() == {"chat:2"}
+    assert len(calls) == 4

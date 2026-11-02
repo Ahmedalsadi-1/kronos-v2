@@ -1,3 +1,5 @@
+import { installSubagentSurfaceSource } from "./subagent-surface-source";
+import { createComputerToolWake } from "./computer-tool-wake";
 import { OpenMausBotHermesBackend, onBotConversationFocus, parseBotSessionId } from "./openmausbot-hermes-backend";
 // Copyright (c) 2026 KronTerm. Licensed under the Apache License, Version 2.0 (the "License").
 // This shim implements `window.hermesDesktop` inside the KronTerm renderer so the
@@ -19,7 +21,6 @@ import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import {
     focusAgentWidget,
     listAgentWidgets,
-    previewAgentWidget,
     promoteAgentWidget,
     setAgentWidgetInspectMode,
     snapshotAgentWidget,
@@ -340,7 +341,10 @@ async function promoteKronTermSurface(blockId: string): Promise<{ ok: boolean; e
 }
 
 async function previewKronTermSurface(blockId: string): Promise<string> {
-    if (!useOwnerHudRoute()) return previewAgentWidget(blockId);
+    if (!useOwnerHudRoute()) {
+        if (!listAgentWidgets().some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
+        return RpcApi.CaptureBlockScreenshotCommand(TabRpcClient, { blockid: blockId, passive: true }, { timeout: 5000 });
+    }
     const surfaces = await listKronTermSurfaces();
     if (!surfaces.some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
     return RpcApi.CaptureBlockScreenshotCommand(
@@ -360,6 +364,13 @@ const kronosCodeBackend = new KronosCodeHermesBackend(() => {
     }
 });
 
+const wakeComputerForTool = createComputerToolWake(async (desktopId) => {
+    const access = await getApi().sandboxComputerAccess();
+    const result = await shim.krontermSurfaces.openMachines("desktop", false, access.desktopId || desktopId);
+    if (!result.ok) throw new Error(result.error);
+    window.dispatchEvent(new Event("kronterm:computer-wake"));
+});
+
 const shim: Window["hermesDesktop"] = {
     getConnection,
     getConnectionFor,
@@ -367,15 +378,42 @@ const shim: Window["hermesDesktop"] = {
     getGatewayWsUrlFor,
     getAgentRoster,
     krontermSurfaces: {
+        computerManager: {
+            list: async () => {
+                const result = await getApi().manageComputerPlugins({ action: "list" });
+                if (result.success === false) throw new Error(result.error.message);
+                return result.data;
+            },
+            manage: async (command) => {
+                const result = await getApi().manageComputerPlugins(command);
+                if (result.success === false) throw new Error(result.error.message);
+                return result.data;
+            },
+            desktops: async () => {
+                const result = await getApi().listLinuxDesktops();
+                if (result.success === false) throw new Error(result.error.message);
+                return result.data;
+            },
+            action: async (action) => {
+                const result = await getApi().performLinuxDesktopAction(action);
+                if (result.success === false) throw new Error(result.error.message);
+                return result.data;
+            },
+            access: (input) => getApi().sandboxComputerAccess(input),
+        },
         list: listKronTermSurfaces,
         toggleChatLayout: () => getApi().syncNativeNotch({ chatLayout: "toggle" }),
-        openMachines: async (kind = "desktop", settings = false) => {
+        openMachines: async (kind = "desktop", settings = false, desktopId?: string) => {
             try {
                 const surfaces = await listKronTermSurfaces();
                 const running = surfaces
                     .filter((surface) => {
                         const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", surface.id)));
-                        return surface.view === "linux-vms" && (block?.meta?.["machine:kind"] ?? "desktop") === kind;
+                        if (desktopId && block?.meta?.["machine:target"] !== desktopId) return false;
+                        return (
+                            (surface.view === "linux-vms" && (block?.meta?.["machine:kind"] ?? "desktop") === kind) ||
+                            (kind === "desktop" && surface.view === "sandbox")
+                        );
                     })
                     .map((surface) => surface.id);
                 await launchSystemApp(makeViewAppDescriptor("linux-vms", running), {
@@ -393,7 +431,11 @@ const shim: Window["hermesDesktop"] = {
                                     {
                                         action: "hud.launch",
                                         view: "machines",
-                                        text: JSON.stringify({ machineKind: kind, machineSettings: settings }),
+                                        text: JSON.stringify({
+                                            machineKind: kind,
+                                            machineSettings: settings,
+                                            machineTarget: desktopId,
+                                        }),
                                     },
                                     { route: ownerTabRoute() }
                                 )
@@ -403,7 +445,12 @@ const shim: Window["hermesDesktop"] = {
                             return;
                         }
                         await createBlock({
-                            meta: { view: "linux-vms", "machine:kind": kind, "machine:settings": settings } as MetaType,
+                            meta: {
+                                view: "linux-vms",
+                                "machine:kind": kind,
+                                "machine:settings": settings,
+                                "machine:target": desktopId,
+                            } as MetaType,
                         });
                     },
                     createAppStream: async () => {
@@ -577,6 +624,7 @@ const shim: Window["hermesDesktop"] = {
     }),
     krontermActivity: {
         report: (activity) => {
+            wakeComputerForTool(activity);
             const event = hermesToolActivityToAgentActivity(activity);
             if (event == null) {
                 return;
@@ -1032,6 +1080,7 @@ const shim: Window["hermesDesktop"] = {
 /** Installs the Hermes desktop bridge shim (idempotent). */
 export function installHermesDesktopShim(config?: HermesDesktopShimConfig): void {
     configureHermesDesktopShim(config);
+    installSubagentSurfaceSource(previewKronTermSurface);
 
     if (!window.hermesDesktop) {
         window.hermesDesktop = shim;

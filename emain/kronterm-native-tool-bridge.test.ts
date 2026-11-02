@@ -557,3 +557,64 @@ describe("HUD tool routing", () => {
         expect(windowMocks.setActiveTab).not.toHaveBeenCalled();
     });
 });
+
+describe("Computer mode widget boundaries", () => {
+    afterEach(() => vi.clearAllMocks());
+    test("denies host terminals, files, settings and local-file browser widgets before input", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({
+            tabId: "sandbox-tab",
+            sandboxComputerId: "linux-vm:ubuntu",
+        }));
+        for (const view of ["term", "preview", "codeeditor", "hermes", "linux-vms", "appstream"]) {
+            vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValueOnce({
+                tabid: "sandbox-tab",
+                block: { meta: { view } },
+            });
+            await expect(bridge.widgetType("host-widget", "blocked")).rejects.toThrow("cannot read or write host");
+        }
+        vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValueOnce({
+            tabid: "sandbox-tab",
+            block: { meta: { view: "web", url: "file:///private/file" } },
+        });
+        await expect(bridge.widgetSnapshot("local-file")).rejects.toThrow("local-file");
+        expect(vi.mocked(ElectronWshClient.wshRpcCall).mock.calls.every((call) => call[0] === "blockinfo")).toBe(true);
+    });
+    test("permits a supported same-tab web widget and denies another tab", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({
+            tabId: "sandbox-tab",
+            sandboxComputerId: "linux-vm:ubuntu",
+        }));
+        vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValueOnce({
+            tabid: "other-tab",
+            block: { meta: { view: "web", url: "https://example.com" } },
+        });
+        await expect(bridge.widgetClick("other-browser", "@e1")).rejects.toThrow("cannot read or write host");
+        vi.mocked(ElectronWshClient.wshRpcCall)
+            .mockResolvedValueOnce({
+                tabid: "sandbox-tab",
+                block: { meta: { view: "web", url: "https://example.com" } },
+            })
+            .mockResolvedValueOnce({ success: true });
+        await bridge.widgetClick("browser", "@e1");
+        expect(vi.mocked(ElectronWshClient.wshRpcCall).mock.calls.at(-1)[0]).toBe("widgetclick");
+    });
+});
+
+describe("widget snapshot screenshot", () => {
+    test("captures pixels along with semantic elements on the same widget route", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab", blockId: "browser" }));
+        const calls = vi.spyOn(bridge as any, "rpc").mockImplementation(async (command: string) => {
+            if (command === "widgetsnapshot") return { elements: [{ ref: "button-1", role: "button" }] };
+            if (command === "captureblockscreenshot") return "data:image/png;base64,aGVsbG8=";
+            throw new Error(`Unexpected call: ${command}`);
+        });
+        try {
+            const result = JSON.parse(await bridge.widgetSnapshot("browser"));
+            expect(result.elements[0].ref).toBe("button-1");
+            expect(result.screenshot).toBe("data:image/png;base64,aGVsbG8=");
+            expect(calls).toHaveBeenCalledWith("captureblockscreenshot", { blockid: "browser" }, "tab:tab");
+        } finally {
+            calls.mockRestore();
+        }
+    });
+});

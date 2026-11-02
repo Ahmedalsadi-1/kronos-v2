@@ -7,7 +7,7 @@ export interface LinuxDesktop {
     status: "missing" | "stopped" | "running" | "unavailable";
     ready: boolean;
     imagePrepared: boolean;
-    provider: "cua-qemu";
+    provider: "cua-qemu" | "openmaus-container";
     runtime: string;
     viewerUrl: string;
     problem?: string;
@@ -52,3 +52,15 @@ export interface LinuxDesktopActionResult {
     imageDataUrl?: string;
     output?: string;
 }
+
+export type ComputerProviderId = "cua-qemu" | "openmaus-container";
+export type ComputerInstanceConfig = { id: string; name: string; provider: ComputerProviderId; slot: number };
+export type ComputerPluginInfo = { id: ComputerProviderId; name: string; enabled: boolean; description: string };
+export type ComputerManagerState = { plugins: ComputerPluginInfo[]; computers: ComputerInstanceConfig[] };
+export type ComputerManagerCommand =
+    | { action: "list" }
+    | { action: "start-runtime"; provider: ComputerProviderId }
+    | { action: "plugin"; provider: ComputerProviderId; enabled: boolean }
+    | { action: "create"; provider: ComputerProviderId; name: string }
+    | { action: "rename"; id: string; name: string };
+export type SandboxComputerAccess = { desktopId: string; enabled: boolean };

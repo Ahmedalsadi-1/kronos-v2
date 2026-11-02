@@ -58,3 +58,71 @@ export function makeSurfaceClipPath(
         .join(" ");
     return path ? `path("${path}")` : "inset(100%)";
 }
+
+function surfaceParent(element: Element): Element {
+    return (
+        element.parentElement ??
+        (element.getRootNode() instanceof ShadowRoot ? (element.getRootNode() as ShadowRoot).host : null)
+    );
+}
+
+function isSurfaceVisible(element: Element): boolean {
+    for (let current = element; current; current = surfaceParent(current)) {
+        const style = getComputedStyle(current);
+        if (
+            current.hasAttribute("hidden") ||
+            style.display === "none" ||
+            style.visibility === "hidden" ||
+            style.opacity === "0"
+        )
+            return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+}
+
+export function collectSurfaceOccluders(
+    sceneRoot: Element,
+    slot: HTMLElement,
+    ownerWindow: HTMLElement,
+    osMode: boolean
+): SurfaceRect[] {
+    const ownerZ = ownerWindow ? Number.parseInt(getComputedStyle(ownerWindow).zIndex) || 0 : 0;
+    const candidates = new Set<Element>();
+    for (const candidate of sceneRoot.querySelectorAll(
+        osMode ? ".os-window, .os-canvas-object, [data-live-block-occluder]" : "[data-live-block-occluder]"
+    )) {
+        if (
+            candidate.hasAttribute("data-live-block-occluder") ||
+            (Number.parseInt(getComputedStyle(candidate).zIndex) || 0) > ownerZ
+        )
+            candidates.add(candidate);
+    }
+    if (osMode) {
+        for (const world of sceneRoot.querySelectorAll("[data-workflow-world]")) {
+            for (const node of world.shadowRoot?.querySelectorAll(".vue-flow__node") ?? []) {
+                if ((Number.parseInt(getComputedStyle(node).zIndex) || 0) > ownerZ) candidates.add(node);
+            }
+        }
+        for (const host of sceneRoot.querySelectorAll("[data-workflow-chrome], [data-workflow-details]")) {
+            if ((Number.parseInt(getComputedStyle(host).zIndex) || 0) <= ownerZ) continue;
+            // Shadow hosts cover the viewport; only the original interactive controls and panels occlude widgets.
+            const panels: Element[] = [];
+            for (const child of (host.shadowRoot ?? host).querySelectorAll("*")) {
+                if (panels.some((panel) => panel.contains(child))) continue;
+                if (getComputedStyle(child).pointerEvents !== "auto" || !isSurfaceVisible(child)) continue;
+                panels.push(child);
+                candidates.add(child);
+            }
+        }
+    }
+    return [...candidates]
+        .filter(
+            (candidate) =>
+                candidate !== ownerWindow &&
+                !ownerWindow?.contains(candidate) &&
+                !candidate.contains(slot) &&
+                isSurfaceVisible(candidate)
+        )
+        .map((candidate) => candidate.getBoundingClientRect());
+}

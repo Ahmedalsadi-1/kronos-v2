@@ -252,6 +252,8 @@ const previewElectronApi: ElectronApi = {
     requestAgentTakeover: () => {},
     onOSOverviewGesture: () => () => {},
     manageNativeTaskGroups: async () => ({ success: true as const, data: { workspaces: [] } }),
+    manageComputerPlugins: async () => ({ success: true as const, data: { plugins: [], computers: [] } }),
+    sandboxComputerAccess: async () => ({ enabled: false, desktopId: "" }),
     listLinuxDesktops: async () => ({ success: true as const, data: [] }),
     listMacVms: async () => ({
         success: true as const,
@@ -455,6 +457,7 @@ const previewElectronApi: ElectronApi = {
     onLspMessage: (_callback: (msg: { sessionId: string; content: string }) => void) => () => {},
     hermesGetConnection: (_context?: HermesSurfaceContext) =>
         Promise.reject(new Error("Hermes is only available in the Electron app")),
+    getKronTermAccountStatus: () => Promise.resolve({ configured: true, encryptionAvailable: true }),
     hermesApi: () => Promise.reject(new Error("Hermes is only available in the Electron app")),
     onHermesConnection: () => () => {},
     onHermesRuntimeFailure: () => () => {},
@@ -532,6 +535,8 @@ function installPreviewElectronApi() {
             }
         };
         Object.assign(previewElectronApi, {
+            manageComputerPlugins: async () => ({ success: true as const, data: { plugins: [], computers: [] } }),
+            sandboxComputerAccess: async () => ({ enabled: false, desktopId: "" }),
             listLinuxDesktops: () => call("linux-list"),
             performLinuxDesktopAction: (action) => call("linux-action", { action }),
             assignLinuxDesktop: (desktopId, agentId, expectedGeneration) =>

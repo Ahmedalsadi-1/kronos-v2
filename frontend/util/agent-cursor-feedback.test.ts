@@ -199,3 +199,26 @@ describe("combined agent cursor", () => {
         expect(cancelAnimationFrame).toHaveBeenCalled();
     });
 });
+
+it("draws a lightweight cursor without a particle field or an idle animation loop", () => {
+    const ctx = context();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as any);
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.stubGlobal(
+        "requestAnimationFrame",
+        vi.fn(() => 1)
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const host = document.createElement("div");
+    Object.defineProperties(host, { clientWidth: { value: 800 }, clientHeight: { value: 600 } });
+    const draw = vi.fn();
+    const sampler = vi.fn(sampleAgentParticle);
+    const cursor = mountAgentCursor(host, draw, undefined, undefined, sampler, false);
+    cursor.update({ x: 40, y: 40 });
+    expect(draw).toHaveBeenCalledOnce();
+    expect(sampler).not.toHaveBeenCalled();
+    expect(ctx.rect).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLElement>(".kron-agent-content-aura").hidden).toBe(true);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+    cursor.destroy();
+});

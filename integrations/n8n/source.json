@@ -1,0 +1,7 @@
+{
+    "repository": "https://github.com/n8n-io/n8n.git",
+    "commit": "dd5f870ecc38344951fb3956f1a7ba7852612c70",
+    "version": "2.46.0",
+    "source": "upstream",
+    "license": "upstream/LICENSE.md"
+}

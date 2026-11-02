@@ -26,6 +26,8 @@ type RecentWebOpen = {
 };
 
 export type SurfaceCapability = {
+    sandboxComputerId?: string;
+    delegationScope?: "sandbox" | "widgets" | "inherit";
     nativeCallerId?: string;
     token: string;
     tabId: string;
@@ -775,7 +777,9 @@ export class WshBridge {
     // ── Widget Human Simulation ────────────────────────────────────────
 
     async widgetSnapshot(blockId: string): Promise<string> {
-        return this.run(["-b", this.blockRef(blockId), "widget", "snapshot", "--json"]);
+        const snapshot = JSON.parse(await this.run(["-b", this.blockRef(blockId), "widget", "snapshot", "--json"]));
+        const screenshot = await this.widgetScreenshot(blockId);
+        return JSON.stringify({ ...snapshot, screenshot });
     }
 
     async widgetFind(

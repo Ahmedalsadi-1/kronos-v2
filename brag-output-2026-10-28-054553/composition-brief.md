@@ -1,0 +1,3 @@
+# Directed composition brief
+
+Implement the approved asset directions as the 45-second film in brag-plan.md. Coucou and the KronTerm title are mandatory in the intro. Preserve the actual Coucou engine geometry. Use the six supplied recording excerpts plus the current screenshot crops. Show profile configuration, bot/session structure, compact HUD headroom, widget focus, file editor, VM assignment, side chat, tool switching, parallel agents, notch presentation, browser visual indicators, and clearly labeled Labs phone control. No voiceover. Seek-safe GSAP timelines and native media ownership. Keep all text readable and hold the end lockup for at least two seconds.

@@ -1,4 +1,5 @@
 import { ComposerPrimitive } from '@assistant-ui/react'
+import { HudComposerSurfaceControls } from '@hermes/app/hud/island-controls'
 import { useStore } from '@nanostores/react'
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
 
@@ -12,10 +13,16 @@ import { PR_COMMENT_URL_RE } from '@hermes/lib/chat-runtime'
 import { sanitizeComposerInput } from '@hermes/lib/composer-input-sanitize'
 import { DATA_IMAGE_URL_RE } from '@hermes/lib/embedded-images'
 import { triggerHaptic } from '@hermes/lib/haptics'
+import { useHermesShellMode } from '@hermes/lib/kronterm-host'
 import { cn } from '@hermes/lib/utils'
 import { interceptsTypedVoiceStop } from '@hermes/lib/voice-stop-word'
 import { sessionCompacting } from '@hermes/store/compaction'
-import { browseBackward, browseForward, deriveUserHistory, isBrowsingHistory } from '@hermes/store/composer-input-history'
+import {
+  browseBackward,
+  browseForward,
+  deriveUserHistory,
+  isBrowsingHistory
+} from '@hermes/store/composer-input-history'
 import { POPOUT_WIDTH_REM } from '@hermes/store/composer-popout'
 import { parkQueuedPrompts, removeQueuedPrompt, unparkQueuedPrompts } from '@hermes/store/composer-queue'
 import { $hudMode } from '@hermes/store/hud'
@@ -60,6 +67,7 @@ import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useSessionStatusPresence } from './hooks/use-status-presence'
 import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
+import { ComposerPositionToggle } from './position'
 import { QueuePanel } from './queue-panel'
 import {
   beginComposerComposition,
@@ -107,6 +115,7 @@ export function ChatBar({
   onTranscribeAudio
 }: ChatBarProps) {
   const hudMode = useStore($hudMode)
+  const { embedded } = useHermesShellMode()
   const { grabbing: hudGrabbing, onPointerDown: onHudDragPointerDown } = useHudComposerDrag(hudMode)
 
   // Typed stop phrase during an active voice conversation ends it — same
@@ -185,14 +194,8 @@ export function ChatBar({
 
   // Pop-out engine: docked↔floating state, dock/float/toggle, drag gestures, and
   // the on-screen re-clamp. Secondary windows can't pop out.
-  const {
-    dockProximity,
-    dragging,
-    onComposerGesturePointerDown,
-    popoutAllowed,
-    popoutPosition,
-    poppedOut
-  } = useComposerPopout({ composerRef })
+  const { dockProximity, dragging, onComposerGesturePointerDown, popoutAllowed, popoutPosition, poppedOut } =
+    useComposerPopout({ composerRef })
 
   // Coordinator-owned: the draft engine reads the live queue-edit snapshot off
   // this ref (to suppress its stash while editing a queued prompt) and the queue
@@ -398,7 +401,16 @@ export function ChatBar({
     triggerItems,
     triggerKeyConsumedRef,
     triggerLoading
-  } = useComposerTrigger({ at, draftRef, editorRef, emoji, recordUndoPoint, requestMainFocus, setComposerText, slash })
+  } = useComposerTrigger({
+    at,
+    draftRef,
+    editorRef,
+    emoji,
+    recordUndoPoint,
+    requestMainFocus,
+    setComposerText,
+    slash
+  })
 
   // Pull the live contentEditable text into draftRef + the AUI composer state
   // (which drives `hasComposerPayload` → the send button). Shared by the input
@@ -1311,6 +1323,7 @@ export function ChatBar({
                   )}
                   {attachments.length > 0 && <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />}
                   <div
+                    data-slot="composer-input-layout"
                     className={cn(
                       'grid w-full',
                       stacked
@@ -1325,6 +1338,8 @@ export function ChatBar({
                     <div className="min-w-0 [grid-area:input]">{input}</div>
                     <div className="flex items-center justify-end gap-(--composer-control-gap) [grid-area:controls]">
                       <ContribSlot area={COMPOSER_AREAS.actions} />
+                      {hudMode && <HudComposerSurfaceControls />}
+                      {(!hudMode || embedded) && !poppedOut && <ComposerPositionToggle hud={hudMode} />}
                       {controls}
                     </div>
                   </div>

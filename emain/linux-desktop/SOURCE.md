@@ -6,7 +6,8 @@ Upstream OpenMaus source and its license remain for shared command types
 and data-directory utilities.
 
 The QEMU backend adapts KronTerm's existing `scripts/setup-sandbox.sh` flow:
-Ubuntu ARM64 cloud image, qcow2 disk, cloud-init seed, XFCE desktop and SSH.
+Ubuntu ARM64 cloud image, qcow2 disk, cloud-init seed, XFCE desktop and SSH. The event-driven focus helper in `guest/`
+maximizes normal app windows while preserving XFWM, the existing desktop, and stock Chromium.
 It corrects the original firmware omission and data-directory mismatch. It
 replaces fixed passwords with a locally generated Ed25519 SSH key, disables
 password authentication and forwards SSH only on loopback. ISO creation

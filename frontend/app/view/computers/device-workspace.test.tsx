@@ -112,3 +112,119 @@ it("releases hidden farm sessions while preserving the selected live session", a
     await act(async () => root.unmount());
     expect(stop).toHaveBeenCalledWith("session-ios");
 });
+
+it("lists more than two devices and supports close, restore, minimize and expand", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const many = [...targets, { ...targets[0], id: "third", name: "Third phone" }];
+    await act(async () =>
+        root.render(
+            <DeviceWorkspace
+                state={{ targets: many, selectedId: "ios", loading: false, busy: false, error: "" }}
+                controller={{ refresh: vi.fn() } as unknown as ComputersController}
+                api={{} as ComputersApi}
+            />
+        )
+    );
+    const selector = host.querySelector<HTMLSelectElement>('[aria-label="Device list"]');
+    expect(selector.options).toHaveLength(3);
+    await act(async () =>
+        Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent === "Farm")
+            .click()
+    );
+    expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(3);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close Third phone"]').click());
+    expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(2);
+    await act(async () => {
+        selector.value = "third";
+        selector.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(3);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Minimize Third phone"]').click());
+    expect(host.querySelector('[aria-label="Third phone"] .kt-device-live').hasAttribute("hidden")).toBe(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Expand Third phone"]').click());
+    expect(host.querySelector('[aria-label="Third phone"]').classList.contains("is-expanded")).toBe(true);
+    await act(async () => root.unmount());
+});
+
+it("routes the close icon to the owning widget when hosted in KronTerm", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const closeWidget = vi.fn();
+    await act(async () =>
+        root.render(
+            <DeviceWorkspace
+                state={{ targets, selectedId: "ios", loading: false, busy: false, error: "" }}
+                controller={{ refresh: vi.fn() } as unknown as ComputersController}
+                api={{} as ComputersApi}
+                onCloseWidget={closeWidget}
+            />
+        )
+    );
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close iPhone"]').click());
+    expect(closeWidget).toHaveBeenCalledOnce();
+    expect(host.querySelector<HTMLElement>('[aria-label="iPhone"]').hidden).toBe(false);
+    await act(async () => root.unmount());
+});
+
+it("prefers a running Xcode iPhone over an iPad and refreshes the catalog on focus", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const refresh = vi.fn();
+    const discovered = [
+        { ...targets[1], id: "ipad", name: "iPad Pro" },
+        targets[1],
+        { ...targets[1], id: "running-iphone", name: "iPhone 17 Pro", status: "booted" as const },
+    ];
+    await act(async () =>
+        root.render(
+            <DeviceWorkspace
+                state={{ targets: discovered, selectedId: "ipad", loading: false, busy: false, error: "" }}
+                controller={{ refresh } as unknown as ComputersController}
+                api={{} as ComputersApi}
+            />
+        )
+    );
+    expect(host.querySelector<HTMLSelectElement>('[aria-label="Device list"]').value).toBe("running-iphone");
+    await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+    });
+    expect(refresh).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+});
+
+it("lets the user edit the visible farm size and restore all discovered devices", async () => {
+    window.localStorage.removeItem("kronterm:device-farm-size");
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const catalog = [...targets, { ...targets[0], id: "third", name: "Third phone" }];
+    await act(async () =>
+        root.render(
+            <DeviceWorkspace
+                state={{ targets: catalog, selectedId: "ios", loading: false, busy: false, error: "" }}
+                controller={{ refresh: vi.fn() } as unknown as ComputersController}
+                api={{} as ComputersApi}
+            />
+        )
+    );
+    await act(async () =>
+        Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent === "Farm")
+            .click()
+    );
+    const count = host.querySelector<HTMLInputElement>('[aria-label="Farm size"]');
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(count, "1");
+        count.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(1);
+    expect(window.localStorage.getItem("kronterm:device-farm-size")).toBe("1");
+    await act(async () =>
+        Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent === "All")
+            .click()
+    );
+    expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(3);
+    await act(async () => root.unmount());
+});

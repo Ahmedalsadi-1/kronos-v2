@@ -9,7 +9,7 @@ export class SandboxViewModel implements ViewModel {
     blockId: string;
     noPadding = atom(true);
     viewIcon = atom("desktop");
-    viewName = atom("Sandbox");
+    viewName = atom("Computer");
 
     constructor({ blockId }: ViewModelInitType) {
         this.blockId = blockId;

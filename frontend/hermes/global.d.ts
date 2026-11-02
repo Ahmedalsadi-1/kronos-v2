@@ -35,11 +35,27 @@ declare global {
             // bridge exposes only the current tab's display-safe block descriptors
             // and bounded split/promote actions; plugins never receive the ambient Electron API.
             krontermSurfaces?: {
+                computerManager?: {
+                    list: () => Promise<import("../types/linux-desktops").ComputerManagerState>;
+                    manage: (
+                        command: import("../types/linux-desktops").ComputerManagerCommand
+                    ) => Promise<import("../types/linux-desktops").ComputerManagerState>;
+                    desktops: () => Promise<import("../types/linux-desktops").LinuxDesktop[]>;
+                    action: (
+                        action: import("../types/linux-desktops").LinuxDesktopAction
+                    ) => Promise<import("../types/linux-desktops").LinuxDesktopActionResult>;
+                    access: (input?: {
+                        desktopId?: string;
+                        enabled?: boolean;
+                        sessionIds?: string[];
+                    }) => Promise<import("../types/linux-desktops").SandboxComputerAccess>;
+                };
                 list: () => Promise<HermesKronTermSurface[]>;
                 toggleChatLayout?: () => void;
                 openMachines?: (
                     kind?: "desktop" | "android" | "iphone",
-                    settings?: boolean
+                    settings?: boolean,
+                    desktopId?: string
                 ) => Promise<{ ok: boolean; error?: string }>;
                 launchWorkspace?: (
                     action:
@@ -90,6 +106,7 @@ declare global {
             krontermActivity?: {
                 report: (activity: {
                     phase: "running" | "succeeded" | "failed";
+                    foreground?: boolean;
                     toolId?: string;
                     name: string;
                     args?: Record<string, unknown>;

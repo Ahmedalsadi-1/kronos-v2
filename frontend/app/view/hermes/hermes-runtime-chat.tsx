@@ -4,6 +4,7 @@
 import { markKronTermWidgetHost } from "@hermes/lib/kronterm-host";
 import { lazy, Suspense, useEffect } from "react";
 import { installHermesDesktopShim } from "./hermes-desktop-shim";
+import { HermesLoadBoundary } from "./hermes-load-boundary";
 
 import { HermesConnectionState, useHermesConnection } from "./use-hermes-connection";
 
@@ -19,8 +20,10 @@ export function HermesRuntimeChat({ tabId }: { tabId?: string }) {
     if (!ready) return <HermesConnectionState error={error} retry={retry} />;
 
     return (
-        <Suspense fallback={<div role="status">Loading chat…</div>}>
-            <LazyHermesApp panelMode />
-        </Suspense>
+        <HermesLoadBoundary>
+            <Suspense fallback={<div role="status">Loading chat…</div>}>
+                <LazyHermesApp panelMode />
+            </Suspense>
+        </HermesLoadBoundary>
     );
 }

@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import tailwindcss from "@tailwindcss/vite";
@@ -98,30 +98,61 @@ export default defineConfig({
             },
         },
         optimizeDeps: {
-            include: ["monaco-yaml/yaml.worker.js"],
+            // Hermes mounts lazily; discovering these after first render invalidates imports already in flight.
+            include: [
+                "monaco-yaml/yaml.worker.js",
+                "react",
+                "react-dom/client",
+                "@radix-ui/react-dialog",
+                "@assistant-ui/react",
+                "@assistant-ui/react-streamdown",
+                "@dnd-kit/core",
+                "@dnd-kit/sortable",
+                "dompurify",
+                "ignore",
+                "rehype-raw",
+            ],
             exclude: ["langium"],
             esbuildOptions: {
                 target: CHROME,
             },
         },
         resolve: {
+            dedupe: ["react", "react-dom"],
             alias: [
-                { find: /^@hermes\/shared\/(.*)/, replacement: path.resolve(process.cwd(), "frontend/hermes-shared/$1") },
-                { find: /^@hermes\/shared$/, replacement: path.resolve(process.cwd(), "frontend/hermes-shared/index.ts") },
-                { find: /^@hermes\/plugin-sdk$/, replacement: path.resolve(process.cwd(), "frontend/hermes/sdk/index.ts") },
+                {
+                    find: /^@hermes\/shared\/(.*)/,
+                    replacement: path.resolve(process.cwd(), "frontend/hermes-shared/$1"),
+                },
+                {
+                    find: /^@hermes\/shared$/,
+                    replacement: path.resolve(process.cwd(), "frontend/hermes-shared/index.ts"),
+                },
+                {
+                    find: /^@hermes\/plugin-sdk$/,
+                    replacement: path.resolve(process.cwd(), "frontend/hermes/sdk/index.ts"),
+                },
                 { find: /^@hermes\/(.*)/, replacement: path.resolve(process.cwd(), "frontend/hermes/$1") },
                 { find: /^@hermes$/, replacement: path.resolve(process.cwd(), "frontend/hermes/index.ts") },
                 { find: /^bippy$/, replacement: path.resolve(process.cwd(), "frontend/hermes/debug/bippy.d.ts") },
-                { find: "vscode-jsonrpc/lib/common/cancellation.js", replacement: path.join(VscodeJsonRpcCommonPath, "cancellation.js") },
-                { find: "vscode-jsonrpc/lib/common/events.js", replacement: path.join(VscodeJsonRpcCommonPath, "events.js") },
+                {
+                    find: "vscode-jsonrpc/lib/common/cancellation.js",
+                    replacement: path.join(VscodeJsonRpcCommonPath, "cancellation.js"),
+                },
+                {
+                    find: "vscode-jsonrpc/lib/common/events.js",
+                    replacement: path.join(VscodeJsonRpcCommonPath, "events.js"),
+                },
             ],
         },
         server: {
             open: false,
             port: 9124,
+            strictPort: true,
             watch: {
                 ignored: [
                     "**/third_party/**",
+                    "**/integrations/n8n/upstream/**",
                     "**/vendor/**",
                     "**/kronoscoder/**",
                     "**/UI-TARS-desktop/**",
@@ -130,16 +161,22 @@ export default defineConfig({
                     "**/.hermes/**",
                     "**/__pycache__/**",
                     "**/.venv/**",
-                    "dist/**",
+                    "**/dist/**",
                     "**/*.go",
                     "**/go.mod",
                     "**/go.sum",
                     "**/*.md",
                     "**/*.mdx",
                     "**/*.json",
-                    "emain/**",
+                    "**/emain/**",
                     "**/*.txt",
                     "**/*.log",
+                    "**/*.tsbuildinfo",
+                    "**/test-results.xml",
+                    "**/*.test.ts",
+                    "**/*.test.tsx",
+                    "**/*.test.mjs",
+                    "**/.tmp/**",
                 ],
             },
         },

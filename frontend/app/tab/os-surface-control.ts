@@ -57,6 +57,14 @@ export function validateOSSurfaceControl(
         if (!input.objectid || !state.objects.some((object) => object.id === input.objectid)) {
             return "OS canvas object not found.";
         }
+        if (
+            input.action === "update_object" &&
+            state.objects.some((object) => object.id === input.objectid && object.kind === "workflow-node")
+        ) {
+            if ([input.width, input.height, input.text, input.color].some((value) => value != null))
+                return "Only workflow node position can be changed here. Use the node editor for parameters.";
+            if (input.x == null && input.y == null) return "Workflow node coordinates are required.";
+        }
     }
     if (input.action === "add_note" || input.action === "update_object") {
         for (const key of ["x", "y", "width", "height"] as const) {

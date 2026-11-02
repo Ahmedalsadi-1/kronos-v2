@@ -29,3 +29,12 @@ Unlocking, authentication, purchases, messages, and account changes remain separ
 - **phone type**: observe editable field -> tap -> `device_type` -> screenshot.
 - **phone swipe**: screenshot -> normalized start/end points -> `device_swipe` -> screenshot.
 - **phone done**: report evidence; leave physical phones connected and return control to the user.
+
+## Fleet automation
+
+- Use existing bot/subagent delegation to create independent per-phone workers with explicit goals and success criteria. Give each worker only its exact device id and have it verify `device_identity` and tool readiness before dispatch.
+- Assign phones to registered native caller identities with `device_assign`, or queue up to 64 explicit targets with `device_batch_start`. Launch concurrency is configurable from 1 to 4. Poll `device_batch_status` and inspect individual errors; `completed` means the queue drained, not that every launch succeeded. `device_batch_cancel` stops queued launches; in-flight boots finish. Release each assignment in cleanup.
+- Exclusive ownership is enforced per native caller. Workers sharing a transport identity share that ownership boundary; give them disjoint target ids and do not claim per-worker isolation.
+- Prefer `device_observe` and `device_step` for adaptive interactions. Inspect the screenshot, supply its single-use observationId and current generation, then inspect the after-image. Observations expire after 30 seconds and are invalidated by intervening actions. Human takeover still stops automation.
+- A delivered action is not evidence of semantic success. If after-capture fails, observe again before deciding whether to retry; never automatically replay side effects.
+- Batch history and assignments are held for the running app process; do not assume work resumes after an app restart.

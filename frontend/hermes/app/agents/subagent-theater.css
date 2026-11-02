@@ -1,0 +1,347 @@
+/* Copyright 2026, KronTerm. SPDX-License-Identifier: Apache-2.0 */
+.subagent-theater-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    background: #0008;
+    pointer-events: auto;
+}
+.subagent-theater {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 12001;
+    width: min(1280px, calc(100vw - 32px));
+    height: min(860px, calc(100dvh - 48px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 10px solid #000 !important;
+    border-radius: 6px !important;
+    background: #111214 !important;
+    color: #ededf0;
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 13px;
+    box-shadow: 0 24px 80px #0009;
+    pointer-events: auto;
+    color-scheme: dark;
+}
+.subagent-theater button {
+    cursor: pointer;
+}
+.subagent-theater button:focus-visible {
+    outline: 2px solid #70a8ff;
+    outline-offset: -3px;
+}
+.subagent-theater-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 48px;
+    padding: 0 10px 8px;
+    background: #000;
+}
+.subagent-theater-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #f4f4f5;
+}
+.subagent-theater-icon-button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 0;
+    color: #bfc1c7;
+}
+.subagent-theater-icon-button:hover {
+    background: #202124;
+    color: #fff;
+}
+.subagent-theater-tabs {
+    display: flex;
+    flex-shrink: 0;
+    gap: 12px;
+    overflow-x: auto;
+    border-bottom: 1px solid #292a2e;
+    padding: 0 10px;
+}
+.subagent-theater-tabs button {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 330px;
+    padding: 17px 8px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #afb1b8;
+    text-align: left;
+    font-size: 12px;
+}
+.subagent-theater-tabs button[aria-selected="true"] {
+    border-bottom-color: #528fff;
+    color: #78a8ff;
+}
+.subagent-theater-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.subagent-theater-status {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: #a9adb5;
+}
+.subagent-theater-status[data-status="running"] {
+    color: #78a8ff;
+}
+.subagent-theater-status[data-status="completed"] {
+    color: #75cf9a;
+}
+.subagent-theater-status[data-status="failed"] {
+    color: #ff9c9c;
+}
+.subagent-theater-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    flex: 1;
+    min-height: 0;
+    gap: 14px;
+    padding: 16px;
+}
+.subagent-theater-surface {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    border: 1px solid #34363d;
+    background: #090a0c;
+}
+.subagent-theater-surface-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border-bottom: 1px solid #292a2e;
+    color: #c4c6ce;
+    font-size: 11px;
+}
+.subagent-theater-surface-label span {
+    margin-left: auto;
+    font-size: 10px;
+    color: #9297a2;
+}
+.subagent-theater-image {
+    display: grid;
+    place-items: center;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.subagent-theater-image img {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.subagent-theater-empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    gap: 12px;
+    padding: 28px;
+    text-align: center;
+    color: #a9adb7;
+}
+.subagent-theater-empty h3 {
+    margin: 0;
+    color: #e8e9ec;
+    font-size: 14px;
+    font-weight: 500;
+}
+.subagent-theater-empty p {
+    max-width: 310px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+}
+.subagent-theater-empty > span {
+    color: #78a8ff;
+    font-size: 12px;
+}
+.subagent-theater-feed {
+    min-height: 0;
+    overflow: auto;
+    margin: 0;
+    padding: 0 8px 0 0;
+    list-style: none;
+    overscroll-behavior: contain;
+}
+.subagent-theater-feed li {
+    display: flex;
+    gap: 12px;
+    padding: 9px 0;
+    min-width: 0;
+}
+.subagent-theater-feed li > .codicon {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #729bff;
+}
+.subagent-theater-feed li > div {
+    flex: 1;
+    min-width: 0;
+}
+.subagent-theater-entry-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.subagent-theater-entry-heading time {
+    white-space: nowrap;
+    color: #979ba6;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+.subagent-theater-feed p {
+    margin: 8px 0 0;
+    color: #b7bac4;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+.subagent-theater-feed .subagent-theater-feed-empty {
+    color: #a9adb7;
+    line-height: 1.7;
+}
+.subagent-theater-feed [data-error="true"] p,
+.subagent-theater-error {
+    color: #ff9c9c !important;
+}
+.subagent-theater-active strong {
+    font-size: 12px;
+    font-weight: 500;
+}
+.subagent-theater-spinner {
+    animation: subagent-theater-spin 1s linear infinite;
+}
+.subagent-theater-footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 20px;
+    border-top: 1px solid #292a2e;
+    padding: 14px 12px;
+}
+.subagent-theater-footer > div {
+    flex: 1;
+    min-width: 0;
+}
+.subagent-theater-footer > div > span {
+    font-size: 10px;
+    color: #a9adb7;
+}
+.subagent-theater-footer p {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.subagent-theater-stop {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 9px 12px;
+    border: 1px solid #454954;
+    background: #252830;
+    color: #f1f2f5;
+    border-radius: 4px !important;
+    font-size: 12px;
+}
+.subagent-theater-stop:hover {
+    background: #333741;
+}
+.subagent-theater-stop:disabled {
+    opacity: 0.6;
+}
+.subagent-theater-close-hint {
+    flex-shrink: 0;
+    border-left: 1px solid #454954;
+    padding-left: 20px;
+    color: #a9adb7;
+    font-size: 10px;
+}
+@keyframes subagent-theater-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (max-width: 720px) {
+    .subagent-theater {
+        width: calc(100vw - 16px);
+        height: calc(100dvh - 32px);
+        border-width: 8px !important;
+    }
+    .subagent-theater-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(180px, 3fr) minmax(100px, 1fr);
+        gap: 12px;
+        padding: 10px;
+    }
+    .subagent-theater-footer {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .subagent-theater-close-hint {
+        width: 100%;
+        border-left: 0;
+        padding-left: 0;
+    }
+    .subagent-theater-tabs button {
+        max-width: 260px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .subagent-theater-spinner {
+        animation: none;
+    }
+}
+
+.subagent-theater-feed details {
+    flex: 1;
+    min-width: 0;
+}
+.subagent-theater-feed summary {
+    cursor: pointer;
+    list-style: none;
+}
+.subagent-theater-entry-heading > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.subagent-theater-feed summary::-webkit-details-marker {
+    display: none;
+}
+.subagent-theater-feed summary:focus-visible {
+    outline: 2px solid #70a8ff;
+    outline-offset: 3px;
+}
+.subagent-theater-feed details[open] summary > span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}

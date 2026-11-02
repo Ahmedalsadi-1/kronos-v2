@@ -26,6 +26,7 @@ export default [
             "**/make/**",
             "tsunami/frontend/scaffold/**",
             "docs/.docusaurus/**",
+            "integrations/n8n/upstream/**",
         ],
     },
 
@@ -56,7 +57,15 @@ export default [
     },
 
     {
-        files: ["emain/**/*.ts", "electron.vite.config.ts", "**/*.cjs", "eslint.config.js", "docs/babel.config.js"],
+        files: [
+            "emain/**/*.ts",
+            "electron.vite.config.ts",
+            "**/*.cjs",
+            "eslint.config.js",
+            "docs/babel.config.js",
+            "integrations/n8n/nodes/*.js",
+            "integrations/n8n/*.mjs",
+        ],
         languageOptions: {
             globals: {
                 ...globals.node,

@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { RpcApi } from "../../frontend/app/store/wshclientapi";
+import { sandboxComputerForTab } from "../computer-access-policy";
 import { ElectronWshClient } from "../emain-wsh";
 import { withKronosCodeAttachArgs } from "../kronoscode-runtime";
 import { KronTermAcpSurfaceSystemPrompt } from "../kronterm-surface-prompt";
@@ -540,12 +541,16 @@ export class AcpAgentManager extends EventEmitter {
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_TOKEN", value: toolServer.token });
             }
             const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
-            const sharedSkillDirs = Array.from(new Set([
-                ...(process.env.KRONTERM_SHARED_SKILL_DIRS ?? "").split(path.delimiter).filter(Boolean),
-                ...SharedSkillDirectories.map((directory) => path.join(this.workspace, directory)),
-                path.resolve(import.meta.dirname, "../..", ".agents/skills"),
-                ...(resourcesPath ? [path.join(resourcesPath, "kronterm-skills")] : []),
-            ].filter((directory) => fs.existsSync(directory) && fs.statSync(directory).isDirectory())));
+            const sharedSkillDirs = Array.from(
+                new Set(
+                    [
+                        ...(process.env.KRONTERM_SHARED_SKILL_DIRS ?? "").split(path.delimiter).filter(Boolean),
+                        ...SharedSkillDirectories.map((directory) => path.join(this.workspace, directory)),
+                        path.resolve(import.meta.dirname, "../..", ".agents/skills"),
+                        ...(resourcesPath ? [path.join(resourcesPath, "kronterm-skills")] : []),
+                    ].filter((directory) => fs.existsSync(directory) && fs.statSync(directory).isDirectory())
+                )
+            );
             if (sharedSkillDirs.length > 0) {
                 surfaceEnv.push({ name: "KRONTERM_SHARED_SKILL_DIRS", value: sharedSkillDirs.join(path.delimiter) });
             }
@@ -678,7 +683,15 @@ export class AcpAgentManager extends EventEmitter {
         }
     }
 
+    ownsActiveHostTab(tabId: string): boolean {
+        return this.surfaceContext?.tabId === tabId && (this.status === "running" || this.confirmations.length > 0);
+    }
+
     async sendMessage(opts: AcpIpcSendMessageRequest): Promise<void> {
+        if (sandboxComputerForTab(this.surfaceContext?.tabId))
+            throw new Error(
+                "Computer mode requires KronTerm Agent. Disable Computer mode before using an external ACP engine with host tools."
+            );
         if (!this.transport || !this.transport.isInitialized()) {
             throw new Error("Agent not initialized");
         }
@@ -986,6 +999,10 @@ export class AcpAgentManager extends EventEmitter {
 }
 
 const agentManagers = new Map<string, AcpAgentManager>();
+
+export function hasRunningExternalAgentForTab(tabId: string): boolean {
+    return [...agentManagers.values()].some((manager) => manager.ownsActiveHostTab(tabId));
+}
 
 export function getAgentManager(conversationId: string): AcpAgentManager | undefined {
     return agentManagers.get(conversationId);

@@ -337,7 +337,10 @@ test("the first window binds future app launches to the same desktop and display
     const { sessionId } = await runtime.perform("start", { taskId: "boundary" });
     await runtime.perform("launch", { sessionId, bundleId });
     spaceIds = ["2"];
-    await assert.rejects(runtime.perform("launch", { sessionId, bundleId: "com.example.Other" }), /assigned Space/);
+    const result = await runtime.perform("launch", { sessionId, bundleId: "com.example.Other" });
+    assert.equal(result.launched, true);
+    assert.equal(result.windowsVerified, false);
+    assert.match(result.problem, /assigned Space/);
     const group = (await runtime.perform("list", {})).workspaces[0];
     assert.deepEqual(group.spaceIds, ["1"]);
     assert.equal(group.paused, true);
@@ -636,4 +639,26 @@ test("unavailable or malformed inventories never remove live window membership",
         assert.equal(group.apps[0].inventoryVerified, false);
         assert.deepEqual(group.apps[0].enrolledWindowIds, [44]);
     }
+});
+
+test("launch reports its completed side effect when window inventory is unavailable", async () => {
+    let launches = 0;
+    const runtime = new NativeBackgroundWorkspaces(async (request) => {
+        if (request.action === "launch") {
+            launches++;
+            return { pid: 123, bundleId, launchTime: 1 };
+        }
+        return {};
+    });
+    const { sessionId } = await runtime.perform("start", { taskId: "launch-recovery" });
+    const result = await runtime.perform("launch", { sessionId, bundleId });
+    assert.equal(result.launched, true);
+    assert.equal(result.windowsVerified, false);
+    assert.equal(result.app.pid, 123);
+    assert.equal(result.paused, true);
+    assert.match(result.nextAction, /Do not retry/);
+    await assert.rejects(runtime.perform("launch", { sessionId, bundleId }), /Resume explicitly/);
+    assert.equal(launches, 1);
+    const finished = await runtime.perform("finish", { sessionId });
+    assert.equal(finished.appsPreserved[0].pid, 123);
 });

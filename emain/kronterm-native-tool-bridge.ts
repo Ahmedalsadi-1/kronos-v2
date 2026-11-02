@@ -97,6 +97,12 @@ export class KronTermNativeToolBridge extends WshBridge {
     async withToolTarget<T>(target: ToolTarget, operation: () => Promise<T>): Promise<T> {
         const routingStart = performance.now();
         const caller = structuredClone(this.context());
+        if (
+            caller.sandboxComputerId &&
+            ((target.targetTabId && target.targetTabId !== caller.tabId) ||
+                (target.targetWorkspaceId && target.targetWorkspaceId !== caller.workspaceId))
+        )
+            throw new ToolFailure("SCOPE_DENIED", "Computer mode cannot target another workspace.");
         if (caller.hostMode === "web-fullscreen") {
             if (
                 (target.targetTabId && target.targetTabId !== caller.tabId) ||
@@ -307,6 +313,7 @@ export class KronTermNativeToolBridge extends WshBridge {
         }
         return {
             nativeCallerId: context.nativeCallerId,
+            sandboxComputerId: context.sandboxComputerId,
             token: token.token,
             tabId: token.tabid,
             blockId: token.blockid || undefined,
@@ -390,6 +397,20 @@ export class KronTermNativeToolBridge extends WshBridge {
 
     private async rpc(command: string, data: unknown, route?: string): Promise<unknown> {
         const context = this.context();
+        if ((context.sandboxComputerId || context.delegationScope === "widgets") && command.startsWith("widget")) {
+            const id = (data as { blockid?: string })?.blockid;
+            if (!id) throw new Error("Computer mode requires an explicit widget target.");
+            const info = (await this.rpc("blockinfo", id)) as BlockInfoData;
+            if (info.block?.meta?.view === "web" && !/^https?:\/\//.test(String(info.block.meta.url || "")))
+                throw new Error("Computer mode cannot inspect local-file browser widgets.");
+            if (
+                info.tabid !== context.tabId ||
+                !["web", "kronoscanvas", "sysinfo", "helpview"].includes(info.block?.meta?.view)
+            )
+                throw new Error(
+                    "Computer mode cannot read or write host terminals, files, native apps or agent/settings widgets. Use the sandbox_vm tools for terminal, files and desktop actions."
+                );
+        }
         const operation = ToolOperationContext.getStore();
         if (operation?.signal.aborted)
             throw new ToolFailure("CANCELLED", "Tool execution was cancelled", false, !operation.readOnly);
@@ -1183,9 +1204,10 @@ export class KronTermNativeToolBridge extends WshBridge {
     }
 
     async widgetSnapshot(targetBlockId: string): Promise<string> {
-        return json(
-            await this.rpc("widgetsnapshot", { blockid: this.assertBlockScope(targetBlockId) }, this.tabRoute())
-        );
+        const blockid = this.assertBlockScope(targetBlockId);
+        const snapshot = await this.rpc("widgetsnapshot", { blockid }, this.tabRoute());
+        const screenshot = await this.widgetScreenshot(blockid);
+        return json({ ...(snapshot as Record<string, unknown>), screenshot });
     }
 
     async widgetFind(

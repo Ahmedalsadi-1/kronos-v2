@@ -1,6 +1,58 @@
 import type { SurfaceCapability } from "./wsh-bridge.js";
 
 export function isToolAllowedBySurfaceCapability(name: string, capability?: SurfaceCapability): boolean {
+    if (capability?.delegationScope === "sandbox")
+        return (
+            name.startsWith("sandbox_vm_") ||
+            name === "tool_search" ||
+            name === "delegation_status" ||
+            name.startsWith("shared_skill_")
+        );
+    if (capability?.delegationScope === "widgets")
+        return (
+            name === "tool_search" ||
+            name === "delegation_status" ||
+            name === "workspace_snapshot" ||
+            [
+                "widget_snapshot",
+                "widget_screenshot",
+                "widget_find",
+                "widget_inspect",
+                "widget_element_at",
+                "widget_click",
+                "widget_type",
+                "widget_press",
+                "widget_scroll",
+                "widget_hover",
+                "widget_mouse_move",
+            ].includes(name)
+        );
+    if (capability?.sandboxComputerId) {
+        return (
+            name === "surface_status" ||
+            name === "delegation_status" ||
+            name === "tool_search" ||
+            name.startsWith("shared_skill_") ||
+            [
+                "widget_snapshot",
+                "widget_screenshot",
+                "widget_screenshot_annotated",
+                "widget_find",
+                "widget_inspect",
+                "widget_element_at",
+                "widget_click",
+                "widget_type",
+                "widget_press",
+                "widget_scroll",
+                "widget_scroll_to",
+                "widget_drag",
+                "widget_hover",
+                "widget_mouse_move",
+            ].includes(name) ||
+            name === "workspace_snapshot" ||
+            name.startsWith("sandbox_vm_")
+        );
+    }
     if (!capability || capability.hostMode !== "web-fullscreen") {
         return true;
     }

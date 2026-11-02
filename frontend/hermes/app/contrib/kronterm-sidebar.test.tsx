@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
 import {
     $krontermSidebarOwner,
     $krontermSidebarTarget,
@@ -11,6 +12,7 @@ import { KrontermSidebar } from "./kronterm-sidebar";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+vi.mock("@hermes/app/workflows", () => ({ WorkflowsView: () => <div>Workflow folders</div> }));
 vi.mock("@hermes/components/ui/sidebar", () => ({ SidebarProvider: ({ children }) => children }));
 vi.mock("./kronterm-inspector", () => ({ KrontermInspector: () => <div>Inspector</div> }));
 vi.mock("@hermes/store/layout", async () => {
@@ -20,6 +22,7 @@ vi.mock("@hermes/store/layout", async () => {
 
 afterEach(() => {
     $krontermSidebarTarget.set(null);
+    $workflowSidebarMode.set("sessions");
     document.body.replaceChildren();
 });
 
@@ -64,6 +67,11 @@ it("keeps one sidebar owner and preserves its draft while the rail is hidden", a
         target.hidden = false;
         expect(target.querySelector("input")).toBe(input);
         expect(input.value).toBe("saved search");
+        await act(async () => target.querySelector<HTMLButtonElement>("#kronterm-navigation-workflows").click());
+        expect(target.querySelector("#kronterm-navigation-pane-sessions").hasAttribute("hidden")).toBe(true);
+        expect(target.querySelector("input")).toBe(input);
+        await act(async () => target.querySelector<HTMLButtonElement>("#kronterm-navigation-sessions").click());
+        expect(target.querySelector("input").value).toBe("saved search");
         await act(async () => root.unmount());
         expect($krontermSidebarOwner.get()).toBeNull();
         expect(target.childElementCount).toBe(0);

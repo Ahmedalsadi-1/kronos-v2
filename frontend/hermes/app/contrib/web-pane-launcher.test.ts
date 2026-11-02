@@ -32,6 +32,20 @@ describe("Hermes web pane launcher", () => {
         expect(isWebModeTitlebarTool("kronterm-chat")).toBe(false);
     });
 
+    it("reuses the Computer widget through the desktop bridge", async () => {
+        const openMachines = vi.fn().mockResolvedValue({ ok: true });
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal("window", { hermesDesktop: { krontermSurfaces: { openMachines } }, dispatchEvent });
+        try {
+            routeKronTermLauncherAction("sandbox", false);
+            await Promise.resolve();
+            expect(openMachines).toHaveBeenCalledWith("desktop");
+            expect(dispatchEvent).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
     it("creates and reveals an internal terminal", () => {
         const dependencies = makeDependencies();
         const launch = makeHermesWebPaneLauncher(dependencies);

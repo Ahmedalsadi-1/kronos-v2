@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SystemButton, SystemMaterial, SystemToolbar } from "@/app/components/system-ui";
+import { uxCloseBlock } from "@/app/store/keymodel";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
 import type { ComputerTargetSnapshot } from "@/types/computer-targets";
 import { useAtomValue } from "jotai";
@@ -589,7 +590,11 @@ export function ComputersView({ model, contentRef }: ViewComponentProps<Computer
     const state = useAtomValue(model.stateAtom);
     return (
         <div ref={contentRef} className="kt-computers-host">
-            <DeviceWorkspace state={state} controller={model.controller} />
+            <DeviceWorkspace
+                state={state}
+                controller={model.controller}
+                onCloseWidget={() => uxCloseBlock(model.blockId, () => model.nodeModel?.onClose())}
+            />
         </div>
     );
 }

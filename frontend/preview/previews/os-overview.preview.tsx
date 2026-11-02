@@ -27,15 +27,27 @@ function initialState(id: string): OSModeState {
 
 export function OSOverviewPreview() {
     const [theme, setTheme] = useState(() => new URLSearchParams(location.search).get("theme") || "light");
-    const [spaces, setSpaces] = useState([
-        { id: "personal", name: "Personal" },
-        { id: "agent", name: "Agent research" },
-    ]);
-    const [active, setActive] = useState("personal");
-    const [states, setStates] = useState<Record<string, OSModeState>>({
-        personal: initialState("personal"),
-        agent: initialState("agent"),
-    });
+    const [spaces, setSpaces] = useState(
+        [
+            "Research",
+            "Development",
+            "Organize",
+            "Scraping",
+            "Koda",
+            "Website",
+            "Notes",
+            "Design",
+            "Build",
+            "Testing",
+            "Docs",
+            "Personal",
+            "Archive",
+        ].map((name, index) => ({ id: `space-${index + 1}`, name }))
+    );
+    const [active, setActive] = useState("space-2");
+    const [states, setStates] = useState<Record<string, OSModeState>>(() =>
+        Object.fromEntries(spaces.map((space) => [space.id, initialState(space.id)]))
+    );
     const [viewport, setViewport] = useState({ width: 1440, height: 852 });
     const root = useRef<HTMLDivElement>(null);
     const state = states[active];
@@ -60,7 +72,7 @@ export function OSOverviewPreview() {
                     top: 48,
                     background: "var(--kt-content)",
                     color: "var(--kt-label)",
-                    "--accent-color": "#007aff",
+                    "--accent-color": "#8b5cf6",
                 } as CSSProperties
             }
         >
@@ -106,8 +118,18 @@ export function OSOverviewPreview() {
                     workspaces={spaces}
                     currentWorkspaceId={active}
                     state={state}
-                    blocks={[]}
+                    blocks={[
+                        { blockId: "browser", title: "Browser", icon: "view:web" },
+                        { blockId: "terminal", title: "Terminal", icon: "view:term" },
+                        { blockId: "files", title: "Files", icon: "view:preview" },
+                    ]}
                     onSwitch={setActive}
+                    onDelete={(id) => {
+                        if (spaces.length < 2) return;
+                        const remaining = spaces.filter((space) => space.id !== id);
+                        setSpaces(remaining);
+                        if (active === id) setActive(remaining[0].id);
+                    }}
                     onCreate={() => {
                         const id = `space-${spaces.length + 1}`;
                         setSpaces((current) => [...current, { id, name: `Workspace ${current.length + 1}` }]);

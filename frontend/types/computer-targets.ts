@@ -24,6 +24,7 @@ export type ComputerTarget = {
     controlOwner: "user" | "agent";
     controlGeneration: number;
     automationPaused?: boolean;
+    availabilityReason?: string;
     labs: true;
 };
 export type ComputerTargetSnapshot = {

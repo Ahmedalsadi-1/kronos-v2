@@ -60,10 +60,11 @@ export type KronTermToolFamilyId = keyof typeof KronTermToolFamilies;
 export function kronTermToolFamily(name: string): KronTermToolFamilyId | null {
     if (name.startsWith("workspace_canvas_") || name.startsWith("canvas_")) return "canvas";
     if (name === "block_run_command" || name.startsWith("terminal_")) return "terminal";
-    if (/^(linux_desktop_|sandbox_task_|device_)/.test(name)) return "sandbox";
+    if (/^(linux_desktop_|sandbox_task_|sandbox_vm_|device_)/.test(name)) return "sandbox";
     if (name.startsWith("kron_computer_")) return "desktop";
     if (name.startsWith("shared_skill_")) return "skills";
-    if (name.startsWith("acp_")) return "agents";
+    if (name.startsWith("acp_") || name === "delegation_status") return "agents";
+    if (name.startsWith("n8n_")) return "agents";
     if (name.startsWith("lsp_")) return "lsp";
     if (name.startsWith("hud_")) return "hud";
     if (name.startsWith("browser_")) return "browser";

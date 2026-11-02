@@ -12,9 +12,6 @@ import { lazy, memo, type ReactNode, Suspense, useCallback, useEffect, useState 
 import "./web-mode.scss";
 
 const LazyHermesApp = lazy(async () => ({ default: (await import("@/app/view/hermes/hermes-app")).HermesApp }));
-const LazySandboxDesktopPane = lazy(async () => ({
-    default: (await import("@/app/view/sandbox/sandbox")).SandboxDesktopPane,
-}));
 
 type WebCapabilityPreset = "web-agent" | "developer" | "research" | "custom";
 type StoredWebCapabilities = HermesWebCapabilities & { preset: WebCapabilityPreset };
@@ -108,9 +105,7 @@ const WebModeView = memo(
     }) => {
         const [runtime, setRuntime] = useState<WebModeRuntimeState>({ status: "starting" });
         const [retryKey, setRetryKey] = useState(0);
-        const [sandboxOpen, setSandboxOpen] = useState(false);
         const [capabilities, setCapabilities] = useState(() => normalizeWebCapabilities(initialCapabilities));
-        const sandboxSessionId = `hermes-web-${workspaceId}`;
         prepareHermesWebModeHost();
 
         useEffect(() => {
@@ -178,7 +173,10 @@ const WebModeView = memo(
         useEffect(() => {
             const handleSandbox = (event: Event) => {
                 const open = (event as CustomEvent<{ open?: boolean }>).detail?.open;
-                setSandboxOpen(open !== false);
+                if (open === false) return;
+                void window.hermesDesktop?.krontermSurfaces?.openMachines?.("desktop").then((result) => {
+                    if (!result.ok) console.error(result.error);
+                });
             };
             window.addEventListener("kronterm:hermes-web-sandbox", handleSandbox);
             return () => window.removeEventListener("kronterm:hermes-web-sandbox", handleSandbox);
@@ -196,41 +194,6 @@ const WebModeView = memo(
                     >
                         <LazyHermesApp key={runtime.connection.baseUrl} hostMode="web-fullscreen" webMode />
                     </Suspense>
-                )}
-                {sandboxOpen && (
-                    <aside className="web-mode-sandbox" aria-label="Sandbox desktop">
-                        <header>
-                            <span>
-                                <i className="fa-solid fa-desktop" aria-hidden="true" /> Sandbox
-                            </span>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    const result = await getApi().listLinuxDesktops();
-                                    if (result.success === false) return;
-                                    const desktop = result.data.find((item) => item.id == "linux-vm:ubuntu");
-                                    if (!desktop) return;
-                                    await getApi().performLinuxDesktopAction({
-                                        desktopId: desktop.id,
-                                        action: "stop",
-                                        expectedGeneration: desktop.controlGeneration,
-                                    });
-                                }}
-                                aria-label="Stop sandbox"
-                                title="Stop this workspace sandbox"
-                            >
-                                <i className="fa-solid fa-stop" aria-hidden="true" />
-                            </button>
-                            <button type="button" onClick={() => setSandboxOpen(false)} aria-label="Close sandbox">
-                                <i className="fa-solid fa-xmark" aria-hidden="true" />
-                            </button>
-                        </header>
-                        <div className="web-mode-sandbox-content">
-                            <Suspense fallback={<div className="web-mode-status">Loading sandbox…</div>}>
-                                <LazySandboxDesktopPane sessionId={sandboxSessionId} />
-                            </Suspense>
-                        </div>
-                    </aside>
                 )}
                 <details className="web-mode-tools">
                     <summary>

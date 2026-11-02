@@ -118,3 +118,44 @@ test("standalone tools forward through the existing authenticated native endpoin
         else process.env.KRONTERM_NATIVE_TOOL_TOKEN = originalToken;
     }
 });
+
+test("fleet tools validate unique bounded batches and route management separately from input", async () => {
+    const tools = createTools();
+    const device = { targetId: TargetId, expectedGeneration: 3, assignee: "bot-one" };
+    assert.equal(tools.device_batch_boot.inputSchema.safeParse({ devices: [device, device] }).success, false);
+    assert.equal(tools.device_batch_boot.inputSchema.safeParse({ devices: [] }).success, false);
+    assert.equal(tools.device_assign.annotations.readOnlyHint, false);
+    assert.equal(tools.device_assignments.annotations.readOnlyHint, true);
+    const calls: unknown[] = [];
+    setComputerTargetToolBridge({
+        list: async () => [],
+        perform: async () => {
+            throw new Error("Unexpected input action");
+        },
+        manage: async (name, args) => {
+            calls.push({ name, args });
+            return { assigned: true };
+        },
+    });
+    try {
+        const result = await tools.device_assign.handler(device);
+        assert.equal(result.isError, undefined);
+        assert.deepEqual(calls, [{ name: "device_assign", args: device }]);
+    } finally {
+        setComputerTargetToolBridge(undefined);
+    }
+});
+
+test("fleet queue tools accept bounded concurrency and observed steps require evidence", () => {
+    const tools = createTools();
+    const item = { targetId: TargetId, expectedGeneration: 1, assignee: "bot" };
+    assert.equal(tools.device_batch_start.inputSchema.safeParse({ devices: [item], concurrency: 4 }).success, true);
+    assert.equal(tools.device_batch_start.inputSchema.safeParse({ devices: [item], concurrency: 5 }).success, false);
+    assert.equal(
+        tools.device_step.inputSchema.safeParse({ targetId: TargetId, expectedGeneration: 1, action: "home" }).success,
+        false
+    );
+    assert.equal(tools.device_observe.annotations.readOnlyHint, true);
+    assert.equal(tools.device_step.annotations.readOnlyHint, false);
+    assert.equal(deviceResult({ imageDataUrl: "data:image/jpeg;base64,aGVsbG8=" }).content[1].type, "image");
+});

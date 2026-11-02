@@ -104,6 +104,7 @@ export function blockViewToName(view: string): string {
     if (view == "review") {
         return "Review";
     }
+    if (view == "sandbox") return "Computer";
     if (view == "linux-vms") {
         return "Devices";
     }

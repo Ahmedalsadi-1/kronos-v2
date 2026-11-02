@@ -145,7 +145,8 @@ export function mountAgentCursor(
     draw = drawAgentCursor,
     advance = advanceAgentCursor,
     onPosition?: (point: CursorPoint) => void,
-    sampleParticle = sampleAgentParticle
+    sampleParticle = sampleAgentParticle,
+    surfaceEffects = true
 ) {
     const canvas = document.createElement("canvas");
     const aura = document.createElement("div");
@@ -219,7 +220,7 @@ export function mountAgentCursor(
             if (pendingClick) {
                 clickAt = now;
                 pendingClick = false;
-                if (!reduced) ripples = [...ripples.slice(-3), { point: { ...target }, at: now }];
+                if (!reduced && surfaceEffects) ripples = [...ripples.slice(-3), { point: { ...target }, at: now }];
             }
         }
         const width = host.clientWidth,
@@ -232,73 +233,76 @@ export function mountAgentCursor(
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, width, height);
         ripples = reduced ? [] : ripples.filter((ripple) => now - ripple.at < 1400);
-        const spacing = Math.max(2.5, Math.ceil(Math.sqrt((width * height) / 50000)));
-        const surface = { width, height };
-        ctx.save();
-        const bands: { x: number; y: number }[][] = Array.from({ length: 8 }, () => []);
-        for (let y = 4; y < height; y += spacing) {
-            for (let x = 4; x < width; x += spacing) {
-                const particle = sampleParticle(x, y, reduced ? 0 : now, ripples, surface);
-                bands[Math.min(7, Math.floor(particle.alpha * 8))].push(particle);
-            }
-        }
-        for (const [index, particles] of bands.entries()) {
-            if (!particles.length) continue;
-            ctx.globalAlpha = (index + 1) / 8;
-            ctx.fillStyle = "rgba(196,167,228,0.38)";
-            ctx.beginPath();
-            for (const particle of particles) ctx.rect(particle.x - 0.5, particle.y - 0.5, 2.7, 2.7);
-            ctx.fill();
-            ctx.fillStyle = "#ffffff";
-            ctx.beginPath();
-            for (const particle of particles) ctx.rect(particle.x, particle.y, 1.8, 1.8);
-            ctx.fill();
-        }
-        ctx.restore();
-        for (const ripple of ripples) {
-            const progress = Math.max(0, (now - ripple.at) / 1400);
-            const radius = 8 + (now - ripple.at) * 0.2;
-            const opacity = (1 - progress) ** 2;
+        if (surfaceEffects) {
+            const spacing = Math.max(2.5, Math.ceil(Math.sqrt((width * height) / 50000)));
+            const surface = { width, height };
             ctx.save();
-            ctx.translate(ripple.point.x, ripple.point.y);
-            const hue = ctx.createRadialGradient(0, 0, radius * 0.65, 0, 0, radius + 12);
-            hue.addColorStop(0, "rgba(140,166,213,0)");
-            hue.addColorStop(0.65, `rgba(199,155,222,${opacity * 0.15})`);
-            hue.addColorStop(1, "rgba(170,164,205,0)");
-            ctx.fillStyle = hue;
-            ctx.fillRect(-radius - 12, -radius - 12, (radius + 12) * 2, (radius + 12) * 2);
-            ctx.beginPath();
-            for (let segment = 0; segment <= 80; segment++) {
-                const angle = (segment / 80) * Math.PI * 2;
-                const bentRadius =
-                    radius + Math.sin(angle * 3 + now * 0.0017) * 9 + Math.sin(angle * 5 - now * 0.001) * 5;
-                const px = Math.cos(angle) * bentRadius,
-                    py = Math.sin(angle) * bentRadius;
-                if (segment === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
+            const bands: { x: number; y: number }[][] = Array.from({ length: 8 }, () => []);
+            for (let y = 4; y < height; y += spacing) {
+                for (let x = 4; x < width; x += spacing) {
+                    const particle = sampleParticle(x, y, reduced ? 0 : now, ripples, surface);
+                    bands[Math.min(7, Math.floor(particle.alpha * 8))].push(particle);
+                }
             }
-            ctx.closePath();
-            ctx.strokeStyle = `rgba(211,177,234,${opacity * 0.38})`;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            for (let index = 0; index < 16; index++) {
-                const angle = index * 2.39996;
-                const distance = radius + Math.sin(index * 4.1) * 10;
-                const size = index % 3 === 0 ? 1.5 : 0.8;
-                ctx.fillStyle = `rgba(188,204,234,${opacity * (0.3 + (index % 3) * 0.15)})`;
-                ctx.fillRect(Math.cos(angle) * distance, Math.sin(angle) * distance, size, size);
+            for (const [index, particles] of bands.entries()) {
+                if (!particles.length) continue;
+                ctx.globalAlpha = (index + 1) / 8;
+                ctx.fillStyle = "rgba(196,167,228,0.38)";
+                ctx.beginPath();
+                for (const particle of particles) ctx.rect(particle.x - 0.5, particle.y - 0.5, 2.7, 2.7);
+                ctx.fill();
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                for (const particle of particles) ctx.rect(particle.x, particle.y, 1.8, 1.8);
+                ctx.fill();
             }
             ctx.restore();
+            for (const ripple of ripples) {
+                const progress = Math.max(0, (now - ripple.at) / 1400);
+                const radius = 8 + (now - ripple.at) * 0.2;
+                const opacity = (1 - progress) ** 2;
+                ctx.save();
+                ctx.translate(ripple.point.x, ripple.point.y);
+                const hue = ctx.createRadialGradient(0, 0, radius * 0.65, 0, 0, radius + 12);
+                hue.addColorStop(0, "rgba(140,166,213,0)");
+                hue.addColorStop(0.65, `rgba(199,155,222,${opacity * 0.15})`);
+                hue.addColorStop(1, "rgba(170,164,205,0)");
+                ctx.fillStyle = hue;
+                ctx.fillRect(-radius - 12, -radius - 12, (radius + 12) * 2, (radius + 12) * 2);
+                ctx.beginPath();
+                for (let segment = 0; segment <= 80; segment++) {
+                    const angle = (segment / 80) * Math.PI * 2;
+                    const bentRadius =
+                        radius + Math.sin(angle * 3 + now * 0.0017) * 9 + Math.sin(angle * 5 - now * 0.001) * 5;
+                    const px = Math.cos(angle) * bentRadius,
+                        py = Math.sin(angle) * bentRadius;
+                    if (segment === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = `rgba(211,177,234,${opacity * 0.38})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                for (let index = 0; index < 16; index++) {
+                    const angle = index * 2.39996;
+                    const distance = radius + Math.sin(index * 4.1) * 10;
+                    const size = index % 3 === 0 ? 1.5 : 0.8;
+                    ctx.fillStyle = `rgba(188,204,234,${opacity * (0.3 + (index % 3) * 0.15)})`;
+                    ctx.fillRect(Math.cos(angle) * distance, Math.sin(angle) * distance, size, size);
+                }
+                ctx.restore();
+            }
         }
         draw(ctx, point, now - clickAt, label, reduced);
         onPosition?.(point);
-        if (!reduced || moving || ripples.length) frame = requestAnimationFrame(render);
+        if ((!reduced && surfaceEffects) || moving || ripples.length || (!reduced && now - clickAt < 320))
+            frame = requestAnimationFrame(render);
     };
     return {
         update(next: CursorPoint, nextLabel = "", click = false, reduce = media.matches) {
             if (destroyed || !ctx || !Number.isFinite(next.x) || !Number.isFinite(next.y)) return;
             target = { ...next };
-            aura.hidden = false;
+            aura.hidden = !surfaceEffects;
             aura.toggleAttribute("data-reduced-motion", reduce);
             point ??= { ...target };
             label = nextLabel;

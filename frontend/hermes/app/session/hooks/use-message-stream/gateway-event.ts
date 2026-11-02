@@ -107,7 +107,8 @@ import { hasSessionInfoStatePatch, sessionInfoStatePatch, SUBAGENT_EVENT_TYPES, 
 function reportHostToolActivity(
   phase: 'failed' | 'running' | 'succeeded',
   sessionId: string,
-  payload: Record<string, unknown> | undefined
+  payload: Record<string, unknown> | undefined,
+  foreground = true
 ): void {
   const name = typeof payload?.name === 'string' ? payload.name : ''
 
@@ -118,6 +119,7 @@ function reportHostToolActivity(
   try {
     window.hermesDesktop?.krontermActivity?.report({
       phase,
+      foreground,
       toolId: typeof payload?.tool_id === 'string' ? payload.tool_id : undefined,
       name,
       args: payload?.args && typeof payload.args === 'object' ? (payload.args as Record<string, unknown>) : undefined,
@@ -1076,7 +1078,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         upsertToolCall(sessionId, toTodoPayload(payload) ?? payload, 'running', event.type, occurredAt)
 
         if (event.type === 'tool.start') {
-          reportHostToolActivity('running', sessionId, payload)
+          reportHostToolActivity('running', sessionId, payload, isActiveEvent)
         }
 
         if (isActiveEvent) {

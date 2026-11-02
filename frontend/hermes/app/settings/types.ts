@@ -8,6 +8,8 @@ export type SettingsView =
     | "about"
     | "billing"
     | "connections"
+    | "computers"
+    | "delegation"
     | "gateway"
     | "keybinds"
     | "keys"

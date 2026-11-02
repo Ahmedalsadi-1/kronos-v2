@@ -37,7 +37,7 @@ import {
     ShieldCheck,
     Trash2,
     X,
-} from "lucide-react";
+} from "@/app/components/system-ui/os-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 type OSSystemCenter = "activity" | "control";

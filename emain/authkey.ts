@@ -7,14 +7,36 @@ import { getWebServerEndpoint, getWSServerEndpoint } from "../frontend/util/endp
 const AuthKeyHeader = "X-AuthKey";
 export const WaveAuthKeyEnv = "WAVETERM_AUTH_KEY";
 export const AuthKey = crypto.randomUUID();
-const RequestGrants = new Map<string, { header: string; value: string; senders: Set<number> }>();
+const RequestGrants = new Map<
+    string,
+    { header: string; value: string; senders: Set<number>; socketHeaders?: Record<string, string> }
+>();
 let RequestSession: Electron.Session;
 
-export function grantManagedRuntimeRequests(origin: string, header: string, value: string, senderId: number) {
-    const grant = RequestGrants.get(origin) ?? { header, value, senders: new Set<number>() };
+export function grantManagedRuntimeRequests(
+    origin: string,
+    header: string,
+    value: string,
+    senderId: number,
+    socketHeaders?: Record<string, string>
+) {
+    const grant = RequestGrants.get(origin) ?? { header, value, senders: new Set<number>(), socketHeaders: undefined };
     grant.senders.add(senderId);
+    if (socketHeaders) grant.socketHeaders = socketHeaders;
     RequestGrants.set(origin, grant);
     if (RequestSession) configureAuthKeyRequestInjection(RequestSession);
+}
+
+export function refreshManagedRuntimeSocketHeaders(origin: string, headers: Record<string, string>) {
+    const grant = RequestGrants.get(origin);
+    if (grant) grant.socketHeaders = headers;
+}
+
+export function revokeManagedRuntimeSender(senderId: number) {
+    for (const [origin, grant] of RequestGrants) {
+        grant.senders.delete(senderId);
+        if (!grant.senders.size) RequestGrants.delete(origin);
+    }
 }
 
 export function revokeManagedRuntimeRequests(origin: string) {
@@ -54,7 +76,17 @@ export function configureAuthKeyRequestInjection(session: Electron.Session) {
             details.requestHeaders[AuthKeyHeader] = AuthKey;
         }
         const grant = RequestGrants.get(origin);
-        if (grant?.senders.has(details.webContentsId)) details.requestHeaders[grant.header] = grant.value;
+        if (grant?.senders.has(details.webContentsId)) {
+            details.requestHeaders[grant.header] = grant.value;
+            if (details.resourceType === "webSocket" && new URL(details.url).pathname === "/rest/push") {
+                for (const name of Object.keys(grant.socketHeaders ?? {})) {
+                    for (const key of Object.keys(details.requestHeaders)) {
+                        if (key.toLowerCase() === name.toLowerCase()) delete details.requestHeaders[key];
+                    }
+                    details.requestHeaders[name] = grant.socketHeaders[name];
+                }
+            }
+        }
         callback({ requestHeaders: details.requestHeaders });
     });
 }

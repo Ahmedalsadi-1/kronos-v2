@@ -18,6 +18,7 @@
         "build:prod": "node --max-old-space-size=8192 ./node_modules/electron-vite/bin/electron-vite.js build --mode production",
         "check:build-output": "node scripts/check-build-output.mjs",
         "coverage": "vitest run --coverage",
+        "prepare:hermes": "node scripts/prepare-hermes-delegation-runtime.mjs",
         "check:ts": "node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
         "test": "vitest",
         "postinstall": "node ./postinstall.cjs",

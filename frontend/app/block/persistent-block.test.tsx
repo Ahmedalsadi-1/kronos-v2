@@ -260,3 +260,106 @@ describe("persistent block ownership", () => {
         expect(first.focusNode).not.toHaveBeenCalled();
     });
 });
+
+describe("persistent surface OS input", () => {
+    it("routes OS gestures before focus while preserving ordinary widget input and the live mount", async () => {
+        vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+        vi.stubGlobal(
+            "requestAnimationFrame",
+            vi.fn(() => 1)
+        );
+        vi.stubGlobal("cancelAnimationFrame", vi.fn());
+        const element = document.createElement("div");
+        document.body.append(element);
+        const root = createRoot(element);
+        const browser = model();
+        const order: string[] = [];
+        const pointer = vi.fn((event) => {
+            order.push("capture");
+            if (event.button === 1) event.preventDefault();
+        });
+        browser.focusNode = vi.fn(() => order.push("focus"));
+        const wheel = vi.fn((event) => {
+            if (event.ctrlKey) event.preventDefault();
+        });
+        const bubble = vi.fn();
+        try {
+            await act(() =>
+                root.render(
+                    <div onWheel={bubble}>
+                        <PersistentBlockProvider blockIds={["browser"]}>
+                            <PersistentBlock
+                                nodeModel={browser}
+                                preview={false}
+                                surfaceInput={{ onPointerDownCapture: pointer, onWheel: wheel }}
+                            />
+                        </PersistentBlockProvider>
+                    </div>
+                )
+            );
+            const input = element.querySelector("input");
+            input.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+            expect(order).toEqual(["capture", "focus"]);
+            input.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 1 }));
+            expect(order).toEqual(["capture", "focus", "capture"]);
+            const scroll = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 10 });
+            input.dispatchEvent(scroll);
+            expect(scroll.defaultPrevented).toBe(false);
+            expect(wheel).toHaveBeenCalledTimes(1);
+            expect(bubble).not.toHaveBeenCalled();
+            input.dispatchEvent(
+                new WheelEvent("wheel", { bubbles: true, cancelable: true, ctrlKey: true, deltaY: 10 })
+            );
+            expect(wheel).toHaveBeenCalledTimes(2);
+            expect(counts.mounts).toBe(1);
+        } finally {
+            await act(() => root.unmount());
+            element.remove();
+        }
+    });
+});
+
+it("captures explicit Hand gestures over guest surfaces without replacing the live block", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal(
+        "requestAnimationFrame",
+        vi.fn(() => 1)
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    const browser = model();
+    const pan = vi.fn((event) => event.preventDefault());
+    const render = (capturePointer: boolean) =>
+        act(() =>
+            root.render(
+                <PersistentBlockProvider blockIds={["browser"]}>
+                    <PersistentBlock
+                        nodeModel={browser}
+                        preview={false}
+                        surfaceInput={{ capturePointer, onPointerDownCapture: pan }}
+                    />
+                </PersistentBlockProvider>
+            )
+        );
+    try {
+        await render(false);
+        const input = element.querySelector("input");
+        expect(element.querySelector("[data-live-block-pan-capture]")).toBeNull();
+        await render(true);
+        const capture = element.querySelector("[data-live-block-pan-capture]");
+        expect(capture).not.toBeNull();
+        capture.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+        expect(pan).toHaveBeenCalledTimes(1);
+        expect(browser.focusNode).not.toHaveBeenCalled();
+        expect(element.querySelector("input")).toBe(input);
+        await render(false);
+        expect(element.querySelector("[data-live-block-pan-capture]")).toBeNull();
+        expect(element.querySelector("input")).toBe(input);
+        expect(counts.mounts).toBe(1);
+    } finally {
+        await act(() => root.unmount());
+        element.remove();
+    }
+});

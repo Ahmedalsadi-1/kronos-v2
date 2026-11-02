@@ -3,7 +3,7 @@
 
 import { AppIcon } from "@/app/components/app-icon";
 import { ContextMenuModel } from "@/app/store/contextmenu";
-import { Plus, X } from "lucide-react";
+import { Plus, X } from "@/app/components/system-ui/os-icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
     addOSDockPin,

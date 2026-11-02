@@ -1,5 +1,7 @@
 import { RightSidebarPane } from "@hermes/app/right-sidebar";
 import { ReviewPane } from "@hermes/app/right-sidebar/review";
+import { OriginalExecutionsPanel, OriginalNodePicker } from "@hermes/app/workflows/original-node-picker";
+import { $workflowSidebarMode, useWorkflowContext } from "@hermes/app/workflows/workflow-context";
 import { FileDiffPanel } from "@hermes/components/chat/diff-lines";
 import { Codicon } from "@hermes/components/ui/codicon";
 import {
@@ -53,11 +55,15 @@ const Sections = {
     files: { label: "Files", icon: "files", shortcut: "⌘P" },
     changes: { label: "Changes", icon: "diff-added", shortcut: "⌃⇧G" },
     chat: { label: "Side chat", icon: "comment-discussion", shortcut: "⌥⌘S" },
+    "workflow-nodes": { label: "Nodes", icon: "symbol-method", shortcut: "" },
+    workflows: { label: "Workflows", icon: "git-merge", shortcut: "" },
+    "workflow-executions": { label: "Executions", icon: "history", shortcut: "" },
     diff: { label: "File diff", icon: "diff" },
 };
 
 export function KrontermInspector() {
     const open = useStore($krontermInspectorOpen);
+    const workflow = useWorkflowContext();
     const view = useStore($krontermInspectorSection);
     const expanded = useStore($krontermInspectorExpanded);
     const compact = useStore($krontermInspectorCompact);
@@ -128,10 +134,22 @@ export function KrontermInspector() {
     useEffect(() => () => $krontermInspectorHasFiles.set(false), []);
 
     const selectSection = (section: KrontermInspectorSection) => {
+        if (section === "workflow-executions") {
+            const detail = { tabId: workflow.tabId, handled: false };
+            window.dispatchEvent(new CustomEvent("kronterm:workflow-executions-dock-open", { detail }));
+            if (detail.handled) return;
+        }
         $krontermInspectorCompact.set(false);
         setTabs((current) => (current.includes(section) ? current : [...current, section]));
         $krontermInspectorSection.set(section);
         $krontermInspectorOpen.set(true);
+        if (section === "workflow-nodes" || section === "workflow-executions") {
+            window.dispatchEvent(
+                new CustomEvent("kronterm:workflow-open", {
+                    detail: { tabId: workflow.tabId, surface: "canvas" },
+                })
+            );
+        }
         if (section === "changes") setUnchangedPath("");
     };
     const close = () => {
@@ -225,12 +243,96 @@ export function KrontermInspector() {
         previousPath.current = path;
     }, [path]);
 
+    useEffect(() => {
+        const openWorkflowChat = () => selectSection("chat");
+        window.addEventListener("kronterm:workflow-chat", openWorkflowChat);
+        return () => window.removeEventListener("kronterm:workflow-chat", openWorkflowChat);
+    }, []);
+
+    useEffect(() => {
+        if (view !== "workflows") return;
+        $workflowSidebarMode.set("workflows");
+        $krontermInspectorSection.set("files");
+        setTabs((current) => current.filter((section) => section !== "workflows"));
+    }, [view]);
+
+    useEffect(() => {
+        let detailsOpen = false;
+        let autoCompacted = false;
+        const stillNodesRail = () =>
+            $krontermInspectorOpen.get() &&
+            $krontermInspectorSection.get() === "workflow-nodes" &&
+            $krontermInspectorCompact.get();
+        const respectUserChange = () => {
+            if (autoCompacted && !stillNodesRail()) autoCompacted = false;
+        };
+        const unsubscribers = [$krontermInspectorOpen, $krontermInspectorSection, $krontermInspectorCompact].map(
+            (store) => store.listen(respectUserChange)
+        );
+        const restore = () => {
+            const restoreWidth = autoCompacted && stillNodesRail();
+            autoCompacted = false;
+            if (restoreWidth) $krontermInspectorCompact.set(false);
+        };
+        const visibility = (event: Event) => {
+            const detail = (event as CustomEvent<{ tabId: string; open: boolean }>).detail;
+            if (
+                !workflow.tabId ||
+                detail?.tabId !== workflow.tabId ||
+                typeof detail.open !== "boolean" ||
+                detail.open === detailsOpen
+            )
+                return;
+            detailsOpen = detail.open;
+            if (!detailsOpen) {
+                restore();
+                return;
+            }
+            if (
+                !$krontermInspectorOpen.get() ||
+                $krontermInspectorSection.get() !== "workflow-nodes" ||
+                $krontermInspectorCompact.get()
+            )
+                return;
+            $krontermInspectorCompact.set(true);
+            autoCompacted = true;
+        };
+        window.addEventListener("kronterm:workflow-details-visibility", visibility);
+        return () => {
+            window.removeEventListener("kronterm:workflow-details-visibility", visibility);
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+            restore();
+        };
+    }, [workflow.tabId]);
+
+    useEffect(() => {
+        const show = (event: Event) => {
+            const request = (event as CustomEvent).detail;
+            if (request?.tabId && request.tabId !== workflow.tabId) return;
+            if (request?.section === "workflow-nodes") selectSection("workflow-nodes");
+            if (request?.section === "workflow-executions" && workflow.hasExecutions)
+                selectSection("workflow-executions");
+        };
+        window.addEventListener("kronterm:workflow-inspector", show);
+        return () => window.removeEventListener("kronterm:workflow-inspector", show);
+    }, [workflow.tabId, workflow.hasExecutions]);
+
+    useEffect(() => {
+        if (workflow.hasExecutions) return;
+        setTabs((current) =>
+            current.includes("workflow-executions")
+                ? current.filter((section) => section !== "workflow-executions")
+                : current
+        );
+        if (view === "workflow-executions") $krontermInspectorSection.set("files");
+    }, [workflow.hasExecutions, view]);
+
     const activateFile = (absolutePath: string) => openKrontermFile(absolutePath);
 
     return (
         <section
             ref={rootRef}
-            aria-label="Files and changes"
+            aria-label="Workspace inspector"
             className={cn("kronterm-inspector", compact && "is-compact")}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && !event.defaultPrevented) {
@@ -315,7 +417,15 @@ export function KrontermInspector() {
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" sideOffset={7} className="kronterm-inspector-menu">
-                        {(["changes", "files", "chat"] as const).map((section) => (
+                        {(
+                            [
+                                "changes",
+                                "files",
+                                "chat",
+                                "workflow-nodes",
+                                ...(workflow.hasExecutions ? ["workflow-executions" as const] : []),
+                            ] as const
+                        ).map((section) => (
                             <DropdownMenuItem
                                 key={section}
                                 className="kronterm-inspector-menu-item"
@@ -383,6 +493,28 @@ export function KrontermInspector() {
                         />
                     </div>
                 ))}
+            {tabs.includes("workflow-nodes") && (
+                <div
+                    id="inspector-pane-workflow-nodes"
+                    role="tabpanel"
+                    aria-labelledby="inspector-tab-workflow-nodes"
+                    hidden={view !== "workflow-nodes"}
+                    className="kronterm-inspector-pane"
+                >
+                    <OriginalNodePicker active={view === "workflow-nodes"} />
+                </div>
+            )}
+            {tabs.includes("workflow-executions") && workflow.hasExecutions && (
+                <div
+                    id="inspector-pane-workflow-executions"
+                    role="tabpanel"
+                    aria-labelledby="inspector-tab-workflow-executions"
+                    hidden={view !== "workflow-executions"}
+                    className="kronterm-inspector-pane"
+                >
+                    <OriginalExecutionsPanel active={view === "workflow-executions"} />
+                </div>
+            )}
             <div
                 id="inspector-pane-files"
                 role="tabpanel"

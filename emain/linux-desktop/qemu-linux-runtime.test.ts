@@ -282,3 +282,33 @@ it("does not execute cancelled VM inputs that were waiting in the queue", async 
     await expect(pending).rejects.toThrow(/abort/i);
     expect(runner).not.toHaveBeenCalled();
 });
+
+it("reuses boot readiness, probes health periodically, and invalidates it when the VM PID changes", async () => {
+    let now = 100_000;
+    let pid = 99999;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    const runner = vi.fn(async () => ({ stdout: "" }));
+    const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+    vi.spyOn(runtime as any, "pid").mockImplementation(async () => pid);
+    vi.spyOn(runtime as any, "configureViewer").mockImplementation(() => {});
+    vi.spyOn(runtime as any, "scheduleIdle").mockImplementation(() => {});
+    try {
+        expect((await runtime.list())[0].ready).toBe(true);
+        expect(runner.mock.calls).toHaveLength(1);
+        now += 3000;
+        expect((await runtime.list())[0].ready).toBe(true);
+        expect(runner.mock.calls).toHaveLength(1);
+        now += 15_000;
+        expect((await runtime.list())[0].ready).toBe(true);
+        expect(runner.mock.calls).toHaveLength(2);
+        const commands = runner.mock.calls as unknown as [string, string[]][];
+        expect(commands[0][1].at(-1)).toContain("cloud-init status --wait");
+        expect(commands[1][1].at(-1)).not.toContain("cloud-init");
+        pid++;
+        now += 3000;
+        expect((await runtime.list())[0].ready).toBe(true);
+        expect(commands[2][1].at(-1)).toContain("cloud-init status --wait");
+    } finally {
+        clock.mockRestore();
+    }
+});

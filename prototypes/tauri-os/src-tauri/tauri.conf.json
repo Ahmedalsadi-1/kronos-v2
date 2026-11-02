@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "KronTerm OS Tauri Prototype",
+    "version": "0.1.0",
+    "identifier": "dev.kronterm.tauri-prototype",
+    "build": {
+        "frontendDist": "../native-assets"
+    },
+    "app": {
+        "withGlobalTauri": true,
+        "windows": [],
+        "security": {
+            "capabilities": [
+                {
+                    "identifier": "workspace",
+                    "windows": [
+                        "main"
+                    ],
+                    "remote": {
+                        "urls": [
+                            "http://127.0.0.1:14290"
+                        ]
+                    },
+                    "permissions": [
+                        "core:event:allow-listen",
+                        "core:event:allow-unlisten",
+                        "allow-browser"
+                    ]
+                }
+            ]
+        }
+    },
+    "bundle": {
+        "active": false
+    }
+}

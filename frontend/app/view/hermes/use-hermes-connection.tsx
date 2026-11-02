@@ -15,9 +15,14 @@ export function useHermesConnection(tabId: string, enabled = true, hostMode?: "k
         if (!enabled) return;
         let active = true;
         let connected = false;
+        const timeout = setTimeout(() => {
+            if (active && !connected)
+                setError("The agent connection is taking longer than expected. Retry the connection.");
+        }, 30000);
         const apply = (connection: HermesConnectionDescriptor) => {
             if (!active) return;
             connected = true;
+            clearTimeout(timeout);
             configureHermesDesktopShim({ baseUrl: connection.baseUrl, token: connection.token });
             setError("");
             setReady(true);
@@ -27,10 +32,14 @@ export function useHermesConnection(tabId: string, enabled = true, hostMode?: "k
             .hermesGetConnection({ tabId, ...(hostMode ? { hostMode } : {}) })
             .then(apply)
             .catch((reason) => {
-                if (active && !connected) setError(reason instanceof Error ? reason.message : String(reason));
+                if (active && !connected) {
+                    clearTimeout(timeout);
+                    setError(reason instanceof Error ? reason.message : String(reason));
+                }
             });
         return () => {
             active = false;
+            clearTimeout(timeout);
             off();
         };
     }, [tabId, enabled, hostMode, attempt]);

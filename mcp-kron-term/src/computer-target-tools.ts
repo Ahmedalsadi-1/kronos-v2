@@ -19,6 +19,7 @@ export type DeviceTargetAction = {
 };
 export type ComputerTargetToolBridge = {
     list(): Promise<unknown>;
+    manage?(name: string, args: Record<string, unknown>): Promise<unknown>;
     perform(action: DeviceTargetAction): Promise<unknown>;
 };
 
@@ -46,7 +47,7 @@ export function deviceResult(value: unknown): CallToolResult {
     if (
         snapshot &&
         typeof snapshot.imageDataUrl === "string" &&
-        snapshot.imageDataUrl.startsWith("data:image/png;base64,")
+        /^data:image\/(png|jpeg);base64,/.test(snapshot.imageDataUrl)
     ) {
         const { imageDataUrl: _image, ...metadata } = snapshot;
         return {
@@ -54,8 +55,8 @@ export function deviceResult(value: unknown): CallToolResult {
                 { type: "text", text: JSON.stringify(metadata) },
                 {
                     type: "image",
-                    mimeType: "image/png",
-                    data: snapshot.imageDataUrl.slice("data:image/png;base64,".length),
+                    mimeType: snapshot.imageDataUrl.startsWith("data:image/jpeg;") ? "image/jpeg" : "image/png",
+                    data: snapshot.imageDataUrl.slice(snapshot.imageDataUrl.indexOf(",") + 1),
                 },
             ],
         };
@@ -71,7 +72,15 @@ async function callDeviceTool(
     try {
         if (bridge)
             return deviceResult(
-                action ? await bridge.perform({ ...args, action } as DeviceTargetAction) : await bridge.list()
+                action
+                    ? await bridge.perform({ ...args, action } as DeviceTargetAction)
+                    : name === "device_list"
+                      ? await bridge.list()
+                      : bridge.manage
+                        ? await bridge.manage(name, args)
+                        : (() => {
+                              throw new Error("Device farm management is unavailable.");
+                          })()
             );
         // Standalone MCP clients reuse the desktop's authenticated native endpoint.
         const endpoint = process.env.KRONTERM_NATIVE_TOOL_URL;
@@ -94,7 +103,7 @@ async function callDeviceTool(
         const response = await fetch(url, {
             method: "POST",
             redirect: "error",
-            signal: AbortSignal.timeout(45_000),
+            signal: AbortSignal.timeout(name === "device_batch_boot" ? 300_000 : 45_000),
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify({ method: "call", name, arguments: args }),
         });
@@ -145,6 +154,127 @@ export function registerComputerTargetTools(server: McpServer): void {
             },
             async (args) => callDeviceTool(name, args, action)
         );
+
+    const assignment = {
+        ...MutatingTarget,
+        assignee: z
+            .string()
+            .min(1)
+            .max(128)
+            .describe("Authenticated nativeCallerId of the existing bot/subagent; does not spawn an agent"),
+    };
+    const fleet = {
+        devices: z
+            .array(z.object(assignment))
+            .min(1)
+            .max(64)
+            .refine(
+                (items) => new Set(items.map((item) => item.targetId)).size === items.length,
+                "Duplicate device ids"
+            ),
+        concurrency: z.number().int().min(1).max(4).default(2),
+    };
+    const step = {
+        ...MutatingTarget,
+        observationId: z.string().uuid(),
+        action: z.enum(["tap", "type", "key", "back", "home", "swipe", "rotate"]),
+        x: z.number().min(0).max(1).optional(),
+        y: z.number().min(0).max(1).optional(),
+        endX: z.number().min(0).max(1).optional(),
+        endY: z.number().min(0).max(1).optional(),
+        text: z.string().min(1).max(4096).optional(),
+        key: z
+            .enum([
+                "Enter",
+                "Backspace",
+                "Delete",
+                "Tab",
+                "Escape",
+                "ArrowUp",
+                "ArrowDown",
+                "ArrowLeft",
+                "ArrowRight",
+                "Home",
+                "End",
+            ])
+            .optional(),
+        orientation: z.enum(["portrait", "landscape-left", "landscape-right", "portrait-upside-down"]).optional(),
+    };
+    for (const [name, description, schema] of [
+        [
+            "device_batch_start",
+            "Queue boot and exclusive assignment for 1–64 exact devices to existing agents, with 1–4 concurrent launches. Returns immediately with a batchId; poll status and inspect every result. Does not spawn agents or execute task prompts.",
+            fleet,
+        ],
+        [
+            "device_batch_status",
+            "Inspect boot/assignment progress and per-device results for your batch. History lasts for this app process, up to one hour after completion.",
+            { batchId: z.string().uuid() },
+        ],
+        [
+            "device_batch_cancel",
+            "Cancel queued launches in your batch. Already running boots finish; completed assignments remain reserved until released.",
+            { batchId: z.string().uuid() },
+        ],
+        [
+            "device_observe",
+            "Capture an assigned phone and issue a caller-bound, single-use observation valid for 30 seconds. Inspect the image before device_step.",
+            { targetId: TargetId },
+        ],
+        [
+            "device_step",
+            "Perform one action from a fresh device_observe image and return an after-image for verification. No automatic retries or semantic success claims. A missing after-image means observe again before any retry.",
+            step,
+        ],
+        [
+            "device_identity",
+            "Return this authenticated caller identity to use when assigning phones to existing bots or subagents.",
+            {},
+        ],
+        [
+            "device_assign",
+            "Exclusively assign a running phone to an existing bot or subagent by native caller identity.",
+            assignment,
+        ],
+        [
+            "device_release",
+            "Release a phone assignment owned by this caller or agent. Does not shut down the phone.",
+            { targetId: TargetId },
+        ],
+        ["device_assignments", "List current phone assignments. Human takeover invalidates control.", {}],
+        [
+            "device_batch_boot",
+            "Boot up to eight explicitly selected emulators and assign each ready device to an existing agent. Returns per-device failures; does not create agents or reclaim human control.",
+            {
+                devices: z
+                    .array(z.object(assignment))
+                    .min(1)
+                    .max(8)
+                    .refine(
+                        (items) => new Set(items.map((item) => item.targetId)).size === items.length,
+                        "Duplicate device ids"
+                    ),
+            },
+        ],
+    ] as const) {
+        server.tool(
+            name,
+            description,
+            schema,
+            {
+                readOnlyHint: [
+                    "device_assignments",
+                    "device_identity",
+                    "device_batch_status",
+                    "device_observe",
+                ].includes(name),
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false,
+            },
+            async (args) => callDeviceTool(name, args)
+        );
+    }
 
     register("device_home", "Press Home on the exact observed simulator or Android device.", MutatingTarget, "home");
     register(

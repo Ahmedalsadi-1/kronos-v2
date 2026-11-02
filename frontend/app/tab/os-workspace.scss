@@ -191,7 +191,8 @@
         inset: 56px auto auto 50% !important;
         height: min(240px, calc(100dvh - 96px)) !important;
         width: min(460px, calc(100vw - 32px)) !important;
-        transform: translateX(-50%);
+        transform: translateX(-50%) !important;
+        translate: 0 !important;
         border-radius: 0 !important;
         background: var(--color-black, #000) !important;
         box-shadow: 0 12px 32px rgb(0 0 0 / 0.3);
@@ -199,6 +200,18 @@
         --hud-band-inset: 0px;
         --thread-viewport-height: 100%;
         --thread-last-message-clearance: 8px;
+    }
+
+    &[data-chat-edge="bottom"] [data-hud-shell][data-hud-edge] [data-slot="composer-bounds"] {
+        inset: auto auto 56px 50% !important;
+        transform-origin: bottom center;
+    }
+
+    [data-hud-shell][data-hud-edge] [data-slot="composer-dock"] {
+        left: 0 !important;
+        right: 0 !important;
+        transform: none !important;
+        translate: 0 !important;
     }
 
     [data-slot="aui_thread-viewport"] {
@@ -525,11 +538,16 @@
 }
 
 .os-workspaces {
+    max-width: min(32vw, 440px);
+    overflow-x: auto;
+    scrollbar-width: thin;
     display: flex;
     align-items: center;
     gap: 4px;
 
     button {
+        flex-shrink: 0;
+        cursor: pointer;
         display: grid;
         width: 36px;
         height: 36px;
@@ -1182,7 +1200,8 @@
 
 .os-mode-viewport {
     position: absolute;
-    inset: 0;
+    inset: var(--os-workflow-top, 0px) calc(var(--os-workflow-right, 0px) + var(--os-workflow-controls-gutter, 0px))
+        var(--os-workflow-bottom, 0px) 0;
     z-index: 1;
     overflow: hidden;
     transition: opacity 180ms ease;
@@ -1206,6 +1225,24 @@
     left: calc(min(260px, 80vw) + var(--os-frame-border));
 }
 
+.os-workflow-panels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.has-agent-sidebar .os-workflow-panels {
+    left: calc(min(260px, 80vw) + var(--os-frame-border));
+}
+
+.has-files-inspector .os-workflow-panels {
+    right: calc(var(--os-inspector-width) + var(--os-frame-border));
+}
+
+.os-mode-viewport.has-workflow-panels .os-canvas-toolbar {
+    top: 16px;
+}
+
 .os-files-inspector {
     position: absolute;
     inset: var(--os-frame-content-top) var(--os-frame-border) var(--os-frame-border) auto;
@@ -1222,7 +1259,10 @@
 }
 
 .has-files-inspector .os-mode-viewport {
-    right: calc(var(--os-inspector-width) + var(--os-frame-border));
+    right: calc(
+        var(--os-inspector-width) + var(--os-frame-border) + var(--os-workflow-right, 0px) +
+            var(--os-workflow-controls-gutter, 0px)
+    );
 }
 
 .os-mode-world {
@@ -3003,9 +3043,6 @@
     .os-shell-right {
         gap: 8px;
     }
-    .os-workspaces button:nth-child(n + 4):not(:last-child) {
-        display: none;
-    }
     .os-shell-right time {
         display: none;
     }
@@ -3356,20 +3393,15 @@
 .kt-system-ui .os-canvas-toolbar {
     position: absolute;
     z-index: 86;
-    top: 66px;
-    left: 50%;
+    top: 176px;
+    left: 16px;
     min-height: 40px;
     padding: 3px;
     border: 1px solid var(--kt-window-border);
     border-radius: 12px;
     background: var(--kt-popover);
     box-shadow: var(--kt-shadow-popover);
-    transform: translateX(-50%);
-}
-
-/* OS mode keeps the desktop surface calm; canvas authoring controls stay available in canvas mode. */
-.os-mode-root .os-canvas-toolbar {
-    display: none;
+    transform: none;
 }
 
 .kt-system-ui .os-canvas-toolbar-separator {
@@ -4130,94 +4162,259 @@
     position: absolute;
     inset: 68px 24px auto;
     z-index: 1100;
-    display: flex;
-    align-items: flex-start;
-    justify-content: safe center;
-    gap: 12px;
-    padding: 8px 12px;
-    overflow-x: auto;
-    max-width: 720px;
-    margin-inline: auto;
+    padding: 14px;
     border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.3));
-    border-radius: 14px;
+    border-radius: 18px;
     background: var(--kt-content, var(--main-bg-color));
+    color: var(--kt-label, var(--primary-text-color));
+    box-shadow: var(--kt-shadow-popover, 0 12px 32px rgba(0, 0, 0, 0.18));
 
     button {
-        flex: 0 0 108px;
         border: 0;
         background: transparent;
         color: inherit;
         cursor: pointer;
-        border-radius: 8px;
     }
-
     button:focus-visible {
         outline: 2px solid var(--accent-color);
-        outline-offset: 4px;
+        outline-offset: -3px;
     }
 }
 
+.has-agent-sidebar .os-space-overview {
+    left: calc(min(260px, 80vw) + var(--os-frame-border) + 16px);
+}
+.workspace-compact-chrome .has-agent-sidebar .os-space-overview {
+    left: calc(min(220px, 80vw) + var(--os-frame-border) + 16px);
+}
+
+.os-space-overview-header,
+.os-space-overview-heading,
+.os-space-overview-actions {
+    display: flex;
+    align-items: center;
+}
+.os-space-overview-header {
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 2px 12px 6px;
+    min-height: 32px;
+}
+.os-space-overview-heading {
+    gap: 12px;
+    white-space: nowrap;
+    strong {
+        font-size: 13px;
+        font-weight: 600;
+    }
+    > span {
+        color: var(--kt-label-secondary, var(--secondary-text-color));
+        font-size: 12px;
+    }
+}
+.os-space-overview-actions {
+    gap: 6px;
+    button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--kt-fill, rgba(128, 128, 128, 0.12));
+        &:hover {
+            background: var(--kt-fill-hover, rgba(128, 128, 128, 0.22));
+        }
+        &:disabled {
+            opacity: 0.35;
+        }
+    }
+    .os-space-overview-create {
+        margin-left: 8px;
+        padding: 0 12px;
+        border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.3));
+        border-radius: 8px;
+        background: transparent;
+        font-size: 12px;
+    }
+}
+.os-space-overview-track {
+    position: relative;
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+.os-space-overview-card {
+    position: relative;
+    flex: 0 0 calc((100% - 60px) / 6);
+    min-width: 188px;
+    border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.3));
+    border-radius: 12px;
+    overflow: hidden;
+    scroll-snap-align: start;
+    background: color-mix(
+        in srgb,
+        var(--kt-content, var(--main-bg-color)) 98%,
+        var(--kt-label, var(--primary-text-color))
+    );
+    &:hover {
+        background: var(--kt-fill-hover, rgba(128, 128, 128, 0.12));
+    }
+    &.is-active {
+        border-color: var(--accent-color);
+        box-shadow: inset 0 0 0 1px var(--accent-color);
+    }
+}
+.os-space-overview-item {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    padding: 9px;
+    text-align: left;
+}
+.os-space-overview .os-space-overview-delete {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.3));
+    border-radius: 50%;
+    background: var(--kt-content, var(--main-bg-color));
+    z-index: 2;
+    &:hover {
+        color: var(--error-color, #d33b3b);
+        background: var(--kt-fill-hover, var(--main-bg-color));
+    }
+}
 .os-space-overview-preview {
     position: relative;
     display: flex;
-    height: 56px;
+    height: 96px;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    border: 2px solid var(--kt-separator, rgba(128, 128, 128, 0.4));
-    border-radius: 8px;
-    background: var(--kt-content, var(--main-bg-color));
+    border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.24));
+    border-radius: 6px;
+    background: var(--kt-bar, var(--main-bg-color));
     color: var(--kt-label-secondary, var(--secondary-text-color));
 }
-
-.os-space-overview-item.is-active .os-space-overview-preview {
-    border-color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 14%, var(--kt-content, var(--main-bg-color)));
+.os-space-overview-snapshot {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
 }
-
+.os-space-overview-current {
+    position: absolute;
+    top: 13px;
+    left: 13px;
+    z-index: 1;
+    border-radius: 6px;
+    background: var(--accent-color);
+    color: var(--accent-text-color, #fff);
+    padding: 3px 7px;
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 600;
+}
 .os-space-overview-window {
     position: absolute;
-    border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.5));
-    border-radius: 3px;
-    background: var(--kt-content, var(--main-bg-color));
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    padding: 3px;
-    color: var(--kt-label, var(--primary-text-color));
+    border: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.4));
+    border-radius: 4px;
+    background: var(--kt-content, var(--main-bg-color));
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.16);
+}
+.os-space-overview-window-bar {
+    svg,
+    img {
+        width: 12px;
+        height: 12px;
+        flex-shrink: 0;
+    }
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 5px;
+    border-bottom: 1px solid var(--kt-separator, rgba(128, 128, 128, 0.2));
     font-size: 10px;
     line-height: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    > span {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
 }
-
-.os-space-overview-name,
-.os-space-overview-caption {
+.os-space-overview-window-body {
+    svg,
+    img {
+        width: 24px;
+        height: 24px;
+    }
+    display: grid;
+    flex: 1;
+    place-items: center;
+    min-height: 0;
+    overflow: hidden;
+    opacity: 0.7;
+}
+.os-space-overview-name {
     display: block;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    margin-top: 8px;
     font-size: 12px;
     line-height: 18px;
+    font-weight: 600;
 }
-
-.os-space-overview-name {
-    margin-top: 7px;
-    font-weight: 500;
-}
-
 .os-space-overview-caption {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
     font-size: 11px;
     color: var(--kt-label-secondary, var(--secondary-text-color));
 }
-
-.os-space-overview-add {
+.os-space-overview-apps {
     display: flex;
-    min-height: 90px;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    font-size: 12px;
+    gap: 7px;
+    &:empty {
+        display: none;
+    }
+    svg,
+    img {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+}
+@media (max-width: 900px) {
+    .os-space-overview {
+        inset-inline: 16px;
+        padding: 10px;
+    }
+    .os-space-overview-heading {
+        gap: 8px;
+    }
+    .os-space-overview-actions .os-space-overview-create {
+        margin-left: 0;
+        padding: 0 8px;
+    }
 }
 
 /* The frame shares the shell's coordinate space so live surfaces keep their bounds. */
@@ -4259,6 +4456,10 @@
             var(--os-frame-content-top) var(--os-frame-border) var(--os-frame-border) round
                 var(--os-frame-content-radius)
         );
+
+        &.has-workflow-panels {
+            clip-path: none;
+        }
     }
 
     .os-shell {
@@ -4625,4 +4826,241 @@
         animation: none !important;
         transition: none !important;
     }
+}
+
+.kt-system-ui .os-canvas-tool-rail.has-workflow-tools {
+    position: absolute;
+    z-index: 1500;
+    right: 6px;
+    top: clamp(80px, 26vh, 280px);
+    max-height: calc(100% - 120px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3px;
+    border: 1px solid var(--kt-window-border);
+    border-radius: 12px;
+    background: var(--kt-popover);
+    box-shadow: var(--kt-shadow-popover);
+    pointer-events: auto;
+}
+.kt-system-ui .has-workflow-tools .os-canvas-toolbar {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+.kt-system-ui .has-workflow-tools .os-canvas-toolbar-separator {
+    width: 22px;
+    height: 1px;
+    margin: 3px 0;
+}
+.os-original-canvas-tools {
+    width: 40px;
+}
+.os-workflow-executions-dock {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 60px;
+    height: min(280px, 40vh);
+    z-index: 1750;
+    overflow: hidden;
+    border: 1px solid var(--kt-window-border);
+    border-radius: 12px;
+    background: var(--kt-window-background, var(--kt-popover));
+    pointer-events: auto;
+}
+.os-workflow-executions-dock[hidden] {
+    display: none;
+}
+
+.kt-system-ui .os-original-canvas-tools {
+    width: 32px;
+}
+.kt-system-ui .has-workflow-tools .os-canvas-toolbar button {
+    width: 32px;
+    min-height: 32px;
+    padding: 0;
+}
+
+.workspace-compact-chrome .os-agent-sidebar {
+    width: min(220px, 80vw);
+    font-size: 12px;
+}
+.workspace-compact-chrome .has-agent-sidebar .os-mode-viewport,
+.workspace-compact-chrome .has-agent-sidebar .os-workflow-panels {
+    left: calc(min(220px, 80vw) + var(--os-frame-border));
+}
+.workspace-compact-chrome .os-shell {
+    font-size: 12px;
+}
+.workspace-compact-chrome .os-shell .kt-system-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.kt-system-ui .os-canvas-tool-rail,
+.kt-system-ui .os-canvas-tool-rail.has-workflow-tools {
+    position: absolute;
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    z-index: 1500;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    max-height: 48px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 1px solid #d4d4d8;
+    border-radius: 12px;
+    padding: 3px;
+    background: #fff;
+    color: #18181b;
+}
+.kt-system-ui .os-canvas-tool-rail .os-canvas-toolbar {
+    position: static;
+    flex-direction: row;
+    background: transparent;
+    box-shadow: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    --kt-label: #18181b;
+    --kt-label-secondary: #52525b;
+}
+.kt-system-ui .os-canvas-tool-rail .os-canvas-toolbar-separator {
+    width: 1px;
+    height: 22px;
+    margin: 0 3px;
+}
+.kt-system-ui .os-canvas-tool-rail .os-original-canvas-tools {
+    width: auto;
+}
+.kt-system-ui .os-canvas-tool-rail.is-selector-owned {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.kt-system-ui .os-canvas-tool-rail,
+.kt-system-ui .os-canvas-tool-rail.has-workflow-tools {
+    bottom: 40px;
+    width: 350px;
+    max-height: min(480px, calc(100% - 80px));
+    flex-direction: column;
+    align-items: stretch;
+    overflow: auto;
+    padding: 8px;
+    box-shadow: var(--kt-shadow-popover);
+}
+.kt-system-ui .os-canvas-tool-rail.is-closed {
+    visibility: hidden;
+    pointer-events: none;
+}
+.os-canvas-tools-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 4px 6px;
+}
+.kt-system-ui .os-canvas-tool-rail .os-canvas-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    min-height: 32px;
+}
+.kt-system-ui .os-canvas-tool-rail .os-original-canvas-tools {
+    align-self: center;
+    max-width: 100%;
+}
+.os-canvas-focus-slot {
+    height: min(280px, 38vh);
+    margin-top: 8px;
+    overflow: auto;
+    border-radius: 8px;
+}
+.os-canvas-tools-trigger {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1500;
+}
+
+.kt-system-ui .os-canvas-tool-rail,
+.kt-system-ui .os-canvas-tool-rail.has-workflow-tools {
+    position: fixed;
+    left: 50vw;
+    bottom: 40px;
+}
+.kt-system-ui .os-canvas-tool-rail.avoids-hud {
+    left: max(410px, calc(50vw - 490px));
+}
+
+.kt-system-ui .os-canvas-tool-rail,
+.kt-system-ui .os-canvas-tool-rail.has-workflow-tools {
+    flex-direction: row;
+    align-items: center;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    max-height: 40px;
+    padding: 3px;
+    overflow: auto;
+}
+.os-canvas-focus-frame {
+    position: fixed;
+    right: 112px;
+    bottom: 253px;
+    z-index: 60000;
+    width: min(350px, calc(100vw - 136px));
+    max-height: calc(100dvh - 317px);
+    padding: 8px;
+    line-height: 37px;
+    background: var(--color-black, #000);
+    color: #f4f4f5;
+    border: 0;
+    border-radius: 12px;
+    box-shadow: var(--kt-shadow-popover);
+    pointer-events: auto;
+}
+.os-canvas-focus-frame[hidden] {
+    display: none;
+}
+.os-canvas-focus-frame .os-canvas-focus-slot {
+    margin-top: 0;
+}
+
+.os-canvas-focus-frame.is-editing {
+    width: min(1120px, calc(100vw - 136px));
+    height: min(720px, calc(100dvh - 317px));
+    display: flex;
+    flex-direction: column;
+}
+.os-canvas-focus-frame.is-editing[hidden] {
+    display: none;
+}
+.os-canvas-focus-frame.is-editing .os-canvas-focus-slot {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+}
+
+.os-shell-chat [data-hud-shell][data-hud-embedded] [data-hud-glass] {
+    display: none;
+}
+.os-shell-chat [data-hud-shell][data-hud-embedded][data-hud-edge] [data-slot="composer-bounds"] {
+    width: 100% !important;
+    max-width: 100% !important;
 }

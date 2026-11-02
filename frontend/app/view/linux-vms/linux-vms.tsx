@@ -6,9 +6,9 @@ import { ComputersController, type ComputersState } from "@/app/view/computers/c
 import { DeviceWorkspace } from "@/app/view/computers/device-workspace";
 import { getApi } from "@/store/global";
 import { useEffect, useState } from "react";
-import { DesktopScreen } from "./desktop-screen";
 import "./linux-vms.css";
 import { MacVmScreen } from "./macos-vm-screen";
+import { ManagedComputerWidget } from "./managed-computer-widget";
 
 export type MachineSection = "desktop" | "macos" | "android" | "iphone";
 
@@ -17,11 +17,13 @@ export function LinuxVmsPanel({
     settings = false,
     targetId,
     blockId,
+    onCloseWidget,
 }: {
     initialSection?: MachineSection;
     settings?: boolean;
     targetId?: string;
     blockId?: string;
+    onCloseWidget?: () => void;
 }) {
     return (
         <div
@@ -36,11 +38,12 @@ export function LinuxVmsPanel({
                 {initialSection == "macos" ? (
                     <MacVmScreen blockId={blockId} targetName={targetId} />
                 ) : initialSection == "desktop" ? (
-                    <DesktopScreen settings={settings} desktopId={targetId} />
+                    <ManagedComputerWidget settings={settings} desktopId={targetId} />
                 ) : (
                     <MobileMachinePanel
                         key={`${initialSection}:${targetId ?? "default"}`}
                         platform={initialSection}
+                        onCloseWidget={onCloseWidget}
                         settings={settings}
                         targetId={targetId}
                     />
@@ -54,8 +57,10 @@ function MobileMachinePanel({
     platform,
     settings,
     targetId,
+    onCloseWidget,
 }: {
     platform: string;
+    onCloseWidget?: () => void;
     settings: boolean;
     targetId?: string;
 }) {
@@ -100,6 +105,8 @@ function MobileMachinePanel({
         <DeviceWorkspace
             state={state}
             controller={controller}
+            initialTargetId={targetId}
+            onCloseWidget={onCloseWidget}
             preferredPlatform={platform === "android" ? "android" : "ios"}
         />
     );

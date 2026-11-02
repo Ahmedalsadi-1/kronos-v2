@@ -3,7 +3,7 @@
 
 import { getApi } from "@/store/global";
 import type { MediaCommand, NowPlayingState } from "@/types/now-playing";
-import { Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Music2, Pause, Play, SkipBack, SkipForward } from "@/app/components/system-ui/os-icons";
 import { useEffect, useState } from "react";
 
 export function useOSNowPlaying() {

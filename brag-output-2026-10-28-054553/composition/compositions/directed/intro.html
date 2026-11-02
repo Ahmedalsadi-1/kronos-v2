@@ -1,0 +1,13 @@
+<!doctype html><html><body><template><style>#intro{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}</style><div id="intro" class="scene" data-composition-id="intro" data-width="1920" data-height="1080" data-duration="3"><div class="eyebrow">HELLO / MEET YOUR WORKSPACE</div><div class="topright">PRIVATE BETA</div><div class="rule"></div><div class="intro-notch"></div><div class="intro-pet"><canvas id="intro-coucou" width="800" height="800"></canvas></div><h1 class="intro-title"><span>K</span><span>r</span><span>o</span><span>n</span><span>T</span><span>e</span><span>r</span><span>m</span><span class="accent">.</span></h1><div class="intro-sub">Work in your element.</div><div class="intro-label">Coucou, your notch companion.</div><div class="footer">THE COMMAND CENTER FOR HUMAN + AGENT WORK</div><div class="counter">01 / 13</div></div><script>(()=>{const tl=gsap.timeline({paused:true});
+ tl.fromTo('#intro .rule',{scaleX:0},{scaleX:1,duration:.65,ease:'power3.inOut'},0);const canvas=document.getElementById('intro-coucou');const pet=new window.MochiBotEngine();pet.catEars=true;const draw=()=>pet.draw(canvas.getContext('2d'),800,800);draw();
+ tl.fromTo('#intro .intro-notch',{scaleX:.25,opacity:0},{scaleX:1,opacity:1,duration:.5,ease:'power3.out'},0);
+ tl.fromTo('#intro .intro-pet',{x:-510,y:-240,scale:.42,rotation:-12},{x:0,y:0,scale:1,rotation:0,duration:1.1,ease:'power3.inOut'},.12);
+ tl.fromTo('#intro .intro-title span',{y:240,rotationX:-80,opacity:0},{y:0,rotationX:0,opacity:1,stagger:.055,duration:.65,ease:'power4.out'},.3);
+ tl.fromTo('#intro .intro-sub',{x:-120,opacity:0},{x:0,opacity:1,duration:.5,ease:'power2.out'},.9);
+ tl.fromTo('#intro .intro-label',{opacity:0},{opacity:1,duration:.4},1.15);
+ tl.to('#intro .intro-notch',{opacity:0,scaleX:.6,duration:.5},1);
+ tl.to(pet,{yaw:.25,pitch:-.08,duration:.9,onUpdate:draw,ease:'sine.inOut'},.8);
+ tl.to(pet,{open:.08,duration:.09,onUpdate:draw,repeat:1,yoyo:true},2);
+ tl.to('#intro .intro-pet',{y:-30,rotation:5,duration:.8,ease:'sine.inOut'},2.2);
+ tl.to('#intro .intro-title',{x:-100,scale:1.06,duration:.4,ease:'power2.in'},2.6);
+window.__timelines['intro']=tl;})();</script></template></body></html>

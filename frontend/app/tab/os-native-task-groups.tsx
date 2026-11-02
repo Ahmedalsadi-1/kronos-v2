@@ -4,7 +4,7 @@
 import { SystemButton, SystemPopover } from "@/app/components/system-ui";
 import { getApi } from "@/store/global";
 import type { NativeTaskGroup, NativeTaskGroupAction } from "@/types/native-task-groups";
-import { Layers, X } from "lucide-react";
+import { Layers, X } from "@/app/components/system-ui/os-icons";
 import { useEffect, useRef, useState } from "react";
 
 export function OSNativeTaskGroups() {

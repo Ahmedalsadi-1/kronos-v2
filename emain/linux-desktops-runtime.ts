@@ -1,9 +1,9 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
-import { QemuLinuxDesktopRuntime } from "./linux-desktop/qemu-linux-runtime";
+import { ComputerPluginRegistry } from "./computer-plugins/registry";
 
-export class LinuxDesktopFleetRuntime extends QemuLinuxDesktopRuntime {}
+export class LinuxDesktopFleetRuntime extends ComputerPluginRegistry {}
 
 let instance: LinuxDesktopFleetRuntime;
 export function getLinuxDesktopsRuntime(): LinuxDesktopFleetRuntime {

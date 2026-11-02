@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><script src="assets/gsap.min.js"></script><style>
+@font-face{font-family:Inter;src:url(assets/inter.woff2)}*{box-sizing:border-box}body{margin:0;font-family:Inter,sans-serif;color:#171b25}#root{width:100%;height:100%;position:relative;overflow:hidden;background:radial-gradient(ellipse at center,#f9fbfb,#f2f3f6)}#viewport{position:absolute;inset:0;perspective:1900px}#world{position:absolute;left:720px;top:576px;transform-style:preserve-3d}.plane{position:absolute;width:1100px;left:-550px;border-radius:24px;box-shadow:0 35px 70px #1a21332e;overflow:hidden;background:#fff}.plane img{display:block;width:100%}.tag{position:absolute;left:-550px;font-size:94px;letter-spacing:-5px;font-weight:800;white-space:nowrap}.small{font-size:22px;letter-spacing:5px;font-weight:500}.pet{position:absolute;width:140px;height:140px;object-fit:contain;left:440px;filter:drop-shadow(0 24px 18px #171b2520)}#end{position:absolute;inset:0;text-align:center;padding-top:38px;opacity:0}#brand{display:flex;justify-content:center;align-items:center;gap:12px;font-size:25px;font-weight:650}#brand img{width:58px;height:58px;object-fit:contain}h1{font-size:72px;letter-spacing:-4px;margin:12px 0 0;font-weight:600}h2{font-family:serif;font-style:italic;font-size:75px;font-weight:400;margin:0;color:#656670}.word{display:inline-block;margin-right:17px}#note{position:absolute;bottom:42px;width:100%;font-size:19px;letter-spacing:3px}
+</style></head><body><div id="root" data-composition-id="fuller" data-width="1440" data-height="1152" data-duration="14.5" data-fps="60"><div id="viewport"><div id="world"><div class="tag small" style="top:-500px">KRONTERM / THE CONNECTED WORKSPACE</div><div class="tag" style="top:-420px">TERMINAL. BROWSER. FILES.</div><div class="plane" id="hero" style="top:-250px"><img src="assets/workspace.png"></div><img class="pet" id="pet1" src="assets/coucou.png" style="top:-340px"><div class="tag" style="top:650px">CODE. PREVIEW. AGENTS.</div><div class="plane" id="files" style="top:820px;width:850px;left:-570px"><img src="assets/files.png"></div><div class="plane" id="apps" style="top:1190px;width:800px;left:-170px"><img src="assets/apps.png"></div><div class="tag" style="top:1880px;font-size:80px">CANVAS. REMOTE. SANDBOX.</div><img class="pet" id="pet2" src="assets/coucou.png" style="top:1820px;left:-650px"></div></div><div id="end"><div id="brand"><img src="assets/coucou.png">KronTerm</div><h1><span class="word">Enjoy</span><span class="word">a fuller</span><span class="word">desktop.</span></h1><h2><span class="word">Download</span><span class="word">KronTerm.</span></h2><div id="note">ONE PERSISTENT WORKSPACE.</div></div></div><script>
+const tl=gsap.timeline({paused:true});
+tl.fromTo('#world',{rotationX:56,y:220,z:180},{rotationX:56,y:-1420,z:-160,duration:7.75,ease:'none'},0)
+.to('#world',{rotationX:0,y:-400,z:-2400,duration:1.5,ease:'power2.inOut'},7.75)
+.to('#world',{rotationX:0,y:100,z:-170,duration:.75,ease:'power3.inOut'},9.25)
+.to('#world',{z:-140,duration:4.5,ease:'none'},10)
+.fromTo('#files',{z:20,rotationX:0},{z:120,rotationX:-25,duration:2,ease:'power2.inOut'},2)
+.fromTo('#apps',{z:15,rotationX:0},{z:160,rotationX:-20,duration:2,ease:'power2.inOut'},4)
+.to(['#files','#apps','.tag','#pet2'],{opacity:0,duration:.4},9.5)
+.to('#hero',{y:50,scale:.93,duration:.75,ease:'power3.inOut'},9.25)
+.to('#pet1',{y:25,x:-70,rotation:8,duration:4.5,ease:'sine.inOut'},10)
+.to('#end',{opacity:1,duration:.25},10)
+.fromTo('h1 .word',{y:25,opacity:0,filter:'blur(12px)'},{y:0,opacity:1,filter:'blur(0px)',stagger:.08,duration:.4},10.12)
+.fromTo('h2 .word',{y:16,opacity:0,filter:'blur(12px)'},{y:0,opacity:1,filter:'blur(0px)',stagger:.08,duration:.4},10.48);
+window.__timelines = window.__timelines || {};
+window.__timelines['fuller']=tl;
+if (location.protocol === 'file:') {
+ const root=document.getElementById('root');
+ document.documentElement.style.cssText='width:100%;height:100%;overflow:hidden';
+ document.body.style.cssText='margin:0;width:100%;height:100%;overflow:hidden;background:#f2f3f6';
+ function fit(){const scale=Math.min(innerWidth/1440,innerHeight/1152);root.style.cssText='position:absolute;width:1440px;height:1152px;transform-origin:top left;transform:scale('+scale+');left:'+((innerWidth-1440*scale)/2)+'px;top:'+((innerHeight-1152*scale)/2)+'px';}
+ fit();addEventListener('resize',fit);
+ Promise.all([document.fonts.ready,...Array.from(document.images).map(img=>img.decode().catch(()=>{}))]).then(()=>tl.repeat(-1).restart());
+ document.body.addEventListener('click',()=>tl.paused(!tl.paused()));
+}
+</script></body></html>

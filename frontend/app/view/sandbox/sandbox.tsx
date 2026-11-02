@@ -1,12 +1,12 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DesktopScreen } from "@/app/view/linux-vms/desktop-screen";
+import { ManagedComputerWidget } from "@/app/view/linux-vms/managed-computer-widget";
 
 export function SandboxView() {
-    return <DesktopScreen />;
+    return <ManagedComputerWidget />;
 }
 
 export function SandboxDesktopPane(_props: { sessionId: string }) {
-    return <DesktopScreen />;
+    return <ManagedComputerWidget />;
 }

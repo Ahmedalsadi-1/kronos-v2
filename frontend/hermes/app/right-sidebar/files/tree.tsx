@@ -1,6 +1,15 @@
 import { useStore } from "@nanostores/react";
-import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    type KeyboardEvent as ReactKeyboardEvent,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { type NodeApi, type NodeRendererProps, type RowRendererProps, Tree, type TreeApi } from "react-arborist";
+import { DndContext } from "react-dnd";
 
 import { TreeSkeleton } from "@hermes/components/chat/skeletons";
 import { Codicon } from "@hermes/components/ui/codicon";
@@ -60,6 +69,7 @@ export function ProjectTree({
     selectedPath,
     isDirty,
 }: ProjectTreeProps) {
+    const inheritedDnd = useContext(DndContext);
     markRightPanePerf("project-tree-render");
 
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -211,7 +221,7 @@ export function ProjectTree({
                     disableDrag
                     disableDrop
                     disableEdit
-                    dndManager={getFileTreeDndManager()}
+                    dndManager={inheritedDnd.dragDropManager ?? getFileTreeDndManager()}
                     height={size.height}
                     indent={INDENT}
                     initialOpenState={openState}

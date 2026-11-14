@@ -1,0 +1,13 @@
+<!doctype html><html><body><template><style>
+    #return{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:#08090c;color:#f0eff5}
+    
+    </style><div id="return" data-composition-id="return" data-width="1920" data-height="1080" data-duration="10" data-fps="30"><canvas id="return-room" class="office-canvas" width="1920" height="1080" data-layout-allow-overflow></canvas>
+    <div id="return-screen" class="projected-screen">
+      <div id="return-footage" class="office-footage"><video id="return-video" class="clip" src="assets/media/os.mp4" data-start="0" data-duration="10" data-track-index="1" muted playsinline ></video></div>
+      <div class="physical-notch"></div>
+      <div id="return-pet-wrap" class="office-pet"><canvas id="return-pet" width="500" height="500"></canvas></div>
+      <div id="return-power" class="power-dot"><span></span></div>
+    </div>
+    <div id="closing-type" class="closing-type"><h1 data-var-text="title">KronTerm</h1><p>macOS private beta</p></div><div id="music-credit" class="music-credit">Music: Chris Zabriskie · CC BY 4.0</div></div>
+    <script>(()=>{const office=window.KronOffice.createOffice({canvas:document.getElementById('return-room'),screen:document.getElementById('return-screen'),petCanvas:document.getElementById('return-pet'),petWrapper:document.getElementById('return-pet-wrap'),power:document.getElementById('return-power'),videoWrapper:document.getElementById('return-footage'),id:'return',start:70,duration:10,returning:true});
+    const tl=window.__timelines['return'];tl.fromTo('#closing-type',{opacity:0,y:12},{opacity:1,y:0,duration:.5,ease:'power2.out'},7.0);tl.fromTo('#music-credit',{opacity:0},{opacity:1,duration:.5},7.0);})();</script></template></body></html>

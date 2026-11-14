@@ -1,0 +1,64 @@
+--- current/frontend/app/view/hermes/subagent-surface-source.ts
++++ baseline/frontend/app/view/hermes/subagent-surface-source.ts
+@@ -8,26 +8,9 @@
+ } from "../../../types/agent-activity";
+ 
+ export function installSubagentSurfaceSource(capture: (activity: LiveAgentSurfaceActivity) => Promise<string>): void {
+-    // A recorded event is the freshness boundary. Sharing by surface alone could
+-    // return a frame started before the latest tool action or control transfer.
+-    const inFlight = new WeakMap<LiveAgentSurfaceActivity, Map<string, Promise<string>>>();
+-    const captureOnce = (event: LiveAgentSurfaceActivity, scope: string, activity: LiveAgentSurfaceActivity) => {
+-        let requests = inFlight.get(event);
+-        if (!requests) {
+-            requests = new Map();
+-            inFlight.set(event, requests);
+-        }
+-        const existing = requests.get(scope);
+-        if (existing) return existing;
+-        const pending = capture(activity).finally(() => requests.delete(scope));
+-        requests.set(scope, pending);
+-        return pending;
+-    };
+     registerSubagentSurfaceSource((target, onSnapshot) => {
+-        const scope = JSON.stringify([target.id, target.sessionId, !!target.swarm]);
+         let disposed = false;
+         let latest: LiveAgentSurfaceActivity;
+-        let latestEvent: LiveAgentSurfaceActivity;
+         let swarmTarget: LiveAgentSurfaceActivity;
+         let swarmFinished = false;
+         let imageUrl: string;
+@@ -103,12 +86,11 @@
+                 return;
+             }
+             const activity = latest;
+-            const event = latestEvent;
+             const currentGeneration = generation;
+             capturePending = true;
+             lastCaptureAt = Date.now();
+             try {
+-                const result = await captureOnce(event, scope, activity);
++                const result = await capture(activity);
+                 if (!canCapture() || generation !== currentGeneration) return;
+                 imageUrl = result;
+                 captureError = undefined;
+@@ -128,7 +110,6 @@
+             }
+         };
+         const accept = (activity: LiveAgentSurfaceActivity) => {
+-            const event = activity;
+             if (target.swarm) {
+                 if (swarmFinished || !matchesWorker(activity)) return;
+                 const swarm = activity.swarm;
+@@ -165,12 +146,6 @@
+                 return;
+             }
+             if (key(latest) !== key(activity)) clearCapture();
+-            else if (
+-                !["inspect", "verify", "screenshot", "wait"].includes(activity.action) ||
+-                activity.risk === "write"
+-            )
+-                generation += 1;
+-            latestEvent = event;
+             latest = { ...activity, previewimageurl: undefined };
+             if (activity.previewimageurl || activity.previewerror) generation += 1;
+             if (activity.previewimageurl) {

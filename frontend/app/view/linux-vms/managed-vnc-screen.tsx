@@ -1,7 +1,10 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ScreenSelectorToolbar, type ScreenSelectorAction } from "@/app/lib/screen-selector-toolbar";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
+import { ComputerSelection, type VmSelectionSnapshot } from "@/app/view/computers/computer-selection-panel";
+import { getApi } from "@/store/global";
 import type { LinuxDesktop } from "@/types/linux-desktops";
 import RFB from "@novnc/novnc";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +14,7 @@ import "./computer-frame.css";
 export function ManagedVncScreen({
     desktop,
     onTakeControl,
+    onReturnControl,
     busy = false,
     error,
     onLifecycle,
@@ -18,6 +22,7 @@ export function ManagedVncScreen({
 }: {
     desktop: LinuxDesktop;
     onTakeControl?: () => Promise<void>;
+    onReturnControl?: () => Promise<void>;
     busy?: boolean;
     error?: string;
     onLifecycle?: () => void;
@@ -33,11 +38,54 @@ export function ManagedVncScreen({
     const [fullscreen, setFullscreen] = useState(false);
     const [takingOver, setTakingOver] = useState(false);
     const [localError, setLocalError] = useState("");
+    const [selection, setSelection] = useState<
+        Extract<VmSelectionSnapshot, { kind: "linux" }> & { action: ScreenSelectorAction }
+    >();
+    const [capturing, setCapturing] = useState(false);
     const activity = useComputerActivity(desktop?.id);
     const agentOwns = desktop?.controlOwner === "agent";
     const approval = agentOwns && activity?.phase === "awaiting-approval";
     const active = agentOwns && ["queued", "running", "verifying"].includes(activity?.phase);
     const endpoint = desktop?.status === "running" ? desktop.viewerUrl : "";
+    const selectionActive =
+        endpoint && selection?.desktopId === desktop.id && selection.controlGeneration === desktop.controlGeneration;
+    useEffect(() => {
+        setSelection(undefined);
+    }, [desktop?.id, desktop?.controlGeneration, endpoint]);
+    const captureSelection = async (action: ScreenSelectorAction) => {
+        if (capturing) return;
+        if (!endpoint) {
+            setLocalError("Start the VM to select a target.");
+            return;
+        }
+        setCapturing(true);
+        setLocalError("");
+        try {
+            const result = await getApi().performLinuxDesktopAction({
+                desktopId: desktop.id,
+                expectedGeneration: desktop.controlGeneration,
+                action: "screenshot",
+            });
+            if (result.success === false) throw new Error(result.error.message);
+            if (result.data.desktop.controlGeneration !== desktop.controlGeneration)
+                throw new Error("VM control changed. Capture the screen again.");
+            if (!result.data.imageDataUrl) throw new Error("The VM screen is unavailable.");
+            setSelection({
+                kind: "linux",
+                action,
+                name: desktop.name,
+                desktopId: desktop.id,
+                controlGeneration: desktop.controlGeneration,
+                supportsElementPick: desktop.provider === "cua-qemu",
+                imageDataUrl: result.data.imageDataUrl,
+                capturedAt: Date.now(),
+            });
+        } catch (error) {
+            setLocalError(error instanceof Error ? error.message : "Could not capture the VM screen.");
+        } finally {
+            setCapturing(false);
+        }
+    };
     const iframe = /^https?:/.test(endpoint);
     let iframeUrl = endpoint;
     if (iframe && agentOwns) {
@@ -103,8 +151,27 @@ export function ManagedVncScreen({
             setTakingOver(false);
         }
     };
+    const returnControl = async () => {
+        if (!onReturnControl || takingOver) return;
+        setTakingOver(true);
+        setLocalError("");
+        try {
+            await onReturnControl();
+            setViewOnly(true);
+        } catch (failure) {
+            setLocalError(failure instanceof Error ? failure.message : "Could not return control to the agent.");
+        } finally {
+            setTakingOver(false);
+        }
+    };
     const lifecycleLabel =
-        desktop?.status === "running" ? "Stop VM" : desktop?.imagePrepared ? "Start VM" : "Prepare desktop";
+        desktop?.status === "running"
+            ? "Stop VM"
+            : desktop?.imagePrepared
+              ? "Start VM"
+              : desktop?.provider === "cua-qemu"
+                ? "Set up and launch"
+                : "Prepare desktop";
     const status = approval
         ? "Awaiting approval"
         : active
@@ -116,22 +183,6 @@ export function ManagedVncScreen({
               : "You have control";
     return (
         <div ref={root} className="computer-frame">
-            <header className="computer-frame-header">
-                <strong>KronTerm Computer</strong>
-                <span className="computer-frame-connection" role="status">
-                    <span
-                        className="computer-frame-dot"
-                        data-state={endpoint && (iframe || phase === "Connected") ? "connected" : "disconnected"}
-                    />
-                    {endpoint
-                        ? iframe
-                            ? "Live desktop"
-                            : phase
-                        : desktop?.status === "running"
-                          ? "Starting…"
-                          : "Offline"}
-                </span>
-            </header>
             <div className="computer-frame-screen" data-active={active} data-approval={approval}>
                 {iframe ? (
                     <iframe
@@ -140,10 +191,27 @@ export function ManagedVncScreen({
                         allow="clipboard-read; clipboard-write; fullscreen"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"
                         className="h-full w-full border-0"
+                        inert={Boolean(selectionActive)}
                     />
                 ) : (
-                    <div ref={display} className="computer-frame-display" />
+                    <div ref={display} className="computer-frame-display" inert={Boolean(selectionActive)} />
                 )}
+                {selectionActive && (
+                    <ComputerSelection
+                        key={selection.action}
+                        vm={selection}
+                        action={selection.action}
+                        onClose={() => setSelection(undefined)}
+                    />
+                )}
+                <ScreenSelectorToolbar
+                    title="Linux VM element selector"
+                    onSelect={(action) => {
+                        if (selectionActive)
+                            setSelection(action === selection.action ? undefined : { ...selection, action });
+                        else void captureSelection(action);
+                    }}
+                />
                 {!iframe && agentOwns && endpoint && (
                     <AgentSurfaceCursor
                         surface="sandbox"
@@ -175,20 +243,32 @@ export function ManagedVncScreen({
                 </p>
             )}
             <footer className="computer-frame-footer">
-                <div className="computer-frame-status" data-approval={approval} role="status">
-                    <span className="computer-frame-dot" data-state={active ? "connected" : "idle"} />
-                    <span>
-                        {busy
+                <div
+                    className="computer-frame-status"
+                    data-approval={approval}
+                    role="status"
+                    aria-label={
+                        busy
                             ? "Updating computer…"
                             : endpoint
-                              ? status
+                              ? approval || active || iframe || phase === "Connected"
+                                  ? status
+                                  : phase
                               : desktop?.status === "running"
                                 ? "Starting computer…"
-                                : "Computer is offline"}
-                    </span>
+                                : "Computer is offline"
+                    }
+                >
+                    <span className="computer-frame-dot" data-state={active ? "connected" : "idle"} />
                 </div>
                 <details className="computer-frame-tools">
-                    <summary aria-label="Computer controls">Controls</summary>
+                    <summary aria-label="Computer controls" title="Computer controls">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+                            <circle cx="3" cy="9" r="1.5" />
+                            <circle cx="9" cy="9" r="1.5" />
+                            <circle cx="15" cy="9" r="1.5" />
+                        </svg>
+                    </summary>
                     <div className="computer-frame-tools-panel">
                         {!iframe && (
                             <>
@@ -246,6 +326,16 @@ export function ManagedVncScreen({
                         onClick={() => void takeOver()}
                     >
                         {takingOver ? "Taking over…" : "Take over"}
+                    </button>
+                )}
+                {!agentOwns && endpoint && onReturnControl && (
+                    <button
+                        type="button"
+                        className="computer-frame-takeover"
+                        disabled={takingOver || busy}
+                        onClick={() => void returnControl()}
+                    >
+                        {takingOver ? "Returning control…" : "Return to agent"}
                     </button>
                 )}
             </footer>

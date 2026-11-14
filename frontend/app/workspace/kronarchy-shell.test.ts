@@ -21,6 +21,12 @@ describe("shouldOpenKronarchyLauncher", () => {
     test("opens the canonical Shift+Command+Space shortcut", () => {
         expect(shouldOpenKronarchyLauncher(makeShortcut(), false)).toBe(true);
     });
+    test("supports Control+Shift+Space on Windows and Linux", () => {
+        expect(shouldOpenKronarchyLauncher(makeShortcut({ metaKey: false, ctrlKey: true }), false)).toBe(true);
+        expect(
+            shouldOpenKronarchyLauncher(makeShortcut({ metaKey: false, ctrlKey: true, shiftKey: false }), true)
+        ).toBe(false);
+    });
 
     test("keeps plain Command+Space for migrated users", () => {
         expect(shouldOpenKronarchyLauncher(makeShortcut({ shiftKey: false }), false)).toBe(false);

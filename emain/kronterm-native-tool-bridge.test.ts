@@ -8,6 +8,8 @@ import { executeTool } from "../mcp-kron-term/src/tool-execution";
 import { ElectronWshClient } from "./emain-wsh";
 import type { HermesSurfaceContext } from "./hermes-runtime";
 import { KronTermNativeToolBridge } from "./kronterm-native-tool-bridge";
+import { swarmBlockTarget, swarmWorkerContext } from "./swarm-target-scope";
+import { resolveToolRequestContext } from "./tool-request-context";
 
 vi.mock("@/app/store/services", () => ({
     WorkspaceService: {
@@ -81,8 +83,95 @@ vi.mock("./emain-window", () => ({
               },
     createWindowForWorkspace: windowMocks.createWindow,
 }));
-vi.mock("./emain-pet", () => ({}));
+vi.mock("./emain-pet", () => ({ notifyDesktopPetSurfaceActivity: vi.fn() }));
 vi.mock("./emain-wsh", () => ({ ElectronWshClient: { wshRpcCall: vi.fn() } }));
+
+describe("audited tool transports", () => {
+    afterEach(() => vi.mocked(ElectronWshClient.wshRpcCall).mockReset());
+
+    test("sends UTF-8 terminal input to the backend shell controller", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab" }));
+        await bridge.terminalInput("block:terminal", "echo café", true);
+        expect(ElectronWshClient.wshRpcCall).toHaveBeenLastCalledWith(
+            "controllerinput",
+            { blockid: "terminal", inputdata64: Buffer.from("echo café\n").toString("base64") },
+            {}
+        );
+    });
+
+    test("passes directory options and distinguishes empty files from missing paths", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab" }));
+        const rpc = vi.mocked(ElectronWshClient.wshRpcCall);
+        rpc.mockResolvedValueOnce(null);
+        expect(await bridge.fileList("/project")).toBe("[]");
+        expect(rpc).toHaveBeenLastCalledWith("filelist", { path: "/project", opts: {} }, {});
+        rpc.mockResolvedValueOnce({ notfound: true });
+        await expect(bridge.fileInfo("/missing")).rejects.toThrow("File not found");
+        rpc.mockResolvedValueOnce({ info: { notfound: true } });
+        await expect(bridge.fileRead("/missing")).rejects.toThrow("File not found");
+        rpc.mockResolvedValueOnce({ info: { size: 0 } });
+        expect(await bridge.fileRead("/empty")).toBe("");
+        rpc.mockResolvedValueOnce({ info: { isdir: true } });
+        await expect(bridge.fileRead("/project")).rejects.toThrow("use file_list");
+        rpc.mockResolvedValueOnce({ data64: Buffer.from("hello").toString("base64") });
+        expect(await bridge.fileRead("wsh://remote/file.txt")).toBe("hello");
+    });
+
+    test("rejects terminal input that no longer belongs to the resolved tab", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab", workspaceId: "workspace" }));
+        vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValue({ tabid: "moved-tab", workspaceid: "workspace" });
+        const result = await executeTool("terminal_input", { blockId: "terminal" }, false, async () => ({
+            content: [{ type: "text", text: await bridge.terminalInput("terminal", "echo hello", true) }],
+        }));
+        expect(result.isError).toBe(true);
+        expect(JSON.parse(result.content[0].text).code).toBe("TARGET_MISMATCH");
+        expect(vi.mocked(ElectronWshClient.wshRpcCall).mock.calls.every(([command]) => command !== "controllerinput")).toBe(true);
+    });
+
+    test("resolves a tab-only workflow caller to its own workspace without borrowing visible focus", async () => {
+        const caller = { tabId: "background-tab", n8nWorkerId: "worker", n8nWorkflowId: "flow" };
+        const bridge = new KronTermNativeToolBridge(() => caller);
+        vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValue([
+            { workspacedata: { oid: "visible", tabids: ["visible-tab"] } },
+            { workspacedata: { oid: "owner", tabids: ["background-tab"] } },
+        ]);
+        const execute = vi.fn(async () => resolveToolRequestContext(() => caller));
+        expect(await bridge.withToolTarget({}, execute)).toMatchObject({ ...caller, workspaceId: "owner" });
+        expect(caller).not.toHaveProperty("workspaceId");
+        vi.mocked(ElectronWshClient.wshRpcCall).mockResolvedValue([]);
+        execute.mockClear();
+        await expect(bridge.withToolTarget({}, execute)).rejects.toThrow("Caller tab no longer belongs");
+        expect(execute).not.toHaveBeenCalled();
+    });
+});
+
+test("a swarm browser can use its RPC pipeline and stops if its partition changes", async () => {
+    const meta = { view: "web", url: "https://example.com", "web:partition": "persist:one" };
+    const target = swarmBlockTarget({ blockid: "browser", tabid: "tab", meta });
+    const context = swarmWorkerContext({ tabId: "tab", workspaceId: "workspace" }, "run", target);
+    const bridge = new KronTermNativeToolBridge(() => context);
+    const rpc = vi.mocked(ElectronWshClient.wshRpcCall);
+    rpc.mockImplementation(async (command) => {
+        if (command === "blockinfo") return { tabid: "tab", workspaceid: "workspace", block: { meta } };
+        if (command === "widgetsnapshot") return { elements: [] };
+        if (command === "captureblockscreenshot") return "image";
+        if (command === "webselector") return ["<main>content</main>"];
+        return { success: true };
+    });
+    try {
+        expect(JSON.parse(await bridge.widgetSnapshot("browser"))).toEqual({ elements: [], screenshot: "image" });
+        expect(await bridge.browserGetHtml("browser", "main")).toContain("<main>content</main>");
+        await expect(bridge.navigateWeb("browser", "https://example.org")).resolves.toContain("example.org");
+        await expect(bridge.focusBlock("browser")).resolves.toContain("focused");
+        await expect(bridge.widgetClick("browser", "e1")).resolves.toContain("success");
+        await expect(bridge.widgetScreenshot("other")).rejects.toThrow("target grant");
+        await expect(bridge.closeBlock("browser")).rejects.toThrow("operation grant");
+        meta["web:partition"] = "persist:two";
+        await expect(bridge.widgetSnapshot("browser")).rejects.toThrow("browser session changed");
+    } finally {
+        rpc.mockReset();
+    }
+});
 
 describe("native tool CLI authentication", () => {
     test("pixel wheel input uses scoped native RPC and preserves zero coordinates", async () => {
@@ -617,4 +706,42 @@ describe("widget snapshot screenshot", () => {
             calls.mockRestore();
         }
     });
+});
+
+test("Hybrid discovery retains the selected mode and exposes workspace tools", async () => {
+    const { isToolAllowedBySurfaceCapability } = await import("../mcp-kron-term/src/surface-policy");
+    const bridge = new KronTermNativeToolBridge(() => ({
+        tabId: "hybrid-discovery",
+        sandboxComputerId: "linux-vm:ubuntu",
+        sandboxComputerMode: "hybrid",
+    }));
+    const rpc = vi.spyOn(bridge as any, "rpc").mockResolvedValue({ token: "fixture", tabid: "hybrid-discovery" });
+    try {
+        const capability = await bridge.getDiscoverySurfaceCapability();
+        expect(capability.sandboxComputerMode).toBe("hybrid");
+        expect(isToolAllowedBySurfaceCapability("terminal_run", capability)).toBe(true);
+        expect(isToolAllowedBySurfaceCapability("sandbox_vm_desktop", capability)).toBe(true);
+    } finally {
+        rpc.mockRestore();
+    }
+});
+
+test("parallel terminal opens reuse the created shell in the owning tab", async () => {
+    const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab", workspaceId: "workspace" }));
+    const blocks: any[] = [];
+    vi.spyOn(bridge, "listBlocks").mockImplementation(async () => JSON.stringify(blocks));
+    const create = vi.spyOn(bridge, "createBlock").mockImplementation(async (_view, meta) => {
+        await Promise.resolve();
+        blocks.push({ blockid: "shell", view: "term", meta });
+        return "block created: shell";
+    });
+    const focus = vi.spyOn(bridge, "focusBlock").mockResolvedValue("focused");
+    const results = await Promise.all([bridge.openTerminal("/project"), bridge.openTerminal("/project")]);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledWith("shell");
+    expect(results[1]).toContain("reused block block:shell");
+    await bridge.openTerminal("/project", false, true);
+    expect(create).toHaveBeenCalledTimes(2);
+    await bridge.openTerminal("/other");
+    expect(create).toHaveBeenCalledTimes(3);
 });

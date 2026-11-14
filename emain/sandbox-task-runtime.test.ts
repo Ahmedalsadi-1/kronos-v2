@@ -62,6 +62,23 @@ describe("sandbox task lifecycle", () => {
         await expect(runtime.start({ ...args, taskId: "another" })).rejects.toThrow("active task");
         expect(actions).toEqual(["start"]);
     });
+    it("accepts a new grant when the previous caller lost ownership without finishing", async () => {
+        const { runtime, desktop, actions } = fixture("running");
+        const stale = await runtime.start(args);
+        desktop.assignedAgentId = "replacement";
+        desktop.controlGeneration++;
+        const fresh = await runtime.start({
+            ...args,
+            assignedAgentId: desktop.assignedAgentId,
+            expectedGeneration: desktop.controlGeneration,
+            taskId: "fresh",
+        });
+        expect(fresh.sessionId).not.toBe(stale.sessionId);
+        await expect(runtime.finish(stale.sessionId)).resolves.toMatchObject({ finished: true, preserved: true });
+        expect(actions).toEqual([]);
+        await expect(runtime.finish(fresh.sessionId)).resolves.toMatchObject({ stopped: true });
+        expect(actions).toEqual(["stop"]);
+    });
     it("returns a cleanup session when startup partly succeeds then fails", async () => {
         const desktop = {
             id: args.desktopId,

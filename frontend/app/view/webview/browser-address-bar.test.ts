@@ -11,7 +11,7 @@ describe("browser address suggestions", () => {
                 "kron",
                 ["https://kronterm.dev", "https://example.com"],
                 [
-                    { type: "url", suggestionid: "one", display: "KronTerm", "url:url": "https://kronterm.dev" },
+                    { type: "url", suggestionid: "one", display: "KronOS", "url:url": "https://kronterm.dev" },
                     { type: "url", suggestionid: "two", display: "Docs", "url:url": "https://docs.kronterm.dev" },
                 ]
             )

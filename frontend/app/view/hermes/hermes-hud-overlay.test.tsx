@@ -186,7 +186,7 @@ it("detaches and reattaches the same mounted composer as a draggable island", as
         expect(frame.hasAttribute("data-hermes-frame-fit")).toBe(false);
         expect(frame.querySelector(".hermes-hud-island-handle")).toBeNull();
         expect(
-            frame.querySelector('[data-slot="composer-surface"] [aria-label="Dock KronTerm Agent in the workspace"]')
+            frame.querySelector('[data-slot="composer-surface"] [aria-label="Dock KronOS Agent in the workspace"]')
         ).not.toBeNull();
         act(() => container.querySelector<HTMLButtonElement>('[aria-label="Attach Hermes to OS frame"]').click());
         expect(frame.dataset.chatPlacement).toBe("shell");

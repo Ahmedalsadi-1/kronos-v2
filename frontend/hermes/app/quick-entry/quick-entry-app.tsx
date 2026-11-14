@@ -131,7 +131,7 @@ export function QuickEntryApp() {
                 dispatch({ type: 'dismiss' })
               }
             }}
-            placeholder={state.connected ? 'Ask KronTerm…' : 'Not connected — open KronTerm to reconnect'}
+            placeholder={state.connected ? 'Ask KronOS…' : 'Not connected — open KronOS to reconnect'}
             ref={inputRef}
             spellCheck={false}
             style={{

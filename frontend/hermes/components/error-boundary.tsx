@@ -62,7 +62,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         label: new URLSearchParams(window.location.search).get('win') ?? 'main',
         boundary: label || 'unlabeled',
         message: error.message,
-        componentStack: info.componentStack ?? ''
+        componentStack: info.componentStack ?? '',
+        stack: error.stack
       })
     } catch {
       // Logging must never take the boundary down with it.

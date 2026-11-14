@@ -23,6 +23,14 @@ export class N8nWorkspaceStore {
         return state;
     }
 
+    removeWorkflow(context: HermesSurfaceContext, workflowId: string): void {
+        const state = this.read(context);
+        if (state.selectedWorkflowId === workflowId) delete state.selectedWorkflowId;
+        else if (!state.folders.some((folder) => folder.workflowIds.includes(workflowId))) return;
+        for (const folder of state.folders) folder.workflowIds = folder.workflowIds.filter((id) => id !== workflowId);
+        this.write(context, state);
+    }
+
     command(
         context: HermesSurfaceContext,
         input: {
@@ -57,12 +65,16 @@ export class N8nWorkspaceStore {
         } else if (input.action === "select-workflow") {
             state.selectedWorkflowId = input.workflowId;
         } else throw new Error("Unknown folder action.");
+        this.write(context, state);
+        return state;
+    }
+
+    private write(context: HermesSurfaceContext, state: N8nWorkspaceState): void {
         const directory = path.join(this.root, n8nScopeKey(context));
         fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
         const filename = path.join(directory, "workspace.json");
         const temporary = `${filename}.${randomUUID()}.tmp`;
         fs.writeFileSync(temporary, JSON.stringify(state), { mode: 0o600 });
         fs.renameSync(temporary, filename);
-        return state;
     }
 }

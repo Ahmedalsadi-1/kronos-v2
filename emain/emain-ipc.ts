@@ -1,6 +1,9 @@
 import { grantManagedRuntimeRequests, revokeManagedRuntimeSender } from "./authkey";
-import { agentBotCommand, openBotDesktop, openMausBotConnection } from "./openmausbot-runtime";
-import { hasKronTermAccount, workflowAccount } from "./workflow-account";
+import { registerDiagnosticsIpc } from "./diagnostics";
+import { agentBotCommand, openBotDesktop, openMausBotConnection, projectRoomCommand } from "./openmausbot-runtime";
+import { workflowAccount } from "./workflow-account";
+import { getKronTermSwarmService } from "./kronterm-tool-server";
+import type { SwarmRecoveryCommand } from "../frontend/types/swarm";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -67,6 +70,7 @@ import { handleCtrlShiftState } from "./emain-util";
 import { getWaveVersion } from "./emain-wavesrv";
 import { createNewWaveWindow, getWaveWindowByWebContentsId } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
+import { openKronosTestSignIn } from "./kronos-signin";
 import { HermesRuntime, type HermesApiRequest } from "./hermes-runtime";
 import {
     isKronosCodeLoopbackUrl,
@@ -351,6 +355,53 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
+    electron.ipcMain.on("open-kronos-sign-in", (event) => {
+        if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) return;
+        const parent = getWaveWindowByWebContentsId(event.sender.id);
+        if (parent && !parent.isDestroyed()) openKronosTestSignIn(parent);
+    });
+    electron.ipcMain.handle("swarm-recovery", async (event, command: SwarmRecoveryCommand) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
+            throw new Error("Unknown swarm recovery renderer");
+        const { workspaceId, tabId } = nativeHudTaskContext(event.sender.id);
+        if (!workspaceId || !tabId) throw new Error("Open a workspace tab to review interrupted swarms.");
+        const coordinator = getKronTermSwarmService()?.coordinator;
+        if (command?.action === "list") return coordinator?.listRecoveries(workspaceId, tabId) ?? [];
+        if (
+            command?.action !== "acknowledge" ||
+            typeof command.runId !== "string" ||
+            command.runId.length > 80 ||
+            typeof command.attemptId !== "string" ||
+            command.attemptId.length > 80 ||
+            !coordinator
+        ) throw new Error("Select an uncertain swarm attempt to review.");
+        const { runId, attemptId } = command;
+        if (!coordinator.listRecoveries(workspaceId, tabId).some((item) => item.runId === runId && item.attemptId === attemptId))
+            throw new Error("This uncertain swarm attempt is no longer available in this workspace.");
+        const { response } = await electron.dialog.showMessageBox({
+            type: "warning",
+            title: "Allow this swarm target to be reused?",
+            message: "Have you inspected this target and checked for unfinished effects?",
+            detail: "A new swarm can use the target after all overlapping uncertain attempts have been reviewed.",
+            buttons: ["Cancel", "Acknowledge review"],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+        });
+        if (response === 1 && !event.sender.isDestroyed()) {
+            const current = nativeHudTaskContext(event.sender.id);
+            if (current.workspaceId !== workspaceId || current.tabId !== tabId)
+                throw new Error("The active tab changed. Review the attempt from its workspace.");
+            coordinator.acknowledge(workspaceId, tabId, runId, attemptId);
+        }
+        return coordinator.listRecoveries(workspaceId, tabId);
+    });
+    electron.ipcMain.handle("project-room-command", (event, command) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
+            throw new Error("Unknown project room renderer");
+        return projectRoomCommand(event.sender, command);
+    });
+    registerDiagnosticsIpc((sender) => getWaveTabViewByWebContentsId(sender.id) != null || isTrustedNativeHudSender(sender.id));
     electron.ipcMain.handle("agent-bot-command", (event, command) => {
         if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
             throw new Error("Unknown bot chat renderer");
@@ -1169,7 +1220,7 @@ export function initIpcHandlers() {
     electron.ipcMain.handle("kronterm-account-status", (event) => {
         if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
             throw new Error("Unknown workspace renderer");
-        return { configured: hasKronTermAccount(), encryptionAvailable: electron.safeStorage.isEncryptionAvailable() };
+        return { configured: true, encryptionAvailable: electron.safeStorage.isEncryptionAvailable() };
     });
 
     electron.ipcMain.handle("hermes-api", async (event, input: HermesApiRequest) => {
@@ -1178,8 +1229,26 @@ export function initIpcHandlers() {
                 throw new Error("Unknown workspace renderer");
             }
             const context = { ...nativeHudTaskContext(event.sender.id), n8nEditorId: event.sender.id };
-            const result = await HermesRuntime.api<any>(input, context);
             const operation = (input.body as any)?.operation;
+            if (input.path === "/api/kronterm/n8n/command" && operation === "switch-workspace") {
+                if (!context.workspaceId || !context.tabId || !Number.isSafeInteger((input.body as any).expectedGeneration))
+                    throw new Error("Refresh the Workflows panel before switching the connection.");
+                const { response } = await electron.dialog.showMessageBox({
+                    type: "warning",
+                    title: "Switch the workflow connection?",
+                    message: "Connect Workflows to this tab?",
+                    detail: "This disconnects the other tab and stops any workflow executions in progress there.",
+                    buttons: ["Cancel", "Switch connection"],
+                    defaultId: 0,
+                    cancelId: 0,
+                    noLink: true,
+                });
+                if (response !== 1 || event.sender.isDestroyed()) return { cancelled: true };
+                const current = nativeHudTaskContext(event.sender.id);
+                if (current.tabId !== context.tabId || current.workspaceId !== context.workspaceId)
+                    throw new Error("The active tab changed. Try again from the Workflows panel.");
+            }
+            const result = await HermesRuntime.api<any>(input, context);
             if (operation === "editor-session") {
                 if (!ManagedWorkflowSenders.has(event.sender)) {
                     ManagedWorkflowSenders.add(event.sender);

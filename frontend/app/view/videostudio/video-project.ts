@@ -11,6 +11,14 @@ export type VideoProject = {
     captions: VideoCaption[];
 };
 
+function isLocalVideoPath(path: unknown): path is string {
+    return typeof path === "string" && !path.includes("\0") && /^(?:\/|[a-z]:[\\/]|\\\\[^\\])/i.test(path);
+}
+
+export function isVideoStudioSource(path: unknown): path is string {
+    return isLocalVideoPath(path) && /\.(mp4|mov|webm|m4v|mkv|avi)$/i.test(path);
+}
+
 export function normalizeVideoProject(value: unknown): VideoProject {
     const candidate = value as Partial<VideoProject>;
     const duration =
@@ -23,7 +31,7 @@ export function normalizeVideoProject(value: unknown): VideoProject {
     const trimEnd = Math.max(trimStart, clamp(candidate?.trimEnd, duration));
     return {
         version: 1,
-        source: typeof candidate?.source === "string" && candidate.source.startsWith("/") ? candidate.source : "",
+        source: isLocalVideoPath(candidate?.source) ? candidate.source : "",
         duration,
         trimStart,
         trimEnd,

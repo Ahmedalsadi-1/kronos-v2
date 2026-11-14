@@ -18,7 +18,8 @@ async function* rpcResponseGenerator(
     command: string,
     reqid: string,
     timeout: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    waitForCancelAck = false
 ): AsyncGenerator<any, void, boolean> {
     const msgQueue: RpcMessage[] = [];
     let signalFn: () => void;
@@ -39,6 +40,7 @@ async function* rpcResponseGenerator(
     };
     const onAbort = () => {
         sendRpcCancel(reqid);
+        if (waitForCancelAck) return;
         msgQueue.push({ resid: reqid, error: "EC-CANCEL: request cancelled" });
         signalFn();
     };
@@ -93,14 +95,15 @@ function sendRpcResponse(msg: RpcMessage) {
 function sendRpcCommand(
     openRpcs: Map<string, ClientRpcEntry>,
     msg: RpcMessage,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    waitForCancelAck = false
 ): AsyncGenerator<RpcMessage, void, boolean> {
     if (signal?.aborted) throw new Error("EC-CANCEL: request cancelled before dispatch");
     DefaultRouter.recvRpcMessage(msg);
     if (msg.reqid == null) {
         return null;
     }
-    const rtnGen = rpcResponseGenerator(openRpcs, msg.command, msg.reqid, msg.timeout, signal);
+    const rtnGen = rpcResponseGenerator(openRpcs, msg.command, msg.reqid, msg.timeout, signal, waitForCancelAck);
     rtnGen.next();
     return rtnGen;
 }

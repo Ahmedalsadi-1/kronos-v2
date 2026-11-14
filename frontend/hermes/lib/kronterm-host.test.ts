@@ -9,7 +9,7 @@ function ModeProbe() {
     return createElement("span", null, JSON.stringify(mode));
 }
 
-describe("KronTerm Hermes host module", () => {
+describe("KronOS Hermes host module", () => {
     it("initializes its React context when the module loads", () => {
         expect(HermesShellModeProvider).toBeTypeOf("function");
         expect(isKronTermHudHost()).toBe(false);
@@ -48,7 +48,7 @@ describe("KronTerm Hermes host module", () => {
         expect(markup).toContain("&quot;webMode&quot;:true");
     });
 
-    it("mounts the native KronTerm panel with the real Hermes HUD shell", () => {
+    it("mounts the native KronOS panel with the real Hermes HUD shell", () => {
         const source = readFileSync(new URL("../../native-hud.tsx", import.meta.url), "utf8");
         expect(source).toContain('<HermesApp hudMode hostMode="hud" kronSettingsModel={settingsModel} />');
         expect(source).not.toContain('<HermesApp hudMode hostMode="kronterm" />');

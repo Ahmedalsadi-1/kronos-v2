@@ -470,7 +470,7 @@ function renderState(nextState: PetState) {
                 state.surface === "browser" ? "Preview browser" : `Preview ${state.appName ?? "widget"}`;
             capturePreview.setAttribute(
                 "aria-label",
-                state.previewImageUrl ? "Expand the latest agent preview" : "Open the active KronTerm widget"
+                state.previewImageUrl ? "Expand the latest agent preview" : "Open the active KronOS widget"
             );
             capturePreview.removeAttribute("hidden");
         } else {

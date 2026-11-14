@@ -19,6 +19,7 @@ export interface SubagentProgress {
   /** The child's own stored session id — lets UIs open its session window. */
   sessionId?: string
   model?: string
+  swarm?: { outcome?: 'blocked' | 'uncertain' }
   status: SubagentStatus
   taskCount: number
   taskIndex: number
@@ -35,6 +36,9 @@ export interface SubagentProgress {
   summary?: string
   /** Active tool while running — cleared on terminal status. */
   currentTool?: string
+  lastTool?: string
+  toolPreview?: string
+  inlineDiff?: string
 }
 
 export interface SubagentNode extends SubagentProgress {
@@ -183,6 +187,7 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
   const stream = streamFromPayload(payload, status, eventType, at).reduce(appendStream, prev?.stream ?? [])
   const filesRead = strList(payload.files_read)
   const filesWritten = strList(payload.files_written)
+  const swarmOutcome = payload.swarm_outcome
 
   return {
     id: prev?.id ?? idOf(payload),
@@ -190,6 +195,9 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
     goal: str(payload.goal) || prev?.goal || 'Subagent',
     sessionId: str(payload.child_session_id) || prev?.sessionId,
     model: str(payload.model) || prev?.model,
+    swarm: payload.swarm_worker === true
+      ? { outcome: swarmOutcome === 'blocked' || swarmOutcome === 'uncertain' ? swarmOutcome : undefined }
+      : prev?.swarm,
     status,
     taskCount: num(payload.task_count) ?? prev?.taskCount ?? 1,
     taskIndex: num(payload.task_index) ?? prev?.taskIndex ?? 0,
@@ -204,14 +212,25 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
     filesWritten: filesWritten.length ? filesWritten : (prev?.filesWritten ?? []),
     stream,
     summary: str(payload.summary) || timeoutSummary(payload) || prev?.summary || undefined,
-    currentTool: TERMINAL.has(status) ? undefined : tool || prev?.currentTool
+    currentTool: TERMINAL.has(status) ? undefined : tool || prev?.currentTool,
+    lastTool: tool || prev?.lastTool,
+    toolPreview: tool ? str(payload.tool_preview).slice(0, 12000) || undefined : prev?.toolPreview,
+    inlineDiff: tool ? str(payload.inline_diff).slice(0, 24000) || undefined : prev?.inlineDiff
   }
 }
 
 export function clearSessionSubagents(sid: string) {
   const map = $subagentsBySession.get()
+  const list = map[sid]
 
-  if (!(sid in map)) {
+  if (!list) {
+    return
+  }
+
+  // Interrupting the parent turn does not interrupt its independent swarm sessions.
+  const swarm = list.filter(item => item.swarm)
+  if (swarm.length > 0) {
+    if (swarm.length !== list.length) $subagentsBySession.set({ ...map, [sid]: swarm })
     return
   }
 
@@ -226,12 +245,12 @@ export function clearSessionSubagents(sid: string) {
  * from the display while background subagents that outlived the spawning turn
  * remain visible (and still accept late progress/complete events).
  *
- * Distinct from `clearSessionSubagents` (used by the Stop action, which
- * genuinely cancels running subagents and so should drop them all) and from
+ * Distinct from `clearSessionSubagents` (used by the parent Stop action to
+ * clear its delegated rows) and from
  * `pruneDelegateFallbackSubagents` (which filters by id prefix to remove
  * placeholder rows once the real native event arrives).
  */
-export function pruneFinishedSessionSubagents(sid: string) {
+export function pruneFinishedSessionSubagents(sid: string, swarmOnly = false) {
   const map = $subagentsBySession.get()
   const list = map[sid]
 
@@ -239,7 +258,7 @@ export function pruneFinishedSessionSubagents(sid: string) {
     return
   }
 
-  const next = list.filter(item => item.status === 'running' || item.status === 'queued')
+  const next = list.filter(item => (swarmOnly && !item.swarm) || item.status === 'running' || item.status === 'queued')
 
   if (next.length === list.length) {
     return
@@ -285,6 +304,15 @@ export function upsertSubagent(sid: string, payload: SubagentPayload, createIfMi
   const nextList = idx >= 0 ? list.map(item => (item.id === id ? next : item)) : [...list, next]
 
   $subagentsBySession.set({ ...map, [sid]: nextList })
+}
+
+export function removeQueuedSubagent(sid: string, id: string) {
+  const map = $subagentsBySession.get()
+  const list = map[sid]
+  if (!list) return
+
+  const next = list.filter(item => item.id !== id || item.status !== 'queued')
+  if (next.length !== list.length) $subagentsBySession.set({ ...map, [sid]: next })
 }
 
 export function buildSubagentTree(items: readonly SubagentProgress[]): SubagentNode[] {

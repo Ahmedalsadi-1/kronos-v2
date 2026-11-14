@@ -17,7 +17,7 @@ const slides: Slide[] = [
         media: {
             type: "image",
             src: productAssets.agent,
-            alt: "KronosCode agent prompt running inside the Kronterm terminal workspace"
+            alt: "KronosCode agent prompt running inside the KronOS terminal workspace"
         }
     },
     {
@@ -26,7 +26,7 @@ const slides: Slide[] = [
         media: {
             type: "image",
             src: productAssets.hero,
-            alt: "Kronterm terminal beside browser, sandbox, files, and system panels"
+            alt: "KronOS terminal beside browser, sandbox, files, and system panels"
         }
     },
     {
@@ -35,7 +35,7 @@ const slides: Slide[] = [
         media: {
             type: "video",
             src: productAssets.browserVideo,
-            alt: "Kronterm browser widget running beside development tools"
+            alt: "KronOS browser widget running beside development tools"
         }
     },
     {
@@ -44,7 +44,7 @@ const slides: Slide[] = [
         media: {
             type: "image",
             src: productAssets.diff,
-            alt: "KronosCode file diff review in Kronterm"
+            alt: "KronosCode file diff review in KronOS"
         }
     },
     {
@@ -53,7 +53,7 @@ const slides: Slide[] = [
         media: {
             type: "video",
             src: productAssets.sandboxVideo,
-            alt: "Kronterm sandbox demonstration for controlled execution"
+            alt: "KronOS sandbox demonstration for controlled execution"
         }
     }
 ];
@@ -88,8 +88,8 @@ export function TerminalHeroShowcase() {
                     </div>
                 </div>
             </div>
-            <div className="terminal-slideshow" aria-label="Kronterm terminal slideshow">
-                <div className="terminal-slide-tabs" role="tablist" aria-label="Kronterm terminal views">
+            <div className="terminal-slideshow" aria-label="KronOS terminal slideshow">
+                <div className="terminal-slide-tabs" role="tablist" aria-label="KronOS terminal views">
                     {slides.map((slide, index) => (
                         <button
                             className={index === active ? "active" : ""}

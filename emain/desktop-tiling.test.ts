@@ -8,7 +8,7 @@ describe("native tiling", () => {
         expect(() => desktopWindowArgs({ action: "resize", windowId: 12, width: NaN, height: 600 })).toThrow();
     });
     it("excludes overlay owners and refreshes before and after mutation", async () => {
-        const rows = JSON.stringify([{ id: 1, pid: 100, title: "Browser" }, { id: 2, pid: 101, title: "KronTerm HUD" }, { id: 3, pid: 102, title: "Project" }]);
+        const rows = JSON.stringify([{ id: 1, pid: 100, title: "Browser" }, { id: 2, pid: 101, title: "KronOS HUD" }, { id: 3, pid: 102, title: "Project" }]);
         const run = vi.fn(async (_file: string, args: string[]) => args.includes("query") ? rows : "");
         const service = new DesktopTiling(run);
         await expect(service.perform({ action: "focus", windowId: 1 }, [100])).rejects.toThrow("stale or excluded");

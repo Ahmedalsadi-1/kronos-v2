@@ -1,6 +1,8 @@
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import * as React from 'react'
 
+import { DesktopModalPortalContainerContext } from './dialog-portal-context'
+
 import { useI18n } from '@hermes/i18n'
 import { type InputModality, lastInputModality } from '@hermes/lib/input-modality'
 import { useKeybindHint } from '@hermes/lib/keybinds/use-keybind-hint'
@@ -93,8 +95,9 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  const container = React.useContext(DesktopModalPortalContainerContext)
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={container}>
       <TooltipPrimitive.Content
         // Transparent, width-capped wrapper. The visible chip is the inner inline
         // span so `box-decoration-break: clone` gives a marker-style background

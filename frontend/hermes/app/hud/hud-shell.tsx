@@ -437,9 +437,9 @@ export function HudShell() {
                     </Tip>
 
                     {embedded ? (
-                        <Tip label="Dismiss KronTerm Agent HUD">
+                        <Tip label="Dismiss KronOS Agent HUD">
                             <Button
-                                aria-label="Dismiss KronTerm Agent HUD"
+                                aria-label="Dismiss KronOS Agent HUD"
                                 className={`${titlebarButtonClass} absolute z-20`}
                                 data-hud-dismiss=""
                                 onClick={() => void window.hermesDesktop?.hud?.dismiss?.()}

@@ -3,19 +3,23 @@
 
 import type { WebContents } from "electron";
 import { describe, expect, it, vi } from "vitest";
-import { installBrowserElementTool } from "./browser-element-tool";
+import { browserElementToolScript, installBrowserElementTool } from "./browser-element-tool";
 
 function guest(type = "webview", url = "https://example.com") {
     return {
         isDestroyed: vi.fn(() => false),
         getType: () => type,
         getURL: () => url,
+        on: vi.fn(),
         insertCSS: vi.fn(async () => "style"),
         executeJavaScript: vi.fn(async (_script: string) => undefined),
     };
 }
 
 describe("browser element tool ownership", () => {
+    it("builds valid guest code for the native toolbar and comment bridge", () => {
+        expect(() => new Function(browserElementToolScript())).not.toThrow();
+    });
     it("installs in the page guest, never in the Electron application renderer", async () => {
         const browser = guest();
         const application = guest("window");
@@ -40,4 +44,5 @@ describe("browser element tool ownership", () => {
         await installBrowserElementTool(browser as unknown as WebContents);
         expect(browser.insertCSS).not.toHaveBeenCalled();
     });
+
 });

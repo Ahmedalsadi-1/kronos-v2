@@ -36,10 +36,15 @@ export function buildGuestOverlayScript(action: GuestScriptAction): string {
     }
 }
 
-const ARM_SCRIPT = [
+const EXTRACTOR = [
     GRAB_GUEST_FOUNDATION_SCRIPT,
     GRAB_GUEST_CONTENT_SCRIPT,
     GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT,
     GRAB_GUEST_REACT_SCRIPT,
-    GRAB_GUEST_OVERLAY_SCRIPT,
 ].join("");
+
+const ARM_SCRIPT = EXTRACTOR + GRAB_GUEST_OVERLAY_SCRIPT;
+
+export function buildBrowserElementExtractor(): string {
+    return EXTRACTOR + "return extractPayload; })()";
+}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { globalStore } from "@/app/store/jotaiStore";
-import { attachOSResourceToKronos } from "@/app/store/os-resource-service";
+import { attachOSResourceToKronos, writeOSResourceDragPayload } from "@/app/store/os-resource-service";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { createBlockSplitHorizontally } from "@/store/global";
 import { agentActivityTimeline, publishAgentActivity } from "@/types/agent-activity";
@@ -22,7 +22,10 @@ vi.mock("@/store/global", () => ({
         },
     }),
 }));
-vi.mock("@/app/store/os-resource-service", () => ({ attachOSResourceToKronos: vi.fn() }));
+vi.mock("@/app/store/os-resource-service", () => ({
+    attachOSResourceToKronos: vi.fn(),
+    writeOSResourceDragPayload: vi.fn(),
+}));
 vi.mock("./ade-diagnostics", () => ({ AdeDiagnostics: () => <div>Current file problems</div> }));
 vi.mock("@/app/store/wshclientapi", () => ({
     RpcApi: { OSWorktreeChangesCommand: vi.fn(async () => []), OSWorktreeFileDiffCommand: vi.fn(async () => "") },
@@ -140,7 +143,7 @@ it("edits the explorer folder path inline and cancels without navigating", async
     expect(mocks.model.updateOpenFileModalAndError).not.toHaveBeenCalled();
 });
 
-it("searches unopened folders and opens a result", async () => {
+it("searches unopened folders and supports opening or dragging a local result", async () => {
     await mount();
     mocks.model.env.rpc.FileReadCommand.mockImplementation(async (_client, { info }) => ({
         entries:
@@ -159,6 +162,14 @@ it("searches unopened folders and opens a result", async () => {
     });
     const result = container.querySelector('[aria-label="File search results"] button') as HTMLButtonElement;
     expect(result.textContent).toContain("src/needle.ts");
+    expect(result.draggable).toBe(true);
+    await act(async () => result.dispatchEvent(new Event("dragstart", { bubbles: true })));
+    expect(writeOSResourceDragPayload).toHaveBeenCalledWith(expect.anything(), {
+        id: "local:/project/src/needle.ts",
+        kind: "file",
+        name: "needle.ts",
+        resource: "/project/src/needle.ts",
+    });
     await act(async () => result.click());
     expect(mocks.model.goHistory).toHaveBeenCalledWith("/project/src/needle.ts");
 });
@@ -318,7 +329,7 @@ it("opens files from the ADE explorer and filters without adding a chat or termi
     const explorer = container.querySelector('[aria-label="Project explorer"]');
     await act(async () => (explorer.querySelector('[title="/project/a.ts"]') as HTMLButtonElement).click());
     expect(globalStore.get(metaFilePath)).toBe("/project/a.ts");
-    expect(container.querySelector('[aria-label="KronTerm development environment"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="KronOS development environment"]')).not.toBeNull();
     const activity = [...container.querySelectorAll("button")].find((button) => button.textContent === "Activity");
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     await act(async () => activity.click());

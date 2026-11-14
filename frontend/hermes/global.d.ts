@@ -14,6 +14,11 @@ export {};
 declare global {
     interface Window {
         hermesDesktop: {
+            swarmRecovery?: (command: import("../types/swarm").SwarmRecoveryCommand) => Promise<import("../types/swarm").SwarmRecoveryItem[]>;
+            projectRooms?: {
+                command: (command: import("../types/project-room").ProjectRoomCommand) => Promise<import("../types/project-room").ProjectRoomState>;
+                openDesktop: (botId: string) => Promise<void>;
+            };
             // Resolve a backend connection. Omit `profile` (or pass the primary) for
             // the window's backend; pass a named profile to lazily spawn/reuse that
             // profile's backend from the pool.
@@ -41,14 +46,13 @@ declare global {
                         command: import("../types/linux-desktops").ComputerManagerCommand
                     ) => Promise<import("../types/linux-desktops").ComputerManagerState>;
                     desktops: () => Promise<import("../types/linux-desktops").LinuxDesktop[]>;
+                    login?: (input: import("../types/sandbox-login").SandboxLoginUiCommand) => Promise<import("../types/sandbox-login").SandboxLoginUiResult>;
                     action: (
                         action: import("../types/linux-desktops").LinuxDesktopAction
                     ) => Promise<import("../types/linux-desktops").LinuxDesktopActionResult>;
-                    access: (input?: {
-                        desktopId?: string;
-                        enabled?: boolean;
-                        sessionIds?: string[];
-                    }) => Promise<import("../types/linux-desktops").SandboxComputerAccess>;
+                    access: (
+                        input?: import("../types/linux-desktops").SandboxComputerAccessRequest
+                    ) => Promise<import("../types/linux-desktops").SandboxComputerAccess>;
                 };
                 list: () => Promise<HermesKronTermSurface[]>;
                 toggleChatLayout?: () => void;
@@ -64,6 +68,7 @@ declare global {
                         | "files"
                         | "connections"
                         | "scratchpad"
+                        | "comfy-workflow"
                         | "activity"
                         | "control"
                         | "widgets"
@@ -359,6 +364,7 @@ declare global {
                 boundary: string;
                 message: string;
                 componentStack: string;
+                stack?: string;
             }) => void;
             readDir: (path: string) => Promise<HermesReadDirResult>;
             gitRoot?: (path: string) => Promise<string | null>;
@@ -1154,6 +1160,8 @@ export interface HermesReadFileTextResult {
 }
 
 export interface HermesKronTermSurface {
+    machineTarget?: string;
+    machineKind?: string;
     id: string;
     view: string;
     title: string;

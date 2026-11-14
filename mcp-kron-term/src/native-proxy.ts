@@ -1,9 +1,9 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// stdio MCP proxy in front of KronTerm's in-process TypeScript tool runtime.
+// stdio MCP proxy in front of KronOS's in-process TypeScript tool runtime.
 //
-// Spawn sites (ACP agent manager, KronTerm gateway) keep the stdio server
+// Spawn sites (ACP agent manager, KronOS gateway) keep the stdio server
 // contract they already have, but every manifest/call is proxied to the
 // Electron-owned `/native` endpoint — so there is no wsh-CLI dependency, no
 // bridge-token pairing to go stale after app restarts, and exactly one tool
@@ -39,7 +39,7 @@ export async function bridgeRequest(
 ): Promise<Record<string, unknown>> {
     const endpoint = (process.env[URL_ENV] ?? "").trim();
     const token = (process.env[TOKEN_ENV] ?? "").trim();
-    if (!endpoint || !token) return { error: "KronTerm native tool bridge is unavailable (missing URL or token)" };
+    if (!endpoint || !token) return { error: "KronOS native tool bridge is unavailable (missing URL or token)" };
     const name = String(payload.name);
     const mutation = payload.method === "call" && !ReadOnlyTools.has(name);
     let dispatched = false;
@@ -58,7 +58,7 @@ export async function bridgeRequest(
             url.search ||
             url.hash
         )
-            return failure("KronTerm native transport must use a local HTTP /native endpoint.", false);
+            return failure("KronOS native transport must use a local HTTP /native endpoint.", false);
         if (url.hostname === "localhost") url.hostname = "127.0.0.1";
         signal?.throwIfAborted();
         const budget =
@@ -74,7 +74,7 @@ export async function bridgeRequest(
             body: JSON.stringify(payload),
             signal: AbortSignal.any([AbortSignal.timeout(budget), ...(signal ? [signal] : [])]),
         });
-        if (!response.body) return failure("KronTerm native tool bridge returned an empty response");
+        if (!response.body) return failure("KronOS native tool bridge returned an empty response");
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let size = 0;
@@ -84,7 +84,7 @@ export async function bridgeRequest(
                 if (chunk.done) break;
                 size += chunk.value.byteLength;
                 if (size > MAX_OUTPUT_BYTES)
-                    return failure("KronTerm native tool bridge returned an oversized response");
+                    return failure("KronOS native tool bridge returned an oversized response");
                 chunks.push(chunk.value);
             }
         } finally {
@@ -93,15 +93,15 @@ export async function bridgeRequest(
         const text = Buffer.concat(chunks).toString("utf8");
         if (response.status !== 200)
             return failure(
-                `KronTerm native tool bridge returned ${response.status}: ${text.slice(0, 200)}`,
+                `KronOS native tool bridge returned ${response.status}: ${text.slice(0, 200)}`,
                 mutation && response.status >= 500
             );
         const parsed: unknown = JSON.parse(text);
         if (typeof parsed !== "object" || parsed == null || Array.isArray(parsed))
-            return failure("KronTerm native tool bridge returned an invalid response");
+            return failure("KronOS native tool bridge returned an invalid response");
         return parsed as Record<string, unknown>;
     } catch (error) {
-        return failure(`KronTerm native tool bridge failed: ${error instanceof Error ? error.message : String(error)}`);
+        return failure(`KronOS native tool bridge failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

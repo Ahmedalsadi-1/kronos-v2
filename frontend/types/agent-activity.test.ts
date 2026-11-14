@@ -76,3 +76,44 @@ describe("agent activity normalization", () => {
         ]);
     });
 });
+
+it("retains the latest preview for each worker sharing a run within the image budget", () => {
+    const timeline = createAgentActivityTimeline(20, 4, 24);
+    const worker = (nodeId: string, previewimageurl: string) =>
+        timeline.record({
+            source: "hermes",
+            phase: "running",
+            surface: "desktop",
+            action: "inspect",
+            runid: "swarm",
+            previewimageurl,
+            swarm: { runId: "swarm", nodeId, goal: nodeId, parentSessionId: "parent", status: "running" },
+        });
+    worker("a", "aaaaaa");
+    const original = worker("b", "bbbbbb");
+    worker("a", "aaaaa2");
+    expect(timeline.get("swarm").map((entry) => entry.previewimageurl)).toEqual([undefined, "bbbbbb", "aaaaa2"]);
+
+    worker("c", "cccccc");
+    expect(timeline.get("swarm").map((entry) => entry.previewimageurl)).toEqual([
+        undefined,
+        undefined,
+        "aaaaa2",
+        "cccccc",
+    ]);
+    expect(timeline.get("swarm").map((entry) => entry.swarm.nodeId)).toEqual(["a", "b", "a", "c"]);
+    expect(original.previewimageurl).toBe("bbbbbb");
+});
+
+it("evicts least recently written runs and preserves cross-run order for simultaneous activity", () => {
+    const timeline = createAgentActivityTimeline(10, 2);
+    const record = (runid: string, detail: string) =>
+        timeline.record({ source: "hermes", phase: "running", surface: "file", action: "inspect", runid, detail }, 1);
+    record("a", "first");
+    record("b", "second");
+    record("a", "third");
+    expect(timeline.getAll().map((entry) => entry.detail)).toEqual(["first", "second", "third"]);
+    record("c", "fourth");
+    expect(timeline.get("b")).toEqual([]);
+    expect(timeline.getAll().map((entry) => entry.detail)).toEqual(["first", "third", "fourth"]);
+});

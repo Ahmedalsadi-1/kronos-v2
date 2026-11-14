@@ -84,7 +84,7 @@ export function WorkflowsPreview() {
                 if (command.action === "read-evidence")
                     return "diff --git a/checkout.css b/checkout.css\n--- a/checkout.css\n+++ b/checkout.css\n@@ -1 +1 @@\n-.checkout { width: 440px; }\n+.checkout { width: 100%; }\n";
                 if (command.action !== "list")
-                    throw new Error("This appearance preview uses sample data. Run workflows in KronTerm.");
+                    throw new Error("This appearance preview uses sample data. Run workflows in KronOS.");
                 return sample;
             },
             workflowContext: async () => ({

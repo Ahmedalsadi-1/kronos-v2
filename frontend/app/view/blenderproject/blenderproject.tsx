@@ -4,9 +4,10 @@ import { globalStore } from "@/app/store/jotaiStore";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useCoucouWorkbenchAppearance } from "@/app/workspace/coucou-workbench-appearance";
-import { getApi, WOS } from "@/store/global";
+import { createBlock, getApi, WOS } from "@/store/global";
+import { getModelPreviewFormat } from "@/util/model-preview";
 import { atom, useAtom, useAtomValue, type Atom, type PrimitiveAtom } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { findBlenderApp, validateBlendPath } from "./blenderproject-utils";
 
 export class BlenderProjectModel implements ViewModel {
@@ -60,6 +61,16 @@ export class BlenderProjectModel implements ViewModel {
             globalStore.set(this.loading, false);
         }
     }
+    async previewExport(file: File) {
+        globalStore.set(this.error, "");
+        try {
+            const path = getApi().getPathForFile(file);
+            if (!path || !getModelPreviewFormat(path)) throw new Error("Choose a local GLB or STL file.");
+            await createBlock({ meta: { view: "preview", file: path } });
+        } catch (error) {
+            globalStore.set(this.error, error instanceof Error ? error.message : String(error));
+        }
+    }
     native(action: "launch" | "open" | "reveal") {
         globalStore.set(this.error, "");
         try {
@@ -92,6 +103,7 @@ export function BlenderProject({ model }: ViewComponentProps<BlenderProjectModel
     const error = useAtomValue(model.error);
     const notice = useAtomValue(model.notice);
     const scene = useAtomValue(model.savedScene);
+    const exportFileInput = useRef<HTMLInputElement>(null);
     useEffect(() => {
         setDraft(globalStore.get(model.savedScene));
         void model.discover();
@@ -155,10 +167,23 @@ export function BlenderProject({ model }: ViewComponentProps<BlenderProjectModel
                 </button>
             </div>
             {scene && <p className="mt-4 break-all font-mono text-xs">Attached scene: {scene}</p>}
-            <p className="mt-5 text-sm text-[var(--coucou-secondary)]">
-                Render and export in Blender, then open the resulting files in KronTerm. This adapter stores a scene
-                reference; it does not embed the Blender editor or run background renders.
-            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+                <input
+                    ref={exportFileInput}
+                    type="file"
+                    accept=".glb,.stl"
+                    hidden
+                    onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        if (file) void model.previewExport(file);
+                        event.currentTarget.value = "";
+                    }}
+                />
+                <button type="button" className={button} onClick={() => exportFileInput.current?.click()}>
+                    Preview exported model
+                </button>
+                <span className="text-sm text-[var(--coucou-secondary)]">GLB and STL open in Files.</span>
+            </div>
         </section>
     );
 }

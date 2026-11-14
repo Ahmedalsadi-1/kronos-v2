@@ -1,0 +1,15 @@
+
+  Lint: 0 error(s), 1 warning(s) — see the Lint badge in Studio, or run `hyperframes lint` for full output.
+
+┌  hyperframes preview
+
+  Project   composition
+  Studio    http://localhost:3017/#project/composition
+  Server    http://localhost:3017
+  Desktop   Keep editing by chatting with Framey in the HyperFrames desktop app → https://hyperframes.studio/studio/download?src=cli
+
+  Running in the background. Log: /Users/albsheralsadi/.local/state/hyperframes/previews/f0dc81f3ce492ef8.log
+  Changes reload automatically in the studio.
+
+  Stop with: hyperframes preview "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition" --stop
+

@@ -179,7 +179,7 @@ function SurfacesPane() {
     };
 
     return (
-        <section className="flex h-full min-h-0 flex-col bg-(--ui-bg)" aria-label="KronTerm surfaces">
+        <section className="flex h-full min-h-0 flex-col bg-(--ui-bg)" aria-label="KronOS surfaces">
             <div className="border-b border-(--ui-border) px-3 py-2">
                 <p className="text-xs font-medium text-foreground">Workspace surfaces</p>
                 <p className="mt-0.5 text-[0.6875rem] leading-4 text-(--ui-text-tertiary)">
@@ -194,7 +194,7 @@ function SurfacesPane() {
                     </p>
                 ) : error ? (
                     <div className="rounded-md border border-(--ui-border) p-3 text-xs">
-                        <p className="text-foreground">KronTerm controls are unavailable.</p>
+                        <p className="text-foreground">KronOS controls are unavailable.</p>
                         <button
                             className="mt-2 cursor-pointer text-(--ui-text-secondary) hover:text-foreground hover:underline focus-visible:outline focus-visible:outline-2"
                             onClick={() => void refetch()}
@@ -264,7 +264,7 @@ function SurfacesStatus() {
     });
 
     return (
-        <Tip label="Open KronTerm workspace surfaces">
+        <Tip label="Open KronOS workspace surfaces">
             <button
                 className="inline-flex h-full cursor-pointer items-center gap-1 px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground"
                 onClick={() => host.revealPane(PaneId)}
@@ -279,15 +279,15 @@ function SurfacesStatus() {
 
 const plugin: HermesPlugin = {
     id: "kronterm-surfaces",
-    name: "KronTerm Surfaces",
-    description: "Live micro-widget for focusing terminal, browser, canvas, sandbox, and other KronTerm blocks.",
+    name: "KronOS Surfaces",
+    description: "Live micro-widget for focusing terminal, browser, canvas, sandbox, and other KronOS blocks.",
     defaultEnabled: true,
     register(ctx) {
         ctx.registerMany([
             {
                 id: "surfaces",
                 area: PANES_AREA,
-                title: "KronTerm",
+                title: "KronOS",
                 data: {
                     placement: "right",
                     collapsible: true,
@@ -308,7 +308,7 @@ const plugin: HermesPlugin = {
                 area: PALETTE_AREA,
                 data: {
                     id: "kronterm-surfaces.open",
-                    label: "KronTerm: Open workspace surfaces",
+                    label: "KronOS: Open workspace surfaces",
                     keywords: ["kronterm", "terminal", "browser", "canvas", "sandbox", "widgets"],
                     run: () => host.revealPane(PaneId),
                 } satisfies PaletteContribution,

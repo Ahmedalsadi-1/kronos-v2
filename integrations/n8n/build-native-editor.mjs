@@ -134,6 +134,11 @@ if (!picker.includes("nativePickerTarget")) {
     )
     .replace("</template>\n\n<style", "</Teleport>\n</template>\n\n<style");
 }
+if (!picker.includes("if (nativePickerTarget.value) return;")) {
+  const outsideClose = /onClickOutside\(\s*nodeCreator,\s*\(\) => \{/;
+  if (!outsideClose.test(picker)) throw new Error("Could not locate the native node picker outside-click handler");
+  picker = picker.replace(outsideClose, "$&\n\t\tif (nativePickerTarget.value) return;");
+}
 fs.writeFileSync(pickerFile, picker);
 applyNativeWidgetPicker(editor);
 patchNativeComposition(editor, path.join(root, "editor"));

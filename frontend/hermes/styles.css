@@ -3,6 +3,7 @@
 @import "tw-shimmer";
 @import "katex/dist/katex.min.css";
 @import "@vscode/codicons/dist/codicon.css";
+@import "../button-styles.css";
 
 /* Titlebar clusters: 24×24 hit targets, 11px glyphs. codicon.css is
    unlayered (`font: 16px/1`); Tailwind utilities in @layer lose that fight. */
@@ -100,7 +101,7 @@
     --color-midground: var(--dt-midground);
     --color-midground-foreground: var(--dt-midground-foreground);
 
-    --font-sans: var(--dt-font-sans);
+    --font-sans: var(--kron-interface-font, var(--dt-font-sans));
     --font-mono: var(--dt-font-mono);
 
     --spacing-mul: var(--dt-spacing-mul, 1);
@@ -514,17 +515,18 @@
         --file-tree-row-height: 1.375rem;
 
         --composer-width: 100%;
+        --hermes-composer-radius: 4px;
         --composer-control-size: 1.5rem;
         --composer-control-primary-size: 1.625rem;
-        --composer-control-gap: 0.25rem;
-        --composer-row-gap: 0.25rem;
+        --composer-control-gap: 0.375rem;
+        --composer-row-gap: 0.375rem;
         --composer-ring-strength: 1;
-        --composer-surface-pad-x: 0.5rem;
-        --composer-surface-pad-y: 0.3125rem;
-        --composer-input-min-height: 1.625rem;
+        --composer-surface-pad-x: 0.625rem;
+        --composer-surface-pad-y: 0.5rem;
+        --composer-input-min-height: 1.875rem;
         --composer-input-max-height: 9.375rem;
         --composer-input-inline-min-width: 8rem;
-        --composer-fallback-height: 2.75rem;
+        --composer-fallback-height: calc(var(--composer-input-min-height) + 2 * var(--composer-surface-pad-y) + 2px);
         --composer-measured-height: calc(
             0.5rem + var(--composer-shell-pad-block-end) + var(--composer-fallback-height)
         );
@@ -624,7 +626,7 @@
         margin: 0;
         background: var(--ui-chat-surface-background);
         color: var(--dt-foreground);
-        font-family: var(--dt-font-sans);
+        font-family: var(--kron-interface-font, var(--dt-font-sans));
         font-size: 0.8125rem;
         line-height: var(--dt-line-height, 1.55);
         letter-spacing: var(--dt-letter-spacing, 0);
@@ -1034,13 +1036,8 @@
     }
 }
 
-/* No focus rings, anywhere. Kills the native outline plus Tailwind's
-   `focus-visible:ring-*` (a box-shadow driven by --tw-ring-*). Unlayered so it
-   beats the utilities layer without !important on the outline. The composer /
-   .desktop-input-chrome focus glow is untouched — those set `box-shadow`
-   directly rather than through the ring vars. */
-*:focus,
-*:focus-visible {
+*:focus:not(:focus-visible),
+:focus-visible:not(button, [role="button"], .kron-button) {
     outline: none;
 }
 
@@ -1052,11 +1049,6 @@
 button {
     -webkit-app-region: no-drag;
 }
-
-/* Button variant styling lives entirely in the cva in components/ui/button.tsx
-   (the single source of truth). Don't re-add [data-slot='button'] rules here —
-   attribute selectors out-specify the Tailwind utilities and silently override
-   the variants. */
 
 [data-slot="dropdown-menu-content"],
 [data-slot="select-content"],
@@ -1077,7 +1069,7 @@ button {
 }
 
 .hermes-glass-menu {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    font-family: var(--kron-interface-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif);
     font-size: 0.875rem;
     line-height: 1.4;
     --hermes-menu-solid: #f4f6fa;
@@ -1186,7 +1178,7 @@ button {
     border-radius: 999px;
     background: color-mix(in srgb, var(--ui-text-primary) 5%, transparent);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    font-family: var(--kron-interface-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif);
     font-weight: 500;
 }
 
@@ -1645,57 +1637,11 @@ body.guest-pointer-lock :is(webview, iframe) {
 }
 
 [data-slot="aui_intro"] p:last-child {
-    max-width: 34rem;
+    max-width: 36ch;
     margin-inline: auto;
-    color: var(--ui-text-tertiary);
+    color: var(--ui-text-secondary);
     font-size: 0.875rem;
-    line-height: 1.45;
-}
-
-.fit-text {
-    --fit-captured-length: initial;
-    --fit-support-sentinel: var(--fit-captured-length, 9999px);
-
-    display: flex;
-    container-type: inline-size;
-}
-
-.fit-text > [aria-hidden] {
-    visibility: hidden;
-}
-
-.fit-text > :not([aria-hidden]) {
-    flex-grow: 1;
-    container-type: inline-size;
-
-    --fit-captured-length: 100cqi;
-    --fit-available-space: var(--fit-captured-length);
-}
-
-.fit-text > :not([aria-hidden]) > * {
-    --fit-support-sentinel: inherit;
-    --fit-captured-length: 100cqi;
-    --fit-ratio: tan(atan2(var(--fit-available-space), var(--fit-available-space) - var(--fit-captured-length)));
-
-    display: block;
-    inline-size: var(--fit-available-space);
-    font-size: clamp(
-        var(--fit-min, 1em),
-        1em * var(--fit-ratio),
-        var(--fit-max, infinity * 1px) - var(--fit-support-sentinel)
-    );
-}
-
-@container (inline-size > 0) {
-    .fit-text > :not([aria-hidden]) > * {
-        white-space: nowrap;
-    }
-}
-
-@property --fit-captured-length {
-    syntax: "<length>";
-    initial-value: 0px;
-    inherits: true;
+    line-height: 1.55;
 }
 
 /* The dock column owns the composer's width; the composer keeps the 5px
@@ -3061,21 +3007,12 @@ button[data-slot="aui_msg-reactions"] svg {
     display: none !important;
 }
 
-/* Opaque, pill-rounded — the Spotlight bar. Same surface tokens the composer
-   already uses; only the radius steps up so a lone floating bar reads as an
-   object rather than a snippet of app chrome.
-
-   ALWAYS fully opaque. It's the input — the one thing that must never be
+/* ALWAYS fully opaque. It's the input — the one thing that must never be
    compromised by whatever's behind the window, in any state. The idle/engaged
    breathing belongs to the thread and the chat surface; the bar just sits
    there, solid, like Spotlight does. */
 [data-hud-shell] [data-slot="composer-surface"] {
     border: 1px solid var(--ui-stroke-secondary) !important;
-    /* Same radius as the band's top and the window's own corners, so the HUD
-     reads as one object however the band is behaving. Its top corners let a
-     sliver of band through, which is the point — the glass wraps the bar's
-     shoulders instead of stopping in a straight line above it. */
-    border-radius: 0.75rem !important;
     background: var(--dt-card) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -3369,9 +3306,9 @@ html:has([data-hermes-app]) [data-overlay-surface] { z-index: 5010; }
     --hermes-composer-stroke: rgb(26 36 52 / 0.14);
     --composer-control-size: 2rem;
     --composer-control-primary-size: 2rem;
-    --composer-surface-pad-x: 0.625rem;
-    --composer-surface-pad-y: 0.5rem;
-    font-family: var(--dt-font-sans);
+    --composer-surface-pad-x: 0.75rem;
+    --composer-surface-pad-y: 0.625rem;
+    font-family: var(--kron-interface-font, var(--dt-font-sans));
 }
 
 .dark [data-hermes-app] {
@@ -3384,7 +3321,6 @@ html:has([data-hermes-app]) [data-overlay-surface] { z-index: 5010; }
 }
 
 [data-hermes-app] [data-slot="composer-surface"] {
-    border-radius: 0 !important;
     border-color: var(--hermes-composer-stroke) !important;
     background: color-mix(in srgb, var(--hermes-composer-solid) 94%, transparent) !important;
     box-shadow:
@@ -3408,19 +3344,12 @@ html:has([data-hermes-app]) [data-overlay-surface] { z-index: 5010; }
     border-radius: 0;
 }
 
-[data-hermes-app] [data-slot="composer-fade"] button:focus-visible {
-    outline: 2px solid #0a84ff;
+[data-hermes-app] [data-slot="composer-surface"]:focus-within {
+    border-color: color-mix(in srgb, var(--dt-ring, var(--focus-ring-color)) 70%, var(--hermes-composer-stroke)) !important;
+}
+
+[data-hermes-app] [data-slot="composer-fade"] .kron-button:focus-visible {
     outline-offset: -2px;
-}
-
-[data-hermes-app] .hermes-composer-primary {
-    background: #007aff;
-    color: #fff;
-}
-
-[data-hermes-app] .hermes-composer-primary:disabled {
-    background: color-mix(in srgb, #007aff 35%, var(--hermes-composer-solid));
-    color: color-mix(in srgb, #fff 70%, transparent);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -3600,16 +3529,19 @@ html:has([data-hud-app]) [data-settings-content] > div {
 }
 
 [data-coucou-hud] {
-    color-scheme: dark;
-    --coucou-accent: var(--theme-midground, #967aff);
-    --coucou-card: #141416;
-    --coucou-border: #2c2c30;
+    color-scheme: inherit;
+    --coucou-accent: var(--kt-focus-ring, var(--theme-midground, #967aff));
+    --coucou-card: var(--kt-window, #141416);
+    --coucou-surface: var(--kt-content, #000);
+    --coucou-label: var(--kt-label, #f5f5f7);
+    --coucou-secondary: var(--kt-label-secondary, #a1a1aa);
+    --coucou-border: var(--kt-separator, #2c2c30);
     --dt-card: var(--coucou-card);
-    --ui-chat-surface-background: #000;
+    --ui-chat-surface-background: var(--coucou-surface);
     --ui-stroke-secondary: var(--coucou-border);
     --dt-primary: var(--coucou-accent);
-    --dt-text: #f4f4f5;
-    --dt-text-secondary: #929398;
+    --dt-text: var(--coucou-label);
+    --dt-text-secondary: var(--coucou-secondary);
     --titlebar-height: 0px;
     border-radius: 0;
 }
@@ -3617,16 +3549,8 @@ html:has([data-hud-app]) [data-settings-content] > div {
 [data-coucou-hud] [data-hud-native-notch] {
     --hud-chip-strip: 0px;
     --hud-band-inset: 0px;
-    --composer-control-size: 1.5rem;
-    --composer-control-primary-size: 1.75rem;
-    --composer-control-gap: 0.25rem;
-    --composer-surface-pad-x: 0.625rem;
-    --composer-surface-pad-y: 0.375rem;
-    --composer-input-min-height: 1.75rem;
-    --composer-input-max-height: min(5rem, 30dvh);
-    --composer-input-font-size: 0.8125rem;
     --thread-last-message-clearance: 0.5rem;
-    background: #000;
+    background: var(--coucou-surface);
     pointer-events: auto;
 }
 
@@ -3638,7 +3562,7 @@ html:has([data-hud-app]) [data-settings-content] > div {
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    background: #000;
+    background: var(--coucou-surface);
 }
 
 [data-coucou-hud] [data-hud-native-notch] [data-slot="composer-bounds"] {
@@ -3673,7 +3597,6 @@ html:has([data-hud-app]) [data-settings-content] > div {
 [data-coucou-hud] [data-hud-native-notch] [data-slot="composer-surface"] {
     background: var(--coucou-card) !important;
     border: 1px solid var(--coucou-border) !important;
-    border-radius: 0 !important;
     box-shadow: none !important;
 }
 
@@ -3691,36 +3614,36 @@ html:has([data-hud-app]) [data-settings-content] > div {
 
 [data-coucou-hud] {
     --dt-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-    --theme-foreground: #f5f6f8;
-    --theme-background-seed: #000;
-    --theme-card-seed: #141416;
-    --theme-elevated-seed: #141416;
-    --theme-bubble-seed: #141416;
-    --ui-base: #f5f6f8;
-    --ui-text-primary: #f5f6f8;
-    --ui-text-secondary: #8e939c;
-    --ui-text-tertiary: #6b7079;
+    --theme-foreground: var(--coucou-label);
+    --theme-background-seed: var(--coucou-surface);
+    --theme-card-seed: var(--coucou-card);
+    --theme-elevated-seed: var(--coucou-card);
+    --theme-bubble-seed: var(--coucou-card);
+    --ui-base: var(--coucou-label);
+    --ui-text-primary: var(--coucou-label);
+    --ui-text-secondary: var(--coucou-secondary);
+    --ui-text-tertiary: var(--coucou-secondary);
     --conversation-text-font-size: 0.875rem;
     --ui-accent: var(--coucou-accent);
     --ui-midground: var(--coucou-accent);
-    --ui-stroke-primary: #2c2c30;
-    --ui-stroke-secondary: #2c2c30;
-    --ui-human-msg-bg: #141416;
+    --ui-stroke-primary: var(--coucou-border);
+    --ui-stroke-secondary: var(--coucou-border);
+    --ui-human-msg-bg: var(--coucou-card);
     --dt-midground: var(--coucou-accent);
     --midground: var(--coucou-accent);
     --coucou-chat-motion: 220ms;
     --coucou-chat-ease: cubic-bezier(0.2, 0.82, 0.2, 1);
-    font-family: var(--dt-font-sans);
+    font-family: var(--kron-interface-font, var(--dt-font-sans));
     -webkit-font-smoothing: antialiased;
 }
 [data-coucou-hud] [data-hud-native-notch] {
     --composer-input-font-size: 0.875rem;
-    --composer-control-size: 1.75rem;
-    --composer-control-primary-size: 1.875rem;
+    --composer-control-size: 2rem;
+    --composer-control-primary-size: 2.25rem;
     --composer-input-min-height: 2.25rem;
     --composer-input-max-height: min(8rem, 30dvh);
     --composer-surface-pad-x: 0.75rem;
-    --composer-surface-pad-y: 0.5rem;
+    --composer-surface-pad-y: 0.625rem;
 }
 [data-coucou-hud] :is(button, [role="button"]) {
     cursor: pointer;
@@ -3735,11 +3658,23 @@ html:has([data-hud-app]) [data-settings-content] > div {
     stroke-linejoin: round;
 }
 [data-coucou-hud] [data-slot="aui_assistant-message-content"] {
-    color: #f5f6f8;
+    color: var(--coucou-label);
     line-height: 1.6;
 }
 [data-coucou-hud] [data-slot="aui_user-message-root"] {
     border-radius: 14px;
+}
+
+[data-coucou-hud] button:focus-visible {
+    outline: 2px solid var(--coucou-accent);
+    outline-offset: 2px;
+}
+
+[data-coucou-hud][data-reduced-transparency="true"] *,
+[data-coucou-hud][data-reduced-transparency="true"] *::before,
+[data-coucou-hud][data-reduced-transparency="true"] *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 }
 [data-slot="composer-root"][data-floating-hud] {
     --dt-card: #111216;
@@ -3747,7 +3682,7 @@ html:has([data-hud-app]) [data-settings-content] > div {
     --dt-input: #111216;
     --dt-composer-ring: #c4c8d0;
     --composer-surface-pad-x: 0.875rem;
-    --composer-surface-pad-y: 0.625rem;
+    --composer-surface-pad-y: 0.75rem;
     --composer-control-size: 2rem;
     --composer-control-primary-size: 2rem;
     border-radius: 24px;
@@ -3756,10 +3691,6 @@ html:has([data-hud-app]) [data-settings-content] > div {
 
 [data-hud-shell]:not([data-hud-native-notch]) {
     --composer-input-max-height: max(2rem, min(9.375rem, calc(var(--hud-available-height, 100dvh) - 7rem)));
-}
-
-[data-hud-shell] [data-slot="composer-root"][data-floating-hud] [data-slot="composer-surface"] {
-    border-radius: 0 !important;
 }
 
 /* Chat geometry is shared by embedded HUD, docked panel, and portaled menus. */
@@ -3773,6 +3704,10 @@ html:has([data-hud-app]) [data-settings-content] > div {
 [data-hermes-portal] *::before,
 [data-hermes-portal] *::after {
     border-radius: 0 !important;
+}
+
+:is([data-slot="composer-surface"], .composer-fallback-surface, .composer-human-message) {
+    border-radius: var(--hermes-composer-radius) !important;
 }
 
 .hermes-workspace-panel [data-hud-shell] {
@@ -3790,20 +3725,28 @@ html:has([data-hud-app]) [data-settings-content] > div {
     pointer-events: auto;
 }
 
+.hermes-workspace-panel {
+    --hermes-panel-header-height: 40px;
+}
+
 .hermes-workspace-panel [data-hermes-chat-header] {
     display: flex !important;
     position: relative !important;
     align-items: center;
     justify-content: space-between;
-    min-height: 36px;
-    height: 36px;
-    padding-inline: 8px;
+    gap: 8px;
+    min-height: var(--hermes-panel-header-height);
+    height: var(--hermes-panel-header-height);
+    padding-inline: 10px;
+    border-bottom: 1px solid var(--ui-stroke-secondary);
+    background: var(--dt-background);
     pointer-events: auto;
 }
 
 .hermes-workspace-panel [data-hermes-chat-header] > div:first-child {
     min-width: 0;
-    max-width: calc(100% - 40px) !important;
+    max-width: 100% !important;
+    flex: 1;
 }
 
 .hermes-workspace-panel .hermes-panel-agent-picker {
@@ -3815,7 +3758,7 @@ html:has([data-hud-app]) [data-settings-content] > div {
 }
 
 .hermes-workspace-panel [data-hud-shell]:has([data-hermes-chat-header]) [data-slot="composer-bounds"] {
-    top: 36px !important;
+    top: var(--hermes-panel-header-height) !important;
 }
 
 .hermes-workspace-panel [data-slot="composer-bounds"] {

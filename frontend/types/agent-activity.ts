@@ -63,9 +63,24 @@ export type AgentActivityEvent = {
     target?: AgentActivityTarget;
     path?: AgentActivityPoint[];
     previewimageurl?: string;
+    previewerror?: string;
     petactivityurl?: string;
     appname?: string;
     surfaceid?: string;
+    ownertabid?: string;
+    controlgeneration?: number;
+    swarm?: {
+        runId: string;
+        nodeId: string;
+        goal: string;
+        status: string;
+        parentSessionId: string;
+        childSessionId?: string;
+        summary?: string;
+        toolName?: string;
+        toolPreview?: string;
+        removed?: true;
+    };
     verificationstatus?: "unverified" | "verified" | "failed";
     errorcode?: "invalid-target" | "stale-target" | "permission" | "unavailable" | "timeout" | "action-failed";
     attempts?: number;
@@ -106,33 +121,84 @@ export function normalizeAgentActivity(activity: AgentActivityEvent): Normalized
     };
 }
 
-export function createAgentActivityTimeline(maxEntries = 120) {
+export function createAgentActivityTimeline(maxEntries = 120, maxRuns = 64, maxImageBytes = 32 * 1024 * 1024) {
     const entriesByRun = new Map<string, TimedAgentActivityEvent[]>();
+    const images = new Map<TimedAgentActivityEvent, { owner: string; url: string }>();
+    const imageByOwner = new Map<string, TimedAgentActivityEvent>();
+    let imageBytes = 0;
+    let sequence = 0;
+    const order = new WeakMap<TimedAgentActivityEvent, number>();
+
+    const forgetImage = (entry: TimedAgentActivityEvent) => {
+        const image = images.get(entry);
+        if (!image) return;
+        images.delete(entry);
+        if (imageByOwner.get(image.owner) === entry) imageByOwner.delete(image.owner);
+        imageBytes -= image.url.length * 2;
+    };
+    const clearRun = (runid: string) => {
+        for (const entry of entriesByRun.get(runid) ?? []) forgetImage(entry);
+        entriesByRun.delete(runid);
+    };
+    const withImage = (entry: TimedAgentActivityEvent): TimedAgentActivityEvent => {
+        const image = images.get(entry);
+        return image ? { ...entry, previewimageurl: image.url } : entry;
+    };
 
     return {
         record(activity: AgentActivityEvent, timestamp = Date.now()): TimedAgentActivityEvent {
-            const entry = { ...normalizeAgentActivity(activity), timestamp };
+            const { previewimageurl, ...normalized } = normalizeAgentActivity(activity);
+            const entry = { ...normalized, timestamp };
+            order.set(entry, sequence++);
             const runid = entry.runid ?? "default";
             const entries = entriesByRun.get(runid) ?? [];
             entries.push(entry);
             if (entries.length > maxEntries) {
-                entries.splice(0, entries.length - maxEntries);
-            }
-            entriesByRun.set(runid, entries);
-            return entry;
-        },
-        getAll(): TimedAgentActivityEvent[] {
-            return [...entriesByRun.values()].flat().sort((a, b) => a.timestamp - b.timestamp);
-        },
-        get(runid = "default"): TimedAgentActivityEvent[] {
-            return [...(entriesByRun.get(runid) ?? [])];
-        },
-        clear(runid?: string) {
-            if (runid == null) {
-                entriesByRun.clear();
-                return;
+                for (const removed of entries.splice(0, entries.length - maxEntries)) forgetImage(removed);
             }
             entriesByRun.delete(runid);
+            entriesByRun.set(runid, entries);
+            if (entriesByRun.size > maxRuns) clearRun(entriesByRun.keys().next().value);
+
+            if (previewimageurl && previewimageurl.length * 2 <= maxImageBytes && maxEntries > 0 && maxRuns > 0) {
+                const owner = entry.swarm
+                    ? JSON.stringify([runid, entry.swarm.runId, entry.swarm.nodeId])
+                    : JSON.stringify([runid, entry.sessionid]);
+                images.set(entry, { owner, url: previewimageurl });
+                imageByOwner.set(owner, entry);
+                // Count two bytes per code unit to bound retention regardless of the engine's string encoding.
+                imageBytes += previewimageurl.length * 2;
+                while (imageBytes > maxImageBytes) {
+                    let oldest = images.keys().next().value;
+                    for (const [candidate, image] of images) {
+                        if (imageByOwner.get(image.owner) !== candidate) {
+                            oldest = candidate;
+                            break;
+                        }
+                    }
+                    forgetImage(oldest);
+                }
+            }
+            return previewimageurl ? { ...entry, previewimageurl } : entry;
+        },
+        getAll(matches?: (entry: TimedAgentActivityEvent) => boolean): TimedAgentActivityEvent[] {
+            const entries = [...entriesByRun.values()].flat();
+            return (matches ? entries.filter(matches) : entries)
+                .sort((a, b) => a.timestamp - b.timestamp || order.get(a) - order.get(b))
+                .map(withImage);
+        },
+        get(runid = "default"): TimedAgentActivityEvent[] {
+            return (entriesByRun.get(runid) ?? []).map(withImage);
+        },
+        clear(runid?: string) {
+            if (runid != null) {
+                clearRun(runid);
+                return;
+            }
+            entriesByRun.clear();
+            images.clear();
+            imageByOwner.clear();
+            imageBytes = 0;
         },
     };
 }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { globalStore } from "@/app/store/jotaiStore";
+import { publishAgentWidgetDesignSelection } from "@/app/view/agent-widget-bridge";
 import { beforeEach, expect, it, vi } from "vitest";
 import { BrowserGrabController } from "./browser-grab-controller";
 
@@ -25,6 +26,28 @@ const Payload = {
     screenshot: null,
 } as any;
 beforeEach(() => vi.clearAllMocks());
+it("stores an inline comment on its own browser block without submitting a prompt", () => {
+    const controller = new BrowserGrabController("owned-browser", () => ({ getWebContentsId: () => 42 }) as any);
+    controller.acceptGuestSelection(99, "annotate", Payload, "Wrong guest");
+    controller.acceptGuestSelection(42, "annotate", Payload, "Review this control");
+    expect(publishAgentWidgetDesignSelection).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ blockId: "owned-browser", comment: "Review this control" })
+    );
+    expect(api.sendHermesSelection).not.toHaveBeenCalled();
+});
+it("reviews a guest toolbar selection only on its owning browser block", async () => {
+    const controller = new BrowserGrabController("owned-browser", () => ({ getWebContentsId: () => 42 }) as any);
+    controller.acceptGuestSelection(99, "annotate", Payload);
+    expect(globalStore.get(controller.selection)).toBeNull();
+    controller.acceptGuestSelection(42, "annotate", Payload);
+    expect(globalStore.get(controller.intent)).toBe("annotate");
+    expect(api.sendHermesSelection).not.toHaveBeenCalled();
+    await controller.sendToHermes("Fix this button");
+    expect(api.sendHermesSelection).toHaveBeenCalledWith({
+        target: "current",
+        text: expect.stringContaining('browser block "owned-browser"'),
+    });
+});
 async function selected() {
     let guestId = 42;
     api.browserGrab.mockImplementation(async ({ opId }) => ({ opId, kind: "selected", payload: Payload }));

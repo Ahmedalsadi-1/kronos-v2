@@ -151,13 +151,6 @@ export function WorkflowCanvasWidget({ blockId }: ViewComponentProps<WorkflowCan
                 <>
                     <button onClick={() => hermesSurfaceController.requestOpenPanel()}>Chat panel</button>
                     <button onClick={() => hermesSurfaceController.requestOpenHud()}>HUD chat</button>
-                    <button
-                        onClick={() =>
-                            void hermesSurfaceController.expandToWidget().catch((reason) => setError(String(reason)))
-                        }
-                    >
-                        Chat widget
-                    </button>
                 </>
             }
         />

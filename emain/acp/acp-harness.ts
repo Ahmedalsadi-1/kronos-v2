@@ -80,7 +80,7 @@ const CommonPatterns: AcpHarnessPattern[] = [
     {
         id: "durable-session",
         label: "Durable session",
-        description: "Keep task state resumable and report lifecycle changes to KronTerm.",
+        description: "Keep task state resumable and report lifecycle changes to KronOS.",
     },
 ];
 
@@ -89,7 +89,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         id: "workspace",
         label: "Workspace & block layout",
         description:
-            "Inspect and rearrange the KronTerm workspace: tabs, blocks, layout, badges, notifications, connections, secrets.",
+            "Inspect and rearrange the KronOS workspace: tabs, blocks, layout, badges, notifications, connections, secrets.",
         tools: [
             "surface_status",
             "workspace_inventory",
@@ -146,7 +146,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         id: "widget",
         label: "Block content interaction",
         description:
-            "Inspect and interact with content inside a KronTerm block (snapshot, refs, click, type, press, scroll, drag, values).",
+            "Inspect and interact with content inside a KronOS block (snapshot, refs, click, type, press, scroll, drag, values).",
         tools: [
             "widget_snapshot",
             "widget_find",
@@ -172,7 +172,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
     browser: {
         id: "browser",
         label: "In-app browser",
-        description: "Reuse, tab, navigate, and read the KronTerm browser surface.",
+        description: "Reuse, tab, navigate, and read the KronOS browser surface.",
         tools: ["browser_open", "browser_open_tab", "browser_navigate", "browser_get_html", "browser_configure"],
     },
     terminal: {
@@ -227,7 +227,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
         id: "desktop",
         label: "Native macOS desktop apps",
         description:
-            "Control native desktop applications via the kron-computer-use accessibility runtime. Only for apps outside KronTerm.",
+            "Control native desktop applications via the kron-computer-use accessibility runtime. Only for apps outside KronOS.",
         tools: [
             "kron_computer_status",
             "kron_computer_background_workspace_start",
@@ -254,7 +254,7 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
     file: {
         id: "file",
         label: "Files & directories",
-        description: "Open, list, read, and inspect files and directories through KronTerm file access.",
+        description: "Open, list, read, and inspect files and directories through KronOS file access.",
         tools: ["file_open", "file_list", "file_read", "file_info"],
     },
     canvas: {
@@ -300,14 +300,14 @@ export const KronTermToolsets: Record<KronTermToolsetId, KronTermToolset> = {
     skills: {
         id: "skills",
         label: "Shared project skills",
-        description: "Discover and load allowlisted project skills shared with KronTerm ACP agents.",
+        description: "Discover and load allowlisted project skills shared with KronOS ACP agents.",
         tools: ["shared_skill_list", "shared_skill_read"],
     },
     agents: {
         id: "agents",
         label: "ACP specialists",
         description:
-            "Discover installed ACP specialists and run one bounded task with the active tab's scoped KronTerm tools.",
+            "Discover installed ACP specialists and run one bounded task with the active tab's scoped KronOS tools.",
         tools: ["acp_list_agents", "acp_run_agent"],
     },
 };
@@ -324,14 +324,14 @@ const TaskClassToolsets: Record<AcpHarnessTaskClass, KronTermToolsetId[]> = {
 
 const Profiles: Record<string, Omit<AcpHarnessProfile, "backend">> = {
     kronoscode: {
-        summary: "Native KronTerm orchestrator for coding, workspace surfaces, and specialist delegation.",
+        summary: "Native KronOS orchestrator for coding, workspace surfaces, and specialist delegation.",
         specialties: ["coding", "debugging", "workspace-control", "automation"],
         patterns: [
             ...CommonPatterns,
             {
                 id: "workspace-native",
                 label: "Workspace-native execution",
-                description: "Use KronTerm blocks, browser, terminal, files, sandbox, and live surface evidence.",
+                description: "Use KronOS blocks, browser, terminal, files, sandbox, and live surface evidence.",
             },
             {
                 id: "capability-router",
@@ -419,14 +419,14 @@ const Profiles: Record<string, Omit<AcpHarnessProfile, "backend">> = {
     },
     "kronterm-agent": {
         summary:
-            "KronTerm's OpenCode-compatible ACP specialist for bounded implementation and repository investigation with tab-scoped tools.",
+            "KronOS's OpenCode-compatible ACP specialist for bounded implementation and repository investigation with tab-scoped tools.",
         specialties: ["coding", "debugging", "review", "workspace-control"],
         patterns: [
             ...CommonPatterns,
             {
                 id: "native-surface-tools",
                 label: "Native surface tools",
-                description: "Use the same scoped KronTerm MCP surface as the invoking Hermes session.",
+                description: "Use the same scoped KronOS MCP surface as the invoking Hermes session.",
             },
         ],
         source: "builtin",
@@ -457,7 +457,7 @@ export function classifyHarnessTask(content: string): { taskClass: AcpHarnessTas
             taskClass: "workspace-control",
             pattern:
                 /\b(kronterm|workspace|widget|block|canvas|desktop|browser tab|sandbox|vm|emulator|simulator|phone|iphone|android)\b/,
-            reason: "The request targets a live KronTerm or desktop workspace surface.",
+            reason: "The request targets a live KronOS or desktop workspace surface.",
         },
         {
             taskClass: "debugging",
@@ -579,7 +579,7 @@ export function formatAcpCapabilityLease(lease: AcpCapabilityLease, availableToo
         )
         .map(([id, names]) => `- ${KronTermToolFamilies[id].label}: ${names.join(", ")}`)
         .join("\n");
-    return `[KronTerm Specialist Capability Lease]
+    return `[KronOS Specialist Capability Lease]
 Lease: ${lease.id}
 Backend: ${lease.backend}
 Task class: ${lease.taskClass}

@@ -1,9 +1,10 @@
 # Linux desktop backends
 
-KronTerm exposes one Linux machine: the QEMU Ubuntu VM. The previous
-Docker/Podman desktop provider has been removed from the runtime and picker.
-Upstream OpenMaus source and its license remain for shared command types
-and data-directory utilities.
+KronOS Linux is the default QEMU VM in KronOS. Its registered ID remains
+`linux-vm:ubuntu`, so existing disks and workspace assignments carry over.
+The first launch prepares the disk and starts the guest through the user
+interface. Later launches reuse that disk. The computer registry also
+supports separate OpenMaus container desktops.
 
 The QEMU backend adapts KronTerm's existing `scripts/setup-sandbox.sh` flow:
 Ubuntu ARM64 cloud image, qcow2 disk, cloud-init seed, XFCE desktop and SSH. The event-driven focus helper in `guest/`

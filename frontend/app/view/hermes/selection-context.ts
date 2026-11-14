@@ -25,9 +25,13 @@ export function browserSelectionContext(payload: BrowserGrabPayload, depth: Sele
 export function browserSelectionPrompt(
     payload: BrowserGrabPayload,
     comment: string,
-    depth: SelectionContextDepth = "full"
+    depth: SelectionContextDepth = "full",
+    blockId?: string
 ): string {
-    return `${comment.trim().slice(0, 2000)}\n\nSelected webpage element (snapshot; revalidate before acting):\n${JSON.stringify(browserSelectionContext(payload, depth), null, 2)}`;
+    const route = blockId
+        ? `\nUse widget_snapshot on browser block ${JSON.stringify(blockId)} and use its widget tools after checking the page and element.\n`
+        : "";
+    return `${comment.trim().slice(0, 2000)}\n\nSelected webpage element (snapshot; revalidate before acting):\n${route}${JSON.stringify(browserSelectionContext(payload, depth), null, 2)}`;
 }
 
 export function desktopSelectionPrompt(
@@ -48,5 +52,5 @@ export function desktopSelectionPrompt(
                   bounds: context.bounds,
                   screenshotOmitted: context.screenshotOmitted,
               };
-    return `${comment.trim().slice(0, 2000)}\n\nSelected desktop control (snapshot; revalidate before acting):\n${JSON.stringify(selected, null, 2)}`;
+    return `${comment.trim().slice(0, 2000)}\n\nSelected macOS desktop control (snapshot; revalidate before acting). Use kron_computer_get_app_state and kron_computer tools scoped to this application.\n${JSON.stringify(selected, null, 2)}`;
 }

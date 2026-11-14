@@ -1,5 +1,6 @@
 const { test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const { ComfyUiWorkflow } = require("./ComfyUiWorkflow.node");
 const { KronTermTool } = require("./KronTermTool.node");
 const { KronTermHarness } = require("./KronTermHarness.node");
 const { KronTermWidget } = require("./KronTermWidget.node");
@@ -26,6 +27,64 @@ function bridge(handler) {
         return { ok: true, json: async () => ({ content: [{ type: "text", text: "done" }] }) };
     };
 }
+
+test("ComfyUI node queues each item and checks the exact prompt through the managed bridge", async () => {
+    const calls = [];
+    const origin = "http://127.0.0.1:8190";
+    const image = { filename: "render.png", subfolder: "", type: "output" };
+    bridge(() => {});
+    const scopedFetch = global.fetch;
+    global.fetch = async (url, options) => {
+        await scopedFetch(url, options);
+        const call = JSON.parse(options.body);
+        calls.push(call);
+        const job =
+            call.name === "comfyui_submit"
+                ? { id: `prompt-${calls.length}`, status: "queued", images: [] }
+                : { id: call.arguments.id, status: "completed", images: [image] };
+        return {
+            ok: true,
+            json: async () => ({ content: [{ type: "text", text: JSON.stringify({ origin, jobs: [job] }) }] }),
+        };
+    };
+    const workflows = ["one", "two"].map((text) => ({ 1: { class_type: "CLIPTextEncode", inputs: { text } } }));
+    const [submitted] = await new ComfyUiWorkflow().execute.call({
+        getInputData: () => workflows.map((workflow) => ({ json: { workflow } })),
+        getNodeParameter: (name, index, fallback) =>
+            ({ workflow: JSON.stringify(workflows[index]), origin })[name] ?? fallback,
+    });
+    assert.deepEqual(
+        calls.map(({ name, arguments: args }) => [name, args]),
+        workflows.map((workflow) => ["comfyui_submit", { origin, workflow }])
+    );
+    assert.deepEqual(submitted[1], {
+        json: { promptId: "prompt-2", origin, status: "queued", images: [] },
+        pairedItem: { item: 1 },
+    });
+
+    const [checked] = await new ComfyUiWorkflow().execute.call({
+        getInputData: () => [submitted[1]],
+        getNodeParameter: (name, _index, fallback) =>
+            ({ operation: "job", promptId: submitted[1].json.promptId })[name] ?? fallback,
+    });
+    assert.deepEqual(calls[2], { method: "call", name: "comfyui_job", arguments: { origin, id: "prompt-2" } });
+    assert.deepEqual(checked[0].json, { promptId: "prompt-2", origin, status: "completed", images: [image] });
+});
+
+test("ComfyUI node rejects an empty job ID and preserves bridge errors", async () => {
+    bridge(() => assert.fail("A blank ID must never query the render queue"));
+    const execute = (promptId) =>
+        new ComfyUiWorkflow().execute.call({
+            getInputData: () => [{ json: {} }],
+            getNodeParameter: (name, _index, fallback) => ({ operation: "job", promptId })[name] ?? fallback,
+        });
+    await assert.rejects(execute("   "), /prompt ID returned/);
+    global.fetch = async () => ({
+        ok: true,
+        json: async () => ({ isError: true, content: [{ type: "text", text: "Render is outside this workspace" }] }),
+    });
+    await assert.rejects(execute("prompt-1"), /outside this workspace/);
+});
 
 test("tool node evaluates parameters per item and preserves item links", async () => {
     const calls = [];
@@ -143,4 +202,32 @@ test("bound widget node exchanges live state over the authenticated loopback bri
         server.closeAllConnections();
         await new Promise((resolve) => server.close(resolve));
     }
+});
+
+test("browser link groups target the bound browser first and open remaining links as new surfaces", async () => {
+    const calls = [];
+    bridge((call) => calls.push(call));
+    await new KronTermWidget().execute.call({ getInputData: () => [{ json: {} }], getNodeParameter: (name, _index, fallback) => ({ operation: "browser_open_links", blockId: "browser-1", urls: "https://example.com\nhttps://example.org", arguments: "{}" })[name] ?? fallback });
+    assert.deepEqual(calls.map((call) => [call.name, call.arguments]), [["browser_navigate", { blockId: "browser-1", url: "https://example.com" }], ["browser_open", { url: "https://example.org", newSurface: true }]]);
+});
+test("invalid browser links fail before navigation and VM control never falls back to host commands", async () => {
+    const calls = [];
+    bridge((call) => calls.push(call));
+    const execute = (parameters) => new KronTermWidget().execute.call({ getInputData: () => [{ json: {} }], getNodeParameter: (name, _index, fallback) => parameters[name] ?? fallback });
+    await assert.rejects(execute({ operation: "browser_open_links", urls: "https://example.com\njavascript:bad", blockId: "browser", arguments: "{}" }), /HTTP/);
+    assert.equal(calls.length, 0);
+    await assert.rejects(execute({ operation: "sandbox_exec", computerId: "vm-1", assignedAgentId: "sandbox:tab", text: "pwd", arguments: "{}" }));
+    assert.equal(calls.some((call) => call.name === "block_run_command" || call.name === "linux_desktop_exec"), false);
+});
+
+test("VM commands carry the observed generation and exact user-assigned target", async () => {
+    const calls = [];
+    bridge((call) => calls.push(call));
+    global.fetch = async (_url, options) => {
+        const call = JSON.parse(options.body); calls.push(call);
+        return { ok: true, json: async () => ({ content: [{ type: "text", text: call.name === "linux_desktop_list" ? JSON.stringify([{ id: "vm-1", ready: true, controlOwner: "agent", assignedAgentId: "sandbox:tab", controlGeneration: 7 }]) : "done" }] }) };
+    };
+    await new KronTermWidget().execute.call({ getInputData: () => [{ json: {} }], getNodeParameter: (name, _index, fallback) => ({ operation: "sandbox_exec", computerId: "vm-1", assignedAgentId: "sandbox:tab", text: "pwd", arguments: "{}" })[name] ?? fallback });
+    assert.deepEqual(calls.map(call => call.name), ["linux_desktop_list", "linux_desktop_exec"]);
+    assert.deepEqual(calls[1].arguments, { desktopId: "vm-1", assignedAgentId: "sandbox:tab", expectedGeneration: 7, command: "pwd" });
 });

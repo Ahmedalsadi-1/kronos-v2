@@ -70,13 +70,18 @@ const previewRuntimes = new Map<
 >();
 
 const previewElectronApi: ElectronApi = {
+    getDiagnosticReport: async () => ({ product: "KronOS", version: "preview", platform: "preview", architecture: "preview", electron: "preview", collectedAt: new Date().toISOString(), automaticUploads: false, entries: [] }),
+    clearDiagnosticReport: async () => {},
+    recordRendererFailure: () => {},
     openBotDesktop: async () => {
         throw new Error("Bot desktops require the managed runtime");
     },
     agentBotCommand: async () => ({ bots: [], messages: [], busy: false }),
+    projectRoomCommand: async () => { throw new Error("Project rooms require the managed desktop runtime."); },
     openAgentWorkspace: async () => {
         throw new Error("Agent workspace requires the managed Electron runtime.");
     },
+    openKronosSignIn: () => {},
     getAuthKey: () => "",
     getIsDev: () => false,
     getCursorPoint: () => ({ x: 0, y: 0 }) as Electron.Point,
@@ -114,6 +119,9 @@ const previewElectronApi: ElectronApi = {
         throw new Error("Native desktop required");
     },
     cancelDesktopGrab: async () => {},
+    onBrowserElementSelection: () => () => {},
+    pickComputerTargetElement: async () => ({ success: true, data: null }),
+    browserAccount: async () => undefined,
     browserNavigationHistory: async () => null,
     browserGrab: async (input) => ({ opId: input.opId, kind: "error", reason: "Native browser required" }),
     browserCancelGrab: async () => {},
@@ -213,6 +221,7 @@ const previewElectronApi: ElectronApi = {
             "/Users/albsheralsadi/kronterm/frontend/app/aipanel/acp-chat-panel.tsx",
             "/Users/albsheralsadi/kronterm/frontend/app/aipanel/use-acp-session.ts",
         ]),
+    getPathForFile: () => "",
     selectWallpaper: () => Promise.resolve(null),
     revealNativePath: (_filePath: string) => {},
     searchSystemItems: (_query: string) => Promise.resolve([]),
@@ -254,6 +263,7 @@ const previewElectronApi: ElectronApi = {
     manageNativeTaskGroups: async () => ({ success: true as const, data: { workspaces: [] } }),
     manageComputerPlugins: async () => ({ success: true as const, data: { plugins: [], computers: [] } }),
     sandboxComputerAccess: async () => ({ enabled: false, desktopId: "" }),
+    sandboxLogin: async () => ({}),
     listLinuxDesktops: async () => ({ success: true as const, data: [] }),
     listMacVms: async () => ({
         success: true as const,
@@ -459,6 +469,7 @@ const previewElectronApi: ElectronApi = {
         Promise.reject(new Error("Hermes is only available in the Electron app")),
     getKronTermAccountStatus: () => Promise.resolve({ configured: true, encryptionAvailable: true }),
     hermesApi: () => Promise.reject(new Error("Hermes is only available in the Electron app")),
+    swarmRecovery: async () => [],
     onHermesConnection: () => () => {},
     onHermesRuntimeFailure: () => () => {},
     kronoscodeGetConnection: () =>

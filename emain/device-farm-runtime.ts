@@ -19,9 +19,12 @@ export class DeviceFarmRuntime {
     private busy = new Set<string>();
     constructor(private computers: ComputerTargetsRuntime) {}
 
-    async authorize(targetId: string, caller: string) {
+    async authorize(targetId: string, caller: string, requireAssigned = false) {
         const assignment = this.assignments.get(targetId);
-        if (!assignment) return;
+        if (!assignment) {
+            if (requireAssigned) throw new Error("Assign this device to the parent agent before starting a swarm.");
+            return;
+        }
         const target = (await this.computers.list()).find((item) => item.id === targetId);
         if (!target || target.automationPaused || target.controlGeneration !== assignment.controlGeneration) {
             this.assignments.delete(targetId);
@@ -30,11 +33,11 @@ export class DeviceFarmRuntime {
         if (assignment.assignee !== caller) throw new Error("Device is assigned to another agent.");
     }
 
-    async perform(action: ComputerTargetAction, caller: string) {
+    async perform(action: ComputerTargetAction, caller: string, requireAssigned = false) {
         if (this.busy.has(action.targetId)) throw new Error("Device operation or assignment is already in progress.");
         this.busy.add(action.targetId);
         try {
-            await this.authorize(action.targetId, caller);
+            await this.authorize(action.targetId, caller, requireAssigned);
             if (action.action !== "screenshot") {
                 this.revisions.set(action.targetId, (this.revisions.get(action.targetId) ?? 0) + 1);
                 for (const [id, observation] of this.observations)

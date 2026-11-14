@@ -11,7 +11,10 @@ import {
     assertBackgroundWorkspaceToolAllowed,
     registerBackgroundWorkspaceTools,
 } from "./background-workspace-tools.js";
+import { registerSwarmTools } from "./swarm-tools.js";
+export { setSwarmToolBridge } from "./swarm-tools.js";
 import { registerComputerTargetTools } from "./computer-target-tools.js";
+import { registerComfyUiTools } from "./comfyui-tools.js";
 import { DeveloperActionRegistry, DeveloperMemoryStore } from "./developer-memory.js";
 import { runInteraction, type InteractionAction, type InteractionResult } from "./interaction-contract.js";
 import {
@@ -21,31 +24,37 @@ import {
     type KronComputerUseToolResult,
 } from "./kron-computer-use.js";
 import { registerLinuxDesktopTools } from "./linux-desktop-tools.js";
-import { registerProductivityTools } from "./productivity-tools.js";
 import { registerN8nTools } from "./n8n-tools.js";
+import { callPenEditor } from "./pen-editor-tools.js";
+import { registerProductivityTools } from "./productivity-tools.js";
 import { registerSandboxComputerTools } from "./sandbox-computer-tools.js";
 import { SharedSkillCatalog } from "./shared-skills.js";
 import { SurfaceOperatingProtocol } from "./surface-operating-protocol.js";
 import { isToolAllowedBySurfaceCapability } from "./surface-policy.js";
 import { appWorkflow, searchTools } from "./tool-discovery.js";
-import { executeTool, normalizeToolResult, toolExecutionDiagnostics } from "./tool-execution.js";
+import { KronTermToolFamilies, type KronTermToolFamilyId } from "./tool-families.js";
+import { executeTool, normalizeToolResult, ToolOperationContext, toolExecutionDiagnostics } from "./tool-execution.js";
 import { WorkflowCommandShape } from "./workflow-command-schema.js";
-import { WshBridge } from "./wsh-bridge.js";
+import { isAbsoluteLocalFilePath, WshBridge } from "./wsh-bridge.js";
 export { setComputerTargetToolBridge } from "./computer-target-tools.js";
+export { setComfyUiToolBridge } from "./comfyui-tools.js";
 export { setLinuxDesktopToolBridge } from "./linux-desktop-tools.js";
-export { setProductivityToolBridge } from "./productivity-tools.js";
 export { setN8nWorkflowBridge } from "./n8n-tools.js";
+export { setProductivityToolBridge } from "./productivity-tools.js";
 export { setSandboxComputerBridge } from "./sandbox-computer-tools.js";
 
 let wsh = new WshBridge();
 const kronComputerUse = new KronComputerUseClient();
 const developerMemoryStore = new DeveloperMemoryStore();
-const sharedSkills = new SharedSkillCatalog();
+let sharedSkills = new SharedSkillCatalog();
+export function setSharedSkillCatalog(catalog: SharedSkillCatalog): void {
+    sharedSkills = catalog;
+}
 export const server = new McpServer({
     name: "kron-term",
     version: "2.0.0",
     description:
-        "KronTerm block/widget control, layout management, notifications, connections, and secrets. " +
+        "KronOS block/widget control, layout management, notifications, connections, and secrets. " +
         "Provides AI agents with block manipulation, widget interaction, terminal/file management, and more.",
 });
 
@@ -66,6 +75,8 @@ registerLinuxDesktopTools(server);
 registerSandboxComputerTools(server);
 registerProductivityTools(server);
 registerN8nTools(server);
+registerComfyUiTools(server);
+const disableSwarmTools = registerSwarmTools(server);
 
 server.tool(
     "kron_computer_annotate",
@@ -102,7 +113,7 @@ server.tool(
 
 server.tool(
     "kron_computer_window",
-    "Inspect, launch and arrange native desktop apps using yabai in Coucou desktop HUD mode only. Query native IDs before actions. split sets the insertion direction for the next app. Use os.* actions for KronTerm OS widgets. Existing keyboard commands remain available; no control panel is created.",
+    "Inspect, launch and arrange native desktop apps using yabai in Coucou desktop HUD mode only. Query native IDs before actions. split sets the insertion direction for the next app. Use os.* actions for KronOS widgets. Existing keyboard commands remain available; no control panel is created.",
     {
         action: z.enum(["list", "launch", "focus", "move", "resize", "split", "swap", "balance", "float"]),
         windowId: z.number().int().positive().optional(),
@@ -220,7 +231,7 @@ export function nativeToolManifest(toolAllowed: (name: string) => boolean): Nati
         }));
 }
 
-const SERVER_UNAVAILABLE = " (unavailable — wsh command not exposed by this version of KronTerm)";
+const SERVER_UNAVAILABLE = " (unavailable — wsh command not exposed by this version of KronOS)";
 
 const canvasNodeSchema = z.object({
     id: z.string().optional(),
@@ -287,6 +298,13 @@ type ToolActivity = {
 
 const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
     workspace_snapshot: () => ({ action: "inspect", detail: "Inspecting workspace presentation and widget geometry" }),
+    workspace_design_editor_state: () => ({ action: "inspect", detail: "Inspecting the live Pen editor" }),
+    workspace_design_execute: () => ({ action: "execute", detail: "Editing the live Pen document" }),
+    workspace_design_read_skill: () => ({ action: "inspect", detail: "Reading a bundled Pen skill" }),
+    workspace_design_save: () => ({ action: "execute", detail: "Saving the Design document" }),
+    workspace_design_layers: () => ({ action: "inspect", detail: "Inspecting Design layers" }),
+    workspace_design_create_layer: () => ({ action: "execute", detail: "Creating a Design layer" }),
+    workspace_design_update_layer: () => ({ action: "execute", detail: "Updating a Design layer" }),
     workspace_screenshot: () => ({ action: "screenshot", detail: "Capturing the active workspace presentation" }),
     workspace_set_presentation: (a) => ({ action: "execute", detail: `Switching workspace to ${a.presentation}` }),
     workspace_focus_widget: (a) => ({ action: "focus", detail: `Focusing workspace widget ${a.blockId}` }),
@@ -302,7 +320,7 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
     workspace_show_overview: () => ({ action: "focus", detail: "Showing all workspace applications" }),
     workspace_os_action: (a) => ({
         action: a.action === "os.window.focus" || a.action === "os.space.switch" ? "focus" : "execute",
-        detail: `KronTerm OS ${String(a.action).replace(/^os\./, "")}${a.blockId ? ` · ${a.blockId}` : ""}`,
+        detail: `KronOS ${String(a.action).replace(/^os\./, "")}${a.blockId ? ` · ${a.blockId}` : ""}`,
     }),
     workspace_switch_workspace: (a) => ({ action: "focus", detail: `Switching to workspace ${a.workspaceId}` }),
     workspace_swap_widgets: (a) => ({
@@ -313,6 +331,7 @@ const toolActivityMap: Record<string, (args: any) => ToolActivity> = {
     workspace_navigate: (a) => ({ action: "focus", detail: `Navigating ${a.direction} from ${a.blockId}` }),
     workspace_canvas_view: (a) => ({ action: "execute", detail: `${a.action} canvas widgets` }),
     workspace_canvas_add_note: () => ({ action: "execute", detail: "Adding a canvas sticky note" }),
+    workspace_canvas_add_file: () => ({ action: "execute", detail: "Adding a canvas file card" }),
     workspace_canvas_update_object: (a) => ({ action: "execute", detail: `Updating canvas object ${a.objectId}` }),
     workspace_canvas_delete_object: (a) => ({ action: "execute", detail: `Deleting canvas object ${a.objectId}` }),
     workspace_canvas_connect: (a) => ({
@@ -706,19 +725,19 @@ async function callKronComputerUse(
     }
 }
 
-const kronTermGuide = `# KronTerm Surface Capability
+const kronTermGuide = `# KronOS Surface Capability
 
 ${SurfaceOperatingProtocol}
 
-You have KronTerm workspace tools available through this MCP connection. Hermes and KronosCode use the same live surface contracts. Use the complete live kron-term MCP manifest to inspect and control KronTerm; this guide routes the tool families but does not narrow the advertised toolset.
+You have KronOS workspace tools available through this MCP connection. Hermes and KronosCode use the same live surface contracts. Use the complete live kron-term MCP manifest to inspect and control KronOS; this guide routes the tool families but does not narrow the advertised toolset.
 
 ## Tool usage policy
 
-- Prefer the kron-term surface tools over generic desktop/browser tools whenever the target lives inside KronTerm (tabs, blocks, terminals, in-app browser, host files).
+- Prefer the kron-term surface tools over generic desktop/browser tools whenever the target lives inside KronOS (tabs, blocks, terminals, in-app browser, host files).
 - Prefer element refs (@eN) and element indexes over raw pixel coordinates. Use coordinates only when no ref/index exists.
 - Prefer file tools (file_read, file_list, file_info) over running cat/ls in a terminal. Use terminal tools for interactive sessions or command execution, not for reading files.
 - Batch independent read-only calls (for example surface_status, workspace_snapshot, and a scoped widget_snapshot) in a single message instead of sequential round trips.
-- Never use sandbox_* tools to control the host, and never use kron_computer_* tools to control KronTerm blocks. Each pointer family targets exactly one surface.
+- Never use sandbox_* tools to control the host, and never use kron_computer_* tools to control KronOS blocks. Each pointer family targets exactly one surface.
 - For browser tasks, reuse the focused open browser widget first, then another open browser widget. Each widget holds one page: browser_open_tab is a navigation alias and replaces that page. To preserve it when another page is required, create a separate browser widget with browser_open(newSurface=true).
 - When the user requests quiet/background native macOS work, start with the kron_computer_background_workspace_* lifecycle, observation and action tools. Retain sessionId, or list and reuse an existing assigned task. New windows require human approval. These assignments override the general native app routing below; never fall back to global computer input, native tiling or a shell workaround when a group refuses an action.
 
@@ -733,11 +752,11 @@ For iOS Simulator or configured Appium phone sessions, use device_list then devi
 | Workspace presentation, widget order/appearance/geometry, layout, tabs | \`workspace_snapshot\`, \`workspace_screenshot\`, \`workspace_*\` controls | \`workspace_snapshot\` |
 | Coucou HUD, background widgets, native islands | \`hud_set_mode\`, \`hud_show_widget\`, \`hud_set_widget_background\`, \`hud_*_island\` | \`workspace_snapshot\` and \`hud_list_islands\` |
 | Block membership, metadata, connections, secrets | workspace data tools (\`list_blocks\`, \`get_block_info\`, \`connection_*\`, \`secret_*\`) | \`list_blocks\` |
-| Content inside a KronTerm block (forms, canvas, browser page) | \`widget_*\` | \`widget_snapshot\` |
+| Content inside a KronOS block (forms, canvas, browser page) | \`widget_*\` | \`widget_snapshot\` |
 | In-app browser navigation | \`browser_open\`, \`browser_open_tab\`, \`browser_navigate\`, \`browser_get_html\` | \`workspace_snapshot\`, then reuse the one-page widget or explicitly create a separate surface |
 | Terminal session or one-shot shell command | \`terminal_open\`, \`terminal_scrollback\`, \`block_run_command\` | \`terminal_open\` (interactive) or \`block_run_command\` (one-shot) |
 | Managed Linux desktop | \`linux_desktop_*\` | \`linux_desktop_list\`, then \`linux_desktop_screenshot\` with assigned agent and generation |
-| Native macOS app outside KronTerm | \`kron_computer_*\` | \`kron_computer_list_apps\`, then \`kron_computer_get_app_state\` |
+| Native macOS app outside KronOS | \`kron_computer_*\` | \`kron_computer_list_apps\`, then \`kron_computer_get_app_state\` |
 | Files and directories | \`file_open\`, \`file_list\`, \`file_read\`, \`file_info\` | \`file_list\` or \`file_read\` |
 | Persistent memory, sessions, action items | memory tools (\`get_memories\`, \`search_memories\`, \`get_workspace_sessions\`, \`get_action_items\`, ...) | \`get_memories\` or \`search_memories\` |
 | Allowlisted project skills | \`shared_skill_list\`, \`shared_skill_read\` | \`shared_skill_list\` |
@@ -745,9 +764,9 @@ For iOS Simulator or configured Appium phone sessions, use device_list then devi
 ## Workflow
 
 1. Call \`surface_status\` for connection failures or explicit availability questions. Start normal workspace work with \`workspace_snapshot\`; inspect an explicit block directly.
-2. For workspace layout work, call \`workspace_snapshot\` to learn whether the active surface is widgets, tabs, canvas, or OS, whether HUD is enabled, and obtain ordered live block IDs, focus, visibility, and geometry. Reuse a fresh snapshot already obtained.
+2. For workspace layout work, call \`workspace_snapshot\` to learn whether the active surface is widgets, tabs, or OS, whether HUD is enabled, and obtain ordered live block IDs, focus, visibility, and geometry. Reuse a fresh snapshot already obtained.
 3. Call \`workspace_screenshot\` when the overall visual arrangement matters; call \`widget_screenshot\` for one widget.
-4. Use the control advertised for the active presentation: split actions in widgets, sequential focus/order in tabs, world-space geometry/fit/arrange in canvas, and typed \`workspace_os_action\` in OS. Native HUD island bounds use desktop pixels from \`hud_list_islands\`.
+4. Use the control advertised for the active presentation: split actions in widgets, sequential focus/order in tabs, and typed \`workspace_os_action\` in OS. Native HUD island bounds use desktop pixels from \`hud_list_islands\`.
 5. For content interaction, call \`widget_snapshot\` before using element refs.
 6. Re-run \`widget_snapshot\` after navigation or DOM changes because refs become stale.
 7. Preserve the user's viewing context: inspect workspace_inventory for the visible workspace and workspace_snapshot for rendered bounds. Hidden or unmounted widgets are not what the user sees. Explicit targetWorkspaceId/targetTabId can activate another tab when interaction needs mounted UI.
@@ -759,7 +778,7 @@ For iOS Simulator or configured Appium phone sessions, use device_list then devi
 - Presentation context: \`workspace_snapshot\` is authoritative for mode, order, focus, visibility, bounds, split tree, canvas camera, and supported controls.
 - Presentation control: \`workspace_set_presentation\`, \`workspace_focus_widget\`, \`workspace_move_widget\`, \`workspace_resize_widget\`, \`workspace_swap_widgets\`, \`workspace_toggle_magnify\`, \`workspace_navigate\`, and \`workspace_canvas_view\`.
 - HUD: \`hud_set_mode\` changes HUD placement without changing the canonical workspace presentation. \`hud_show_widget\` selects and expands an existing browser, terminal, editor, diff, preview, or sandbox by block ID inside the HUD. \`hud_set_widget_background\` folds it away or restores it without deleting its session. Use \`hud_open_island\` for a new detached widget and \`hud_move_island\`/\`hud_resize_island\` for its native window geometry. Do not recreate an existing background browser to reveal it.
-- Canvas whiteboard: \`workspace_canvas_add_note\`, \`workspace_canvas_update_object\`, \`workspace_canvas_delete_object\`, and \`workspace_canvas_connect\`. Read \`workspace_snapshot\` first and use its world-space object IDs and geometry; placements are automatically moved clear of occupied widgets and objects.
+- Canvas whiteboard: \`workspace_canvas_add_note\`, \`workspace_canvas_add_file\`, \`workspace_canvas_update_object\`, \`workspace_canvas_delete_object\`, and \`workspace_canvas_connect\`. Read \`workspace_snapshot\` first and use its world-space object IDs and geometry. Use an absolute local file path to pin a preview card in Canvas or OS. Placements are automatically moved clear of occupied widgets and objects.
 - Blocks: \`list_blocks\`, \`create_block\`, \`close_block\`, \`focus_block\`, \`get_block_info\`, and \`set_block_meta\`.
 - Widgets: \`widget_*\` operations inspect or interact with content in an existing block, including clipboard control.
 - Browser blocks: reuse an existing widget with \`browser_navigate\` or widget interactions. \`browser_open_tab\` navigates in place and does not preserve its current page. Use \`browser_open\` when no browser exists, or with newSurface=true when another page must remain available, then inspect with \`widget_snapshot\` before interacting.
@@ -776,7 +795,7 @@ For iOS Simulator or configured Appium phone sessions, use device_list then devi
   \`promote_memory\`, \`get_workspace_sessions\`, \`create_workspace_session\`, \`append_workspace_session_event\`,
   \`complete_workspace_session\`, \`get_action_items\`, \`create_action_item\`, and \`ingest_workspace_event\`.
 - Native desktop apps: \`kron_computer_*\` tools expose the local \`kron-computer-use\` runtime. Start with \`kron_computer_list_apps\`, then call \`kron_computer_get_app_state\` before actions. The macOS runtime displays its software cursor overlay during click and set-value actions.
-- Shared skills: call \`shared_skill_list\`, then \`shared_skill_read\` with an exact skill id. These expose the allowlisted packaged, project, and user skill roots shared by KronTerm, KronosCode, and Kronos.
+- Shared skills: call \`shared_skill_list\`, then \`shared_skill_read\` with an exact skill id. These expose the allowlisted packaged, project, and user skill roots shared by KronOS, KronosCode, and Kronos.
 
 ## Fallback rules
 
@@ -785,16 +804,16 @@ For iOS Simulator or configured Appium phone sessions, use device_list then devi
 
 ## Runtime requirements
 
-KronTerm sessions automatically issue a temporary scoped capability. The managed Kronos widget reads the refreshed capability from \`KRONTERM_SURFACE_CAPABILITY_FILE\` before every WSH action so JWT rotation does not require restarting MCP. ACP sessions receive equivalent \`KRONTERM_JWT\`/\`WAVETERM_JWT\` and tab/block environment values at session creation. For standalone MCP launches, the subprocess must inherit an authenticated \`KRONTERM_JWT\` (or \`WAVETERM_JWT\`); tab-scoped creation and focus also require \`KRONTERM_TABID\`. Set \`KRONTERM_WSH\` (or \`WAVETERM_WSH\`) to a widget-capable development binary when running against an unbundled build.`;
+KronOS sessions automatically issue a temporary scoped capability. The managed Kronos widget reads the refreshed capability from \`KRONTERM_SURFACE_CAPABILITY_FILE\` before every WSH action so JWT rotation does not require restarting MCP. ACP sessions receive equivalent \`KRONTERM_JWT\`/\`WAVETERM_JWT\` and tab/block environment values at session creation. For standalone MCP launches, the subprocess must inherit an authenticated \`KRONTERM_JWT\` (or \`WAVETERM_JWT\`); tab-scoped creation and focus also require \`KRONTERM_TABID\`. Set \`KRONTERM_WSH\` (or \`WAVETERM_WSH\`) to a widget-capable development binary when running against an unbundled build.`;
 
 server.registerPrompt(
     "kron-term-guide",
     {
-        title: "KronTerm Guide",
-        description: "Load the compact operating guide for KronTerm block and widget control.",
+        title: "KronOS Guide",
+        description: "Load the compact operating guide for KronOS block and widget control.",
     },
     async () => ({
-        description: "Instructions for controlling the active KronTerm surface.",
+        description: "Instructions for controlling the active KronOS surface.",
         messages: [{ role: "user", content: { type: "text", text: kronTermGuide } }],
     })
 );
@@ -803,8 +822,8 @@ server.registerResource(
     "kron-term-skill",
     "kron-term://skill",
     {
-        title: "KronTerm Skill",
-        description: "Agent guidance for safe KronTerm block and widget control.",
+        title: "KronOS Skill",
+        description: "Agent guidance for safe KronOS block and widget control.",
         mimeType: "text/markdown",
     },
     async (uri) => ({
@@ -816,8 +835,8 @@ server.registerResource(
     "kron-term-shared-skills",
     "kron-term://skills",
     {
-        title: "KronTerm Shared Skills",
-        description: "Inventory of allowlisted project skills shared with KronTerm ACP agents.",
+        title: "KronOS Shared Skills",
+        description: "Inventory of allowlisted project skills shared with KronOS ACP agents.",
         mimeType: "application/json",
     },
     async (uri) => ({
@@ -833,8 +852,9 @@ server.registerResource(
 
 server.tool(
     "shared_skill_list",
-    "List allowlisted project skills shared by KronTerm, KronosCode, and ACP agents.",
+    "List allowlisted project skills shared by KronOS, KronosCode, and ACP agents.",
     { query: z.string().optional().describe("Optional case-insensitive filter") },
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async ({ query }) => jsonText(sharedSkills.list(query))
 );
 
@@ -842,6 +862,7 @@ server.tool(
     "shared_skill_read",
     "Read one shared project skill by the exact id returned from shared_skill_list.",
     { id: z.string().min(1).describe("Exact shared skill id") },
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async ({ id }) => jsonText(sharedSkills.read(id))
 );
 
@@ -853,6 +874,7 @@ server.tool(
     "surface_status",
     "Report selected wsh executable and required session environment availability.",
     {},
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async () => ({
         content: [{ type: "text", text: wsh.getDiagnostics() }],
     })
@@ -904,7 +926,7 @@ server.tool(
 
 server.tool(
     "kron_computer_click",
-    "Click a native desktop app element by accessibility index or screenshot coordinates. When to use: native macOS apps outside KronTerm only; call kron_computer_get_app_state first and prefer elementIndex over coordinates. When NOT to use: KronTerm blocks (use widget_click) or the sandbox VM (use linux_desktop_click).",
+    "Click a native desktop app element by accessibility index or screenshot coordinates. When to use: native macOS apps outside KronOS only; call kron_computer_get_app_state first and prefer elementIndex over coordinates. When NOT to use: KronOS blocks (use widget_click) or the sandbox VM (use linux_desktop_click).",
     {
         app: z.string().min(1).describe("App name or bundle identifier"),
         elementIndex: z.string().min(1).optional().describe("Element index from kron_computer_get_app_state"),
@@ -944,7 +966,7 @@ server.tool(
 
 server.tool(
     "kron_computer_type_text",
-    "Type literal text into the focused field of a native desktop app. When to use: native macOS apps outside KronTerm only. When NOT to use: KronTerm blocks (use widget_type) or the sandbox VM (use linux_desktop_type).",
+    "Type literal text into the focused field of a native desktop app. When to use: native macOS apps outside KronOS only. When NOT to use: KronOS blocks (use widget_type) or the sandbox VM (use linux_desktop_type).",
     {
         app: z.string().min(1).describe("App name or bundle identifier"),
         text: z.string().describe("Text to type"),
@@ -1201,7 +1223,7 @@ const workspaceDirectionSchema = z.enum(["up", "right", "down", "left"]);
 
 server.tool(
     "workspace_snapshot",
-    "Read the authoritative active KronTerm presentation before operating. Returns widgets/tabs/canvas/OS mode, ordered live identities, focus and visibility, on-screen and world bounds, camera, OS scene/groups, split tree, supported actions, userview, and visualassessment. Read uservisible and clipping/occlusion hints to understand the human view; use screenshots to verify appearance.",
+    "Read the authoritative active KronOS presentation before operating. Returns widgets/tabs/canvas/OS mode, ordered live identities, focus and visibility, on-screen and world bounds, camera, OS scene/groups, split tree, supported actions, userview, and visualassessment. Read uservisible and clipping/occlusion hints to understand the human view; use screenshots to verify appearance.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_snapshot")(async () => {
@@ -1214,14 +1236,126 @@ server.tool(
 );
 
 server.tool(
+    "workspace_design_editor_state",
+    "Inspect the live Pen editor in KronOS Design, including its document and selection. Opens Design automatically with a blank document when needed; no .pen import is required. Use this for the Design editor, and workspace_design_layers only for retained native OS canvas layers.",
+    {},
+    workspaceReadAnnotations,
+    wrapActivity("workspace_design_editor_state")(async () => callPenEditor(wsh, "get_app_state"))
+);
+
+server.tool(
+    "workspace_design_read_skill",
+    "Read a real skill bundled with the installed Pen editor. Read name=execute before writing scripts. Use name=index to list available skills. This describes the editor's supported API rather than KronOS's retained native layer subset.",
+    { name: z.string().min(1).max(120).regex(/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*(?:\.md)?$/) },
+    workspaceReadAnnotations,
+    wrapActivity("workspace_design_read_skill")(async (params) => callPenEditor(wsh, "read_skill", params))
+);
+
+server.tool(
+    "workspace_design_execute",
+    "Execute code against the real live Pen document in KronOS Design. First call workspace_design_editor_state and workspace_design_read_skill with name=execute, then follow the returned API exactly. Supports the editor's document tools, not arbitrary host-shell code. Repair failed scripts with the returned editId and edits instead of resending code. Verify edits with editor_state and workspace_screenshot, then save.",
+    {
+        code: z.string().min(1).max(100000).optional().describe("New Pen script. Omit when repairing a failed script."),
+        description: z.string().max(240).optional().describe("Short label for the design edit."),
+        editId: z.string().min(1).max(200).optional().describe("Failed execute ID returned by Pen; required with edits."),
+        edits: z.array(z.object({
+            find: z.string().min(1).max(100000),
+            replace: z.string().max(100000),
+            all: z.boolean().optional(),
+        })).min(1).max(100).optional().describe("Ordered repairs to a failed script. Never send together with code."),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_design_execute")(async (params) => {
+        const initial = params.code != null && params.edits == null && params.editId == null;
+        const repair = params.code == null && (params.edits?.length ?? 0) > 0 && params.editId != null;
+        if (!initial && !repair) return {
+            content: [{ type: "text" as const, text: "Provide code for a new script, or edits and editId to repair a failed script." }],
+            isError: true,
+        };
+        return callPenEditor(wsh, "execute", params);
+    })
+);
+
+server.tool(
+    "workspace_design_save",
+    "Save the current live Pen document to KronOS's local Design storage. This does not publish or deploy the design.",
+    {},
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_design_save")(async () => callPenEditor(wsh, "save"))
+);
+
+const designLayerFields = {
+    name: z.string().max(12000).optional(),
+    text: z.string().max(12000).optional(),
+    fill: z.string().regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i).optional(),
+    geometry: z.string().max(12000).optional().describe("SVG path data for a path layer."),
+    x: z.number().finite().optional(),
+    y: z.number().finite().optional(),
+    width: z.number().finite().min(1).optional(),
+    height: z.number().finite().min(1).optional(),
+};
+
+server.tool(
+    "workspace_design_layers",
+    "List retained native OS canvas design layers and selection. These are separate from the real Pen editor document; use workspace_design_editor_state for the default Design editor.",
+    { offset: z.number().int().nonnegative().default(0), limit: z.number().int().min(1).max(100).default(30) },
+    workspaceReadAnnotations,
+    wrapActivity("workspace_design_layers")(async ({ offset = 0, limit = 30 }) => {
+        try {
+            const snapshot = JSON.parse(await wsh.workspaceSurfaceSnapshot());
+            if (snapshot.presentation !== "os") throw new Error("Design requires the KronOS OS workspace.");
+            const layers = (snapshot.canvasobjects ?? []).filter((object: { kind?: string }) => object.kind === "pen-layer");
+            return { content: [{ type: "text", text: JSON.stringify({
+                layers: layers.slice(offset, offset + limit),
+                selectedLayerId: layers.find((layer: { id: string }) => layer.id === snapshot.selectedcanvasobjectid)?.id ?? null,
+                nextOffset: offset + limit < layers.length ? offset + limit : null,
+            }) }] };
+        } catch (err) {
+            return { content: [{ type: "text", text: String(err) }], isError: true };
+        }
+    })
+);
+
+async function writeDesignLayer(action: "os.design.create" | "os.design.update", properties: object, objectId?: string) {
+    try {
+        const result = JSON.parse(await wsh.workspaceSurfaceControl({ action, objectId, text: JSON.stringify(properties) }));
+        return { content: [{ type: "text" as const, text: JSON.stringify({
+            success: result.success,
+            message: result.message,
+            selectedLayerId: result.success ? result.snapshot?.selectedcanvasobjectid : undefined,
+        }) }], isError: !result.success };
+    } catch (err) {
+        return { content: [{ type: "text" as const, text: String(err) }], isError: true };
+    }
+}
+
+server.tool(
+    "workspace_design_create_layer",
+    "Create a retained native OS canvas layer. This does not edit the real Pen editor document; use workspace_design_execute for that. Coordinates use KronOS world space. Selects the new layer.",
+    { type: z.enum(["frame", "rectangle", "ellipse", "text", "note", "path"]), ...designLayerFields },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_design_create_layer")(async (properties) => writeDesignLayer("os.design.create", properties))
+);
+
+server.tool(
+    "workspace_design_update_layer",
+    "Edit a retained native OS canvas layer. This does not edit the real Pen editor document; use workspace_design_execute for that. Get layerId with workspace_design_layers. Omitted properties keep their values.",
+    { layerId: z.string().min(1), ...designLayerFields },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_design_update_layer")(async ({ layerId, ...properties }) =>
+        writeDesignLayer("os.design.update", properties, layerId)
+    )
+);
+
+server.tool(
     "workspace_screenshot",
-    "Capture the complete active KronTerm widgets, tabs, canvas, or OS presentation. Use with workspace_snapshot when visual appearance matters; use widget_screenshot for one widget's content.",
+    "Capture the complete active KronOS widgets, tabs, canvas, or OS presentation. Use with workspace_snapshot when visual appearance matters; use widget_screenshot for one widget's content.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_screenshot")(async () => {
         try {
             const result = await wsh.workspaceSurfaceScreenshot();
-            return { content: screenshotContent(result, "Active KronTerm workspace presentation screenshot.") };
+            return { content: screenshotContent(result, "Active KronOS workspace presentation screenshot.") };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }
@@ -1230,8 +1364,8 @@ server.tool(
 
 server.tool(
     "workspace_set_presentation",
-    "Switch the active workspace between tiled widgets, focused widget tabs, spatial canvas, and OS mode. Snapshot again after switching because visibility and geometry semantics change.",
-    { presentation: z.enum(["widgets", "tabs", "canvas", "os"]) },
+    "Switch the active workspace between tiled widgets, focused widget tabs, and OS mode. Snapshot again after switching because visibility and geometry semantics change.",
+    { presentation: z.enum(["widgets", "tabs", "os"]) },
     workspaceWriteAnnotations,
     wrapActivity("workspace_set_presentation")(async ({ presentation }) => {
         try {
@@ -1360,7 +1494,7 @@ server.tool(
 
 server.tool(
     "workspace_open_app",
-    "Open a live application block in the active KronTerm OS workspace.",
+    "Open a live application block in the active KronOS workspace.",
     { view: z.string().min(1) },
     workspaceWriteAnnotations,
     wrapActivity("workspace_open_app")(async ({ view }) => {
@@ -1376,7 +1510,7 @@ server.tool(
 
 server.tool(
     "workspace_open_native_app",
-    "Open an installed desktop application as a live KronTerm OS app-stream session.",
+    "Open an installed desktop application as a live KronOS app-stream session.",
     { appId: z.string().min(1), appName: z.string().min(1).optional() },
     workspaceWriteAnnotations,
     wrapActivity("workspace_open_native_app")(async ({ appId, appName }) => {
@@ -1401,7 +1535,7 @@ server.tool(
 
 server.tool(
     "workspace_set_os_view",
-    "Switch KronTerm OS between Canvas and File without replacing or restarting any live session.",
+    "Switch the OS presentation between Canvas and File without restarting live sessions. Requires OS presentation; inspect workspace_snapshot and use workspace_set_presentation first if needed.",
     { view: z.enum(["canvas", "file"]) },
     workspaceWriteAnnotations,
     wrapActivity("workspace_set_os_view")(async ({ view }) => {
@@ -1444,7 +1578,7 @@ const OSActionNames = [
 server.tool(
     "workspace_os_action",
     [
-        "Run one typed KronTerm OS action on the live desktop (requires OS presentation; call workspace_snapshot first for block IDs and bounds).",
+        "Run one typed KronOS action on the live desktop (requires OS presentation; call workspace_snapshot first for block IDs and bounds).",
         "os.app.launch: view (term|web|preview|hermes|...) or appId+appName for a native app.",
         "os.window.focus|minimize|restore|maximize|close|overview: blockId.",
         "os.window.move: blockId,x,y. os.window.resize: blockId,width,height.",
@@ -1495,7 +1629,7 @@ server.tool(
 
 server.tool(
     "workspace_open_file",
-    "Open a file or directory as a live preview session in the current KronTerm OS workspace.",
+    "Open a file or directory as a live preview session in the current KronOS workspace.",
     { file: z.string().min(1) },
     workspaceWriteAnnotations,
     wrapActivity("workspace_open_file")(async ({ file }) => {
@@ -1516,7 +1650,7 @@ server.tool(
 
 server.tool(
     "workspace_open_command_center",
-    "Open KronTerm's unified command center for apps, sessions, files, settings, and compatibility layouts.",
+    "Open KronOS's unified command center for apps, sessions, files, settings, and compatibility layouts.",
     {},
     workspaceWriteAnnotations,
     wrapActivity("workspace_open_command_center")(async () => {
@@ -1581,7 +1715,7 @@ server.tool(
 
 server.tool(
     "workspace_set_widget_collapsed",
-    "Minimize or restore a live window in KronTerm OS without closing its underlying session.",
+    "Minimize or restore a live window in KronOS without closing its underlying session.",
     { blockId: z.string().min(1), collapsed: z.boolean() },
     workspaceWriteAnnotations,
     wrapActivity("workspace_set_widget_collapsed")(async ({ blockId, collapsed }) => {
@@ -1605,7 +1739,7 @@ server.tool(
 
 server.tool(
     "workspace_show_overview",
-    "Show all live KronTerm OS windows in a calm, flat overview while preserving every session.",
+    "Show all live KronOS windows in overview while preserving every session. Requires OS presentation; inspect workspace_snapshot and use workspace_set_presentation first if needed.",
     { selectedBlockId: z.string().min(1).optional() },
     workspaceWriteAnnotations,
     wrapActivity("workspace_show_overview")(async ({ selectedBlockId }) => {
@@ -1629,7 +1763,7 @@ server.tool(
 
 server.tool(
     "workspace_organize",
-    "Create a named persisted KronTerm workspace or rename an existing workspace. Use workspace_inventory to resolve workspaceId; use the layout and widget tools to organize its contents. Creation preserves the user's current workspace.",
+    "Create a named persisted KronOS workspace or rename an existing workspace. Use workspace_inventory to resolve workspaceId; use the layout and widget tools to organize its contents. Creation preserves the user's current workspace.",
     {
         action: z.enum(["create", "rename"]),
         workspaceId: z.string().min(1).optional(),
@@ -1647,7 +1781,7 @@ server.tool(
 
 server.tool(
     "workspace_switch_workspace",
-    "Switch the active KronTerm window to another persisted workspace.",
+    "Switch the active KronOS window to another persisted workspace.",
     { workspaceId: z.string().min(1) },
     workspaceWriteAnnotations,
     wrapActivity("workspace_switch_workspace")(async ({ workspaceId }) => {
@@ -1751,6 +1885,38 @@ server.tool(
             };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+        }
+    })
+);
+
+server.tool(
+    "workspace_canvas_add_file",
+    "Pin a local file preview card to the active Canvas or OS workspace. Use workspace_snapshot to choose optional world-space coordinates and verify the card. Placement is adjusted to avoid overlap.",
+    {
+        path: z
+            .string()
+            .refine(isAbsoluteLocalFilePath, "An absolute local file path is required")
+            .describe("Absolute path to a file on the KronOS host."),
+        label: z.string().optional().describe("Card title. Defaults to the file name."),
+        x: z.number().finite().optional().describe("World-space x coordinate of the card's left edge."),
+        y: z.number().finite().optional().describe("World-space y coordinate of the card's top edge."),
+    },
+    workspaceWriteAnnotations,
+    wrapActivity("workspace_canvas_add_file")(async ({ path, label, x, y }) => {
+        try {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: await wsh.workspaceSurfaceControl({ action: "add_file", file: path, text: label, x, y }),
+                    },
+                ],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : error}` }],
+                isError: true,
+            };
         }
     })
 );
@@ -1906,7 +2072,7 @@ server.tool(
 
 server.tool(
     "hud_list_islands",
-    "Read the shared HUD widget inventory for the active KronTerm tab, including each live block identity, view, location, selection, owner route, readiness, and visibility. Detached islands also include desktop pixel bounds. Call this before moving, resizing, focusing, arranging, or closing islands.",
+    "Read the shared HUD widget inventory for the active KronOS tab, including each live block identity, view, location, selection, owner route, readiness, and visibility. Detached islands also include desktop pixel bounds. Call this before moving, resizing, focusing, arranging, or closing islands.",
     {},
     workspaceReadAnnotations,
     wrapActivity("hud_list_islands")(async () => {
@@ -1948,7 +2114,7 @@ server.tool(
 
 server.tool(
     "hud_focus_island",
-    "Bring one native HUD island to the front and focus its live widget without revealing the hidden KronTerm window.",
+    "Bring one native HUD island to the front and focus its live widget without revealing the hidden KronOS window.",
     { blockId: z.string().min(1) },
     workspaceWriteAnnotations,
     wrapActivity("hud_focus_island")(async ({ blockId }) => {
@@ -2026,7 +2192,7 @@ server.tool(
 
 server.tool(
     "acp_list_agents",
-    "List installed ACP specialist agents that KronTerm Agent can invoke. Prefer kronoscode for coding and repository work.",
+    "List installed ACP specialist agents that KronOS Agent can invoke. Prefer kronoscode for coding and repository work.",
     {},
     workspaceReadAnnotations,
     wrapActivity("acp_list_agents")(async () => {
@@ -2040,7 +2206,7 @@ server.tool(
 
 server.tool(
     "acp_run_agent",
-    "Run one bounded task with an installed ACP specialist. The child receives the active tab's scoped KronTerm MCP tools and shared skills. The parent Hermes agent keeps its built-in tools and must verify the child's self-reported result. Approval-required child actions fail closed instead of silently escalating privileges.",
+    "Run one bounded task with an installed ACP specialist. The child receives the active tab's scoped KronOS MCP tools and shared skills. The parent Hermes agent keeps its built-in tools and must verify the child's self-reported result. Approval-required child actions fail closed instead of silently escalating privileges.",
     {
         backend: z.string().min(1).default("kronoscode"),
         task: z.string().min(1).max(40_000),
@@ -2223,7 +2389,7 @@ server.tool(
 
 server.tool(
     "browser_open",
-    "Open a URL by reusing and focusing the active KronTerm browser surface. Set newSurface only when another browser must remain visible. Call widget_snapshot after navigation because element refs are document-scoped.",
+    "Open a URL by reusing and focusing the active KronOS browser surface. Set newSurface only when another browser must remain visible. Call widget_snapshot after navigation because element refs are document-scoped.",
     {
         url: z.string().url().describe("URL to open"),
         magnified: z.boolean().optional().describe("Open in magnified mode"),
@@ -2245,7 +2411,7 @@ server.tool(
 
 server.tool(
     "browser_open_tab",
-    "Navigate an existing KronTerm browser widget to a URL in place — browser widgets hold exactly one page, so this replaces the current page rather than adding a tab. Kept as a compatibility alias of browser_navigate; prefers the focused browser and falls back to opening a new widget only when none exists.",
+    "Navigate an existing KronOS browser widget to a URL in place — browser widgets hold exactly one page, so this replaces the current page rather than adding a tab. Kept as a compatibility alias of browser_navigate; prefers the focused browser and falls back to opening a new widget only when none exists.",
     {
         url: z.string().url().describe("URL to navigate the browser widget to"),
         blockId: z.string().optional().describe("Existing browser block ID; defaults to the focused browser widget"),
@@ -2263,7 +2429,7 @@ server.tool(
 
 server.tool(
     "browser_configure",
-    "Configure a KronTerm browser widget's behavior by setting one or more of its supported meta keys: web:zoom (number as string), web:partition (session isolation key), web:useragent (default | mobile:iphone | mobile:android), pinnedurl (homepage lock), url (navigate). Changing useragent or partition reloads the page.",
+    "Configure a KronOS browser widget's behavior by setting one or more of its supported meta keys: web:zoom (number as string), web:partition (session isolation key), web:useragent (default | mobile:iphone | mobile:android), pinnedurl (homepage lock), url (navigate). Changing useragent or partition reloads the page.",
     {
         blockId: z.string().describe("Web block ID"),
         zoom: z
@@ -2297,7 +2463,7 @@ server.tool(
 
 server.tool(
     "browser_navigate",
-    "Navigate an existing KronTerm browser block to a URL, then use widget_snapshot again because document refs change.",
+    "Navigate an existing KronOS browser block to a URL, then use widget_snapshot again because document refs change.",
     {
         blockId: z.string().describe("Web block ID"),
         url: z.string().url().describe("URL to navigate to"),
@@ -2315,7 +2481,7 @@ server.tool(
 
 server.tool(
     "browser_get_html",
-    "Query HTML from an existing KronTerm browser block using a CSS selector.",
+    "Query HTML from an existing KronOS browser block using a CSS selector.",
     {
         blockId: z.string().describe("Web block ID"),
         selector: z.string().min(1).describe("CSS selector"),
@@ -2458,7 +2624,7 @@ server.tool(
 
 server.tool(
     "canvas_load",
-    "Load the full persisted KronTerm canvas document.",
+    "Load the full persisted KronOS canvas document.",
     { workspaceId: z.string().min(1), blockId: z.string().min(1) },
     { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     wrapActivity("canvas_load")(async ({ workspaceId, blockId }) => {
@@ -2492,7 +2658,7 @@ server.tool(
 
 server.tool(
     "canvas_create_node",
-    "Create a typed node in a KronTerm canvas graph.",
+    "Create a typed node in a KronOS canvas graph.",
     { workspaceId: z.string().min(1), blockId: z.string().min(1), node: canvasNodeSchema },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     wrapActivity("canvas_create_node")(async ({ workspaceId, blockId, node }) => {
@@ -2577,7 +2743,7 @@ server.tool(
 
 server.tool(
     "canvas_launch_node",
-    "Launch a launchable canvas node as a live KronTerm block.",
+    "Launch a launchable canvas node as a live KronOS block.",
     {
         workspaceId: z.string().min(1),
         blockId: z.string().min(1),
@@ -2619,7 +2785,7 @@ server.tool(
 
 server.tool(
     "get_block_content",
-    'Get the structured content and live state of any KronTerm block or widget as JSON (supported views: term, web, editor, preview, sandbox, waveai). Use "this" to target the current block.',
+    'Get the structured content and live state of any KronOS block or widget as JSON (supported views: term, web, editor, preview, sandbox, waveai). Use "this" to target the current block.',
     {
         blockId: z.string().optional().describe('Block ID to inspect; omit or "this" targets the current block'),
     },
@@ -2649,7 +2815,7 @@ server.tool(
 
 server.tool(
     "set_config",
-    'Set KronTerm app configuration settings, e.g. {"app:layoutmode": "canvas"} or {"term:fontsize": "14"}. Same effect as editing the setting through KronSettings.',
+    'Set KronOS app configuration settings, e.g. {"app:layoutmode": "os"} or {"term:fontsize": "14"}. Same effect as editing the setting through KronSettings.',
     {
         settings: z.record(z.string()).describe('Config key/value pairs to set, e.g. {"app:layoutmode": "tabs"}'),
     },
@@ -2669,15 +2835,16 @@ server.tool(
 
 server.tool(
     "terminal_open",
-    "Open a shell terminal block. When to use: interactive terminal sessions or long-running processes. When NOT to use: one-shot commands (use block_run_command) or reading files (use file_read/file_list). Creates an interactive terminal surface in the active tab.",
+    "Open a shell terminal block. When to use: interactive terminal sessions or long-running processes. When NOT to use: one-shot commands (use block_run_command) or reading files (use file_read/file_list). Reuses a local shell in the owning tab with a matching cwd by default; inspect its scrollback before input. Set newSurface=true only for a separate process/session. Host terminals do not share files with the sandbox VM.",
     {
-        cwd: z.string().optional().describe("Working directory for the new terminal"),
+        cwd: z.string().optional().describe("Host working directory; reuse requires an exact matching cwd"),
+        newSurface: z.boolean().optional().describe("Explicitly create another terminal instead of reusing one"),
         magnified: z.boolean().optional().describe("Open in magnified mode"),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    wrapActivity("terminal_open")(async ({ cwd, magnified }) => {
+    wrapActivity("terminal_open")(async ({ cwd, magnified, newSurface }) => {
         try {
-            const result = await wsh.openTerminal(cwd, magnified);
+            const result = await wsh.openTerminal(cwd, magnified, newSurface);
             return { content: [{ type: "text", text: result }] };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
@@ -2729,7 +2896,7 @@ server.tool(
 
 server.tool(
     "file_open",
-    "Open a file or directory in a KronTerm preview/file explorer block.",
+    "Open a file or directory in a KronOS preview/file explorer block.",
     {
         path: z.string().describe("File or directory path to open"),
         edit: z.boolean().optional().describe("Open a file in edit mode"),
@@ -2747,7 +2914,7 @@ server.tool(
 
 server.tool(
     "file_list",
-    "List a directory through KronTerm file access. When to use: explore directories or find files. Prefer over running ls in a terminal. When NOT to use: remote SSH directories (list through the remote file URI instead).",
+    "List a directory through KronOS file access. When to use: explore directories or find files. Prefer over running ls in a terminal. When NOT to use: remote SSH directories (list through the remote file URI instead).",
     {
         path: z.string().optional().describe("Directory path or Wave file URI"),
     },
@@ -2763,7 +2930,7 @@ server.tool(
 
 server.tool(
     "file_read",
-    "Read a text file through KronTerm file access. When to use: read file contents for context or analysis. Prefer over cat in a terminal. When NOT to use: large binary files or when the exact terminal environment matters (use terminal tools instead).",
+    "Read a text file through KronOS file access. When to use: read file contents for context or analysis. Prefer over cat in a terminal. When NOT to use: large binary files or when the exact terminal environment matters (use terminal tools instead).",
     {
         path: z.string().describe("File path or Wave file URI"),
     },
@@ -2779,7 +2946,7 @@ server.tool(
 
 server.tool(
     "file_info",
-    "Get metadata for a file or directory through KronTerm file access. When to use: check existence, size, or modification time before reading or acting.",
+    "Get metadata for a file or directory through KronOS file access. When to use: check existence, size, or modification time before reading or acting.",
     {
         path: z.string().describe("File path or Wave file URI"),
     },
@@ -2959,7 +3126,7 @@ server.tool(
 
 server.tool(
     "widget_snapshot",
-    "Capture a screenshot and interactive elements with positions, roles, and names. Call this FIRST to see what's on screen.",
+    "Capture a screenshot and interactive elements with positions, roles, and names. Call this FIRST to see what's on screen. If a browser account handoff is requested, ask the user to finish in that widget and wait for Return to agent. Never ask for passwords or verification codes in chat.",
     { blockId: z.string().describe("Block ID to inspect") },
     wrapActivity("widget_snapshot")(async ({ blockId }) => {
         try {
@@ -3065,7 +3232,7 @@ server.tool(
 
 server.tool(
     "widget_click",
-    "Click an element by ref (@e3) or at coordinates (x, y) within a KronTerm block. When to use: content inside a KronTerm block (forms, canvas, browser page). Prefer elementRef from widget_snapshot over coordinates. When NOT to use: the isolated sandbox VM (use linux_desktop_click) or native macOS apps (use kron_computer_click).",
+    "Click an element by ref (@e3) or at coordinates (x, y) within a KronOS block. When to use: content inside a KronOS block (forms, canvas, browser page). Prefer elementRef from widget_snapshot over coordinates. When NOT to use: the isolated sandbox VM (use linux_desktop_click) or native macOS apps (use kron_computer_click).",
     {
         blockId: z.string().describe("Block ID"),
         elementRef: z.string().optional().describe("Element ref from snapshot, e.g. @e3 (provide OR x/y)"),
@@ -3120,7 +3287,7 @@ server.tool(
 
 server.tool(
     "widget_mouse_move",
-    "Move the mouse over an element by ref (@e3) or to coordinates (x, y) within a KronTerm block. When to use: KronTerm block content only. When NOT to use: the sandbox VM (use linux_desktop_click) or native macOS apps (use kron_computer pointer tools). Alias for hover semantics, useful before click/drag.",
+    "Move the mouse over an element by ref (@e3) or to coordinates (x, y) within a KronOS block. When to use: KronOS block content only. When NOT to use: the sandbox VM (use linux_desktop_click) or native macOS apps (use kron_computer pointer tools). Alias for hover semantics, useful before click/drag.",
     {
         blockId: z.string().describe("Block ID"),
         elementRef: z.string().optional().describe("Element ref to move over"),
@@ -3154,7 +3321,7 @@ server.tool(
 
 server.tool(
     "widget_type",
-    "Type text into a focused KronTerm block. When to use: text entry inside a block. When NOT to use: the sandbox VM (use linux_desktop_type) or native macOS apps (use kron_computer_type_text). For special keys (Enter, Tab, etc.), use widget_press instead.",
+    "Type text into a focused KronOS block. When to use: text entry inside a block. When NOT to use: the sandbox VM (use linux_desktop_type) or native macOS apps (use kron_computer_type_text). For special keys (Enter, Tab, etc.), use widget_press instead.",
     {
         blockId: z.string().describe("Block ID"),
         text: z.string().describe("Text to type"),
@@ -3368,6 +3535,7 @@ server.tool(
         condition: z.enum(["visible", "hidden", "focused", "enabled", "disabled"]).describe("Condition to wait for"),
         timeoutMs: z.number().int().min(100).max(60000).optional().describe("Timeout in ms (default: 10000)"),
     },
+    { readOnlyHint: true },
     wrapActivity("widget_wait_for")(async ({ blockId, elementRef, condition, timeoutMs }) => {
         try {
             const result = await wsh.widgetWaitFor(blockId, condition, elementRef, timeoutMs);
@@ -3450,7 +3618,7 @@ server.tool(
 
 server.tool(
     "notify",
-    "Create a desktop notification through KronTerm.",
+    "Create a desktop notification through KronOS.",
     {
         message: z.string().min(1).describe("Notification message text"),
         title: z.string().optional().describe("Notification title (default: 'Wsh Notify')"),
@@ -3598,7 +3766,7 @@ server.tool("connection_disconnect_all", "Disconnect all SSH and WSL connections
 
 server.tool(
     "ai_append",
-    "Append content (text + optional file attachments) to the KronTerm AI sidebar prompt.",
+    "Append content (text + optional file attachments) to the KronOS AI sidebar prompt.",
     {
         message: z.string().min(1).describe("Message/question to append to the AI prompt"),
         files: z.array(z.string()).optional().describe("File paths to attach"),
@@ -3790,14 +3958,14 @@ server.tool(
 
 server.tool(
     "developer_action_registry",
-    "List KronTerm's typed action registry. This is the CopilotOne-style action contract for widgets, memory, sessions, and pipelines.",
+    "List KronOS's typed action registry. This is the CopilotOne-style action contract for widgets, memory, sessions, and pipelines.",
     {},
     async () => jsonText({ actions: DeveloperActionRegistry })
 );
 
 server.tool(
     "get_memories",
-    "List developer memories. Adapted from Omi's get_memories tool for KronTerm project/workspace memory.",
+    "List developer memories. Adapted from Omi's get_memories tool for KronOS project/workspace memory.",
     {
         limit: z.number().int().min(1).max(500).optional().describe("Maximum memories to return"),
         offset: z.number().int().min(0).optional().describe("Offset into the memory list"),
@@ -3943,7 +4111,7 @@ server.tool(
 
 server.tool(
     "create_workspace_session",
-    "Create a KronTerm workspace session. This is the developer equivalent of Omi's conversation record.",
+    "Create a KronOS workspace session. This is the developer equivalent of Omi's conversation record.",
     {
         title: z.string().optional().describe("Session title"),
         scope: memoryScopeSchema.describe("Workspace/repo/block scope"),
@@ -3959,7 +4127,7 @@ server.tool(
 
 server.tool(
     "get_workspace_sessions",
-    "List KronTerm workspace sessions.",
+    "List KronOS workspace sessions.",
     {
         limit: z.number().int().min(1).max(500).optional().describe("Maximum sessions"),
         offset: z.number().int().min(0).optional().describe("Offset into session list"),
@@ -3976,7 +4144,7 @@ server.tool(
 
 server.tool(
     "get_workspace_session",
-    "Get a KronTerm workspace session by ID, including captured events and linked memory/action IDs.",
+    "Get a KronOS workspace session by ID, including captured events and linked memory/action IDs.",
     {
         sessionId: z.string().min(1).describe("Workspace session ID"),
     },
@@ -3991,7 +4159,7 @@ server.tool(
 
 server.tool(
     "search_workspace_sessions",
-    "Search KronTerm workspace sessions by title, summary, commands, URLs, paths, and event details.",
+    "Search KronOS workspace sessions by title, summary, commands, URLs, paths, and event details.",
     {
         query: z.string().min(1).describe("Search query"),
         limit: z.number().int().min(1).max(100).optional().describe("Maximum results"),
@@ -4007,7 +4175,7 @@ server.tool(
 
 server.tool(
     "get_conversations",
-    "Omi-compatible alias for get_workspace_sessions. In KronTerm, conversations are developer workspace sessions.",
+    "Omi-compatible alias for get_workspace_sessions. In KronOS, conversations are developer workspace sessions.",
     {
         limit: z.number().int().min(1).max(500).optional().describe("Maximum sessions"),
         offset: z.number().int().min(0).optional().describe("Offset into session list"),
@@ -4024,7 +4192,7 @@ server.tool(
 
 server.tool(
     "get_conversation_by_id",
-    "Omi-compatible alias for get_workspace_session. In KronTerm, the conversation ID is a workspace session ID.",
+    "Omi-compatible alias for get_workspace_session. In KronOS, the conversation ID is a workspace session ID.",
     {
         conversationId: z.string().min(1).describe("Workspace session/conversation ID"),
     },
@@ -4316,16 +4484,33 @@ async function discoverableManifest(): Promise<NativeToolManifestEntry[]> {
 
 server.tool(
     "tool_search",
-    "Search enabled tools by name and description, with optional input schemas and read-only filtering. Discovery does not grant execution authority.",
+    "Search the current scoped catalog by task, tool name, or family. Use an empty query for available family counts; page with nextOffset, and request includeSchemas for exact arguments. Enabled does not mean the target runtime is ready. Discovery grants no authority.",
     {
         query: z.string().max(500).default(""),
         limit: z.number().int().min(1).max(100).default(20),
+        offset: z.number().int().min(0).default(0),
+        family: z.enum(Object.keys(KronTermToolFamilies) as [KronTermToolFamilyId, ...KronTermToolFamilyId[]]).optional(),
         readOnly: z.boolean().optional(),
         includeSchemas: z.boolean().default(false),
     },
     workspaceReadAnnotations,
-    async ({ query, limit, readOnly, includeSchemas }) =>
-        jsonText(searchTools(await discoverableManifest(), query, { limit, readOnly, includeSchemas }))
+    async ({ query, limit, offset, family, readOnly, includeSchemas }) => {
+        const capability = await wsh.getDiscoverySurfaceCapability();
+        const tools = nativeToolManifest((name) => isToolAllowedBySurfaceCapability(name, capability));
+        return jsonText({
+            ...searchTools(tools, query, { limit, offset, family, readOnly, includeSchemas }),
+            observedAt: new Date().toISOString(),
+            scope: capability ? {
+                workspaceId: capability.workspaceId,
+                tabId: capability.tabId,
+                blockId: capability.blockId,
+                hostMode: capability.hostMode,
+                sandboxComputerId: capability.sandboxComputerId,
+                sandboxComputerMode: capability.sandboxComputerMode,
+                delegationScope: capability.delegationScope,
+            } : undefined,
+        });
+    }
 );
 
 server.tool(
@@ -4404,13 +4589,16 @@ for (const [name, tool] of Object.entries(executionRegistry) as Array<[string, a
             tool.annotations?.readOnlyHint === true,
             async () => {
                 await assertBackgroundWorkspaceToolAllowed(name, args);
+                const invoke = async () => {
+                    ToolOperationContext.getStore()?.signal.throwIfAborted();
+                    return handler(args, extra);
+                };
                 return wsh.withWorkflowRun(name, args, () =>
-                    targetable
-                        ? wsh.withToolTarget(args, () => Promise.resolve(handler(args, extra)))
-                        : Promise.resolve(handler(args, extra))
+                    targetable ? wsh.withToolTarget(args, invoke) : invoke()
                 );
             },
-            extra?.signal
+            extra?.signal,
+            extra?.trackOperation
         );
 }
 
@@ -4419,6 +4607,7 @@ for (const [name, tool] of Object.entries(executionRegistry) as Array<[string, a
 // ══════════════════════════════════════════════════════════════════════════
 
 export async function startKronTermMcpServer(): Promise<void> {
+    disableSwarmTools();
     const transport = new StdioServerTransport();
     process.once("exit", () => kronComputerUse.close());
     process.once("SIGINT", () => {

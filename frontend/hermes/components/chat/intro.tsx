@@ -1,8 +1,7 @@
-import { type CSSProperties, useState } from "react";
+import { useState } from "react";
 
 import { useHermesShellMode } from "@hermes/lib/kronterm-host";
 import { capitalize, normalize } from "@hermes/lib/text";
-import { cn } from "@hermes/lib/utils";
 
 import introCopyJsonl from "./intro-copy.jsonl?raw";
 
@@ -32,7 +31,7 @@ const FALLBACK_COPY: IntroCopy[] = [
         body: "Bring the code, question, or stuck part. I'll read the room before making changes.",
     },
     {
-        headline: "What should KronTerm look at?",
+        headline: "What should KronOS look at?",
         body: "Send the task, failing path, or half-formed plan. I'll help turn it into action.",
     },
     {
@@ -146,8 +145,6 @@ function pickCopy(copies: IntroCopy[], seed = 0): IntroCopy {
     return copies[Math.abs(seed) % copies.length] || FALLBACK_COPY[0];
 }
 
-const WORDMARK = "HERMES AGENT";
-
 function resolveCopy(personality?: string, seed?: number): IntroCopy {
     const personalityKey = normalizeKey(personality);
 
@@ -165,33 +162,17 @@ export function Intro({ personality, seed }: IntroProps) {
 
     return (
         <div
-            className="pointer-events-none flex w-full min-w-0 flex-col items-center justify-center px-0.5 py-6 text-center text-muted-foreground sm:px-6 lg:px-8"
+            className="flex w-full min-w-0 flex-col items-center px-4 py-6 text-center sm:px-8"
             data-slot="aui_intro"
         >
             <div className="w-full min-w-0">
-                <p
-                    aria-label={panelMode ? "KronTerm Agent" : WORDMARK}
-                    className={cn(
-                        "mx-auto mb-2 w-[calc(100%-1rem)] text-midground dark:text-foreground/90",
-                        panelMode
-                            ? "text-[clamp(1.5rem,7cqi,2rem)] font-semibold leading-tight tracking-tight"
-                            : "fit-text font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] mix-blend-plus-lighter"
-                    )}
-                    style={panelMode ? undefined : ({ "--fit-min": "2.75rem" } as CSSProperties)}
-                >
-                    {panelMode ? (
-                        "KronTerm Agent"
-                    ) : (
-                        <>
-                            <span>
-                                <span>{WORDMARK}</span>
-                            </span>
-                            <span aria-hidden="true">{WORDMARK}</span>
-                        </>
-                    )}
+                <p className="m-0 text-[0.6875rem] font-semibold tracking-[0.1em] text-(--ui-text-secondary) uppercase">
+                    {panelMode ? "KronOS Agent" : "Hermes Agent"}
                 </p>
-
-                <p className="m-0 text-center leading-normal tracking-tight">{copy.body}</p>
+                <h2 className="mx-auto mt-2.5 mb-2 max-w-[24ch] text-[clamp(1.25rem,4cqi,1.75rem)] leading-tight font-semibold tracking-tight text-(--ui-text-primary) text-balance">
+                    {copy.headline}
+                </h2>
+                <p className="m-0 text-pretty">{copy.body}</p>
             </div>
         </div>
     );

@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { ClientService, ObjectService, WindowService, WorkspaceService } from "@/app/store/services";
@@ -20,8 +20,9 @@ import { getElectronAppBasePath, isDev, unamePlatform } from "./emain-platform";
 import { getOrCreateWebViewForTab, getWaveTabViewByWebContentsId, WaveTabView } from "./emain-tabview";
 import { delay, ensureBoundsAreVisible, waveKeyToElectronKey } from "./emain-util";
 import { ElectronWshClient } from "./emain-wsh";
-import { updater } from "./updater";
 import { installOSOverviewGestures } from "./os-overview-gestures";
+import { updater } from "./updater";
+import { activateExistingWorkspace } from "./workspace-activation";
 
 const DevInitTimeoutMs = 5000;
 
@@ -179,7 +180,7 @@ export class WaveBrowserWindow extends BaseWindow {
                 symbolColor: "white",
                 color: "#00000000",
             };
-            winOpts.icon = path.join(getElectronAppBasePath(), "public/logos/wave-logo-dark.png");
+            winOpts.icon = path.join(getElectronAppBasePath(), "frontend/logos/kronterm-icon.png");
             winOpts.autoHideMenuBar = !settings?.["window:showmenubar"];
             if (isTransparent) {
                 winOpts.transparent = true;
@@ -233,7 +234,7 @@ export class WaveBrowserWindow extends BaseWindow {
         }, 1000);
         this.on(
             "resize",
-            debounce(400, (e) => this.mainResizeHandler(e))
+            debounce(400, () => { void this.mainResizeHandler(); })
         );
         this.on("resize", () => {
             if (this.isDestroyed()) {
@@ -243,7 +244,7 @@ export class WaveBrowserWindow extends BaseWindow {
         });
         this.on(
             "move",
-            debounce(400, (e) => this.mainResizeHandler(e))
+            debounce(400, () => { void this.mainResizeHandler(); })
         );
         this.on("enter-full-screen", async () => {
             if (this.isDestroyed()) {
@@ -631,7 +632,7 @@ export class WaveBrowserWindow extends BaseWindow {
         }
     }
 
-    private async mainResizeHandler(_: any) {
+    private async mainResizeHandler() {
         if (this == null || this.isDestroyed() || this.fullScreen) {
             return;
         }
@@ -930,7 +931,7 @@ export async function relaunchBrowserWindows() {
 
 let lastFocusedWaveWindow: WaveBrowserWindow = null;
 
-// The HUD hides its owning window, so the renderer keybinding cannot reach it from other apps.
+// Exclusive HUD placement hides its owner, so its shortcut must remain reachable from other apps.
 export function registerNotchHotkey(rawNotchHotKey: string) {
     try {
         const electronHotKey = waveKeyToElectronKey(rawNotchHotKey);
@@ -954,13 +955,7 @@ export function registerGlobalHotkey(rawGlobalHotKey: string) {
         const electronHotKey = waveKeyToElectronKey(rawGlobalHotKey);
         console.log("registering globalhotkey of ", electronHotKey);
         globalShortcut.register(electronHotKey, () => {
-            const selectedWindow = focusedWaveWindow;
-            const firstWaveWindow = getAllWaveWindows()[0];
-            if (focusedWaveWindow) {
-                selectedWindow.focus();
-            } else if (firstWaveWindow) {
-                firstWaveWindow.focus();
-            } else {
+            if (!activateExistingWorkspace(getAllWaveWindows(), focusedWaveWindow)) {
                 fireAndForget(createNewWaveWindow);
             }
         });

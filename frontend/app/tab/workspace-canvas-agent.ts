@@ -345,7 +345,7 @@ export function buildCanvasContextPrompt(
         .map(
             (node, index) =>
                 `${index + 1}. ${node.title} [${node.surface}/${node.phase}/${node.action}]${
-                    node.blockid ? `\nKronTerm block: ${node.blockid}` : ""
+                    node.blockid ? `\nKronOS block: ${node.blockid}` : ""
                 }\n${node.detail.trim()}`
         )
         .join("\n\n");

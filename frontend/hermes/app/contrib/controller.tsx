@@ -814,7 +814,7 @@ export function ContribController() {
         return (
             <ContribWiring>
                 <section
-                    aria-label="KronTerm Agent workspace conversation"
+                    aria-label="KronOS Agent workspace conversation"
                     className="@container relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-(--ui-bg) text-(--ui-text-primary)"
                     data-kronterm-panel-shell=""
                 >

@@ -20,6 +20,7 @@ export default defineConfig({
         root: ".",
         build: {
             target: NODE,
+            sourcemap: ProductionSourceMaps,
             rollupOptions: {
                 input: {
                     index: "emain/emain.ts",
@@ -67,6 +68,7 @@ export default defineConfig({
         plugins: [tsconfigPaths({ ignoreConfigErrors: true })],
     },
     renderer: {
+        base: "./",
         root: ".",
         cacheDir: "node_modules/.vite/kronterm-renderer",
         build: {
@@ -78,6 +80,8 @@ export default defineConfig({
                     index: "index.html",
                     pet: "pet.html",
                     overlay: "overlay.html",
+                    signin: "signin.html",
+                    "selector-toolbar": "selector-toolbar.html",
                 },
                 output: {
                     manualChunks(id) {
@@ -153,6 +157,9 @@ export default defineConfig({
                 ignored: [
                     "**/third_party/**",
                     "**/integrations/n8n/upstream/**",
+                    "**/integrations/comfyui/upstream/**",
+                    "**/public/comfy-native/**",
+                    "**/public/pen/**",
                     "**/vendor/**",
                     "**/kronoscoder/**",
                     "**/UI-TARS-desktop/**",
@@ -194,7 +201,7 @@ export default defineConfig({
                 svgrOptions: { exportType: "default", ref: true, svgo: false, titleProp: true },
                 include: "**/*.svg",
             }),
-            react({}),
+            react({ exclude: [/node_modules/, /\/frontend\/(?:signin|app\/components\/ui\/modern-stunning-sign-in)\.tsx$/] }),
             tailwindcss(),
         ],
     },

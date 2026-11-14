@@ -35,9 +35,9 @@ describe("activeAgentPresences", () => {
 
     it("keeps in-flight activity and labels the agent", () => {
         const [presence] = activeAgentPresences([activity({ blockid: "b1" })], 1_200);
-        expect(presence.agent).toBe("KronTerm Agent");
+        expect(presence.agent).toBe("KronOS Agent");
         expect(presence.blockId).toBe("b1");
-        expect(describeAgentPresence(presence)).toBe("KronTerm Agent · click Save");
+        expect(describeAgentPresence(presence)).toBe("KronOS Agent · click Save");
     });
 
     it("expires activity that never reported completion", () => {
@@ -80,8 +80,8 @@ describe("assignAgentPresencesToWindows", () => {
 
 describe("agentLabelForSource", () => {
     it("names each engine", () => {
-        expect(agentLabelForSource("hermes")).toBe("KronTerm Agent");
+        expect(agentLabelForSource("hermes")).toBe("KronOS Agent");
         expect(agentLabelForSource("acp")).toBe("KronosCode");
-        expect(agentLabelForSource("mcp")).toBe("KronTerm Agent");
+        expect(agentLabelForSource("mcp")).toBe("KronOS Agent");
     });
 });

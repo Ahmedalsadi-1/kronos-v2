@@ -6,13 +6,8 @@
     justify-content: center;
     min-width: 26px;
     min-height: 26px;
-    background: none;
-    border: 1px solid transparent;
-    border-radius: 5px;
     padding: 2px;
-    color: inherit;
     font: inherit;
-    outline: none;
     transition:
         background-color 160ms ease,
         border-color 160ms ease,
@@ -31,7 +26,6 @@
     }
 
     &:hover {
-        background: var(--surface-hover-color);
         opacity: 1;
     }
 

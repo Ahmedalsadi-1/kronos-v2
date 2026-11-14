@@ -85,7 +85,7 @@ export function resolveLspQueryPaths(
     const requestedFile = path.isAbsolute(filePath) ? filePath : path.join(resolvedWorkspace, filePath);
     const resolvedFile = fs.realpathSync(path.resolve(requestedFile));
     if (!isContainedPath(resolvedWorkspace, resolvedFile)) {
-        throw new Error("LSP file must be contained by the KronTerm workspace");
+        throw new Error("LSP file must be contained by the KronOS workspace");
     }
     const stat = fs.statSync(resolvedFile);
     if (!stat.isFile()) {

@@ -1,0 +1,24 @@
+<template>
+<style>
+@font-face{font-family:Inter;src:url("assets/fonts/inter.woff2");font-weight:100 900}
+#root{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:#eef0f2;color:#191b20;font-family:Inter,sans-serif}
+#ending-lockup{position:absolute;left:0;right:0;top:300px;display:flex;justify-content:center;align-items:center;gap:20px}
+#ending-mark{width:154px;height:154px}
+#ending-name{font-size:166px;font-weight:700;letter-spacing:-.065em;line-height:1;margin:0;padding:0 15px 13px 0}
+#ending-line{position:absolute;left:0;right:0;top:523px;margin:0;text-align:center;font-size:47px;font-weight:480;letter-spacing:-.035em}
+#ending-status{position:absolute;left:0;right:0;top:625px;text-align:center;font-size:28px;color:#575b62;font-weight:450}
+</style>
+<div id="root" data-composition-id="ending" data-width="1920" data-height="1080" data-duration="3">
+<div id="ending-lockup"><img id="ending-mark" src="assets/kronos.png" alt=""><h1 id="ending-name">KronOS</h1></div>
+<p id="ending-line">Your whole workflow. Within reach.</p><p id="ending-status">Private beta</p>
+</div>
+<script>
+const tl=gsap.timeline({paused:true});
+tl.from("#ending-mark",{scale:.85,x:18,opacity:0,duration:.65,ease:"power3.out"},0)
+ .from("#ending-name",{clipPath:"inset(0 100% 0 0)",duration:.65,ease:"power3.inOut"},.05)
+ .from("#ending-line",{opacity:0,y:16,duration:.5,ease:"power3.out"},.33)
+ .from("#ending-status",{opacity:0,duration:.3},.5);
+tl.to({},{duration:.01},2.99);
+window.__timelines.ending=tl;
+</script>
+</template>

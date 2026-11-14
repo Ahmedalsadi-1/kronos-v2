@@ -984,7 +984,7 @@ function supportsAcpMcpServer(runtime: AcpRuntimeRecord | undefined, server: MCP
 }
 
 const settingsTabs: Array<{ id: SettingsTab; label: string; icon: string; sections: SettingsSection[] }> = [
-    { id: "kronterm", label: "Kronterm", icon: "fa-gear", sections: ["defaults", "runtimes", "workspace"] },
+    { id: "kronterm", label: "KronOS", icon: "fa-gear", sections: ["defaults", "runtimes", "workspace"] },
     { id: "agents", label: "Agents", icon: "fa-robot", sections: ["agents"] },
     { id: "commands", label: "Commands", icon: "fa-terminal", sections: ["commands"] },
     { id: "skills", label: "Skills", icon: "fa-book", sections: ["skills"] },
@@ -1120,9 +1120,9 @@ export const SettingsPanel = memo(
                         <div>
                             <div className="text-sm font-semibold text-[#eeeeee]">Settings</div>
                             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[#6b6863]">
-                                <span>Configure KronTerm and agents</span>
+                                <span>Configure KronOS and agents</span>
                                 <Badge variant="outline" className="border-[#34322f] text-[#8a8580]">
-                                    KronTerm
+                                    KronOS
                                 </Badge>
                                 <Badge variant="outline" className="border-[#34322f] text-[#8a8580]">
                                     Kronos agent
@@ -1425,7 +1425,7 @@ export const SettingsPanel = memo(
                                 <div className="mt-5 border-t border-[#2a2a2a] pt-5">
                                     <div className="mb-1 text-sm font-semibold text-[#d4d4d4]">Agent configuration</div>
                                     <p className="mb-4 text-[#8a8580]">
-                                        Save a Kronterm agent definition and publish its model default to compatible ACP
+                                        Save a KronOS agent definition and publish its model default to compatible ACP
                                         runtimes. Runtime modes remain configured under Providers.
                                     </p>
                                     <label className="mb-3 block">
@@ -1992,7 +1992,7 @@ export const SettingsPanel = memo(
                             <section>
                                 <div className="mb-2 text-sm font-semibold text-[#d4d4d4]">KronosCode Marketplace</div>
                                 <p className="mb-5 leading-relaxed text-[#8a8580]">
-                                    Create KronosCoder configs from curated KronTerm sections. Installed presets are
+                                    Create KronosCoder configs from curated KronOS sections. Installed presets are
                                     saved into the same ACP agent, command, and skill stores used by chat.
                                 </p>
                                 <div className="grid gap-3 @xl:grid-cols-2">
@@ -2074,15 +2074,15 @@ export const SettingsPanel = memo(
                                             title: "Kronos UI skill",
                                             icon: "fa-book",
                                             description:
-                                                "Create a skill with KronTerm UI conventions for composer, widgets, and dense app surfaces.",
+                                                "Create a skill with KronOS UI conventions for composer, widgets, and dense app surfaces.",
                                             action: () =>
                                                 onSaveSkill("kronos-ui", {
                                                     name: "kronos-ui",
                                                     scope: "project",
                                                     backend: "kronoscode",
-                                                    description: "KronTerm and KronosCode UI implementation guidance.",
+                                                    description: "KronOS and KronosCode UI implementation guidance.",
                                                     instructions:
-                                                        "Build dense, usable KronTerm interfaces that match existing dark workspace patterns. Prefer direct controls, compact panels, lucide or FontAwesome icons, and ACP-backed state over static mockups.",
+                                                        "Build dense, usable KronOS interfaces that match existing dark workspace patterns. Prefer direct controls, compact panels, lucide or FontAwesome icons, and ACP-backed state over static mockups.",
                                                 }),
                                         },
                                         {

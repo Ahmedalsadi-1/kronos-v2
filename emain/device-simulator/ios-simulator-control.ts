@@ -4,9 +4,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { DeviceSelectedElement } from "../../frontend/types/computer-targets";
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from "./orca-ios/emulator-gesture-sender";
 import { MjpegFrameStream } from "./orca-ios/mjpeg-frame-stream";
-import { normalizeServeSimAxTree } from "./orca-ios/serve-sim-ax-normalization";
+import { normalizeServeSimAxTree, type NormalizedAxNode } from "./orca-ios/serve-sim-ax-normalization";
 import { waitForServeSimEndpointReady } from "./orca-ios/serve-sim-endpoint-readiness";
 import { computerOutput } from "./upstream/openmuse/computer-output";
 
@@ -235,5 +236,40 @@ export class IosSimulatorControl {
         const tree = JSON.parse(text);
         if (!Array.isArray(tree)) throw new Error("Simulator returned an invalid accessibility tree.");
         return normalizeServeSimAxTree(tree);
+    }
+
+    async pickElement(udid: string, x: number, y: number): Promise<DeviceSelectedElement> {
+        const tree = await this.accessibility(udid);
+        let selected: DeviceSelectedElement;
+        let smallestArea = Infinity;
+        const visit = (node: NormalizedAxNode, application?: string) => {
+            const role = node.role || node.type || "Element";
+            if (/^(AX)?Application$/i.test(node.type) || role.toLowerCase() === "application") {
+                application = node.label.slice(0, 250) || undefined;
+            }
+            const frame = node.frame;
+            const area = frame.width * frame.height;
+            if (
+                frame.width > 0 &&
+                frame.height > 0 &&
+                area <= smallestArea &&
+                x >= frame.x &&
+                x < frame.x + frame.width &&
+                y >= frame.y &&
+                y < frame.y + frame.height
+            ) {
+                selected = {
+                    application,
+                    role: role.slice(0, 150),
+                    name: /secure|password/i.test(`${role} ${node.type}`) ? undefined : node.label.slice(0, 250),
+                    id: node.id?.slice(0, 300),
+                    frame,
+                };
+                smallestArea = area;
+            }
+            for (const child of node.children) visit(child, application);
+        };
+        for (const node of tree) visit(node);
+        return selected ?? null;
     }
 }

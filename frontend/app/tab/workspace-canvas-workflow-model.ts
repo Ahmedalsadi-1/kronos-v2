@@ -10,6 +10,7 @@ export type CanvasWorkflowDraft = {
     title: string;
     graph: WorkflowGraph;
     target?: Pick<WorkflowTarget, "environment" | "computerId" | "repository">;
+    savedWorkflow?: { id: string; version: number; dirty?: boolean };
 };
 
 export function emptyCanvasWorkflow(): CanvasWorkflowDraft {
@@ -19,19 +20,32 @@ export function emptyCanvasWorkflow(): CanvasWorkflowDraft {
 export function makeCanvasWorkflowDefinition(
     draft: CanvasWorkflowDraft,
     target: WorkflowTarget,
-    liveBlockIds: string[]
+    liveBlockIds: string[],
+    saved?: WorkflowDefinition
 ): WorkflowDefinition {
     if (!draft.title.trim()) throw new Error("Give this workflow a name before saving or running.");
     if (draft.graph.nodes.some((node) => node.blockId && !liveBlockIds.includes(node.blockId)))
         throw new Error("A bound widget was closed. Remove or rebind its node before running.");
+    if (
+        saved &&
+        (target.workspaceId !== saved.target.workspaceId ||
+            target.tabId !== saved.target.tabId ||
+            target.environment !== saved.target.environment ||
+            target.computerId !== (saved.target.computerId || undefined) ||
+            target.repository !== (saved.target.repository || undefined) ||
+            target.blockIds.some((id) => !saved.target.blockIds.includes(id)))
+    ) {
+        throw new Error("The execution scope changed. Save as a new workflow to use these targets.");
+    }
+    const executionTarget = saved?.target ?? target;
     return {
-        id: `canvas-${crypto.randomUUID()}`,
+        id: saved?.id ?? `canvas-${crypto.randomUUID()}`,
         title: draft.title,
-        kind: "automation",
-        target,
-        parameters: { task: draft.title },
+        kind: saved?.kind ?? "automation",
+        target: executionTarget,
+        parameters: saved?.parameters ?? { task: draft.title },
         graph: structuredClone(draft.graph),
-        steps: compileWorkflowGraph(draft.graph, target),
+        steps: compileWorkflowGraph(draft.graph, executionTarget),
     };
 }
 

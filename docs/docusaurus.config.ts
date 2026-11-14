@@ -86,7 +86,7 @@ const config: Config = {
             logo: {
                 alt: "KronTerm",
                 src: "img/logo/kronterm-icon.svg",
-                srcDark: "img/logo/kronterm-icon.svg",
+                srcDark: "img/logo/kronterm-icon-dark.svg",
                 href: "https://www.kronterm.dev/",
             },
             hideOnScroll: true,

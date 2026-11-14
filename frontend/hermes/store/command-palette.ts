@@ -1,49 +1,55 @@
 import { atom } from 'nanostores'
 
 import { releaseTypingFocus } from '@hermes/components/ui/keyboard-first'
+import { $workspaceCanvasPanels } from '@hermes/lib/kronterm-sidebar'
 
-/** Whether the global command palette (Cmd/Ctrl+K) is currently open. */
 export const $commandPaletteOpen = atom(false)
-
-/** Optional nested page to open when the palette next opens (e.g. `pets`). */
 export const $commandPalettePage = atom<string | null>(null)
 
+export type WorkflowPickerSource = 'n8n' | 'comfy-nodes' | 'comfy-models' | 'commands'
+export type WorkflowPickerTarget = { element: HTMLDivElement; overflow: HTMLElement; query: string; tabId: string }
+export const $workflowPickerSource = atom<WorkflowPickerSource | null>(null)
+export const $workflowPickerCommandTarget = atom<WorkflowPickerTarget | null>(null)
+export const $workflowPickerComfyTarget = atom<WorkflowPickerTarget | null>(null)
+
 export function openCommandPalette(): void {
+  if ($workspaceCanvasPanels.get()) {
+    $workflowPickerSource.set('commands')
+    return
+  }
   $commandPaletteOpen.set(true)
 }
 
-/** Open the palette directly on a nested page (`theme`, `pets`, …). */
 export function openCommandPalettePage(page: string): void {
   $commandPalettePage.set(page)
-  $commandPaletteOpen.set(true)
+  openCommandPalette()
 }
 
-// Closing hands the keyboard back to the composer — a hotkey-opened overlay
-// owes typing focus to whatever the user was writing, not to its trigger.
-// Skipped when the palette action itself moved focus (navigating to a route,
-// opening a dialog): those surfaces claim focus after this runs.
-function setOpen(open: boolean): void {
-  const wasOpen = $commandPaletteOpen.get()
-
-  $commandPaletteOpen.set(open)
-
-  if (!open) {
-    $commandPalettePage.set(null)
-
-    if (wasOpen) {
-      releaseTypingFocus()
-    }
-  }
+export function closeWorkflowPicker(): void {
+  $workflowPickerSource.set(null)
+  $commandPalettePage.set(null)
 }
 
 export function closeCommandPalette(): void {
-  setOpen(false)
+  setCommandPaletteOpen(false)
 }
 
 export function setCommandPaletteOpen(open: boolean): void {
-  setOpen(open)
+  if (open) {
+    openCommandPalette()
+    return
+  }
+  const wasOpen = $commandPaletteOpen.get()
+  $commandPaletteOpen.set(false)
+  closeWorkflowPicker()
+  if (wasOpen) releaseTypingFocus()
 }
 
 export function toggleCommandPalette(): void {
-  setOpen(!$commandPaletteOpen.get())
+  if ($workspaceCanvasPanels.get()) {
+    if ($workflowPickerSource.get()) closeWorkflowPicker()
+    else openCommandPalette()
+    return
+  }
+  setCommandPaletteOpen(!$commandPaletteOpen.get())
 }

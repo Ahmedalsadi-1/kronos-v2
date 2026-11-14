@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+
+    <g class="kronterm-cube" stroke="#d8dfe8" stroke-width="1.65" stroke-linejoin="round">
+        <path d="M5.5 13.4 24 24.1v21.3L5.5 34.7Z" fill="#1b1f26"/>
+        <path d="M24 24.1 42.5 13.4v21.3L24 45.4Z" fill="#242a32"/>
+        <path d="M24 2.7 42.5 13.4 24 24.1 5.5 13.4Z" fill="#30353d"/>
+        <path d="M24 7.4 34.2 13.3 24 19.2 13.8 13.3Zm0 2.8-5.4 3.1 5.4 3.1 5.4-3.1Z"
+              fill="#abb6c4" fill-rule="evenodd" stroke="none"/>
+    </g>
+</svg>

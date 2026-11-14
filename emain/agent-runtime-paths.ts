@@ -60,7 +60,7 @@ export function resolveAgentWsh(
     ];
     const resolved = candidates.find(existingExecutable);
     if (!resolved) {
-        throw new Error("KronTerm's wsh executable is missing. Rebuild or reinstall KronTerm, or set KRONTERM_WSH.");
+        throw new Error("KronOS's wsh executable is missing. Rebuild or reinstall KronOS, or set KRONTERM_WSH.");
     }
     return path.resolve(resolved);
 }

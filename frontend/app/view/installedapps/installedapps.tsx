@@ -187,7 +187,7 @@ function InstalledAppsView({ model }: ViewComponentProps<InstalledAppsViewModel>
                     <div>
                         <div className="text-sm font-semibold text-primary">Stream an app</div>
                         <div className="text-xs text-muted">
-                            Stream installed macOS applications without leaving KronTerm.
+                            Stream installed macOS applications without leaving KronOS.
                         </div>
                     </div>
                     <button

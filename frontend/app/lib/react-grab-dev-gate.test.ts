@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { selectReactGrabApi, shouldEnableReactGrab } from "./react-grab-dev-gate";
 
 describe("shouldEnableReactGrab", () => {
-    it("requires development mode and honors the explicit opt-out", () => {
+    it("enables the canvas selector in development and packaged builds while honoring opt-out", () => {
         expect(shouldEnableReactGrab(true, undefined)).toBe(true);
         expect(shouldEnableReactGrab(true, "false")).toBe(false);
-        expect(shouldEnableReactGrab(false, undefined)).toBe(false);
+        expect(shouldEnableReactGrab(false, undefined)).toBe(true);
+        expect(shouldEnableReactGrab(false, "false")).toBe(false);
     });
 });
 

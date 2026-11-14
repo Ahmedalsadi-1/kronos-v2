@@ -2,9 +2,14 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
 
 import { Codicon } from "@hermes/components/ui/codicon";
-import { subscribeSubagentSurface, type SubagentSurfaceSnapshot } from "@hermes/lib/subagent-surface";
+import {
+    requestSwarmWorkerStop,
+    subscribeSubagentSurface,
+    type SubagentSurfaceSnapshot,
+} from "@hermes/lib/subagent-surface";
 import type { SubagentProgress } from "@hermes/store/subagents";
 import "./subagent-theater.css";
+import { SwarmRecovery } from "./swarm-recovery";
 
 const StatusLabels = {
     running: "Running",
@@ -14,44 +19,75 @@ const StatusLabels = {
     interrupted: "Stopped",
 };
 
+const SwarmOutcomeLabels = { blocked: "Blocked", uncertain: "Uncertain" };
+
 export function SubagentTheater({
     agents,
     initialAgentId,
     onClose,
     onStop,
+    showRecovery = false,
 }: {
     agents: SubagentProgress[];
     initialAgentId?: string;
     onClose: () => void;
     onStop?: (agent: SubagentProgress) => Promise<void>;
+    showRecovery?: boolean;
 }) {
     const [selectedId, setSelectedId] = useState(initialAgentId);
-    const [surface, setSurface] = useState<SubagentSurfaceSnapshot & { agentId?: string }>({});
+    const [surface, setSurface] = useState<SubagentSurfaceSnapshot & { selectionKey?: string }>({});
     const [stopError, setStopError] = useState("");
     const [stopping, setStopping] = useState(false);
     const feedRef = useRef<HTMLOListElement>(null);
     const followRef = useRef(true);
     const selectedRef = useRef<string>(undefined);
     const selected = agents.find((agent) => agent.id === selectedId) ?? agents[0];
-    const currentSurface = surface.agentId === selected?.id ? surface : {};
+    const selectionKey = selected ? JSON.stringify([selected.id, selected.sessionId]) : undefined;
+    const currentSurface = surface.selectionKey === selectionKey ? surface : {};
+    const tool = selected?.currentTool || selected?.lastTool;
+    const toolEntry = selected?.stream
+        .slice()
+        .reverse()
+        .find((entry) => entry.kind === "tool");
+    const isVisualTool =
+        tool &&
+        /browser|widget|computer|desktop|device|sandbox|vm_|screenshot/.test(tool) &&
+        !/file|patch|edit|write/.test(tool);
+    const showImage = currentSurface.imageUrl && (!tool || isVisualTool);
     const running = selected?.status === "running" || selected?.status === "queued";
 
+    const swarm = selected?.swarm != null;
+    const canStop = !!selected?.sessionId && (swarm ? selected.status === "running" : running);
+    const livePreview = running && (!swarm || canStop) && (!tool || !!isVisualTool);
+
     useEffect(() => {
-        if (selectedRef.current !== selected?.id) setSurface({});
-        selectedRef.current = selected?.id;
+        if (selectedRef.current !== selectionKey) setSurface({});
+        selectedRef.current = selectionKey;
         setStopError("");
         setStopping(false);
+    }, [selectionKey]);
+
+    useEffect(() => {
         followRef.current = true;
         if (!selected) return;
-        return subscribeSubagentSurface({ id: selected.id, sessionId: selected.sessionId, live: running }, (snapshot) =>
-            setSurface((current) => ({
-                ...snapshot,
-                imageUrl:
-                    snapshot.imageUrl ?? (!running && current.agentId === selected.id ? current.imageUrl : undefined),
-                agentId: selected.id,
-            }))
+        return subscribeSubagentSurface(
+            { id: selected.id, sessionId: selected.sessionId, live: livePreview, swarm },
+            (snapshot) =>
+                setSurface((current) => ({
+                    ...snapshot,
+                    imageUrl:
+                        snapshot.imageUrl ??
+                        (!running &&
+                        !snapshot.captureError &&
+                        snapshot.targetKey &&
+                        snapshot.targetKey === current.targetKey &&
+                        current.selectionKey === selectionKey
+                            ? current.imageUrl
+                            : undefined),
+                    selectionKey,
+                }))
         );
-    }, [selected?.id, selected?.sessionId, running]);
+    }, [selected?.id, selected?.sessionId, running, livePreview, swarm, selectionKey]);
 
     useEffect(() => {
         const feed = feedRef.current;
@@ -59,13 +95,15 @@ export function SubagentTheater({
     }, [selected?.id, selected?.stream]);
 
     const stop = async () => {
-        if (!selected?.sessionId || stopping) return;
-        const stoppingId = selected.id;
+        if (!canStop || stopping) return;
+        const stoppingKey = selectionKey;
         setStopping(true);
         setStopError("");
         try {
             if (onStop) {
                 await onStop(selected);
+            } else if (swarm) {
+                await requestSwarmWorkerStop(selected.sessionId);
             } else {
                 const { activeGateway } = await import("@hermes/store/gateway");
                 const gateway = activeGateway();
@@ -73,11 +111,11 @@ export function SubagentTheater({
                 await gateway.request("session.interrupt", { session_id: selected.sessionId });
             }
         } catch (error) {
-            if (selectedRef.current === stoppingId) {
+            if (selectedRef.current === stoppingKey) {
                 setStopError(error instanceof Error ? error.message : "Could not stop this agent.");
             }
         } finally {
-            if (selectedRef.current === stoppingId) setStopping(false);
+            if (selectedRef.current === stoppingKey) setStopping(false);
         }
     };
 
@@ -93,13 +131,36 @@ export function SubagentTheater({
                 <Dialog.Content className="subagent-theater" aria-describedby="subagent-theater-description">
                     <header className="subagent-theater-header">
                         <Dialog.Title>Subagents</Dialog.Title>
-                        <Dialog.Close className="subagent-theater-icon-button" aria-label="Close subagents">
-                            <Codicon name="close" size={16} />
-                        </Dialog.Close>
+                        <div className="subagent-theater-controls">
+                            {canStop && (
+                                <button
+                                    type="button"
+                                    className="subagent-theater-stop"
+                                    disabled={stopping}
+                                    onClick={() => void stop()}
+                                >
+                                    <Codicon name="debug-stop" />
+                                    {stopping ? "Stopping…" : "Stop agent"}
+                                </button>
+                            )}
+                            <Dialog.Close className="subagent-theater-icon-button" aria-label="Close subagents">
+                                <Codicon name="close" size={16} />
+                            </Dialog.Close>
+                        </div>
                     </header>
+                    {stopError && (
+                        <p role="alert" className="subagent-theater-error">
+                            {stopError}
+                        </p>
+                    )}
                     <Dialog.Description id="subagent-theater-description" className="sr-only">
                         Watch agent activity. Closing this view keeps agents running.
                     </Dialog.Description>
+                    {showRecovery && (
+                        <SwarmRecovery
+                            uncertainCount={agents.filter((agent) => agent.swarm?.outcome === "uncertain").length}
+                        />
+                    )}
                     {selected ? (
                         <>
                             <div className="subagent-theater-tabs" role="tablist" aria-label="Subagents">
@@ -130,7 +191,9 @@ export function SubagentTheater({
                                     >
                                         <span className="subagent-theater-tab-title">{agent.goal}</span>
                                         <span className="subagent-theater-status" data-status={agent.status}>
-                                            {StatusLabels[agent.status]}
+                                            {agent.swarm?.outcome
+                                                ? SwarmOutcomeLabels[agent.swarm.outcome]
+                                                : StatusLabels[agent.status]}
                                         </span>
                                     </button>
                                 ))}
@@ -142,7 +205,7 @@ export function SubagentTheater({
                                 aria-labelledby={`subagent-tab-${agents.indexOf(selected)}`}
                             >
                                 <section className="subagent-theater-surface" aria-label="Selected agent surface">
-                                    {currentSurface.imageUrl ? (
+                                    {showImage ? (
                                         <>
                                             <div className="subagent-theater-surface-label">
                                                 <Codicon name="preview" />
@@ -157,15 +220,66 @@ export function SubagentTheater({
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="subagent-theater-empty">
-                                            <Codicon name="preview" size={28} />
-                                            <h3>{running ? "Waiting for screenshot" : "No screenshot"}</h3>
-                                            <p>
-                                                {currentSurface.detail ||
-                                                    "Screenshots appear when the agent uses a widget."}
-                                            </p>
-                                            {selected.currentTool && (
-                                                <span>{selected.currentTool.replace(/_/g, " ")}</span>
+                                        <div className="subagent-theater-tool-context" aria-label="Selected agent tool">
+                                            <div className="subagent-theater-tool-heading">
+                                                <Codicon
+                                                    name={selected.filesWritten.length ? "edit" : "tools"}
+                                                    size={22}
+                                                />
+                                                <div>
+                                                    <span>{running ? "Current activity" : "Last activity"}</span>
+                                                    <h3>
+                                                        {tool?.replace(/_/g, " ") ||
+                                                            currentSurface.title ||
+                                                            (running ? "Agent working" : "Agent finished")}
+                                                    </h3>
+                                                </div>
+                                            </div>
+                                            {(currentSurface.captureError ||
+                                                (isVisualTool && !currentSurface.imageUrl)) && (
+                                                <p className="subagent-theater-capture-status" role="status">
+                                                    {currentSurface.captureError ||
+                                                        "Surface snapshots will appear here when available."}
+                                                </p>
+                                            )}
+                                            {currentSurface.filepath && (
+                                                <p className="subagent-theater-tool-path">{currentSurface.filepath}</p>
+                                            )}
+                                            <pre className="subagent-theater-tool-preview">
+                                                {selected.toolPreview ||
+                                                    toolEntry?.text ||
+                                                    currentSurface.detail ||
+                                                    selected.summary ||
+                                                    selected.goal}
+                                            </pre>
+                                            {selected.inlineDiff && (
+                                                <pre className="subagent-theater-tool-diff" aria-label="File changes">
+                                                    {selected.inlineDiff}
+                                                </pre>
+                                            )}
+                                            {(selected.filesWritten.length > 0 || selected.filesRead.length > 0) && (
+                                                <div className="subagent-theater-tool-files">
+                                                    {selected.filesWritten.length > 0 && (
+                                                        <section aria-label="Files changed">
+                                                            <h4>Files changed</h4>
+                                                            <ul>
+                                                                {selected.filesWritten.map((path) => (
+                                                                    <li key={path}>{path}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </section>
+                                                    )}
+                                                    {selected.filesRead.length > 0 && (
+                                                        <section aria-label="Files read">
+                                                            <h4>Files read</h4>
+                                                            <ul>
+                                                                {selected.filesRead.map((path) => (
+                                                                    <li key={path}>{path}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </section>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     )}
@@ -225,29 +339,6 @@ export function SubagentTheater({
                                     )}
                                 </ol>
                             </div>
-                            <footer className="subagent-theater-footer">
-                                <div>
-                                    <span>{selected.model || "Task"}</span>
-                                    <p>{selected.goal}</p>
-                                    {stopError && (
-                                        <p role="alert" className="subagent-theater-error">
-                                            {stopError}
-                                        </p>
-                                    )}
-                                </div>
-                                {running && selected.sessionId && (
-                                    <button
-                                        type="button"
-                                        className="subagent-theater-stop"
-                                        disabled={stopping}
-                                        onClick={() => void stop()}
-                                    >
-                                        <Codicon name="debug-stop" />
-                                        {stopping ? "Stopping…" : "Stop agent"}
-                                    </button>
-                                )}
-                                <span className="subagent-theater-close-hint">Agents keep running</span>
-                            </footer>
                         </>
                     ) : (
                         <div className="subagent-theater-empty">

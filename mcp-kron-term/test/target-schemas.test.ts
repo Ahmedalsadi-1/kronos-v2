@@ -128,3 +128,40 @@ test("a failed widget wait cannot be accompanied by verified interaction evidenc
         setKronTermToolBridge(new WshBridge());
     }
 });
+
+test("Design tools are advertised and address editable layers through the scoped workspace bridge", async () => {
+    class DesignBridge extends WshBridge {
+        async workspaceSurfaceSnapshot() {
+            return JSON.stringify({
+                presentation: "os",
+                selectedcanvasobjectid: "design-1",
+                canvasobjects: [{ id: "note", kind: "note" }, { id: "design-1", kind: "pen-layer" }],
+            });
+        }
+        async workspaceSurfaceControl(input: Parameters<WshBridge["workspaceSurfaceControl"]>[0]) {
+            assert.equal(input.action, "os.design.update");
+            assert.equal(input.objectId, "design-1");
+            assert.deepEqual(JSON.parse(input.text), { fill: "#22C55E", x: 0 });
+            return JSON.stringify({ success: true, snapshot: { selectedcanvasobjectid: input.objectId } });
+        }
+        async publishAgentSurfaceActivity() {}
+    }
+    setKronTermToolBridge(new DesignBridge());
+    try {
+        assert.deepEqual(
+            nativeToolManifest((name) => name.startsWith("workspace_design_")).map((tool) => tool.name),
+            ["workspace_design_editor_state", "workspace_design_read_skill", "workspace_design_execute", "workspace_design_save", "workspace_design_layers", "workspace_design_create_layer", "workspace_design_update_layer"]
+        );
+        const read = await registry.workspace_design_layers.handler({});
+        assert.deepEqual(JSON.parse(read.content[0].text), {
+            layers: [{ id: "design-1", kind: "pen-layer" }],
+            selectedLayerId: "design-1",
+            nextOffset: null,
+        });
+        const write = await registry.workspace_design_update_layer.handler({ layerId: "design-1", fill: "#22C55E", x: 0 });
+        assert.equal(write.isError, false);
+        assert.equal(JSON.parse(write.content[0].text).selectedLayerId, "design-1");
+    } finally {
+        setKronTermToolBridge(new WshBridge());
+    }
+});

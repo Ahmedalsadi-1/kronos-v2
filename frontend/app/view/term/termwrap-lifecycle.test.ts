@@ -118,6 +118,23 @@ describe("terminal lifecycle cleanup", () => {
         expect(wrap.terminal.dispose).toHaveBeenCalledTimes(1);
     });
 
+    it("cancels a queued selection copy when the terminal closes", async () => {
+        const wrap = makeTermWrap();
+        let selectionChanged: () => void;
+        wrap.terminal.onSelectionChange = vi.fn((callback) => {
+            selectionChanged = callback;
+            return { dispose: vi.fn() };
+        });
+        mocks.getFileSubject.mockReturnValue(Object.assign(new Subject(), { release: vi.fn() }));
+        mocks.getRTInfo.mockResolvedValue({});
+        wrap.loadInitialTerminalData = vi.fn().mockResolvedValue(undefined);
+        await wrap.initTerminal();
+        selectionChanged();
+        expect(vi.getTimerCount()).toBe(2);
+        wrap.dispose();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it("does not resume initialization after disposal while runtime info loads", async () => {
         const wrap = makeTermWrap();
         mocks.getFileSubject.mockReturnValue(Object.assign(new Subject(), { release: vi.fn() }));

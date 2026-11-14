@@ -37,23 +37,30 @@ export function bindNativeNodeEditor(host, clearNodeActive) {
   };
 }
 
-export function bindNativeWidgetInsertion(host, canEdit, insert) {
+export function bindNativeWidgetInsertion(host, canEdit, insert, captureSource = () => undefined) {
   if (!host) return () => {};
+  host.getWidgetConnectionSource = captureSource;
   const add = async (input) => {
     if (host.disposing || host.documentMutation?.value || !canEdit()) throw new Error("Workflow is read only.");
     if (!input || input.workflowId !== host.workflowId || typeof input.blockId !== "string" || !input.blockId.trim())
       throw new Error("Widget binding is not valid for this workflow.");
-    const node = await insert({
-      type: "CUSTOM.kronTermWidget",
-      openDetail: false,
-      name: String(input.label || "Workspace widget").slice(0, 100),
-      parameters: { operation: "widget_get_state", blockId: input.blockId, arguments: "{}" },
-    });
+    const node = await insert(
+      {
+        type: "CUSTOM.kronTermWidget",
+        openDetail: false,
+        name: String(input.label || "Workspace widget").slice(0, 100),
+        parameters: { operation: "widget_get_state", arguments: "{}", ...input.parameters, blockId: input.blockId },
+      },
+      input.source
+    );
     if (!node?.id) throw new Error("The widget node could not be created.");
     return { nodeId: node.id };
   };
   host.insertWidgetNode = add;
   return () => {
-    if (host.insertWidgetNode === add) delete host.insertWidgetNode;
+    if (host.insertWidgetNode === add) {
+      delete host.insertWidgetNode;
+      delete host.getWidgetConnectionSource;
+    }
   };
 }

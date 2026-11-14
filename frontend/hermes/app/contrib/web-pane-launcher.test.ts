@@ -124,7 +124,7 @@ describe("Hermes web pane launcher", () => {
         );
     });
 
-    it("routes web mode internally and normal widget mode through KronTerm", () => {
+    it("routes web mode internally and normal widget mode through KronOS", () => {
         const dependencies = makeDependencies();
 
         routeKronTermLauncherAction("term", true, dependencies);

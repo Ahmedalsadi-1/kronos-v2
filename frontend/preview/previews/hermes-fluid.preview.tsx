@@ -20,7 +20,7 @@ export function HermesFluidPreview() {
         >
             <Backdrop />
             <div style={{ position: "relative", zIndex: 3, maxWidth: 720, margin: "64px auto", padding: 24 }}>
-                <h1 style={{ fontSize: 22 }}>KronTerm chat background</h1>
+                <h1 style={{ fontSize: 22 }}>KronOS chat background</h1>
                 <p style={{ marginTop: 16 }}>Shared panel and widget background. Move the pointer to stir the fluid.</p>
                 <p style={{ marginTop: 16 }}>Visual fixture only. No agent is running.</p>
                 <button

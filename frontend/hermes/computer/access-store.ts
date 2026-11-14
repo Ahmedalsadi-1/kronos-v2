@@ -1,2 +1,7 @@
 import { atom } from "nanostores";
-export const $sandboxComputerAccess = atom<{ enabled: boolean; desktopId: string }>({ enabled: false, desktopId: "" });
+import type { SandboxComputerAccess } from "../../types/linux-desktops";
+
+export const $sandboxComputerAccess = atom<SandboxComputerAccess>({
+    enabled: false,
+    desktopId: "",
+});

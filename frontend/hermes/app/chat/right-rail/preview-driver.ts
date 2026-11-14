@@ -105,7 +105,7 @@ function actionScript(action: PreviewDriverAction): string {
 export async function actOnActivePreview(action: PreviewDriverAction): Promise<Record<string, unknown>> {
     const handle = activePreviewDriver();
     if (!handle) {
-        return { success: false, error: "No live page is open in the built-in KronTerm Agent browser." };
+        return { success: false, error: "No live page is open in the built-in KronOS Agent browser." };
     }
     if (action.kind === "back" || action.kind === "forward" || action.kind === "reload") {
         handle[action.kind]();

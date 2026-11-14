@@ -235,7 +235,8 @@ const TabV = forwardRef<HTMLDivElement, TabVProps>((props, ref) => {
                 </div>
                 <TabBadges badges={badges} flagColor={flagColor} />
                 <Button
-                    className="ghost grey close"
+                    className="close"
+                    variant="ghost"
                     onClick={onClose}
                     onMouseDown={handleMouseDownOnClose}
                     title="Close Tab"

@@ -1,0 +1,199 @@
+/* Copyright 2026, Command Line Inc.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.webview-browser-chrome[data-browser-preview],
+.webview-shell[data-browser-preview] {
+    --browser-preview-bg: var(--surface-base-color, #171719);
+    --browser-preview-muted: var(--surface-raised-color, #202024);
+    --browser-preview-border: var(--border-color, #38383e);
+    --browser-preview-text: var(--text-primary-color, #f5f5f6);
+    --browser-preview-secondary: var(--text-secondary-color, #b2b2ba);
+    background: var(--browser-preview-bg);
+    color: var(--browser-preview-text);
+    font-family: Inter, system-ui, sans-serif;
+}
+
+.webview-browser-chrome[data-browser-preview] {
+    container-name: browser-preview;
+
+    .webview-navigation {
+        height: 48px;
+        min-height: 48px;
+        gap: 4px;
+        padding: 6px 8px;
+        background: var(--browser-preview-bg);
+        border-color: var(--browser-preview-border);
+
+        > button,
+        .webview-toolbar-menu > button {
+            width: 32px;
+            height: 32px;
+            flex-basis: 32px;
+            border-radius: 6px;
+        }
+
+        svg {
+            width: 16px;
+            height: 16px;
+        }
+    }
+
+    .webview-omnibox {
+        height: 34px;
+        padding-inline: 10px;
+        background: var(--browser-preview-muted);
+        border-color: var(--browser-preview-border);
+
+        input {
+            font-size: 13px;
+        }
+    }
+
+    .webview-toolbar-secondary {
+        display: none;
+    }
+}
+
+.webview-shell[data-browser-preview] {
+    flex-direction: column;
+
+    .webview-stage {
+        margin: 8px;
+        overflow: hidden;
+        border: 1px solid var(--browser-preview-border);
+        border-radius: 7px;
+        background: var(--browser-preview-muted);
+    }
+}
+
+.browser-preview-links,
+.browser-preview-status {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    background: var(--browser-preview-muted);
+    color: var(--browser-preview-secondary);
+    font-size: 12px;
+}
+
+.browser-preview-links {
+    border-bottom: 1px solid var(--browser-preview-border);
+
+    button {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 5px;
+        min-height: 24px;
+        padding: 3px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover {
+            background: var(--surface-hover-color);
+            color: var(--browser-preview-text);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--focus-ring-color, currentColor);
+            outline-offset: -2px;
+        }
+    }
+
+    svg {
+        width: 13px;
+        height: 13px;
+    }
+}
+
+.browser-preview-shortcuts {
+    display: flex;
+    min-width: 0;
+    gap: 3px;
+    overflow-x: auto;
+    padding-left: 6px;
+    border-left: 1px solid var(--browser-preview-border);
+    scrollbar-width: none;
+}
+
+.browser-preview-list {
+    inset: 0;
+    width: min(340px, calc(100% - 24px));
+    max-height: min(320px, calc(100% - 24px));
+    margin: auto;
+    padding: 8px;
+    overflow: auto;
+    border: 1px solid var(--browser-preview-border);
+    border-radius: 8px;
+    background: var(--browser-preview-bg);
+    color: var(--browser-preview-text);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+
+    button {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    span,
+    small {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    small,
+    p {
+        color: var(--browser-preview-secondary);
+    }
+
+    p {
+        padding: 5px 6px;
+    }
+}
+
+.browser-preview-status {
+    min-height: 25px;
+    gap: 12px;
+    border-top: 1px solid var(--browser-preview-border);
+
+    span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    svg {
+        width: 11px;
+        height: 11px;
+    }
+}
+
+.browser-preview-zoom {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.browser-preview-lock {
+    color: #5bb984;
+}
+
+.browser-preview-star {
+    fill: #d4a53f;
+    color: #d4a53f;
+}
+
+@container browser-preview (max-width: 360px) {
+    .browser-preview-links > button > span {
+        display: none;
+    }
+
+    .webview-navigation > button.browser-preview-download {
+        display: none;
+    }
+}

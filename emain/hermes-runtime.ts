@@ -9,17 +9,21 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { resolveAgentWsh } from "./agent-runtime-paths";
+import { DelegationWallTimeoutSeconds } from "./delegation-policy";
 import { installHermesWorkflowPack } from "./hermes-workflow-packs";
-import { getKronosCodeBinaryCandidates, KronosCodeRuntime, withKronosCodeAttachArgs } from "./kronoscode-runtime";
 import { KronTermSurfaceSystemPrompt } from "./kronterm-surface-prompt";
 import {
     kronTermToolManifest,
+    revokeKronTermToolCaller,
     startKronTermToolServer,
     type KronTermToolServerDescriptor,
 } from "./kronterm-tool-server";
 import { prepareWorkflowProfile, runHermesWorkflowWorker } from "./n8n-hermes-worker";
 import { N8nRuntime } from "./n8n-runtime";
 import type { N8nWorkspace, N8nWorkspaceCommand } from "./n8n-workspace";
+import { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
+export { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
+import type { SwarmTarget } from "./swarm-target-scope";
 export { resolveAgentWsh as resolveHermesWsh } from "./agent-runtime-paths";
 
 const StartupTimeoutMs = 90_000;
@@ -32,23 +36,27 @@ const SurfaceRefreshLeadMs = 10 * 60 * 1000;
 const ExecFile = promisify(execFile);
 const PluginPreparations = new Map<string, Promise<string>>();
 
-type KronTermSkillRootOptions = {
-    cwd?: string;
-    homeDir?: string;
-    resourcesPath?: string;
-    configured?: string;
-};
+
 
 export type HermesSurfaceContext = {
+    agentWorkspace?: string;
+    chatId?: string;
     n8nWorkerId?: string;
     n8nEditorId?: number;
     n8nWorkflowId?: string;
     sandboxComputerId?: string;
+    sandboxComputerGeneration?: number;
+    sandboxComputerMode?: "sandbox" | "hybrid";
     agentRuntime?: "hermes";
     delegationScope?: "sandbox" | "widgets" | "inherit";
     toolSessionId?: string;
     nativeCallerId?: string;
     workflowRunId?: string;
+    swarmRunId?: string;
+    swarmAttemptId?: string;
+    swarmSessionId?: string;
+    swarmPlanning?: boolean;
+    swarmTarget?: SwarmTarget;
     tabId?: string;
     blockId?: string;
     workspaceId?: string;
@@ -169,7 +177,7 @@ async function resolveHermesBinary(): Promise<string> {
     for (const candidate of candidates) {
         const resolved = existingExecutable(candidate);
         if (resolved) {
-            return resolveManagedHermesLauncher(resolved);
+            return resolved === preparedBinary ? resolved : resolveManagedHermesLauncher(resolved);
         }
     }
 
@@ -185,7 +193,7 @@ async function resolveHermesBinary(): Promise<string> {
     }
 
     throw new Error(
-        "Kronos agent runtime is not installed. Reinstall KronTerm or set KRONTERM_HERMES_BIN to the compatible runtime executable."
+        "KronOS Agent runtime is not installed. Reinstall KronOS or set KRONTERM_HERMES_BIN to the compatible runtime executable."
     );
 }
 
@@ -280,7 +288,19 @@ async function stageHermesBundledPlugins(
                 }
             }
         }
-        await fs.promises.cp(adapterSource, path.join(staging, "kronterm-tools"), { recursive: true, force: true });
+        await fs.promises.rm(path.join(staging, "kronterm-tools"), { recursive: true, force: true });
+        const adapterTarget = path.join(staging, "kronterm-tools");
+        await fs.promises.cp(adapterSource, adapterTarget, { recursive: true, force: true });
+        const harnessFilename =
+            process.platform === "darwin"
+                ? "libkronos_agent_harness.dylib"
+                : process.platform === "win32"
+                  ? "kronos_agent_harness.dll"
+                  : "libkronos_agent_harness.so";
+        const developmentHarness = path.resolve(adapterSource, "../../harness/target/release", harnessFilename);
+        if (fs.existsSync(developmentHarness)) {
+            await fs.promises.copyFile(developmentHarness, path.join(adapterTarget, harnessFilename));
+        }
         for (const name of ["orgo-computer", "advanced-delegation"]) {
             const source = path.join(path.dirname(adapterSource), name);
             if (!fs.existsSync(source)) continue;
@@ -310,34 +330,6 @@ async function stageHermesBundledPlugins(
     }
 }
 
-export function resolveKronTermSharedSkillDirs(options: KronTermSkillRootOptions = {}): string[] {
-    const cwd = options.cwd ?? process.cwd();
-    const homeDir = options.homeDir ?? os.homedir();
-    const resourcesPath =
-        options.resourcesPath ?? (process as typeof process & { resourcesPath?: string }).resourcesPath;
-    const configured = options.configured ?? process.env.KRONTERM_SHARED_SKILL_DIRS ?? "";
-    const configuredRoots = configured
-        .split(path.delimiter)
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-    const candidates = [
-        ...configuredRoots,
-        path.join(cwd, ".agents", "skills"),
-        path.resolve(import.meta.dirname, "..", ".agents", "skills"),
-        resourcesPath ? path.join(resourcesPath, "kronterm-skills") : undefined,
-        path.join(homeDir, ".agents", "skills"),
-        path.join(homeDir, ".codex", "skills"),
-        path.join(homeDir, ".hermes", "skills"),
-    ];
-    return Array.from(
-        new Set(
-            candidates
-                .filter((candidate): candidate is string => Boolean(candidate))
-                .map((candidate) => path.resolve(candidate))
-                .filter((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory())
-        )
-    );
-}
 
 function resolveHermesToolAdapterRoot(): string {
     const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
@@ -352,7 +344,7 @@ function resolveHermesToolAdapterRoot(): string {
             Boolean(candidate) && fs.existsSync(candidate!) && fs.statSync(candidate!).isDirectory()
     );
     if (!resolved) {
-        throw new Error("KronTerm's built-in Agent tool adapter is missing. Rebuild or reinstall KronTerm.");
+        throw new Error("KronOS's built-in Agent tool adapter is missing. Rebuild or reinstall KronOS.");
     }
     return resolved;
 }
@@ -378,13 +370,19 @@ export function makeHermesManagedConfig(toolServer?: KronTermToolServerDescripto
         delegation: {
             backend: "kronterm_smart",
             max_concurrent_children: 2,
+            max_spawn_depth: 1,
+            max_iterations: 20,
+            child_timeout_seconds: 180,
+            kronos_wall_timeout_seconds: DelegationWallTimeoutSeconds,
         },
         agent: {
             system_prompt: KronTermSurfaceSystemPrompt,
-            reasoning_effort: "minimal",
+            reasoning_effort: "medium",
             environment_probe: false,
-            task_completion_guidance: false,
-            max_turns: 30,
+            stall_guards: true,
+            task_completion_guidance: true,
+            parallel_tool_call_guidance: true,
+            max_turns: 45,
         },
         display: {
             personality: "",
@@ -397,17 +395,11 @@ export function makeHermesManagedConfig(toolServer?: KronTermToolServerDescripto
     };
 }
 
-export function resolveKronosCodeDelegationBinary(): string | undefined {
-    return getKronosCodeBinaryCandidates().find(existingExecutable);
-}
-
 export function makeHermesRuntimeEnvironment(
     binary: string,
     token: string,
     options: {
         managedDir?: string;
-        kronosCodeBinary?: string;
-        kronosCodeConnection?: { baseUrl: string; username: string; password?: string };
         toolEnvironment?: Record<string, string>;
         enableKronTermTools?: boolean;
         toolServer?: KronTermToolServerDescriptor;
@@ -433,26 +425,8 @@ export function makeHermesRuntimeEnvironment(
                   KRONTERM_NATIVE_TOOL_TOKEN: options.toolServer.token,
               }
             : {}),
-        ...(options.enableKronTermTools ? { HERMES_TUI_TOOLSETS: "kronterm,delegation" } : {}),
+        ...(options.enableKronTermTools ? { HERMES_TUI_TOOLSETS: "kronterm,delegation,terminal,file" } : {}),
         ...options.toolEnvironment,
-        ...(options.kronosCodeBinary
-            ? {
-                  HERMES_COPILOT_ACP_COMMAND: options.kronosCodeBinary,
-                  HERMES_COPILOT_ACP_ARGS: options.kronosCodeConnection
-                      ? withKronosCodeAttachArgs(["acp"], options.kronosCodeConnection.baseUrl)
-                            .map((argument) => `'${argument.replace(/'/g, `'"'"'`)}'`)
-                            .join(" ")
-                      : "acp",
-              }
-            : {}),
-        ...(options.kronosCodeConnection
-            ? {
-                  KRONOSCODE_SERVER_USERNAME: options.kronosCodeConnection.username,
-                  OPENCODE_SERVER_USERNAME: options.kronosCodeConnection.username,
-                  KRONOSCODE_SERVER_PASSWORD: options.kronosCodeConnection.password ?? "",
-                  OPENCODE_SERVER_PASSWORD: options.kronosCodeConnection.password ?? "",
-              }
-            : {}),
         PATH: makeHermesPath(binary, options.toolEnvironment),
     };
 }
@@ -473,36 +447,6 @@ class ManagedHermesRuntime extends EventEmitter {
     private surfaceCapabilityReady = false;
     private surfaceGeneration = 0;
     private startupGeneration = 0;
-    private delegationConnection: ReturnType<typeof KronosCodeRuntime.getInternalConnection> = null;
-
-    constructor() {
-        super();
-        KronosCodeRuntime.on("connection", () => {
-            const previous = this.delegationConnection;
-            const next = KronosCodeRuntime.getInternalConnection();
-            if (!previous || !next || this.stopping) {
-                return;
-            }
-            if (
-                previous.descriptor.baseUrl === next.descriptor.baseUrl &&
-                previous.descriptor.serverInstanceId === next.descriptor.serverInstanceId &&
-                previous.username === next.username &&
-                previous.password === next.password
-            ) {
-                return;
-            }
-            this.startupGeneration += 1;
-            this.startPromise = null;
-            this.connection = null;
-            this.delegationConnection = null;
-            const child = this.child;
-            this.child = null;
-            if (child) {
-                this.stopChild(child);
-            }
-            this.scheduleRestart();
-        });
-    }
 
     ensure(): Promise<HermesConnectionDescriptor> {
         return this.ensureRuntime(false);
@@ -527,6 +471,7 @@ class ManagedHermesRuntime extends EventEmitter {
         const startPromise = this.start(generation)
             .catch((error) => {
                 if (generation === this.startupGeneration) {
+                    revokeKronTermToolCaller("hermes");
                     this.scheduleRestart();
                 }
                 throw error;
@@ -550,6 +495,7 @@ class ManagedHermesRuntime extends EventEmitter {
             if (
                 this.surfaceCapabilityReady &&
                 previousContext?.tabId === context.tabId &&
+                previousContext.workspaceId === context.workspaceId &&
                 previousContext.blockId === context.blockId &&
                 previousContext.hostMode === context.hostMode &&
                 JSON.stringify(previousContext.capabilities) === JSON.stringify(context.capabilities)
@@ -656,14 +602,23 @@ class ManagedHermesRuntime extends EventEmitter {
         context: HermesSurfaceContext,
         signal?: AbortSignal
     ): Promise<unknown> {
+        if (!["state", "runtime-status", "hide-desktop", "editor-cancel"].includes(input.operation)) await this.ensure();
         if (!this.workflowWidgets) {
             const { N8nWorkspace } = await import("./n8n-workspace");
-            this.workflowWidgets ??= new N8nWorkspace(this.n8n, async (task, scope, abort) => {
-                this.n8n.assertScope(scope);
-                await prepareWorkflowProfile(<T>(request: HermesApiRequest) => this.api<T>(request));
-                const connection = await this.ensure();
-                return runHermesWorkflowWorker(connection, task, scope, abort);
-            });
+            this.workflowWidgets ??= new N8nWorkspace(
+                this.n8n,
+                async (task, scope, abort) => {
+                    this.n8n.assertScope(scope);
+                    await prepareWorkflowProfile(<T>(request: HermesApiRequest) => this.api<T>(request));
+                    const connection = await this.ensure();
+                    return runHermesWorkflowWorker(connection, task, scope, abort);
+                },
+                undefined,
+                () => {
+                    this.workflowWorkers.abort();
+                    this.workflowWorkers = new AbortController();
+                }
+            );
         }
         const abort = signal ? AbortSignal.any([signal, this.workflowWorkers.signal]) : this.workflowWorkers.signal;
         return this.workflowWidgets.command(input, context, abort);
@@ -745,7 +700,7 @@ class ManagedHermesRuntime extends EventEmitter {
             });
         } catch (error) {
             if (error instanceof DOMException && error.name === "TimeoutError") {
-                throw new Error(`Timed out connecting to the KronTerm Agent after ${timeoutMs}ms`);
+                throw new Error(`Timed out connecting to the KronOS Agent after ${timeoutMs}ms`);
             }
             throw error;
         }
@@ -778,18 +733,6 @@ class ManagedHermesRuntime extends EventEmitter {
         };
         const binary = await resolveHermesBinary();
         assertCurrent();
-        const kronosCodeBinary = resolveKronosCodeDelegationBinary();
-        if (!kronosCodeBinary) {
-            throw new Error("KronosCode executable not found for Hermes delegation.");
-        }
-        await KronosCodeRuntime.ensure();
-        if (generation !== this.startupGeneration) {
-            throw new Error("Hermes startup was cancelled.");
-        }
-        const kronosCodeConnection = KronosCodeRuntime.getInternalConnection();
-        if (!kronosCodeConnection) {
-            throw new Error("KronosCode disconnected before Hermes delegation could attach.");
-        }
         const token = randomBytes(32).toString("base64url");
         const capabilityFile = this.capabilityFilePath();
         const managedDir = this.managedConfigDir();
@@ -800,7 +743,6 @@ class ManagedHermesRuntime extends EventEmitter {
         if (generation !== this.startupGeneration) {
             throw new Error("Hermes startup was cancelled.");
         }
-        this.delegationConnection = kronosCodeConnection;
         const wshPath = resolveAgentWsh();
         fs.mkdirSync(managedDir, { recursive: true, mode: 0o700 });
         await prepareHermesBundledPlugins(
@@ -826,12 +768,6 @@ class ManagedHermesRuntime extends EventEmitter {
         const child = spawn(binary, ["serve", "--host", "127.0.0.1", "--port", "0"], {
             env: makeHermesRuntimeEnvironment(binary, token, {
                 managedDir,
-                kronosCodeBinary,
-                kronosCodeConnection: {
-                    baseUrl: kronosCodeConnection.descriptor.baseUrl,
-                    username: kronosCodeConnection.username,
-                    password: kronosCodeConnection.password,
-                },
                 enableKronTermTools: true,
                 toolServer,
                 toolEnvironment: makeKronTermToolEnvironment(
@@ -944,6 +880,7 @@ class ManagedHermesRuntime extends EventEmitter {
             }
             this.child = null;
             this.connection = null;
+            revokeKronTermToolCaller("hermes");
             if (!this.stopping) {
                 if (Date.now() - this.readyAt >= StableRuntimeMs) {
                     this.restartAttempt = 0;
@@ -991,7 +928,7 @@ class ManagedHermesRuntime extends EventEmitter {
         this.n8n.stop();
         this.stopping = true;
         this.startupGeneration += 1;
-        this.delegationConnection = null;
+        revokeKronTermToolCaller("hermes");
         this.connection = null;
         this.startPromise = null;
         this.surfaceContext = null;

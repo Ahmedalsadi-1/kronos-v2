@@ -6,7 +6,7 @@ const capabilityCards = [
     {
         title: "Vertical tabs",
         text: "Keep terminal sessions, browser work, sandboxes, and agent tasks visible with workspace metadata instead of buried app windows.",
-        media: { type: "image", src: productAssets.devElectron, alt: "Kronterm dev app showing vertical tabs and side tool rail" },
+        media: { type: "image", src: productAssets.devElectron, alt: "KronOS dev app showing vertical tabs and side tool rail" },
         icon: PanelsTopLeft,
         size: "large"
     },
@@ -20,35 +20,35 @@ const capabilityCards = [
     {
         title: "Browser validation",
         text: "Run the app where it renders, keep browser context near logs, and validate UI behavior beside the terminal.",
-        media: { type: "video", src: productAssets.browserVideo, alt: "Kronterm browser validation workflow" },
+        media: { type: "video", src: productAssets.browserVideo, alt: "KronOS browser validation workflow" },
         icon: PanelTop,
         size: "wide"
     },
     {
         title: "Side rail context",
         text: "Files, git tree, web, sandbox, sysinfo, apps, and settings live in the same workspace surface.",
-        media: { type: "image", src: productAssets.sidepanel, alt: "Kronterm side rail and workspace tools" },
+        media: { type: "image", src: productAssets.sidepanel, alt: "KronOS side rail and workspace tools" },
         icon: Workflow,
         size: "small"
     },
     {
         title: "Sandbox control",
         text: "Move risky browser automation and desktop actions into isolated environments with visible status.",
-        media: { type: "video", src: productAssets.sandboxVideo, alt: "Kronterm sandbox control workflow" },
+        media: { type: "video", src: productAssets.sandboxVideo, alt: "KronOS sandbox control workflow" },
         icon: Boxes,
         size: "small"
     },
     {
         title: "Terminal execution",
         text: "Let KronosCode read output, explain failures, and request approval before the next command runs.",
-        media: { type: "video", src: productAssets.devServerVideo, alt: "Kronterm terminal execution and dev server workflow" },
+        media: { type: "video", src: productAssets.devServerVideo, alt: "KronOS terminal execution and dev server workflow" },
         icon: Terminal,
         size: "small"
     },
     {
         title: "KronosCode engine",
         text: "The AI engine coordinates files, terminal output, browser context, sandboxes, and agent activity.",
-        media: { type: "image", src: productAssets.agent, alt: "KronosCode agent panel inside Kronterm" },
+        media: { type: "image", src: productAssets.agent, alt: "KronosCode agent panel inside KronOS" },
         icon: Bot,
         size: "small"
     }
@@ -60,7 +60,7 @@ export function KrontermCapabilitiesBento() {
             <div className="capabilities-heading">
                 <p className="eyebrow">Capabilities</p>
                 <h2 id="capabilities-bento-title">Build, review, and ship in one surface.</h2>
-                <p>Core Kronterm surfaces, structured for fast iteration with KronosCode in the loop.</p>
+                <p>Core KronOS surfaces, structured for fast iteration with KronosCode in the loop.</p>
             </div>
             <div className="capabilities-grid">
                 {capabilityCards.map((card) => {

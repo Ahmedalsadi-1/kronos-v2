@@ -10,7 +10,7 @@ export type WorkflowContext = {
     surface?: string;
 };
 export const $workflowContext = atom<WorkflowContext>({});
-export const $workflowSidebarMode = atom<"sessions" | "workflows">("sessions");
+export const $workflowSidebarMode = atom<"sessions" | "workflows" | "comfy" | "design">("sessions");
 
 export function useWorkflowContext() {
     const context = useStore($workflowContext);

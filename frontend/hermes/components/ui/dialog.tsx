@@ -2,7 +2,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import * as React from 'react'
 
 import { Button } from '@hermes/components/ui/button'
-import { DialogPortalContainerContext } from '@hermes/components/ui/dialog-portal-context'
+import { DesktopModalPortalContainerContext, DialogPortalContainerContext } from '@hermes/components/ui/dialog-portal-context'
 import { useI18n } from '@hermes/i18n'
 import { X } from '@hermes/lib/icons'
 import { cn } from '@hermes/lib/utils'
@@ -16,7 +16,8 @@ function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive
 }
 
 function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  const container = React.useContext(DesktopModalPortalContainerContext)
+  return <DialogPrimitive.Portal data-slot="dialog-portal" container={container} {...props} />
 }
 
 function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {

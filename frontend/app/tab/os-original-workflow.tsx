@@ -1,4 +1,9 @@
-import { OriginalExecutionsPanel } from "@hermes/app/workflows/original-node-picker";
+import { $workflowPickerSource, closeWorkflowPicker } from "@hermes/store/command-palette";
+import { useStore } from "@nanostores/react";
+import type { WorkflowWidget, WorkflowWidgetConfiguration } from "@/util/workflow-widget";
+import { workflowWidgetParameters } from "@/util/workflow-widget";
+import { OriginalExecutionsPanel, OriginalNodePicker } from "@hermes/app/workflows/original-node-picker";
+import { WidgetConnectionDialog } from "@hermes/app/workflows/widget-connection-dialog";
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -9,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
     getWorkflowSelectionCommand,
+    loadWorkflowEditor,
     workflowEventMatchesTab,
     type WorkflowCamera,
     type WorkflowCameraIntent,
@@ -34,6 +40,7 @@ type WorkflowHost = {
     detailTarget: HTMLElement;
     headerTarget: HTMLElement;
     logsTarget: HTMLElement;
+    getWidgetConnectionSource?: () => unknown;
     insertWidgetNode?: (input: any) => Promise<{ nodeId: string }>;
     worldTarget: HTMLElement;
     viewportTarget: HTMLElement;
@@ -47,6 +54,7 @@ type WorkflowHost = {
     setObjectOrder?: (order: Record<string, number>) => void;
     setPickerTarget?: (target: HTMLElement) => void;
     setExecutionTarget?: (target: HTMLElement) => void;
+    setPanelTargets?: (targets: { tools: HTMLElement; focus: HTMLElement }) => void;
     openPicker?: () => void;
     fitWorkflow?: () => void;
     moveNode?: (id: string, position: { x: number; y: number }) => void;
@@ -136,6 +144,7 @@ export function OSOriginalWorkflow({
     const executionDock = useRef<HTMLDivElement>(null);
     const [executionDockOpen, setExecutionDockOpen] = useState(false);
     const [executionRequested, setExecutionRequested] = useState(false);
+    const pickerSource = useStore($workflowPickerSource);
     const panelFrame = useRef<HTMLDivElement>(null);
     const [panelWidth, setPanelWidth] = useState(0);
     const [detailExpanded, setDetailExpanded] = useState(false);
@@ -145,13 +154,19 @@ export function OSOriginalWorkflow({
     cameraRef.current = camera;
     const orderRef = useRef(objectOrder);
     orderRef.current = objectOrder;
+    const panelTargets = useRef({ toolsTarget, focusTarget });
+    panelTargets.current = { toolsTarget, focusTarget };
+    const currentPanelMounts = () => ({
+        tools: panelTargets.current.toolsTarget ? nativeMount(panelTargets.current.toolsTarget, "chrome") : null,
+        focus: panelTargets.current.focusTarget ? nativeMount(panelTargets.current.focusTarget, "details") : null,
+    });
+    useEffect(() => {
+        bridge.current?.setPanelTargets?.(currentPanelMounts());
+    }, [toolsTarget, focusTarget]);
     const callbacks = useRef({ onCameraIntent, onObjects, onActivate, onChat, onPanelLayout });
     callbacks.current = { onCameraIntent, onObjects, onActivate, onChat, onPanelLayout };
     const reportPanelLayout = (layout: WorkflowPanelInsets) => {
-        callbacks.current.onPanelLayout?.(layout);
-        window.dispatchEvent(
-            new CustomEvent("kronterm:workflow-details-visibility", { detail: { tabId, open: layout.right > 0 } })
-        );
+        callbacks.current.onPanelLayout?.({ ...layout, right: 0 });
     };
     useEffect(() => {
         const publish = () =>
@@ -193,8 +208,8 @@ export function OSOriginalWorkflow({
     }, [tabId]);
     useEffect(() => {
         if (!visible) return;
-        reportPanelLayout({ ...panelInsets, bottom: Math.max(panelInsets.bottom, executionDockOpen ? 352 : 0) });
-    }, [executionDockOpen, panelInsets, visible]);
+        reportPanelLayout({ ...panelInsets, bottom: Math.min(36, panelInsets.bottom) });
+    }, [panelInsets, visible]);
     useEffect(() => {
         const frame = panelFrame.current;
         if (!frame) return;
@@ -219,6 +234,9 @@ export function OSOriginalWorkflow({
             reportPanelLayout({ top: 0, right: 0, bottom: 0 });
         }
     }, [visible]);
+    useEffect(() => {
+        if (pickerSource && !visible) onActivate();
+    }, [pickerSource, visible, onActivate]);
     const pickerTarget = useRef<HTMLElement>(null);
     const executionTarget = useRef<HTMLElement>(null);
     const stateRef = useRef<RuntimeState>({});
@@ -228,6 +246,15 @@ export function OSOriginalWorkflow({
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [retry, setRetry] = useState(0);
+    const [widgetConnection, setWidgetConnection] = useState<{
+        widget: WorkflowWidget;
+        workflowId: string;
+        respond: (error?: string, nodeId?: string) => void;
+        source?: unknown;
+    }>(null);
+    const widgetConnectionRef = useRef<typeof widgetConnection>(null);
+    const [connectingWidget, setConnectingWidget] = useState(false);
+    const [widgetError, setWidgetError] = useState("");
     const readyRef = useRef(false);
     const request = (operation: string, input: Record<string, unknown> = {}) =>
         getApi().hermesApi<any>({
@@ -243,6 +270,7 @@ export function OSOriginalWorkflow({
     useEffect(() => {
         let active = true;
         let pending = false;
+        let refreshQueued = false;
         const refresh = async () => {
             if (pending) return;
             pending = true;
@@ -254,6 +282,7 @@ export function OSOriginalWorkflow({
                     previous.desktop?.url === next.desktop?.url &&
                     previous.desktop?.revision === next.desktop?.revision &&
                     previous.documentRevision === next.documentRevision &&
+                    previous.documentWorkflowId === next.documentWorkflowId &&
                     previous.selectedWorkflowId === next.selectedWorkflowId
                         ? previous
                         : next
@@ -274,36 +303,60 @@ export function OSOriginalWorkflow({
                 if (active && bridge.current) setError(String(failure));
             } finally {
                 pending = false;
+                if (active && refreshQueued) {
+                    refreshQueued = false;
+                    void refresh();
+                }
             }
         };
         void refresh();
         const timer = setInterval(() => void refresh(), 1500);
-        const refreshOnCommand = () => void refresh();
+        const refreshOnCommand = (event: Event) => {
+            if (!workflowEventMatchesTab((event as CustomEvent).detail, tabId)) return;
+            if (pending) refreshQueued = true;
+            else void refresh();
+        };
+        const prepareEditor = (event: Event) => {
+            if (workflowEventMatchesTab((event as CustomEvent).detail, tabId))
+                void loadWorkflowEditor("workflow-native").catch(() => {});
+        };
         window.addEventListener("kronterm:workflow-context-request", refreshOnCommand);
+        window.addEventListener("kronterm:workflow-open", refreshOnCommand);
+        window.addEventListener("kronterm:workflow-prepare", prepareEditor);
         return () => {
             active = false;
             clearInterval(timer);
             window.removeEventListener("kronterm:workflow-context-request", refreshOnCommand);
+            window.removeEventListener("kronterm:workflow-open", refreshOnCommand);
+            window.removeEventListener("kronterm:workflow-prepare", prepareEditor);
         };
     }, [tabId, workspaceId]);
 
     useEffect(() => {
+        let active = true;
         const picker = (event: Event) => {
             const value = (event as CustomEvent).detail;
             if (!workflowEventMatchesTab(value, tabId)) return;
             pickerTarget.current = value?.target ?? null;
-            bridge.current?.setPickerTarget?.(
-                pickerTarget.current ? nativeMount(pickerTarget.current, "inspector") : null
-            );
+            const mount = pickerTarget.current ? nativeMount(pickerTarget.current, "inspector") : null;
+            bridge.current?.setPickerTarget?.(mount);
             if (!pickerTarget.current) return;
             bridge.current?.openPicker?.();
-            if (!bridge.current)
+            if (!bridge.current && !stateRef.current.desktop && !$workflowPickerSource.get()?.startsWith("comfy"))
                 void request("open", { surface: "canvas" }).catch((failure) => setError(String(failure)));
+        };
+        const showPicker = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (workflowEventMatchesTab(detail, tabId) && detail?.section === "workflow-nodes") {
+                callbacks.current.onActivate();
+                if (!$workflowPickerSource.get()) $workflowPickerSource.set("n8n");
+            }
         };
         const surface = (event: Event) => {
             const value = (event as CustomEvent).detail;
             if (!workflowEventMatchesTab(value, tabId)) return;
             if (value?.surface !== "executions") return;
+            if (!value.target && value.previousTarget && executionTarget.current !== value.previousTarget) return;
             executionTarget.current = value.target;
             bridge.current?.setExecutionTarget?.(value.target ? nativeMount(value.target, "inspector") : null);
         };
@@ -350,11 +403,22 @@ export function OSOriginalWorkflow({
                 if (!readyRef.current || !host?.insertWidgetNode)
                     throw new Error("Workflow editor is still loading. Try again when connected.");
                 if (host.workflowId !== value.workflowId) throw new Error("The selected workflow has changed.");
+                const source = host.getWidgetConnectionSource?.();
                 const widgets = await request("workspace-widgets");
                 const widget = widgets.find((entry: any) => entry.blockId === value.blockId);
                 if (!widget) throw new Error("That widget is no longer in this workspace.");
-                const result = await host.insertWidgetNode({ ...widget, workflowId: value.workflowId });
-                respond(undefined, result.nodeId);
+                if (!active || bridge.current !== host || host.workflowId !== value.workflowId)
+                    throw new Error("The workflow changed. Reconnect this widget.");
+                widgetConnectionRef.current?.respond("Another widget connection was opened.");
+                const connection = { widget, workflowId: value.workflowId, source, respond };
+                widgetConnectionRef.current = connection;
+                setWidgetError("");
+                setWidgetConnection(connection);
+                window.dispatchEvent(
+                    new CustomEvent("kronterm:workflow-widget-configuring", {
+                        detail: { tabId, workflowId: value.workflowId, requestId: value.requestId },
+                    })
+                );
             })().catch((failure) => respond(String(failure)));
         };
         const activate = (event: Event) => {
@@ -367,12 +431,18 @@ export function OSOriginalWorkflow({
         window.addEventListener("kronterm:workflow-insert-widget", insertWidget);
         window.addEventListener("kronterm:workflow-open", activate);
         window.addEventListener("kronterm:original-node-picker", picker);
+        window.addEventListener("kronterm:workflow-inspector", showPicker);
         window.addEventListener("kronterm:workflow-surface", surface);
         window.addEventListener("kronterm:workflow-object-command", objectCommand);
         return () => {
+            active = false;
+            widgetConnectionRef.current?.respond("The workflow tab changed.");
+            widgetConnectionRef.current = null;
+            setWidgetConnection(null);
             window.removeEventListener("kronterm:workflow-insert-widget", insertWidget);
             window.removeEventListener("kronterm:workflow-open", activate);
             window.removeEventListener("kronterm:original-node-picker", picker);
+            window.removeEventListener("kronterm:workflow-inspector", showPicker);
             window.removeEventListener("kronterm:workflow-surface", surface);
             window.removeEventListener("kronterm:workflow-object-command", objectCommand);
         };
@@ -399,7 +469,12 @@ export function OSOriginalWorkflow({
             }
         }, 45000);
         const mount = async () => {
-            const session = await request("editor-session");
+            const [session, module] = await Promise.all([
+                request("editor-session"),
+                loadWorkflowEditor<{
+                    mountKronTermWorkflow(root: HTMLElement, host: WorkflowHost): Promise<() => void>;
+                }>("workflow-native"),
+            ]);
             if (!active) return;
             const shadow = element.current.shadowRoot ?? element.current.attachShadow({ mode: "open" });
             const css = document.createElement("link");
@@ -411,6 +486,7 @@ export function OSOriginalWorkflow({
             const contextStyle = document.createElement("style");
             contextStyle.textContent = ":host,#app{background:transparent!important}";
             shadow.replaceChildren(css, contextStyle, root);
+            const panels = currentPanelMounts();
             const host = {
                 ...session,
                 tabId,
@@ -421,8 +497,8 @@ export function OSOriginalWorkflow({
                 viewportTarget,
                 objectOrder: orderRef.current,
                 chromeTarget: nativeMount(chrome.current, "chrome"),
-                toolsTarget: toolsTarget ? nativeMount(toolsTarget, "chrome") : null,
-                focusTarget: focusTarget ? nativeMount(focusTarget, "details") : null,
+                toolsTarget: panels.tools,
+                focusTarget: panels.focus,
                 detailTarget: nativeMount(detail.current, "details"),
                 headerTarget: nativeMount(header.current, "chrome"),
                 logsTarget: nativeMount(logs.current, "chrome"),
@@ -449,6 +525,12 @@ export function OSOriginalWorkflow({
                 onInspector: (value: "nodes" | "executions" | "workflow-nodes" | "workflow-executions") => {
                     const section =
                         value === "nodes" ? "workflow-nodes" : value === "executions" ? "workflow-executions" : value;
+                    if (section === "workflow-executions") {
+                        if (executionTarget.current?.closest("#inspector-pane-workflow-executions")) return;
+                        const detail = { tabId, handled: false };
+                        window.dispatchEvent(new CustomEvent("kronterm:workflow-executions-dock-open", { detail }));
+                        if (detail.handled) return;
+                    }
                     window.dispatchEvent(
                         new CustomEvent("kronterm:workflow-inspector", { detail: { section, tabId } })
                     );
@@ -456,6 +538,9 @@ export function OSOriginalWorkflow({
                 onExecutionsChanged: (hasExecutions: boolean) => {
                     contextRef.current = { ...contextRef.current, hasExecutions };
                     publishContext();
+                },
+                onPickerClosed: () => {
+                    if (initialNavigationSettled && pickerTarget.current) closeWorkflowPicker();
                 },
                 request: (input: unknown) => request("editor-request", { input }),
                 cancelRequest: (requestId: string) => request("editor-cancel", { input: { requestId } }),
@@ -502,14 +587,12 @@ export function OSOriginalWorkflow({
                 },
             } as WorkflowHost & Record<string, any>;
             bridge.current = host;
-            const moduleUrl = new URL("./workflow-native/editor.js", document.baseURI).href;
-            const module = await import(/* @vite-ignore */ moduleUrl);
-            if (!active) return;
             dispose = await module.mountKronTermWorkflow(root, host);
             if (!active) {
                 dispose?.();
                 return;
             }
+            host.setPanelTargets?.(currentPanelMounts());
             const latest = stateRef.current.desktop;
             if (latest && host.navigate) {
                 const url = new URL(latest.url);
@@ -535,6 +618,9 @@ export function OSOriginalWorkflow({
             readyRef.current = false;
             dispose?.();
             bridge.current = null;
+            widgetConnectionRef.current?.respond("The workflow editor was closed.");
+            widgetConnectionRef.current = null;
+            setWidgetConnection(null);
             callbacks.current.onObjects([]);
             chrome.current?.shadowRoot?.replaceChildren();
             detail.current?.shadowRoot?.replaceChildren();
@@ -542,7 +628,7 @@ export function OSOriginalWorkflow({
             logs.current?.shadowRoot?.replaceChildren();
             reportPanelLayout({ top: 0, right: 0, bottom: 0 });
         };
-    }, [open, tabId, retry, worldTarget, viewportTarget, toolsTarget, focusTarget]);
+    }, [open, tabId, retry, worldTarget, viewportTarget]);
 
     useEffect(() => {
         const host = bridge.current;
@@ -557,7 +643,7 @@ export function OSOriginalWorkflow({
         const host = bridge.current;
         const workflowId = state.documentWorkflowId ?? host?.workflowId;
         if (
-            revision == null ||
+            !revision ||
             !workflowId ||
             !host?.refreshDocument ||
             !readyRef.current ||
@@ -652,6 +738,42 @@ export function OSOriginalWorkflow({
         return () => window.removeEventListener("kronterm:workflow-close-node-config", close);
     }, []);
 
+    const connectWidget = async (configuration: WorkflowWidgetConfiguration) => {
+        if (!widgetConnection || connectingWidget) return;
+        const connection = widgetConnection;
+        setConnectingWidget(true);
+        setWidgetError("");
+        try {
+            const host = bridge.current;
+            if (!readyRef.current || !host?.insertWidgetNode || host.workflowId !== widgetConnection.workflowId)
+                throw new Error("The workflow changed. Reconnect this widget.");
+            const widgets = await request("workspace-widgets");
+            if (
+                widgetConnectionRef.current !== connection ||
+                bridge.current !== host ||
+                !readyRef.current ||
+                host.workflowId !== connection.workflowId
+            )
+                throw new Error("The workflow changed. Reconnect this widget.");
+            const widget = widgets.find((entry: WorkflowWidget) => entry.blockId === connection.widget.blockId);
+            if (!widget) throw new Error("That widget is no longer in this workspace.");
+            const parameters = workflowWidgetParameters(widget.view, configuration);
+            if (parameters.computerId) parameters.assignedAgentId = `sandbox:${tabId}`;
+            const result = await host.insertWidgetNode({
+                ...widget,
+                parameters,
+                source: connection.source,
+                workflowId: connection.workflowId,
+            });
+            connection.respond(undefined, result.nodeId);
+            widgetConnectionRef.current = null;
+            setWidgetConnection(null);
+        } catch (failure) {
+            setWidgetError(failure instanceof Error ? failure.message : String(failure));
+        } finally {
+            setConnectingWidget(false);
+        }
+    };
     const retryConnection = async () => {
         if (!bridge.current || (!readyRef.current && !bridge.current.getDocumentState?.()?.dirty)) {
             setRetry((value) => value + 1);
@@ -666,6 +788,22 @@ export function OSOriginalWorkflow({
     };
     return (
         <div ref={panelFrame} className="absolute inset-0 pointer-events-none">
+            {pickerSource && visible && <OriginalNodePicker tabId={tabId} onClose={closeWorkflowPicker} />}
+            {widgetConnection && (
+                <WidgetConnectionDialog
+                    key={widgetConnection.widget.blockId}
+                    widget={widgetConnection.widget}
+                    pending={connectingWidget}
+                    error={widgetError}
+                    onConnect={(configuration) => void connectWidget(configuration)}
+                    onClose={() => {
+                        if (connectingWidget) return;
+                        widgetConnection.respond();
+                        widgetConnectionRef.current = null;
+                        setWidgetConnection(null);
+                    }}
+                />
+            )}
             <section
                 data-workflow-native-host=""
                 aria-label="Workflow scene"

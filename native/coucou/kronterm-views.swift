@@ -1,5 +1,20 @@
 import SwiftUI
 
+struct KronTermSystemCard<Content: View>: View {
+    @ObservedObject private var bridge = KronTermBridge.shared
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) { self.content = content }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 18).fill(bridge.cardColor)
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(bridge.separatorColor.opacity(bridge.systemAppearance?.contrast == "high" ? 1 : 0.25)))
+            content()
+        }.foregroundStyle(bridge.labelColor)
+    }
+}
+
 struct KronTermMediaIndicator: View {
     let media: KronTermMediaState
     @ObservedObject private var bridge = KronTermBridge.shared
@@ -7,7 +22,7 @@ struct KronTermMediaIndicator: View {
     var body: some View {
         Button { expanded.toggle() } label: {
             Image(systemName: media.playing ? "waveform" : "music.note")
-                .foregroundStyle(bridge.accentColor)
+                .foregroundStyle(bridge.focusColor)
                 .frame(width: 32, height: 32)
         }.buttonStyle(.plain)
             .accessibilityLabel("Now Playing: \(media.title), \(media.playing ? "playing" : "paused")")
@@ -17,15 +32,15 @@ struct KronTermMediaIndicator: View {
                     HStack(spacing: 12) {
                         Image(systemName: "music.note").font(.system(size: 22))
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                            .background(bridge.controlFill, in: RoundedRectangle(cornerRadius: 12))
                         VStack(alignment: .leading, spacing: 4) {
                             Text(media.title).font(.system(size: 13, weight: .semibold)).lineLimit(2)
                             Text(media.artist.isEmpty ? media.source : media.artist)
-                                .font(.system(size: 11)).foregroundStyle(Color(hex: "#B2B6C0")).lineLimit(1)
+                                .font(.system(size: 11)).foregroundStyle(bridge.secondaryColor).lineLimit(1)
                         }
                     }
                     HStack {
-                        Text(media.source).font(.system(size: 11)).foregroundStyle(Color(hex: "#B2B6C0"))
+                        Text(media.source).font(.system(size: 11)).foregroundStyle(bridge.secondaryColor)
                         Spacer()
                         if media.canSkip {
                             Button { bridge.action("media-previous", route: media.id) } label: {
@@ -43,47 +58,55 @@ struct KronTermMediaIndicator: View {
                         }
                     }.buttonStyle(.plain)
                 }.padding(16).frame(width: 260)
-                    .foregroundStyle(Color(hex: "#F4F5F7"))
-                    .background(Color(hex: "#141519"))
+                    .foregroundStyle(bridge.labelColor)
+                    .background(bridge.cardColor)
             }
     }
 }
 
 struct KronTermLaunchers: View {
     @ObservedObject private var bridge = KronTermBridge.shared
-    private let items = [("globe", "web", "Browser"), ("folder.fill", "files", "Files"),
+    private let primaryItems = [("globe", "web", "Browser"), ("folder.fill", "files", "Files"),
+        ("terminal", "terminal", "Terminal")]
+    private let moreItems = [
         ("point.3.connected.trianglepath.dotted", "workflowcanvas", "Workflows"),
-        ("person.2", "bots", "Bots"), ("terminal", "terminal", "Terminal"), ("desktopcomputer", "machines", "Sandbox"),
+        ("person.2", "bots", "Bots"), ("desktopcomputer", "machines", "Sandbox"),
         ("display", "apps", "Streamed apps"), ("square.grid.2x2", "widget", "Widget"),
-        ("rectangle.portrait.and.arrow.right", "exit", "Exit HUD")]
+    ]
     var body: some View {
         HStack(spacing: 5) {
-            ForEach(items, id: \.1) { item in
+            ForEach(primaryItems, id: \.1) { item in
                 Button {
                     AppState.shared.isPinned = true
                     AppState.shared.view = .overview
                     KronTermBridge.shared.action(item.1)
                 } label: {
                     Image(systemName: item.0).font(.system(size: 12))
-                        .foregroundStyle(Color(hex: "#8E939C"))
-                        .frame(width: 28, height: 24)
-                        .background(Color.white.opacity(0.06), in: Capsule())
+                        .foregroundStyle(bridge.secondaryColor)
+                        .frame(width: 32, height: 32)
+                        .background(bridge.controlFill, in: RoundedRectangle(cornerRadius: 8))
                 }.buttonStyle(.plain).help(item.2).accessibilityLabel(item.2)
             }
+            Button { bridge.action("navigate", route: "/command-center") } label: {
+                Image(systemName: "magnifyingglass").frame(width: 32, height: 32)
+            }.buttonStyle(.plain).help("Command Center (Command-Shift-Space)")
+                .accessibilityLabel("Open Command Center")
+                .keyboardShortcut(.space, modifiers: [.command, .shift])
+            Menu {
+                ForEach(moreItems, id: \.1) { item in
+                    Button { bridge.action(item.1) } label: { Label(item.2, systemImage: item.0) }
+                }
+                Divider()
+                Button { bridge.action("exit") } label: {
+                    Label("Return to workspace", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 32, height: 32)
+            }.menuStyle(.borderlessButton).fixedSize().help("More apps and workspace")
+                .accessibilityLabel("More apps and workspace")
             KronTermProductivityControls()
-            if bridge.widgetDocked {
-                Divider().frame(height: 14).padding(.horizontal, 3)
-                Button { bridge.action("preview-detach") } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12)).frame(width: 28, height: 24)
-                }.buttonStyle(.plain).help("Enlarge widget").accessibilityLabel("Enlarge widget")
-                Button { bridge.action("preview-hide") } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12)).frame(width: 28, height: 24)
-                }.buttonStyle(.plain).help("Hide widget").accessibilityLabel("Hide widget")
-            }
         }.padding(.leading, 8)
-            .foregroundStyle(Color(hex: "#8E939C"))
+            .foregroundStyle(bridge.secondaryColor)
     }
 }
 
@@ -112,13 +135,13 @@ struct KronTermBrowserAddressBar: View {
                     }
                     .padding(.horizontal, 8)
                     .frame(minWidth: 80, idealWidth: 150, maxWidth: 190)
-                    .animation(bridge.reducedMotion ? nil : .timingCurve(0.16, 1, 0.3, 1, duration: 0.52), value: editing)
+                    .animation(bridge.reducedMotion ? nil : .timingCurve(0.2, 0.82, 0.2, 1, duration: 0.18), value: editing)
                     .frame(height: 24)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                    .background(bridge.controlFill, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityLabel("Search or enter address")
             }
             .padding(.leading, 8)
-            .foregroundStyle(Color(hex: "#D6D8DD"))
+            .foregroundStyle(bridge.labelColor)
             .onAppear { address = bridge.browserURL }
             .onChange(of: bridge.browserURL) { _, url in
                 if !editing { address = url }
@@ -132,7 +155,7 @@ struct KronTermBrowserAddressBar: View {
 
     private func navigationButton(_ icon: String, action: String, label: String, enabled: Bool = true) -> some View {
         Button { bridge.action(action) } label: {
-            Image(systemName: icon).font(.system(size: 11)).frame(width: 20, height: 24)
+            Image(systemName: icon).font(.system(size: 11)).frame(width: 32, height: 32)
         }.buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.35).help(label).accessibilityLabel(label)
     }
 }
@@ -148,15 +171,15 @@ struct KronTermBrowserTabs: View {
                             Button { bridge.action("browser-select:" + widget.id) } label: {
                                 Label(widget.title, systemImage: "globe")
                                     .font(.system(size: 10)).lineLimit(1).frame(maxWidth: 156)
-                                    .padding(.horizontal, 9).frame(height: 24)
-                                    .background(bridge.widgets.indices.contains(bridge.previewSelected) && bridge.widgets[bridge.previewSelected].id == widget.id ? bridge.accentColor.opacity(0.22) : Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 7))
+                                    .padding(.horizontal, 9).frame(height: 32)
+                                    .background(bridge.widgets.indices.contains(bridge.previewSelected) && bridge.widgets[bridge.previewSelected].id == widget.id ? bridge.focusColor.opacity(0.22) : bridge.controlFill, in: RoundedRectangle(cornerRadius: 7))
                             }.buttonStyle(.plain).help(widget.title).accessibilityLabel("Switch to " + widget.title)
                         }
                     }
                 }.frame(minWidth: 80, idealWidth: bridge.browserDetached ? 190 : 260, maxWidth: bridge.browserDetached ? 210 : 340)
-                Button { bridge.action("web-new") } label: { Image(systemName: "plus").frame(width: 22, height: 24) }
+                Button { bridge.action("web-new") } label: { Image(systemName: "plus").frame(width: 32, height: 32) }
                     .buttonStyle(.plain).help("New browser tab").accessibilityLabel("New browser tab")
-            }.foregroundStyle(Color(hex: "#D6D8DD"))
+            }.foregroundStyle(bridge.labelColor)
         }
     }
 }
@@ -166,8 +189,8 @@ struct KronTermChatButton: View {
     var body: some View {
         Button { bridge.action("chat") } label: {
             Image(systemName: bridge.chatVisible ? "bubble.left.fill" : "bubble.left")
-                .font(.system(size: 14)).foregroundStyle(Color(hex: "#8E939C"))
-                .frame(width: 28, height: 24)
+                .font(.system(size: 14)).foregroundStyle(bridge.secondaryColor)
+                .frame(width: 32, height: 32)
         }.buttonStyle(.plain)
             .help(bridge.chatVisible ? "Collapse chat" : "Expand chat")
             .accessibilityLabel(bridge.chatVisible ? "Collapse chat" : "Expand chat")
@@ -177,7 +200,7 @@ struct KronTermChatButton: View {
 struct KronTermSettingsButton: View {
     @ObservedObject private var bridge = KronTermBridge.shared
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 4) {
             if let media = bridge.media { KronTermMediaIndicator(media: media) }
             Menu {
                 ForEach(KronTermPalette.all) { palette in
@@ -188,27 +211,38 @@ struct KronTermSettingsButton: View {
                     }
                 }
             } label: {
-                Image(systemName: "paintpalette").foregroundStyle(bridge.accentColor)
+                Image(systemName: "paintpalette").foregroundStyle(bridge.focusColor).frame(width: 32, height: 32)
             }.menuStyle(.borderlessButton).fixedSize().help("Coucou palette").accessibilityLabel("Choose Coucou palette")
             if !bridge.widgets.isEmpty {
                 Button { bridge.action("follow-agent") } label: {
-                    Image(systemName: "scope").foregroundStyle(bridge.followAgent ? bridge.accentColor : Color(hex: "#8E939C"))
+                    Image(systemName: "scope").foregroundStyle(bridge.followAgent ? bridge.focusColor : bridge.secondaryColor).frame(width: 32, height: 32)
                 }.buttonStyle(.plain).help("Follow agent cursor with floating Coucou").accessibilityLabel("Follow agent cursor")
                     .accessibilityAddTraits(bridge.followAgent ? .isSelected : [])
+            }
+            if !bridge.widgets.isEmpty || bridge.chatVisible {
                 Button { bridge.workspaceLarge.toggle() } label: {
                     Image(systemName: bridge.workspaceLarge ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .frame(width: 32, height: 32)
                 }.buttonStyle(.plain).help(bridge.workspaceLarge ? "Restore notch size" : "Enlarge notch")
                     .accessibilityLabel(bridge.workspaceLarge ? "Restore notch size" : "Enlarge notch")
+            }
+            if !bridge.widgets.isEmpty {
                 Button { bridge.action("preview-detach") } label: {
-                    Image(systemName: "arrow.up.right.square")
-                }.buttonStyle(.plain).help("Detach preview").accessibilityLabel("Detach preview")
+                    Image(systemName: "arrow.up.right.square").frame(width: 32, height: 32)
+                }.buttonStyle(.plain).help("Detach widget").accessibilityLabel("Detach widget")
+                if bridge.widgetDocked {
+                    Button { bridge.action("preview-hide") } label: {
+                        Image(systemName: "xmark").frame(width: 32, height: 32)
+                    }.buttonStyle(.plain).help("Hide widget").accessibilityLabel("Hide widget")
+                }
             }
             Button { KronTermBridge.shared.action("navigate", route: "/settings") } label: {
             Image(systemName: "gearshape").font(.system(size: 14))
-                .foregroundStyle(Color(hex: "#8E939C"))
-        }.buttonStyle(.plain).help("KronTerm and Hermes settings")
-            .accessibilityLabel("Open KronTerm and Hermes settings")
-        }.foregroundStyle(Color(hex: "#8E939C"))
+                .foregroundStyle(bridge.secondaryColor)
+                .frame(width: 32, height: 32)
+        }.buttonStyle(.plain).help("KronOS settings")
+            .accessibilityLabel("Open KronOS settings")
+        }.foregroundStyle(bridge.secondaryColor)
     }
 }
 
@@ -241,33 +275,33 @@ struct KronTermOverviewView: View {
                         .padding(.bottom, 12)
                         .frame(maxHeight: .infinity)
                         .clipped()
-                        .background(Color.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 18))
+                        .background(bridge.controlFill, in: RoundedRectangle(cornerRadius: 18))
                     } else { KronTermTaskCard() }
                 }.frame(width: bridge.railWidth)
                 KronTermPreviewView(tracksLayout: appState.view == presentation).transition(.opacity.combined(with: .move(edge: .trailing)))
             }
-            .animation(bridge.reducedMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: bridge.previewView)
-            .animation(bridge.reducedMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: bridge.widgetDocked)
-            .animation(bridge.reducedMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: bridge.chatExpanded)
+            .animation(bridge.reducedMotion ? nil : .timingCurve(0.2, 0.82, 0.2, 1, duration: 0.22), value: bridge.previewView)
+            .animation(bridge.reducedMotion ? nil : .timingCurve(0.2, 0.82, 0.2, 1, duration: 0.22), value: bridge.widgetDocked)
+            .animation(bridge.reducedMotion ? nil : .timingCurve(0.2, 0.82, 0.2, 1, duration: 0.22), value: bridge.chatExpanded)
         } else if bridge.voice.active {
             KronTermVoiceCard(state: bridge.voice)
         } else {
         HStack(spacing: 10) {
-            CardBackground(wash: nil) {
+            KronTermSystemCard {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(bridge.taskPhase == "idle" ? "KronTerm companion" : bridge.taskDetail).font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white).lineLimit(1)
+                    Text(bridge.taskPhase == "idle" ? "KronOS companion" : bridge.taskDetail).font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(bridge.labelColor).lineLimit(1)
                     Text(bridge.taskPhase == "idle" ? "Drag me onto an app to work together" : bridge.taskSteps.dropLast().last ?? bridge.taskPhase.capitalized).font(.system(size: 11))
-                        .foregroundStyle(Color(hex: "#8E939C")).lineLimit(2)
+                        .foregroundStyle(bridge.secondaryColor).lineLimit(2)
                     if let selected {
                         Button("Open \(selected.name)") {
                             bridge.action("navigate", route: selected.route)
-                        }.buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(bridge.accentColor)
+                        }.buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(bridge.focusColor)
                     }
                 }.padding(.leading, 108).padding(.trailing, 12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }.frame(width: 322)
-            CardBackground(wash: nil) {
+            KronTermSystemCard {
                 VStack(spacing: 3) {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
                         ForEach(Array(homeCategories.dropFirst(page * 4).prefix(4))) { category in
@@ -277,13 +311,13 @@ struct KronTermOverviewView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: category.kind == "plugin" ? "puzzlepiece.extension.fill" : "gearshape.fill")
-                                        .foregroundStyle(category.kind == "plugin" ? bridge.accentColor : Color(hex: "#4DC8A0"))
+                                        .foregroundStyle(bridge.focusColor)
                                     Text(category.name).lineLimit(1)
                                     Spacer(minLength: 0)
-                                }.font(.system(size: 10, weight: .medium)).foregroundStyle(Color(hex: "#B9BDC5"))
-                                    .padding(.horizontal, 7).frame(height: 27)
-                                    .background(Color.black.opacity(0.35), in: Capsule())
-                                    .overlay(Capsule().stroke(Color.white.opacity(bridge.selectedId == category.id ? 0.4 : 0.1)))
+                                }.font(.system(size: 10, weight: .medium)).foregroundStyle(bridge.secondaryColor)
+                                    .padding(.horizontal, 7).frame(height: 32)
+                                    .background(bridge.controlFill, in: RoundedRectangle(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(bridge.selectedId == category.id ? bridge.focusColor : .clear))
                             }.buttonStyle(.plain).help(category.detail)
                         }
                     }
@@ -302,7 +336,7 @@ struct KronTermVoiceCard: View {
     let state: KronTermVoiceState
 
     var body: some View {
-        CardBackground(wash: nil) {
+        KronTermSystemCard {
             HStack(spacing: 18) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16).fill(Color.white)
@@ -315,14 +349,14 @@ struct KronTermVoiceCard: View {
                         .offset(y: 20)
                         .animation(bridge.reducedMotion ? nil : .easeOut(duration: 0.08), value: state.speechLevel)
                 }.frame(width: 74, height: 58)
-                    .shadow(color: bridge.accentColor.opacity(0.3), radius: 8 + state.level * 20)
+                    .shadow(color: bridge.focusColor.opacity(0.3), radius: 8 + state.level * 20)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(state.muted ? "Microphone muted" : title)
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                    Text(state.error ?? (state.transcript.isEmpty ? (state.status == "transcribing" ? "Transcribing…" : "Say something to KronTerm…") : "You: \(state.transcript)"))
-                        .font(.system(size: 13)).foregroundStyle(Color.white.opacity(0.58)).lineLimit(1)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(bridge.labelColor).lineLimit(1)
+                    Text(state.error ?? (state.transcript.isEmpty ? (state.status == "transcribing" ? "Transcribing…" : "Say something to KronOS…") : "You: \(state.transcript)"))
+                        .font(.system(size: 13)).foregroundStyle(bridge.secondaryColor).lineLimit(1)
                     if !state.response.isEmpty {
-                        Text("KronTerm: \(state.response)").font(.system(size: 13)).foregroundStyle(bridge.accentColor).lineLimit(1)
+                        Text("KronOS: \(state.response)").font(.system(size: 13)).foregroundStyle(bridge.focusColor).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
@@ -338,12 +372,12 @@ struct KronTermVoiceCard: View {
                             Image(systemName: state.status == "error" ? "arrow.clockwise" : "pause.fill")
                         }.help(state.status == "error" ? "Retry voice" : "Interrupt reply")
                     }
-                }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.white.opacity(0.65))
+                }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(bridge.secondaryColor)
                 Button { KronTermBridge.shared.action("voice-expand") } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                }.buttonStyle(.plain).help("Expand chat").foregroundStyle(Color.white.opacity(0.65))
+                }.buttonStyle(.plain).help("Expand chat").foregroundStyle(bridge.secondaryColor)
             }.padding(.horizontal, 28).padding(.vertical, 18)
-                .background(LinearGradient(colors: [Color.clear, Color(hex: "#6B2B55").opacity(0.5)], startPoint: .leading, endPoint: .trailing))
+                .background(bridge.cardColor)
         }.padding(.horizontal, 12)
     }
 
@@ -351,8 +385,8 @@ struct KronTermVoiceCard: View {
         switch state.status {
         case "listening": return "Listening…"
         case "transcribing": return "Transcribing…"
-        case "thinking": return "KronTerm is thinking"
-        case "speaking": return "KronTerm is speaking"
+        case "thinking": return "KronOS is thinking"
+        case "speaking": return "KronOS is speaking"
         case "error": return "Voice unavailable"
         default: return "Voice ready"
         }
@@ -374,6 +408,7 @@ struct KronTermPromptView: View {
 }
 
 struct KronTermPageDots: View {
+    @ObservedObject private var bridge = KronTermBridge.shared
     @Binding var page: Int
     let count: Int
     private var visiblePages: Range<Int> {
@@ -384,25 +419,25 @@ struct KronTermPageDots: View {
         HStack(spacing: 7) {
             Button { page = max(0, page - 1) } label: {
                 Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 32, height: 32)
             }.buttonStyle(.plain).disabled(page == 0).accessibilityLabel("Previous category page")
             HStack(spacing: 7) {
                 ForEach(visiblePages, id: \.self) { index in
                     Button { page = index } label: {
                         Circle()
-                            .fill(index == page ? Color.clear : Color.white.opacity(0.7))
-                            .overlay(Circle().stroke(index == page ? Color.white : Color.clear, lineWidth: 1))
+                            .fill(index == page ? Color.clear : bridge.secondaryColor)
+                            .overlay(Circle().stroke(index == page ? bridge.labelColor : Color.clear, lineWidth: 1))
                             .frame(width: 5, height: 5)
-                            .frame(width: 8, height: 14)
+                            .frame(width: 32, height: 32)
                     }.buttonStyle(.plain).accessibilityLabel("Category page \(index + 1) of \(count)")
                         .accessibilityAddTraits(index == page ? .isSelected : [])
                 }
-            }.padding(.horizontal, 7).background(Color.white.opacity(0.12), in: Capsule())
+            }.padding(.horizontal, 7).background(bridge.controlFill, in: Capsule())
             Button { page = min(count - 1, page + 1) } label: {
                 Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 32, height: 32)
             }.buttonStyle(.plain).disabled(page == count - 1).accessibilityLabel("Next category page")
-        }.foregroundStyle(Color(hex: "#8E939C")).frame(height: 18)
+        }.foregroundStyle(bridge.secondaryColor).frame(height: 32)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Agent category pages")
     }
@@ -417,17 +452,17 @@ struct KronTermPreviewView: View {
                 if bridge.widgetDocked {
                     Color.clear
                 } else {
-                    RoundedRectangle(cornerRadius: 18).fill(Color(hex: "#141416"))
+                    RoundedRectangle(cornerRadius: 18).fill(bridge.cardColor)
                 }
                 if !bridge.previewExpanded {
                     Button { bridge.action("preview-dock") } label: {
                         Label("Show preview", systemImage: "rectangle.inset.filled")
-                            .font(.system(size: 12)).foregroundStyle(bridge.accentColor)
+                            .font(.system(size: 12)).foregroundStyle(bridge.focusColor)
                     }.buttonStyle(.plain)
                 } else if !bridge.widgetDocked {
                     VStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Opening live widget…").font(.system(size: 11)).foregroundStyle(.gray)
+                        Text("Opening live widget…").font(.system(size: 11)).foregroundStyle(bridge.secondaryColor)
                         if bridge.previewStale {
                             Button("Retry") { bridge.action("preview-dock") }.buttonStyle(.plain)
                         }
@@ -444,8 +479,8 @@ struct KronTermPreviewView: View {
                             Button { bridge.action("workspace-select:" + workspace.id) } label: {
                                 Text(workspace.name).font(.system(size: 11, weight: .medium)).lineLimit(1)
                                     .padding(.horizontal, 10).padding(.vertical, 6)
-                                    .foregroundStyle(workspace.selected ? Color(hex: "#F5F6F8") : Color(hex: "#8E939C"))
-                                    .background(Color.white.opacity(workspace.selected ? 0.1 : 0.025), in: Capsule())
+                                    .foregroundStyle(workspace.selected ? bridge.labelColor : bridge.secondaryColor)
+                                    .background(workspace.selected ? bridge.controlFill : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                             }.buttonStyle(.plain).help(workspace.name)
                                 .accessibilityAddTraits(workspace.selected ? .isSelected : [])
                         }
@@ -453,21 +488,21 @@ struct KronTermPreviewView: View {
                             Image(systemName: "plus").frame(width: 28, height: 28)
                         }.buttonStyle(.plain).help("Create workspace").accessibilityLabel("Create workspace")
                     }
-                }.accessibilityLabel("KronTerm workspaces")
+                }.accessibilityLabel("KronOS workspaces")
                 if bridge.widgets.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 2) {
                             ForEach(Array(bridge.widgets.enumerated()), id: \.element.id) { index, widget in
                                 Button { bridge.action("preview-select:" + widget.id) } label: {
-                                    Circle().fill(index == bridge.previewSelected ? bridge.accentColor : .white.opacity(0.35))
-                                        .frame(width: 6, height: 6).frame(width: 28, height: 28)
+                                    Circle().fill(index == bridge.previewSelected ? bridge.focusColor : bridge.secondaryColor)
+                                        .frame(width: 6, height: 6).frame(width: 32, height: 32)
                                 }.buttonStyle(.plain).help(widget.title).accessibilityLabel("Show " + widget.title)
                                     .accessibilityAddTraits(index == bridge.previewSelected ? .isSelected : [])
                             }
                         }
                     }.frame(maxWidth: 180)
                 }
-            }.buttonStyle(.plain).foregroundStyle(bridge.accentColor)
+            }.buttonStyle(.plain).foregroundStyle(bridge.focusColor)
         }.padding(.trailing, 12).padding(.bottom, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -506,16 +541,16 @@ struct KronTermTaskCard: View {
     @State private var showSearch = false
     private var primary: KronTermAgent? { bridge.agents.first }
     var body: some View {
-        CardBackground(wash: nil) {
+        KronTermSystemCard {
             VStack(alignment: .leading, spacing: 8) {
                 Spacer().frame(height: 118)
                 KronTermProgressSummary()
                 if bridge.taskPhase == "idle", let primary {
-                    Text(primary.detail).font(.system(size: 12)).foregroundStyle(Color.white.opacity(0.7)).lineLimit(2)
+                    Text(primary.detail).font(.system(size: 12)).foregroundStyle(bridge.secondaryColor).lineLimit(2)
                 }
                 if !bridge.agents.isEmpty {
                     Divider().padding(.vertical, 4)
-                    Text("ACTIVE AGENTS").font(.system(size: 10, weight: .medium)).tracking(1).foregroundStyle(Color.white.opacity(0.45))
+                    Text("ACTIVE AGENTS").font(.system(size: 10, weight: .medium)).tracking(1).foregroundStyle(bridge.secondaryColor)
                     ScrollView {
                         VStack(spacing: 7) {
                             ForEach(bridge.agents) { agent in
@@ -526,7 +561,7 @@ struct KronTermTaskCard: View {
                                         KronTermAgentLogo(backend: agent.backend).frame(width: 20, height: 20)
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(agent.name).font(.system(size: 11, weight: .medium))
-                                            Text(agent.detail).font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.55)).lineLimit(1)
+                                            Text(agent.detail).font(.system(size: 10)).foregroundStyle(bridge.secondaryColor).lineLimit(1)
                                         }
                                         Spacer(minLength: 0)
                                         KronTermActivityFace(active: ["running", "queued", "verifying"].contains(agent.phase))
@@ -539,14 +574,14 @@ struct KronTermTaskCard: View {
                 }
                 if bridge.previewView == "web" {
                     Divider()
-                    Text("BROWSER TABS").font(.system(size: 10)).tracking(1).foregroundStyle(.gray)
+                    Text("BROWSER TABS").font(.system(size: 10)).tracking(1).foregroundStyle(bridge.secondaryColor)
                     ScrollView {
                         VStack(spacing: 5) {
                             ForEach(bridge.widgets.filter { $0.view == "web" }) { widget in
                                 Button { bridge.action("browser-select:" + widget.id) } label: {
                                     Label(widget.title, systemImage: "globe").font(.system(size: 10)).lineLimit(1)
                                         .frame(maxWidth: .infinity, alignment: .leading).padding(7)
-                                        .background(bridge.widgets.indices.contains(bridge.previewSelected) && bridge.widgets[bridge.previewSelected].id == widget.id ? bridge.accentColor.opacity(0.2) : Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                                        .background(bridge.widgets.indices.contains(bridge.previewSelected) && bridge.widgets[bridge.previewSelected].id == widget.id ? bridge.focusColor.opacity(0.2) : bridge.controlFill, in: RoundedRectangle(cornerRadius: 8))
                                 }.buttonStyle(.plain).help(widget.title)
                             }
                         }
@@ -557,7 +592,7 @@ struct KronTermTaskCard: View {
                     Divider()
                     HStack {
                         Text(bridge.previewView == "term" ? "TERMINALS" : "STREAMED APPS")
-                            .font(.system(size: 10)).tracking(1).foregroundStyle(.gray)
+                            .font(.system(size: 10)).tracking(1).foregroundStyle(bridge.secondaryColor)
                         Spacer()
                         Button { bridge.action(bridge.previewView == "term" ? "terminal-new" : "apps-connect") } label: {
                             Image(systemName: "plus").frame(width: 32, height: 32)
@@ -569,7 +604,7 @@ struct KronTermTaskCard: View {
                                 Button { bridge.action("preview-select:" + widget.id) } label: {
                                     Label(widget.title + ((widget.paneCount ?? 0) > 1 ? " • 2 panes" : ""), systemImage: bridge.previewView == "term" ? "terminal" : "display")
                                         .font(.system(size: 11)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading).padding(7)
-                                        .background(bridge.widgets.indices.contains(bridge.previewSelected) && bridge.widgets[bridge.previewSelected].id == widget.id ? Color(hex: "#9270FF").opacity(0.2) : Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                                        .background(bridge.widgets.indices.contains(bridge.previewSelected) && bridge.widgets[bridge.previewSelected].id == widget.id ? bridge.focusColor.opacity(0.2) : bridge.controlFill, in: RoundedRectangle(cornerRadius: 8))
                                 }.buttonStyle(.plain).help(widget.title)
                             }
                         }
@@ -586,7 +621,7 @@ struct KronTermTaskCard: View {
                     }
                 } else if bridge.previewView == "preview" {
                     Divider()
-                    Text("EXPLORER").font(.system(size: 10)).tracking(1).foregroundStyle(.gray)
+                    Text("EXPLORER").font(.system(size: 10)).tracking(1).foregroundStyle(bridge.secondaryColor)
                     HStack(spacing: 2) {
                         Button { bridge.action("explorer-new-file") } label: { Image(systemName: "doc.badge.plus").frame(width: 32, height: 32) }.help("New file").accessibilityLabel("New file")
                         Button { bridge.action("explorer-new-folder") } label: { Image(systemName: "folder.badge.plus").frame(width: 32, height: 32) }.help("New folder").accessibilityLabel("New folder")
@@ -595,7 +630,7 @@ struct KronTermTaskCard: View {
                     }.buttonStyle(.plain)
                     if showSearch {
                         TextField("Filter files…", text: $search).textFieldStyle(.plain).font(.system(size: 10))
-                            .padding(5).background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 5))
+                            .padding(5).background(bridge.controlFill, in: RoundedRectangle(cornerRadius: 5))
                     }
                     if let explorer = bridge.explorer {
                         ScrollView(.horizontal) { Text(explorer.root).font(.system(size: 10)).textSelection(.enabled).fixedSize() }
@@ -607,23 +642,23 @@ struct KronTermTaskCard: View {
                                     Button { bridge.action("explorer-open", route: row.path) } label: {
                                         HStack(spacing: 5) {
                                             if row.directory { Image(systemName: row.expanded ? "chevron.down" : "chevron.right").font(.system(size: 7)) }
-                                            Image(systemName: row.directory ? "folder.fill" : "doc.text").foregroundStyle(row.directory ? Color(hex: "#70BDD6") : Color.white.opacity(0.6))
+                                            Image(systemName: row.directory ? "folder.fill" : "doc.text").foregroundStyle(row.directory ? bridge.focusColor : bridge.secondaryColor)
                                             Text(row.name).lineLimit(1)
                                             Spacer(minLength: 0)
                                         }.font(.system(size: 10)).padding(.leading, CGFloat(min(row.depth, 6)) * 9).padding(.vertical, 4)
-                                            .background(row.path == explorer.selected ? Color(hex: "#9270FF").opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 4))
+                                            .background(row.path == explorer.selected ? bridge.focusColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 4))
                                     }.buttonStyle(.plain).help(row.path).accessibilityLabel((row.directory ? "Folder " : "Open file ") + row.name)
                                 }
                             }
                         }
-                    } else { Text("Loading files…").font(.system(size: 10)).foregroundStyle(.gray) }
+                    } else { Text("Loading files…").font(.system(size: 10)).foregroundStyle(bridge.secondaryColor) }
                 }
                 if !bridge.controlTarget.isEmpty {
                     Divider()
-                    Text("CONTROLLING").font(.system(size: 10)).tracking(1).foregroundStyle(.gray)
+                    Text("CONTROLLING").font(.system(size: 10)).tracking(1).foregroundStyle(bridge.secondaryColor)
                     Text(bridge.controlTarget).font(.system(size: 11, weight: .medium)).lineLimit(2)
                     Text(bridge.controlRoute == "Kron tools" ? "Uses Kron tools for widget control, extraction, and automation." : "Uses Kron Computer Use for this native app.")
-                        .font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.65)).lineLimit(3)
+                        .font(.system(size: 10)).foregroundStyle(bridge.secondaryColor).lineLimit(3)
                     HStack {
                         Button("Pause") { bridge.action("control-pause") }
                         Button("Release") { bridge.action("control-release") }
@@ -635,13 +670,12 @@ struct KronTermTaskCard: View {
                         Button { showSearch.toggle() } label: { Image(systemName: "magnifyingglass") }.help("Filter files").accessibilityLabel("Filter files")
                         Button { bridge.action("files") } label: { Image(systemName: "folder") }.help("Open files").accessibilityLabel("Open files")
                     } else {
-                        Button { bridge.action("chat") } label: { Image(systemName: "paperplane.fill") }.help("Open chat").accessibilityLabel("Open chat")
-                        Button { bridge.action("chat") } label: { Image(systemName: "bubble.left.fill") }.help("Agent conversation").accessibilityLabel("Agent conversation")
+                        Button { bridge.action("chat") } label: { Label("Chat", systemImage: "bubble.left").frame(minHeight: 32) }.help("Open chat").accessibilityLabel("Open chat")
                     }
                     Menu { Button("Open chat") { bridge.action("chat") }; Button("Enlarge notch") { bridge.workspaceLarge.toggle() } } label: { Image(systemName: "ellipsis") }
                         .menuStyle(.borderlessButton).fixedSize().help("Notch actions")
                 }.font(.system(size: 11)).buttonStyle(.plain).padding(.horizontal, 10).padding(.vertical, 7)
-                    .background(Color.black.opacity(0.5), in: Capsule()).overlay(Capsule().stroke(Color.white.opacity(0.15)))
+                    .background(bridge.cardColor, in: Capsule()).overlay(Capsule().stroke(bridge.separatorColor))
             }.padding(12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
     }
@@ -690,17 +724,17 @@ struct KronTermProgressSummary: View {
                 Text(needsAttention ? "Needs your attention" : bridge.widgetFocused ? "Working together" : "Agent activity")
                     .font(.system(size: 12, weight: .semibold))
                 Spacer(minLength: 0)
-            }.foregroundStyle(needsAttention ? Color.orange : Color(hex: "#C7B9FF"))
+            }.foregroundStyle(needsAttention ? Color.orange : bridge.focusColor)
             if !bridge.workflowID.isEmpty {
                 Text(bridge.workflowTitle).font(.system(size: 12, weight: .semibold)).lineLimit(2)
                 Text("\(bridge.workflowStatus.capitalized) · \(bridge.workflowStep)")
-                    .font(.system(size: 11)).foregroundStyle(Color.white.opacity(0.65)).lineLimit(2)
+                    .font(.system(size: 11)).foregroundStyle(bridge.secondaryColor).lineLimit(2)
                 HStack(spacing: 8) {
-                    Button { bridge.action("workflow-open", route: bridge.workflowID) } label: { Image(systemName: "square.grid.2x2") }.help("Open workspace")
-                    Button { bridge.action("workflow-pause", route: bridge.workflowID) } label: { Image(systemName: "pause") }.help("Pause task")
-                    Button { bridge.action("workflow-takeover", route: bridge.workflowID) } label: { Image(systemName: "hand.raised") }.help("Take over")
-                    Button { bridge.action("workflow-review", route: bridge.workflowID) } label: { Image(systemName: "doc.text.magnifyingglass") }.help("Review result")
-                }.buttonStyle(.plain).foregroundStyle(bridge.accentColor)
+                    Button { bridge.action("workflow-open", route: bridge.workflowID) } label: { Image(systemName: "square.grid.2x2").frame(width: 32, height: 32) }.help("Open workspace").accessibilityLabel("Open task workspace")
+                    Button { bridge.action("workflow-pause", route: bridge.workflowID) } label: { Image(systemName: "pause").frame(width: 32, height: 32) }.help("Pause task").accessibilityLabel("Pause task")
+                    Button { bridge.action("workflow-takeover", route: bridge.workflowID) } label: { Image(systemName: "hand.raised").frame(width: 32, height: 32) }.help("Take over").accessibilityLabel("Take over task")
+                    Button { bridge.action("workflow-review", route: bridge.workflowID) } label: { Image(systemName: "doc.text.magnifyingglass").frame(width: 32, height: 32) }.help("Review result").accessibilityLabel("Review result")
+                }.buttonStyle(.plain).foregroundStyle(bridge.focusColor)
                 if bridge.workflowStatus == "awaiting-approval", !bridge.workflowQuestionID.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(bridge.workflowOptions) { option in
@@ -711,26 +745,27 @@ struct KronTermProgressSummary: View {
                                     .font(.system(size: 11, weight: .semibold))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
+                                    .frame(minHeight: 32)
                                     .background(
                                         Capsule().fill(
                                             option.kind == "danger"
                                                 ? Color.orange.opacity(0.18)
-                                                : bridge.accentColor.opacity(0.16)
+                                                : bridge.focusColor.opacity(0.16)
                                         )
                                     )
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(option.kind == "danger" ? Color.orange : bridge.accentColor)
+                            .foregroundStyle(option.kind == "danger" ? Color.orange : bridge.focusColor)
                             .help(option.label)
                         }
                     }
                 }
             }
-            Text(bridge.taskDetail).font(.system(size: 12)).foregroundStyle(Color.white).lineLimit(2)
+            Text(bridge.taskDetail).font(.system(size: 12)).foregroundStyle(bridge.labelColor).lineLimit(2)
             if !bridge.widgetFocused {
                 ForEach(Array(bridge.taskSteps.dropLast().suffix(2).enumerated()), id: \.offset) { _, step in
                     Label(step, systemImage: "circle.fill")
-                        .font(.system(size: 11)).foregroundStyle(Color.white.opacity(0.65)).lineLimit(1)
+                        .font(.system(size: 11)).foregroundStyle(bridge.secondaryColor).lineLimit(1)
                 }
             }
         }
@@ -748,7 +783,7 @@ struct KronTermProductivityControls: View {
                 HStack(spacing: 3) {
                     Image(systemName: "checklist")
                     if productivity.openTasks > 0 { Text("\(productivity.openTasks)") }
-                }.font(.system(size: 11)).frame(minWidth: 24, minHeight: 24)
+                }.font(.system(size: 11)).frame(minWidth: 32, minHeight: 32)
             }.buttonStyle(.plain).help("Tasks and habits").accessibilityLabel("Tasks and habits")
             Button { bridge.action("productivity-focus-toggle") } label: {
                 HStack(spacing: 3) {
@@ -756,10 +791,10 @@ struct KronTermProductivityControls: View {
                     if let focus = productivity.focus {
                         Text("\(Int(ceil(max(0, focus.remainingMs) / 60000)))m")
                     }
-                }.font(.system(size: 11)).frame(minWidth: 24, minHeight: 24)
+                }.font(.system(size: 11)).frame(minWidth: 32, minHeight: 32)
             }.buttonStyle(.plain).help("Start, pause, or resume focus").accessibilityLabel("Toggle focus session")
             Button { bridge.action("navigate", route: "/productivity?tab=notes") } label: {
-                Image(systemName: "square.and.pencil").font(.system(size: 11)).frame(width: 24, height: 24)
+                Image(systemName: "square.and.pencil").font(.system(size: 11)).frame(width: 32, height: 32)
             }.buttonStyle(.plain).help("Quick note").accessibilityLabel("Open notes")
         }
     }

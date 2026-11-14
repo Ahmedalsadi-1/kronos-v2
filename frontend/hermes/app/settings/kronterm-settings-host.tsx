@@ -7,11 +7,15 @@ export interface KronTermSettingsSectionDescriptor {
 
 export interface KronTermSettingsHost {
     appearance?: { reducedMotion: boolean };
+    renderAppearance?: () => ReactNode;
     renderSection: (sectionId: string) => ReactNode;
     sections: readonly KronTermSettingsSectionDescriptor[];
 }
 
 const KronTermSettingsPrefix = "kronterm:";
+export const HermesSettingsSavedEvent = "hermes:settings-saved";
+export type HermesSettingsSavedDetail = { provider: string; model: string };
+
 const KronTermSettingsRequestEvent = "kronterm:open-settings";
 let pendingKronTermSettingsSection: string | null = null;
 

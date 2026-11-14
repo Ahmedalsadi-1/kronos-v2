@@ -52,7 +52,6 @@ const WidgetCategories: Array<{ id: string; label: string; views: string[] }> = 
             "gamestudio",
             "personal",
             "imagestudio",
-            "medialibrary",
             "blenderproject",
             "datastudio",
             "videostudio",
@@ -163,7 +162,7 @@ const OSWidgetsFileView = memo(function OSWidgetsFileView({
         >
             <SystemSidebar className="os-file-sidebar" aria-label="Session sources">
                 <div className="os-file-sidebar-title">
-                    <span>KronTerm</span>
+                    <span>KronOS</span>
                     <strong>{workspaceName}</strong>
                 </div>
                 <nav aria-label="Session filters">
@@ -323,7 +322,7 @@ const OSWidgetsFileView = memo(function OSWidgetsFileView({
                                                 type="button"
                                                 className="os-resource-open"
                                                 onClick={() => onOpenResource(resource)}
-                                                title={`Open ${resource.name} in KronTerm`}
+                                                title={`Open ${resource.name} in KronOS`}
                                             >
                                                 <span className="os-resource-icon">
                                                     <ResourceIcon aria-hidden="true" />

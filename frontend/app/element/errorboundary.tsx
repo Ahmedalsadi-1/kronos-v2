@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { ReactNode } from "react";
+import { reportClientFailure } from "@/util/client-diagnostics";
 
 export class ErrorBoundary extends React.Component<
     { children: ReactNode; fallback?: React.ReactElement & { error?: Error } },
@@ -13,6 +14,7 @@ export class ErrorBoundary extends React.Component<
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        reportClientFailure(error);
         console.error("ErrorBoundary caught an error:", error, errorInfo);
         this.setState({ error: error });
     }
@@ -46,6 +48,7 @@ export class NullErrorBoundary extends React.Component<
     }
 
     componentDidCatch(error: Error, info: React.ErrorInfo) {
+        reportClientFailure(error);
         console.error(`${this.props.debugName ?? "NullErrorBoundary"} error boundary caught error`, error, info);
     }
 

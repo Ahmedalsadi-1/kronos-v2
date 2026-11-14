@@ -120,13 +120,15 @@ describe("KronosCodeHermesBackend", () => {
         return { api, fire: (event: any) => listener?.(event) };
     }
 
-    it("leaves Hermes sessions to the Hermes socket", () => {
+    it("defaults new chats to KronOS Agent and leaves routing to its socket", async () => {
         const { api } = makeApi();
         const backend = new KronosCodeHermesBackend(
             () => api,
             () => undefined,
             store
         );
+        expect(backend.getActive()).toBe("hermes");
+        expect((await backend.list())[0]).toMatchObject({ id: "hermes", label: "KronOS Agent", available: true });
         expect(backend.route("session.create", {})).toBeUndefined();
         expect(backend.route("prompt.submit", { session_id: "abc" })).toBeUndefined();
     });

@@ -30,7 +30,7 @@ export function initializeProductivity(notify: (title: string, body: string) => 
     timer = setInterval(() => {
         try {
             const { reminders, focusCompleted } = store.tick();
-            for (const reminder of reminders) notify("KronTerm reminder", reminder.title);
+            for (const reminder of reminders) notify("KronOS reminder", reminder.title);
             if (focusCompleted) {
                 notify("Focus session complete", "Your focus session has finished. Take a moment to reset.");
                 const focus = store.snapshot().focus.find((row) => row.status === "completed");

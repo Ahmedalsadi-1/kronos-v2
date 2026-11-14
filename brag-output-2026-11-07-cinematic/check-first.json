@@ -1,0 +1,1095 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 2,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "nested_media_start_basis_ambiguous",
+        "severity": "warning",
+        "message": "<video id=\"awakening-video\"> has data-start=\"4.8\" inside a sub-composition. Nested media timing is local to its composition by default; a nonzero value can be confused with a legacy root-global timestamp.",
+        "selector": "#awakening-video",
+        "dataAttributes": {},
+        "sourceFile": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/compositions/awakening.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Keep data-start=\"4.8\" if it is composition-local. If this is a legacy root-global timestamp, add data-hf-media-start-basis=\"global\"; otherwise convert it to local time by subtracting the host start."
+      },
+      {
+        "code": "nested_media_start_basis_ambiguous",
+        "severity": "warning",
+        "message": "<video id=\"fleet-terminal-video\"> has data-start=\"1\" inside a sub-composition. Nested media timing is local to its composition by default; a nonzero value can be confused with a legacy root-global timestamp.",
+        "selector": "#fleet-terminal-video",
+        "dataAttributes": {},
+        "sourceFile": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/compositions/sessions.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Keep data-start=\"1\" if it is composition-local. If this is a legacy root-global timestamp, add data-hf-media-start-basis=\"global\"; otherwise convert it to local time by subtracting the host start."
+      }
+    ],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 2,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "console_warning",
+        "severity": "warning",
+        "message": "THREE.WebGLShadowMap: PCFSoftShadowMap has been removed. Using PCFShadowMap instead.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {
+          "data-composition-id": "kronterm-film",
+          "data-width": "1920",
+          "data-height": "1080",
+          "data-duration": "80",
+          "data-fps": "30",
+          "data-start": "0"
+        },
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080
+        },
+        "time": 0,
+        "url": "http://127.0.0.1:57461/",
+        "line": 2226
+      },
+      {
+        "code": "console_warning",
+        "severity": "warning",
+        "message": "THREE.WebGLShadowMap: PCFSoftShadowMap has been removed. Using PCFShadowMap instead.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {
+          "data-composition-id": "kronterm-film",
+          "data-width": "1920",
+          "data-height": "1080",
+          "data-duration": "80",
+          "data-fps": "30",
+          "data-start": "0"
+        },
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080
+        },
+        "time": 0,
+        "url": "http://127.0.0.1:57461/",
+        "line": 2226
+      }
+    ]
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 18,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 8,
+        "selector": "#awakening-pet-wrap",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 890.38,
+          "top": 183.29,
+          "right": 1070.15,
+          "bottom": 372.31,
+          "width": 179.77,
+          "height": 189.02
+        },
+        "containerSelector": "#awakening-screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 533.96,
+          "top": 202.69,
+          "right": 1484.98,
+          "bottom": 884.03,
+          "width": 951.02,
+          "height": 681.34
+        },
+        "overflow": {
+          "top": 19.4
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/awakening.html",
+        "bbox": {
+          "x": 890.38,
+          "y": 183.29,
+          "width": 179.77,
+          "height": 189.02
+        },
+        "firstSeen": 8,
+        "lastSeen": 13,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          8,
+          13
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 18,
+        "selector": "#browser-camera",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 278.24,
+          "top": -125.92,
+          "right": 2241.76,
+          "bottom": 1125.92,
+          "width": 1963.52,
+          "height": 1251.84
+        },
+        "containerSelector": "#scene-browser > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "right": 321.76,
+          "top": 125.92,
+          "bottom": 45.92
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/browser.html",
+        "bbox": {
+          "x": 278.24,
+          "y": -125.92,
+          "width": 1963.52,
+          "height": 1251.84
+        },
+        "firstSeen": 18,
+        "lastSeen": 25,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          18,
+          25
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 38,
+        "selector": "#selection-camera",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 405,
+          "top": 58.72,
+          "right": 1855,
+          "bottom": 1121.28,
+          "width": 1450,
+          "height": 1062.56
+        },
+        "containerSelector": "#scene-selection > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 41.28
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/selection.html",
+        "bbox": {
+          "x": 405,
+          "y": 58.72,
+          "width": 1450,
+          "height": 1062.56
+        },
+        "firstSeen": 38,
+        "lastSeen": 38,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          38
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 38,
+        "selector": "#selection-camera",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 405,
+          "top": 58.72,
+          "right": 1855,
+          "bottom": 1121.28,
+          "width": 1450,
+          "height": 1062.56
+        },
+        "containerSelector": "#root",
+        "text": "",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 41.28
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/selection.html",
+        "bbox": {
+          "x": 405,
+          "y": 58.72,
+          "width": 1450,
+          "height": 1062.56
+        },
+        "firstSeen": 38,
+        "lastSeen": 38,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          38
+        ]
+      },
+      {
+        "code": "text_box_overflow",
+        "severity": "info",
+        "time": 50,
+        "selector": "#fleet-terminal > div:nth-of-type(1)",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": 168.65,
+          "top": 874.4,
+          "right": 263.76,
+          "bottom": 905.45,
+          "width": 95.11,
+          "height": 31.05
+        },
+        "containerSelector": "#fleet-terminal",
+        "text": "Terminal",
+        "fixHint": "Text is 95px x 31px inside 695px x 449px and overflows by up to 38px; increase the container height to at least ~488px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 160.17,
+          "top": 417.57,
+          "right": 854.96,
+          "bottom": 867,
+          "width": 694.79,
+          "height": 449.43
+        },
+        "overflow": {
+          "bottom": 38.45
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 168.65,
+          "y": 874.4,
+          "width": 95.11,
+          "height": 31.05
+        },
+        "firstSeen": 50,
+        "lastSeen": 58,
+        "occurrences": 3,
+        "heldMs": 0,
+        "times": [
+          50,
+          55,
+          58
+        ]
+      },
+      {
+        "code": "text_box_overflow",
+        "severity": "info",
+        "time": 50,
+        "selector": "#fleet-phone > div:nth-of-type(1)",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": 955.26,
+          "top": 598.08,
+          "right": 1112.11,
+          "bottom": 627.91,
+          "width": 156.85,
+          "height": 29.83
+        },
+        "containerSelector": "#fleet-phone",
+        "text": "Android / Labs",
+        "fixHint": "Text is 157px x 30px inside 671px x 429px and overflows by up to 37px; increase the container height to at least ~467px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 945.65,
+          "top": 161.26,
+          "right": 1617.08,
+          "bottom": 590.43,
+          "width": 671.43,
+          "height": 429.17
+        },
+        "overflow": {
+          "bottom": 37.48
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 955.26,
+          "y": 598.08,
+          "width": 156.85,
+          "height": 29.83
+        },
+        "firstSeen": 50,
+        "lastSeen": 58,
+        "occurrences": 3,
+        "heldMs": 0,
+        "times": [
+          50,
+          55,
+          58
+        ]
+      },
+      {
+        "code": "text_box_overflow",
+        "severity": "info",
+        "time": 50,
+        "selector": "#fleet-parallel > div:nth-of-type(1)",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": 161.5,
+          "top": 356.93,
+          "right": 327.6,
+          "bottom": 386.89,
+          "width": 166.1,
+          "height": 29.96
+        },
+        "containerSelector": "#fleet-parallel",
+        "text": "Agent sessions",
+        "fixHint": "Text is 166px x 30px inside 680px x 434px and overflows by up to 35px; increase the container height to at least ~469px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 153.21,
+          "top": -82.55,
+          "right": 833.47,
+          "bottom": 351.57,
+          "width": 680.26,
+          "height": 434.12
+        },
+        "overflow": {
+          "bottom": 35.32
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 161.5,
+          "y": 356.93,
+          "width": 166.1,
+          "height": 29.96
+        },
+        "firstSeen": 50,
+        "lastSeen": 58,
+        "occurrences": 3,
+        "heldMs": 0,
+        "times": [
+          50,
+          55,
+          58
+        ]
+      },
+      {
+        "code": "text_box_overflow",
+        "severity": "info",
+        "time": 50,
+        "selector": "#fleet-browser > div:nth-of-type(1)",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": 952.78,
+          "top": 1105.97,
+          "right": 1039.47,
+          "bottom": 1136.19,
+          "width": 86.69,
+          "height": 30.22
+        },
+        "containerSelector": "#fleet-browser",
+        "text": "Browser",
+        "fixHint": "Text is 87px x 30px inside 656px x 425px and overflows by up to 37px; increase the container height to at least ~462px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 943.42,
+          "top": 673.82,
+          "right": 1599.38,
+          "bottom": 1099.27,
+          "width": 655.97,
+          "height": 425.45
+        },
+        "overflow": {
+          "bottom": 36.92
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 952.78,
+          "y": 1105.97,
+          "width": 86.69,
+          "height": 30.22
+        },
+        "firstSeen": 50,
+        "lastSeen": 58,
+        "occurrences": 3,
+        "heldMs": 0,
+        "times": [
+          50,
+          55,
+          58
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 50,
+        "selector": "#fleet-browser > div:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 952.78,
+          "top": 1105.97,
+          "right": 1039.47,
+          "bottom": 1136.19,
+          "width": 86.69,
+          "height": 30.22
+        },
+        "containerSelector": "#root",
+        "text": "Browser",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 56.19
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 952.78,
+          "y": 1105.97,
+          "width": 86.69,
+          "height": 30.22
+        },
+        "firstSeen": 50,
+        "lastSeen": 58,
+        "occurrences": 3,
+        "heldMs": 0,
+        "times": [
+          50,
+          55,
+          58
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 50,
+        "selector": "#fleet-parallel",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 153.21,
+          "top": -82.55,
+          "right": 833.47,
+          "bottom": 351.57,
+          "width": 680.26,
+          "height": 434.12
+        },
+        "containerSelector": "#root",
+        "text": "Agent sessions",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "top": 82.55
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 153.21,
+          "y": -82.55,
+          "width": 680.26,
+          "height": 434.12
+        },
+        "firstSeen": 50,
+        "lastSeen": 58,
+        "occurrences": 3,
+        "heldMs": 0,
+        "times": [
+          50,
+          55,
+          58
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 55,
+        "selector": "#fleet-browser",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 945.32,
+          "top": 694.69,
+          "right": 1635.81,
+          "bottom": 1136.38,
+          "width": 690.49,
+          "height": 441.69
+        },
+        "containerSelector": "#root",
+        "text": "Browser",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 56.38
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 945.32,
+          "y": 694.69,
+          "width": 690.49,
+          "height": 441.69
+        },
+        "firstSeen": 55,
+        "lastSeen": 58,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          55,
+          58
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 58,
+        "selector": "#fleet-terminal > div:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 146.92,
+          "top": 1068.02,
+          "right": 274.75,
+          "bottom": 1109.9,
+          "width": 127.83,
+          "height": 41.88
+        },
+        "containerSelector": "#root",
+        "text": "Terminal",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 29.9
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 146.92,
+          "y": 1068.02,
+          "width": 127.83,
+          "height": 41.88
+        },
+        "firstSeen": 58,
+        "lastSeen": 58,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          58
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 58,
+        "selector": "#fleet-camera",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 37.59,
+          "top": -63.27,
+          "right": 2397.35,
+          "bottom": 1270.58,
+          "width": 2359.76,
+          "height": 1333.85
+        },
+        "containerSelector": "div.fleet-space",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "right": 477.35,
+          "top": 63.27,
+          "bottom": 190.58
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 37.59,
+          "y": -63.27,
+          "width": 2359.76,
+          "height": 1333.85
+        },
+        "firstSeen": 58,
+        "lastSeen": 58,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          58
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 58,
+        "selector": "#fleet-phone",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 1216.41,
+          "top": 66.94,
+          "right": 2179.87,
+          "bottom": 680.07,
+          "width": 963.46,
+          "height": 613.13
+        },
+        "containerSelector": "#root",
+        "text": "Android / Labs",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "right": 259.87
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 1216.41,
+          "y": 66.94,
+          "width": 963.46,
+          "height": 613.13
+        },
+        "firstSeen": 58,
+        "lastSeen": 58,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          58
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 73,
+        "selector": "#return-screen",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "containerSelector": "#scene-return > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 1088.01,
+          "right": 1087.85,
+          "bottom": 1738.44
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": -1088.01,
+          "y": 291.96,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "firstSeen": 73,
+        "lastSeen": 73,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          73
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 73,
+        "selector": "#return-screen > div:nth-of-type(2)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 781.69,
+          "top": 289.68,
+          "right": 1138.31,
+          "bottom": 378.8,
+          "width": 356.62,
+          "height": 89.12
+        },
+        "containerSelector": "#return-screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "overflow": {
+          "top": 2.28
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": 781.69,
+          "y": 289.68,
+          "width": 356.62,
+          "height": 89.12
+        },
+        "firstSeen": 73,
+        "lastSeen": 73,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          73
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 73,
+        "selector": "#return-pet-wrap",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 610.75,
+          "top": 133.67,
+          "right": 1309.22,
+          "bottom": 818.28,
+          "width": 698.47,
+          "height": 684.61
+        },
+        "containerSelector": "#return-screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "overflow": {
+          "top": 158.29
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": 610.75,
+          "y": 133.67,
+          "width": 698.47,
+          "height": 684.61
+        },
+        "firstSeen": 73,
+        "lastSeen": 78,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          73,
+          78
+        ]
+      },
+      {
+        "code": "escaped_container",
+        "severity": "info",
+        "time": 73,
+        "selector": "#return-screen",
+        "message": "Positioned element renders far outside its offset parent — its coordinates were likely computed in a different frame (canvas/viewport pixels).",
+        "rect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "containerSelector": "#scene-return > div:nth-of-type(1)",
+        "text": "",
+        "fixHint": "Compute left/top in the offset parent's frame (subtract its rect), or mark intentional placement with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": -1088.01,
+          "y": 291.96,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "firstSeen": 73,
+        "lastSeen": 73,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          73
+        ]
+      }
+    ],
+    "duration": 80,
+    "samples": [
+      1.8,
+      4.8,
+      8,
+      13,
+      18,
+      25,
+      32,
+      38,
+      44,
+      50,
+      55,
+      58,
+      65,
+      73,
+      78
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 18,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.8,
+      13,
+      38,
+      55,
+      78
+    ],
+    "checked": 8,
+    "passed": 8
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 2,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 3 text elements stay under it for 0.5 s or more, the smallest \"Terminal\" at 23 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Terminal",
+        "selector": "#fleet-terminal > div:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 64.29,
+          "y": 897.32,
+          "width": 103.36,
+          "height": 33.65
+        },
+        "time": 49.549,
+        "times": [
+          49.549,
+          49.549,
+          49.683
+        ],
+        "fontPx": 23.21,
+        "floorPx": 28,
+        "seconds": 8.014,
+        "elements": [
+          {
+            "selector": "#fleet-terminal > div:nth-of-type(1)",
+            "text": "Terminal",
+            "fontPx": 23.21,
+            "time": 49.549,
+            "seconds": 8.014
+          },
+          {
+            "selector": "#fleet-phone > div:nth-of-type(1)",
+            "text": "Android / Labs",
+            "fontPx": 23.21,
+            "time": 49.549,
+            "seconds": 8.014
+          },
+          {
+            "selector": "#fleet-parallel > div:nth-of-type(1)",
+            "text": "Agent sessions",
+            "fontPx": 23.21,
+            "time": 49.683,
+            "seconds": 7.88
+          }
+        ]
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and \"Music: Chris Zabriskie · CC BY 4.0\" renders at 24 px for 3.47 s: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Music: Chris Zabriskie · CC BY 4.0",
+        "selector": "#music-credit",
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": 190,
+          "y": 961,
+          "width": 371.52,
+          "height": 29
+        },
+        "time": 76.528,
+        "times": [
+          76.528
+        ],
+        "fontPx": 24,
+        "floorPx": 28,
+        "seconds": 3.472,
+        "elements": [
+          {
+            "selector": "#music-credit",
+            "text": "Music: Chris Zabriskie · CC BY 4.0",
+            "fontPx": 24,
+            "time": 76.528,
+            "seconds": 3.472
+          }
+        ]
+      }
+    ],
+    "enabled": true,
+    "step": 0.134,
+    "samples": 599
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": true,
+    "files": [
+      ".hyperframes/artifacts/snapshots/3c788267-1628-4d56-89b4-8767c5c8832c/frame-00-at-1.8s.png",
+      ".hyperframes/artifacts/snapshots/3c788267-1628-4d56-89b4-8767c5c8832c/frame-01-at-13.0s.png",
+      ".hyperframes/artifacts/snapshots/3c788267-1628-4d56-89b4-8767c5c8832c/frame-02-at-38.0s.png",
+      ".hyperframes/artifacts/snapshots/3c788267-1628-4d56-89b4-8767c5c8832c/frame-03-at-55.0s.png",
+      ".hyperframes/artifacts/snapshots/3c788267-1628-4d56-89b4-8767c5c8832c/frame-04-at-78.0s.png"
+    ],
+    "times": [
+      1.8,
+      13,
+      38,
+      55,
+      78
+    ],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "4a9ba8c1-926a-4f1b-b759-652ae525c851",
+    "revision": null,
+    "report": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/checks/4a9ba8c1-926a-4f1b-b759-652ae525c851.json",
+    "attribution": "unversioned"
+  },
+  "_meta": {
+    "version": "0.9.22",
+    "latestVersion": "0.9.22",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-08T02:01:11.331Z",
+    "skillsOutdated": 4,
+    "skillsMissing": 0
+  }
+}

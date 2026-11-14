@@ -70,6 +70,11 @@ describe("live surface DOM occlusion", () => {
             const shadow = world.attachShadow({ mode: "open" });
             add(shadow, "vue-flow__node", 2);
             add(shadow, "vue-flow__node", 7);
+            const comfyWorld = add(scene, "", 0, 1500);
+            comfyWorld.dataset.comfyWorkflowWorld = "";
+            const comfyShadow = comfyWorld.attachShadow({ mode: "open" });
+            add(comfyShadow, "lg-node", 2).dataset.osObjectKind = "workflow-node";
+            add(comfyShadow, "lg-node", 12).dataset.osObjectKind = "workflow-node";
             const chrome = add(scene, "", 1500, 1500);
             chrome.dataset.workflowChrome = "";
             chrome.style.pointerEvents = "none";
@@ -87,8 +92,9 @@ describe("live surface DOM occlusion", () => {
             add(dialog, "", 11, 200).style.pointerEvents = "auto";
             const empty = add(full, "", 9, 0);
             empty.style.pointerEvents = "auto";
-            expect(collectSurfaceOccluders(scene, slot, owner, true).map((rect) => rect.x)).toEqual([5, 7, 8, 10]);
+            expect(collectSurfaceOccluders(scene, slot, owner, true).map((rect) => rect.x)).toEqual([5, 7, 12, 8, 10]);
             world.hidden = true;
+            comfyWorld.style.display = "none";
             picker.style.opacity = "0";
             expect(collectSurfaceOccluders(scene, slot, owner, true).map((rect) => rect.x)).toEqual([5, 10]);
         } finally {

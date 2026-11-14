@@ -29,14 +29,14 @@ export function KrontermHudModeCard({
     const active = isAgentActivityActive(activity.phase);
     return (
         <aside
-            aria-label="KronTerm HUD mode: computer use"
+            aria-label="KronOS HUD mode: computer use"
             className="pointer-events-auto fixed z-[115] flex flex-col gap-2 overflow-hidden rounded-xl border border-accent/40 bg-[#080a0df2] p-2.5 text-white/90 shadow-2xl backdrop-blur-xl"
             style={{ left: hudGeometry.x, width: hudGeometry.width, bottom: window.innerHeight - hudGeometry.y + 8 }}
         >
             <header className="flex items-center justify-between gap-2 px-0.5">
                 <span className="flex items-center gap-1.5 text-[9px] font-bold tracking-[0.08em] text-white/45 uppercase">
                     <i aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
-                    KronTerm HUD mode · Computer use
+                    KronOS HUD mode · Computer use
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-1.5 py-0.5 text-[9px] capitalize">
                     <i

@@ -31,6 +31,7 @@ export type AppBlockRef = {
 
 const BuiltinViewApps: Array<{
     view: string;
+    name?: string;
     kind?: SystemAppDescriptor["kind"];
     launchPolicy?: SystemAppDescriptor["launchPolicy"];
     capabilities?: string[];
@@ -77,11 +78,26 @@ const BuiltinViewApps: Array<{
         launchPolicy: "singleton",
         capabilities: ["files"],
     },
+    {
+        view: "codeeditor",
+        aliases: ["editor", "code", "text editor"],
+        category: "Productivity",
+        launchPolicy: "multi-window",
+        capabilities: ["files", "clipboard"],
+    },
+    {
+        view: "aifilediff",
+        aliases: ["file diff", "agent changes"],
+        category: "Productivity",
+        launchPolicy: "multi-window",
+        capabilities: ["files"],
+    },
     { view: "sysinfo", aliases: ["system", "cpu", "memory", "monitor"], category: "System" },
     {
         view: "sandbox",
+        name: "KronOS Linux",
         kind: "sandbox",
-        aliases: ["linux", "vm", "isolated", "computer", "vnc", "remote desktop"],
+        aliases: ["sandbox", "ubuntu", "linux", "vm", "isolated", "computer", "vnc", "remote desktop"],
         category: "System",
         capabilities: ["screen-capture"],
         launchPolicy: "singleton",
@@ -91,7 +107,6 @@ const BuiltinViewApps: Array<{
     { view: "documentstudio", aliases: ["documents", "reports", "markdown"], category: "Productivity" },
     { view: "datastudio", aliases: ["csv", "data", "data studio", "spreadsheet"], category: "Productivity" },
     { view: "blenderproject", aliases: ["blender", "3d", "scene"], category: "Productivity" },
-    { view: "medialibrary", aliases: ["media", "assets", "media library"], category: "Productivity" },
     { view: "imagestudio", aliases: ["image", "images", "comfyui", "image studio"], category: "Productivity" },
     { view: "gamestudio", aliases: ["game", "games", "game studio"], category: "Productivity" },
     {
@@ -142,7 +157,7 @@ export function makeViewAppDescriptor(view: string, runningBlockIds: string[]): 
     return {
         id: `view:${view}`,
         kind: builtin?.kind ?? "builtin",
-        name: blockViewToName(view),
+        name: builtin?.name ?? blockViewToName(view),
         icon: hasViewIcon(view) ? viewIconId(view) : blockViewToIcon(view),
         category: builtin?.category,
         aliases: builtin?.aliases ?? [],
@@ -249,7 +264,7 @@ export function focusOrCreateDecision(
     descriptor: AppDescriptor,
     options: { newWindow?: boolean } = {}
 ): AppLaunchDecision {
-    if (descriptor.runningBlockIds.length > 0 && !options.newWindow) {
+    if (descriptor.runningBlockIds.length > 0 && (!options.newWindow || descriptor.launchPolicy === "singleton")) {
         return { action: "focus", blockId: descriptor.runningBlockIds[0] };
     }
     if (descriptor.view != null) {

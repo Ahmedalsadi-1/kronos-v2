@@ -4,10 +4,30 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { registerAgentInputIpc } from "./agent-input-ipc";
 
-const handlers = vi.hoisted(() => new Map<string, (...args: any[]) => Promise<void>>());
-vi.mock("electron", () => ({ ipcMain: { handle: (name, handler) => handlers.set(name, handler) } }));
+const handlers = vi.hoisted(() => new Map<string, (...args: any[]) => Promise<unknown>>());
+const clipboard = vi.hoisted(() => ({ readText: vi.fn(), writeText: vi.fn() }));
+vi.mock("electron", () => ({ ipcMain: { handle: (name, handler) => handlers.set(name, handler) }, clipboard }));
 
 beforeEach(() => handlers.clear());
+
+it("reads and writes clipboard text only for trusted top-level surfaces", async () => {
+    const event = senderEvent();
+    registerAgentInputIpc(() => true);
+    clipboard.readText.mockReturnValue("hello");
+    expect(await handlers.get("agent-read-clipboard")(event)).toBe("hello");
+    await handlers.get("agent-write-clipboard")(event, "paste me");
+    expect(clipboard.writeText).toHaveBeenLastCalledWith("paste me");
+    clipboard.writeText.mockClear();
+    for (const value of [null, {}, "x".repeat(1_000_001)])
+        await expect(handlers.get("agent-write-clipboard")(event, value)).rejects.toThrow("Invalid clipboard");
+    await expect(handlers.get("agent-write-clipboard")({ ...event, senderFrame: {} }, "bad")).rejects.toThrow(
+        "trusted"
+    );
+    registerAgentInputIpc(() => false);
+    await expect(handlers.get("agent-read-clipboard")(event)).rejects.toThrow("trusted");
+    await expect(handlers.get("agent-write-clipboard")(event, "bad")).rejects.toThrow("trusted");
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+});
 
 function senderEvent() {
     const frame = {};

@@ -16,7 +16,7 @@ const chatConfigs: ChatConfig[] = [
         userPrompt: "Check out ~/kronterm and summarize the project — what it does and how it's organized.",
         toolName: "read_dir",
         toolDescription: 'reading directory "~/kronterm"',
-        markdownResponse: `Here's a quick overview of this repo (KronTerm):
+        markdownResponse: `Here's a quick overview of this repo (KronOS):
 
 ## What it is
 - Electron + React frontend with a Go backend. Provides an AI-native terminal with GUI widgets, previews, browser, and sandbox. (README.md)

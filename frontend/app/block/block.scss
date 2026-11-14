@@ -791,6 +791,42 @@
     }
 }
 
+[data-live-blockid][data-presentation="widgets"] > .block.block-frame-default:not(.block-folded) {
+    padding: 0;
+
+    > .block-frame-default-inner {
+        border-color: color-mix(in srgb, var(--border-color) 72%, transparent);
+        box-shadow: none;
+        transition: border-color var(--motion-standard, 140ms) var(--ease-standard, ease-out);
+
+        > .block-content {
+            // The detached host already follows every frame of the tile's geometry.
+            flex: 1 1 0;
+            min-inline-size: 100%;
+            max-inline-size: 100%;
+        }
+    }
+
+    &:focus-within > .block-frame-default-inner,
+    &.block-focused:not(.block-no-highlight) > .block-frame-default-inner {
+        border-color: color-mix(in srgb, var(--focus-ring-color) 74%, var(--border-color));
+    }
+
+    &:has(:focus-visible) > .block-frame-default-inner {
+        border-color: var(--focus-ring-color);
+    }
+
+    &.block-focused:not(.block-no-highlight) > .block-mask {
+        border-color: transparent;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        > .block-frame-default-inner {
+            transition: none;
+        }
+    }
+}
+
 // KronosCode context ribbon
 .kron-context-ribbon {
     font-family: var(--font-default);

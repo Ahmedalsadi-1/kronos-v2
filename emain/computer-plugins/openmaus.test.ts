@@ -22,6 +22,30 @@ vi.mock("../linux-desktop/upstream/openmaus/container-computer", async (importAc
     };
 });
 afterEach(() => vi.clearAllMocks());
+it("requires the current assignment for agent handback and revokes later commands", async () => {
+    const runner = vi.fn(async () => ({ stdout: "{}" }));
+    const runtime = new OpenMausComputerPlugin("linux-container:handback", "Handback", runner);
+    await runtime.assign("linux-container:handback", "agent-a", 0);
+    await expect(runtime.takeover("linux-container:handback", { agentId: "agent-b", generation: 1 })).rejects.toThrow(
+        "not assigned"
+    );
+    await expect(runtime.takeover("linux-container:handback", { agentId: "agent-a", generation: 0 })).rejects.toThrow(
+        "control changed"
+    );
+    const released = await runtime.takeover("linux-container:handback", { agentId: "agent-a", generation: 1 });
+    expect(released.controlOwner).toBe("user");
+    expect(released.controlGeneration).toBe(2);
+    await expect(
+        runtime.performAgent({
+            desktopId: released.id,
+            action: "exec",
+            command: "printf unexpected",
+            assignedAgentId: "agent-a",
+            expectedGeneration: 1,
+        })
+    ).rejects.toThrow("control changed");
+    expect(runner).not.toHaveBeenCalled();
+});
 it("uses independent immutable container targets and generation checks", async () => {
     const runner = vi.fn(async (_command: string, _args: string[]) => ({ stdout: "{}" }));
     const first = new OpenMausComputerPlugin("linux-container:one", "One", runner);

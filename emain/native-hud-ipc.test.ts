@@ -19,9 +19,15 @@ const mocks = vi.hoisted(() => ({
     desktopSend: vi.fn(),
     hudSend: vi.fn(),
     forwardHermesSelection: vi.fn(),
+    beginDesktopGrab: vi.fn(),
+    cancelDesktopGrab: vi.fn(),
 }));
 vi.mock("electron", () => ({ ipcMain: { on: mocks.on, handle: mocks.handle } }));
 vi.mock("./browser/browser-tools-ipc", () => ({ registerBrowserToolsIpc: mocks.registerBrowserToolsIpc }));
+vi.mock("./desktop-picker", () => ({
+    beginDesktopGrab: mocks.beginDesktopGrab,
+    cancelDesktopGrab: mocks.cancelDesktopGrab,
+}));
 vi.mock("./emain-tabview", () => ({ getWaveTabViewByWebContentsId: (id: number) => (id === 1 ? {} : null) }));
 vi.mock("./emain-window", () => ({
     getAllWaveWindows: () => [
@@ -60,6 +66,20 @@ vi.mock("./emain-hud", () => ({
 }));
 
 beforeEach(() => vi.clearAllMocks());
+test("only a trusted top-level renderer can arm or cancel its desktop picker", () => {
+    registerNativeHudIpc();
+    const grab = mocks.handle.mock.calls.find(([channel]) => channel === "desktop-grab")[1];
+    const cancel = mocks.handle.mock.calls.find(([channel]) => channel === "cancel-desktop-grab")[1];
+    const mainFrame = {};
+    const sender = { id: 1, mainFrame };
+    const operationId = "f7abbbf2-cb7a-47cd-912c-f06397b6f58b";
+    expect(() => grab({ sender, senderFrame: {} }, operationId)).toThrow("Untrusted desktop picker");
+    expect(() => cancel({ sender, senderFrame: mainFrame }, undefined)).toThrow("Invalid desktop picker operation");
+    grab({ sender, senderFrame: mainFrame }, operationId);
+    cancel({ sender, senderFrame: mainFrame }, operationId);
+    expect(mocks.beginDesktopGrab).toHaveBeenCalledExactlyOnceWith(sender, operationId);
+    expect(mocks.cancelDesktopGrab).toHaveBeenCalledExactlyOnceWith(1, operationId);
+});
 test("registers notch startup and widget APIs for workspace and native renderers", () => {
     registerNativeHudIpc();
     const startup = mocks.on.mock.calls.find(([channel]) => channel === "set-hud-window-mode")[1];

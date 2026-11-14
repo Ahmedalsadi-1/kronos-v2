@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KronOS — launch film review</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 64px 5vw; background: #101112; color: #f5f5f7; font: 16px/1.55 system-ui, sans-serif; }
+    main { max-width: 1280px; margin: auto; }
+    .eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: #a6a7ad; }
+    h1 { font-size: clamp(32px, 5vw, 64px); line-height: 1.05; letter-spacing: -.05em; font-weight: 650; margin: 20px 0 30px; }
+    video { display: block; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 16px; }
+    .note { max-width: 780px; color: #bfc1c6; margin: 26px 0; }
+    nav { display: flex; flex-wrap: wrap; gap: 12px; }
+    a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid #494b50; padding: 10px 18px; border-radius: 30px; }
+    a:hover { background: #292b30; }
+    a:focus-visible { outline: 3px solid #a49bff; outline-offset: 4px; }
+</style>
+<main>
+    <div class="eyebrow">KronOS · Launch film iteration</div>
+    <h1>Your whole workflow.<br>Within reach.</h1>
+    <video controls playsinline preload="metadata" poster="brag.jpg" src="brag.mp4"></video>
+    <p class="note">A motion concept covering the notch agent, widgets, sandbox, n8n and ComfyUI. This iteration mixes verified product imagery with staged development UI. It is not a continuous recording of a live workflow.</p>
+    <nav aria-label="Film files">
+        <a href="brag.mp4" download>Download film</a>
+        <a href="brag.jpg" download>Poster</a>
+        <a href="recording-shot-list.md">Recording checklist</a>
+        <a href="share-copy.txt">Share copy</a>
+    </nav>
+</main>
+</html>

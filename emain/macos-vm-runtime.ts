@@ -116,7 +116,7 @@ export class MacVmRuntime {
             if (!inventory.available) throw new Error(inventory.problem);
             const machine = inventory.machines.find((machine) => machine.name === name);
             if (!machine) throw new Error("The selected local VM is unavailable");
-            if (machine.running) throw new Error("Stop the externally running VM before opening it in KronTerm");
+            if (machine.running) throw new Error("Stop the externally running VM before opening it in KronOS");
             const child = spawn(
                 await this.binary(),
                 ["run", name, "--no-graphics", "--vnc-experimental", "--no-clipboard", "--no-audio"],

@@ -1,0 +1,14 @@
+{
+    "defwidget@browser-preview": {
+        "display:order": -2.9,
+        "icon": "globe",
+        "label": "Browser Preview",
+        "description": "Try the alternate browser layout",
+        "blockdef": {
+            "meta": {
+                "view": "web",
+                "web:chrome": "preview"
+            }
+        }
+    }
+}

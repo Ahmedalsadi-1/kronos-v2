@@ -241,7 +241,7 @@ const UpgradeOnboardingPatch = ({ isReleaseNotes = false }: UpgradeOnboardingPat
                             <Logo />
                         </div>
                         <div className="text-center text-[25px] font-normal text-foreground">
-                            KronTerm {currentVersion.version} Update
+                            KronOS {currentVersion.version} Update
                         </div>
                     </header>
                     <OverlayScrollbarsComponent

@@ -568,7 +568,7 @@ export function FloatingPet() {
       ) : null}
       {showPreviewControl && previewExpanded ? (
         <button
-          aria-label={activeSurface ? `Open ${previewTitle} in KronTerm` : `Close ${previewTitle} preview`}
+          aria-label={activeSurface ? `Open ${previewTitle} in KronOS` : `Close ${previewTitle} preview`}
           className="absolute left-[92%] top-[74%] z-10 w-56 cursor-pointer overflow-hidden rounded-xl border border-(--ui-border) bg-(--ui-bg-secondary)/96 text-left shadow-2xl backdrop-blur-xl"
           onClick={(event) => {
             event.stopPropagation()

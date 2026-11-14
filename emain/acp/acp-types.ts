@@ -188,11 +188,11 @@ export const ACP_BACKENDS_ALL: Record<string, AcpBackendConfig> = {
         acpArgs: ["acp"],
         skillsDirs: [".opencode/skills"],
         avatar: "◇",
-        description: "OpenCode ACP agent — runs inside the Hermes chat as /kronterm-agent",
+        description: "OpenCode CLI via ACP",
     },
     "kronterm-agent": {
         id: "kronterm-agent",
-        name: "KronTerm Agent",
+        name: "KronOS Coding Agent",
         cliCommand: "kronterm-agent",
         authRequired: false,
         enabled: true,
@@ -200,7 +200,7 @@ export const ACP_BACKENDS_ALL: Record<string, AcpBackendConfig> = {
         acpArgs: ["acp"],
         skillsDirs: [".agents/skills", ".kronoscode/skills", ".hermes/skills", ".opencode/skills"],
         avatar: "◆",
-        description: "KronTerm's OpenCode-compatible ACP specialist with scoped workspace tools",
+        description: "KronOS's OpenCode-compatible ACP specialist with scoped workspace tools",
     },
     droid: {
         id: "droid",
@@ -281,7 +281,7 @@ export const ACP_BACKENDS_ALL: Record<string, AcpBackendConfig> = {
         acpArgs: ["acp"],
         skillsDirs: [".agents/skills", ".kronoscode/skills", ".hermes/skills"],
         avatar: "◎",
-        description: "Built-in KronTerm agent",
+        description: "Built-in KronOS agent",
     },
     snow: {
         id: "snow",

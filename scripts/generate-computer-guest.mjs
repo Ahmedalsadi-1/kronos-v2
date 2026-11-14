@@ -8,7 +8,7 @@ import { fileURLToPath, URL } from "node:url";
 const directory = new URL("../emain/linux-desktop/guest/", import.meta.url);
 const source = Object.fromEntries(
   await Promise.all(
-    ["appearance.sh", "focus-one.sh", "session.sh"].map(async (name) => [
+    ["appearance.sh", "focus-one.sh", "open-app.sh", "pick-element.py", "session.sh"].map(async (name) => [
       name,
       await readFile(new URL(name, directory), "utf8"),
     ])

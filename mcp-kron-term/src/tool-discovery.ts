@@ -1,4 +1,5 @@
-import { kronTermToolFamily } from "./tool-families.js";
+import { discoveryWords, matchesDiscoveryQuery } from "./discovery-query.js";
+import { KronTermToolFamilies, kronTermToolFamily, type KronTermToolFamilyId } from "./tool-families.js";
 
 export type DiscoverableTool = {
     name: string;
@@ -10,26 +11,50 @@ export type DiscoverableTool = {
 export function searchTools(
     tools: DiscoverableTool[],
     query: string,
-    options: { limit?: number; readOnly?: boolean; includeSchemas?: boolean } = {}
+    options: {
+        limit?: number;
+        offset?: number;
+        family?: KronTermToolFamilyId;
+        readOnly?: boolean;
+        includeSchemas?: boolean;
+    } = {}
 ) {
-    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    const matches = tools
-        .filter((tool) => options.readOnly == null || (tool.annotations?.readOnlyHint === true) === options.readOnly)
+    const terms = discoveryWords(query, true);
+    const available = tools.filter(
+        (tool) => options.readOnly == null || (tool.annotations?.readOnlyHint === true) === options.readOnly
+    );
+    const matches = available
+        .filter((tool) => !options.family || kronTermToolFamily(tool.name) === options.family)
         .map((tool) => {
             const name = tool.name.toLowerCase();
-            const text = `${name} ${tool.description ?? ""}`.toLowerCase();
-            const score = terms.reduce(
-                (total, term) => total + (name === term ? 8 : name.includes(term) ? 4 : text.includes(term) ? 1 : 0),
-                0
-            );
-            return { tool, score, matches: terms.every((term) => text.includes(term)) };
+            const family = kronTermToolFamily(tool.name);
+            const text = `${name} ${tool.description ?? ""} ${family ?? ""} ${family ? KronTermToolFamilies[family].label : ""}`;
+            const score =
+                (name === query.trim().toLowerCase() ? 100 : 0) +
+                terms.reduce((total, term) => total + (name.includes(term) ? 4 : 1), 0);
+            return { tool, score, matches: matchesDiscoveryQuery(text, terms) };
         })
         .filter((entry) => entry.matches)
         .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));
     const limit = Math.min(100, Math.max(1, options.limit ?? 20));
+    const offset = Math.max(0, options.offset ?? 0);
     return {
         total: matches.length,
-        tools: matches.slice(0, limit).map(({ tool }) => ({
+        offset,
+        nextOffset: offset + limit < matches.length ? offset + limit : null,
+        availability: "enabled_for_current_scope",
+        readiness: "not_probed",
+        families: Object.entries(KronTermToolFamilies).flatMap(([id, info]) => {
+            const count = available.filter((tool) => kronTermToolFamily(tool.name) === id).length;
+            return count ? [{ id, ...info, count }] : [];
+        }),
+        ...(matches.length
+            ? {}
+            : {
+                  guidance:
+                      "No enabled tool matched. Try an empty query or a family filter. Missing catalog entries are not proof of a disconnected runtime; do not guess tool names or bypass scope.",
+              }),
+        tools: matches.slice(offset, offset + limit).map(({ tool }) => ({
             name: tool.name,
             family: kronTermToolFamily(tool.name),
             description: tool.description,

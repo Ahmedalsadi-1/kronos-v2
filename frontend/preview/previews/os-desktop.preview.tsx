@@ -6,7 +6,6 @@ import { SystemUIProvider } from "@/app/components/system-ui";
 import { OSDesktopLayer, type OSDesktopWindow } from "@/app/tab/os-desktop";
 import { DefaultOSDockPins, type OSDockPin } from "@/app/tab/os-desktop-model";
 import "@/app/tab/os-workspace.scss";
-import type { NowPlayingState } from "@/types/now-playing";
 import { useState } from "react";
 
 const windows: OSDesktopWindow[] = [
@@ -41,14 +40,6 @@ export function OSDesktopPreview() {
     const [scheme, setScheme] = useState("light");
     const [pins, setPins] = useState<OSDockPin[]>(DefaultOSDockPins);
     const [log, setLog] = useState<string>("");
-    const [media, setMedia] = useState<NowPlayingState>({
-        id: "preview",
-        source: "Media preview",
-        title: "Now Playing preview",
-        artist: "Playback controls",
-        playing: true,
-        canSkip: true,
-    });
     return (
         <div className="relative h-full min-h-0 w-full flex-1 overflow-hidden">
             <SystemUIProvider>
@@ -64,15 +55,6 @@ export function OSDesktopPreview() {
                     </select>
                     <img src={KronTermOSWallpaper} alt="" className="absolute inset-0 h-full w-full object-cover" />
                     <OSDesktopLayer
-                        media={{
-                            state: media,
-                            pending: false,
-                            error: "",
-                            control: async (command) => {
-                                if (command === "toggle") setMedia((state) => ({ ...state, playing: !state.playing }));
-                                setLog(`media ${command}`);
-                            },
-                        }}
                         windows={windows}
                         pins={pins}
                         installedApps={[{ id: "com.apple.Notes", name: "Notes", icon: "fa-note-sticky" }]}

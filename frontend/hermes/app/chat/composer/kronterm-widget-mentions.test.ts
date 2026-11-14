@@ -2,7 +2,7 @@ import { hermesDirectiveFormatter } from "@hermes/components/assistant-ui/direct
 import { describe, expect, it } from "vitest";
 import { detectTrigger } from "./text-utils";
 
-describe("Hermes KronTerm widget mentions", () => {
+describe("Hermes KronOS widget mentions", () => {
     it("keeps widget references in the live @ completion scope", () => {
         expect(detectTrigger("inspect @widget:block-7")).toMatchObject({
             kind: "@",

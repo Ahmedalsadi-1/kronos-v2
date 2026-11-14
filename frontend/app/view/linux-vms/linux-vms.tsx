@@ -42,6 +42,7 @@ export function LinuxVmsPanel({
                 ) : (
                     <MobileMachinePanel
                         key={`${initialSection}:${targetId ?? "default"}`}
+                        blockId={blockId}
                         platform={initialSection}
                         onCloseWidget={onCloseWidget}
                         settings={settings}
@@ -54,11 +55,13 @@ export function LinuxVmsPanel({
 }
 
 function MobileMachinePanel({
+    blockId,
     platform,
     settings,
     targetId,
     onCloseWidget,
 }: {
+    blockId?: string;
     platform: string;
     onCloseWidget?: () => void;
     settings: boolean;
@@ -103,6 +106,7 @@ function MobileMachinePanel({
         <ComputersPanel state={state} controller={controller} />
     ) : (
         <DeviceWorkspace
+            blockId={blockId}
             state={state}
             controller={controller}
             initialTargetId={targetId}

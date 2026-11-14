@@ -3,7 +3,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { clampHermesHudGeometry, hermesSurfaceController } from "./hermes-surface-controller";
 
 afterEach(() => {
@@ -17,86 +17,19 @@ describe("Hermes surface controller", () => {
         hermesSurfaceController.requestOpenPanel();
         hermesSurfaceController.requestOpenChat();
         expect(hermesSurfaceController.getSnapshot()).toMatchObject({ presentation: "panel", sessionId: "session-1" });
-        hermesSurfaceController.returnToHud();
+        hermesSurfaceController.requestOpenHud();
         expect(hermesSurfaceController.getSnapshot()).toMatchObject({ presentation: "hud", sessionId: "session-1" });
         hermesSurfaceController.dismiss();
         hermesSurfaceController.requestOpenChat();
         expect(hermesSurfaceController.getSnapshot().presentation).toBe("hud");
     });
-    it("moves one surface between HUD and widget presentation", async () => {
-        const expand = vi.fn(async () => undefined);
-        hermesSurfaceController.setExpandHandler(expand);
-        hermesSurfaceController.requestOpenHud("session-1");
-        expect(hermesSurfaceController.getSnapshot()).toMatchObject({
-            presentation: "hud",
-            sessionId: "session-1",
-        });
 
-        await hermesSurfaceController.expandToWidget();
-        expect(expand).toHaveBeenCalledOnce();
-        expect(hermesSurfaceController.getSnapshot().presentation).toBe("hud");
-
-        const closeToHud = vi.fn();
-        const unregister = hermesSurfaceController.registerWidgetHost({ blockId: "hermes-1", closeToHud });
-        expect(hermesSurfaceController.getSnapshot().presentation).toBe("widget");
-        hermesSurfaceController.requestOpenHud();
-        expect(closeToHud).toHaveBeenCalledOnce();
-        unregister();
-        expect(hermesSurfaceController.getSnapshot().presentation).toBe("hud");
-    });
-
-    it("dismisses independently from expanding", () => {
-        hermesSurfaceController.requestOpenHud();
+    it("retains the conversation when the side panel is dismissed and reopened in the HUD", () => {
+        hermesSurfaceController.requestOpenPanel("session-2");
         hermesSurfaceController.dismiss();
         expect(hermesSurfaceController.getSnapshot().presentation).toBe("closed");
-    });
-
-    it("moves the active widget into the docked panel", () => {
-        const closeToHud = vi.fn();
-        const unregister = hermesSurfaceController.registerWidgetHost({ blockId: "hermes-1", closeToHud });
-
-        hermesSurfaceController.requestOpenPanel("session-panel");
-        expect(closeToHud).toHaveBeenCalledOnce();
-        unregister();
-        expect(hermesSurfaceController.getSnapshot()).toMatchObject({
-            presentation: "panel",
-            sessionId: "session-panel",
-            widgetBlockId: null,
-        });
-    });
-
-    it("keeps the requested panel destination when the widget model disposes before React cleanup", () => {
-        const unregister = hermesSurfaceController.registerWidgetHost({ blockId: "hermes-1", closeToHud: vi.fn() });
-        hermesSurfaceController.requestOpenPanel("session-panel");
-        hermesSurfaceController.disposeWidget("hermes-1");
-        unregister();
-        expect(hermesSurfaceController.getSnapshot()).toMatchObject({
-            presentation: "panel",
-            sessionId: "session-panel",
-            widgetBlockId: null,
-        });
-    });
-
-    it("gives an open widget ownership instead of leaving the HUD expanded", () => {
-        hermesSurfaceController.requestOpenHud("session-widget");
-        hermesSurfaceController.registerWidgetHost({ blockId: "hermes-visible", closeToHud: vi.fn() });
-
-        expect(hermesSurfaceController.getSnapshot()).toMatchObject({
-            presentation: "widget",
-            sessionId: "session-widget",
-            widgetBlockId: "hermes-visible",
-        });
-    });
-
-    it("activates the widget the user interacts with", () => {
-        hermesSurfaceController.registerWidgetHost({ blockId: "hermes-1", closeToHud: vi.fn() });
-        hermesSurfaceController.registerWidgetHost({ blockId: "hermes-2", closeToHud: vi.fn() });
-
-        hermesSurfaceController.activateWidget("hermes-2");
-        expect(hermesSurfaceController.getSnapshot()).toMatchObject({
-            presentation: "widget",
-            widgetBlockId: "hermes-2",
-        });
+        hermesSurfaceController.requestOpenHud();
+        expect(hermesSurfaceController.getSnapshot()).toMatchObject({ presentation: "hud", sessionId: "session-2" });
     });
 });
 

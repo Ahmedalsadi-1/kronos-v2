@@ -373,6 +373,16 @@ export interface Translations {
       reasoningCollapsedDesc: string
       uiScaleTitle: string
       uiScaleDesc: (percent: number) => string
+      workspaceAppearanceTitle: string
+      interfaceFontTitle: string
+      interfaceFontDesc: string
+      interfaceFontSystem: string
+      interfaceFontMono: string
+      buttonStyleTitle: string
+      buttonStyleDesc: string
+      buttonStyleFlat: string
+      buttonStyleOutlined: string
+      controlDefault: string
       sessionDensityTitle: string
       sessionDensityDesc: string
       sessionDensityCompact: string
@@ -1761,6 +1771,7 @@ export interface Translations {
       openInTerminal: string
       hideTabBar: string
       openInNewTab: string
+      openInSidePanel: string
       openInSplit: string
       copyIdFailed: string
       sessionActions: string

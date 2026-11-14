@@ -3,6 +3,8 @@ import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
 import {
     $krontermSidebarOwner,
     $krontermSidebarTarget,
+    $penDesignTarget,
+    $workspaceCanvasPanels,
     registerKrontermSidebarOwner,
 } from "@hermes/lib/kronterm-sidebar";
 import { act, useState } from "react";
@@ -23,7 +25,31 @@ vi.mock("@hermes/store/layout", async () => {
 afterEach(() => {
     $krontermSidebarTarget.set(null);
     $workflowSidebarMode.set("sessions");
+    $workspaceCanvasPanels.set(false);
     document.body.replaceChildren();
+});
+
+it("opens the Design panel only when the native OS canvas is available", async () => {
+    const host = document.createElement("div");
+    const target = document.createElement("aside");
+    document.body.append(host, target);
+    const root = createRoot(host);
+    try {
+        await act(async () => {
+            $krontermSidebarTarget.set(target);
+            $workspaceCanvasPanels.set(true);
+            root.render(<KrontermSidebar>Sessions</KrontermSidebar>);
+        });
+        const button = target.querySelector<HTMLButtonElement>("#kronterm-navigation-design");
+        await act(async () => button.click());
+        expect(button.getAttribute("aria-selected")).toBe("true");
+        expect($penDesignTarget.get()?.hidden).toBe(false);
+        await act(async () => $workspaceCanvasPanels.set(false));
+        expect(target.contains(button)).toBe(false);
+        expect($penDesignTarget.get()).toBeNull();
+    } finally {
+        await act(async () => root.unmount());
+    }
 });
 
 it("prefers the workspace conversation over a background widget and returns ownership on teardown", () => {
@@ -61,17 +87,27 @@ it("keeps one sidebar owner and preserves its draft while the rail is hidden", a
                 </>
             );
         });
-        expect(target.querySelectorAll("input")).toHaveLength(1);
-        const input = target.querySelector("input");
+        const drafts = () => target.querySelectorAll<HTMLInputElement>("#kronterm-navigation-pane-sessions input");
+        expect(drafts()).toHaveLength(1);
+        expect([...target.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+            "Sessions",
+            "KronFlow",
+        ]);
+        const input = drafts()[0];
         target.hidden = true;
         target.hidden = false;
-        expect(target.querySelector("input")).toBe(input);
+        expect(drafts()[0]).toBe(input);
         expect(input.value).toBe("saved search");
         await act(async () => target.querySelector<HTMLButtonElement>("#kronterm-navigation-workflows").click());
         expect(target.querySelector("#kronterm-navigation-pane-sessions").hasAttribute("hidden")).toBe(true);
-        expect(target.querySelector("input")).toBe(input);
-        await act(async () => target.querySelector<HTMLButtonElement>("#kronterm-navigation-sessions").click());
-        expect(target.querySelector("input").value).toBe("saved search");
+        expect(drafts()[0]).toBe(input);
+        await act(async () =>
+            target
+                .querySelector("#kronterm-navigation-workflows")
+                .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))
+        );
+        expect($workflowSidebarMode.get()).toBe("sessions");
+        expect(drafts()[0].value).toBe("saved search");
         await act(async () => root.unmount());
         expect($krontermSidebarOwner.get()).toBeNull();
         expect(target.childElementCount).toBe(0);

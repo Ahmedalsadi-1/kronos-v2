@@ -171,20 +171,17 @@ describe("ComputerTargetsRuntime", () => {
     });
 });
 
-it("shuts down an idle iOS simulator despite repeated discovery", async () => {
+it("leaves an externally booted iOS simulator running after discovery", async () => {
     vi.useFakeTimers();
-    let state = "Booted";
-    const execute = vi.fn(async (_file: string, args: string[]) => {
-        if (args[1] === "shutdown") state = "Shutdown";
-        return deviceList(state);
-    });
+    const execute = vi.fn(async () => deviceList("Booted"));
     try {
         const runtime = new ComputerTargetsRuntime(execute, "darwin");
         await runtime.list();
         await vi.advanceTimersByTimeAsync(290_000);
         await runtime.list();
         await vi.advanceTimersByTimeAsync(10_000);
-        expect(execute).toHaveBeenCalledWith("/usr/bin/xcrun", ["simctl", "shutdown", DeviceId]);
+        expect(execute).toHaveBeenCalledTimes(2);
+        expect(execute).not.toHaveBeenCalledWith("/usr/bin/xcrun", ["simctl", "shutdown", DeviceId]);
     } finally {
         vi.useRealTimers();
     }
@@ -207,4 +204,15 @@ it("never arms an idle shutdown for a physical Android phone", async () => {
     } finally {
         vi.useRealTimers();
     }
+});
+
+
+it("coalesces overlapping inventory reads and refreshes after they finish", async () => {
+    const execute = vi.fn(async () => deviceList("Booted"));
+    const runtime = new ComputerTargetsRuntime(execute, "darwin");
+    const [first, second] = await Promise.all([runtime.list(), runtime.list()]);
+    expect(first).toEqual(second);
+    expect(execute).toHaveBeenCalledOnce();
+    await runtime.list();
+    expect(execute).toHaveBeenCalledTimes(2);
 });

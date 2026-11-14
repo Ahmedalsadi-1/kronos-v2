@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import http.client
+import io
 import json
+import select
+from collections import OrderedDict
+from concurrent.futures import Future
+from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 import logging
@@ -21,18 +28,20 @@ logger = logging.getLogger(__name__)
 _URL_ENV = "HERMES_KRONTERM_NATIVE_TOOL_URL"
 _TOKEN_ENV = "KRONTERM_NATIVE_TOOL_TOKEN"
 _TOOLSET = "kronterm"
+_CODING_TOOLS = frozenset({"terminal", "process_manage", "read_file", "write_file", "patch", "search_files"})
 # Socket budgets include a small grace period beyond the shared server deadline.
 _TIMEOUT_SECONDS = 35
 _READ_TIMEOUT_SECONDS = 15
 _readonly_tools: set[str] = set()
 _MANIFEST_TIMEOUT_SECONDS = 15
+_SWARM_SCOPE_TIMEOUT_SECONDS = 3
 _MAX_OUTPUT_BYTES = 28 * 1024 * 1024
 _ALIASES = {"browser_navigate": "kronterm_browser_navigate", "tool_search": "kronterm_tool_search"}
 _ALLOWED_TTL_SECONDS = 1.0
 _ALLOWED_FAILURE_TTL_SECONDS = 2.0
-_allowed_ttl = _ALLOWED_TTL_SECONDS
-_allowed_cache: tuple[float, frozenset[str]] | None = None
-_allowed_bridge: tuple[str, str] | None = None
+_ALLOWED_CACHE_SIZE = 64
+_allowed_cache: OrderedDict[tuple[str, ...], tuple[float, frozenset[str]]] = OrderedDict()
+_allowed_pending: dict[tuple[str, ...], Future[frozenset[str]]] = {}
 _allowed_lock = threading.Lock()
 _job_scope = ContextVar("kronterm_delegated_scope", default=None)
 
@@ -70,14 +79,68 @@ def _transport_failure(message: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             "uncertain": payload.get("method") == "call" and payload.get("name") not in _readonly_tools}}
 
 
-class _LocalBridgeRedirects(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+_MAX_IDLE_CONNECTIONS = 8
+_IDLE_CONNECTION_SECONDS = 10
+_idle_connections: list[tuple[tuple[str, bytes], float, http.client.HTTPConnection]] = []
+_connection_lock = threading.Lock()
 
 
+def _take_connection(key: tuple[str, bytes], timeout: float) -> http.client.HTTPConnection:
+    connection = None
+    now = time.monotonic()
+    with _connection_lock:
+        for index in range(len(_idle_connections) - 1, -1, -1):
+            identity, expires, idle = _idle_connections[index]
+            if expires <= now:
+                _idle_connections.pop(index)
+                idle.close()
+            elif connection is None and identity == key:
+                _idle_connections.pop(index)
+                connection = idle
+    if connection is not None:
+        try:
+            # An idle peer can close without sending another response.
+            if connection.sock is not None and not select.select([connection.sock], [], [], 0)[0]:
+                connection.sock.settimeout(timeout)
+                connection.timeout = timeout
+                return connection
+        except (OSError, ValueError):
+            pass
+        connection.close()
+    return http.client.HTTPConnection(key[0], timeout=timeout)
+
+
+class _OversizedResponse(Exception):
+    pass
+
+
+@contextmanager
 def _open_request(request, timeout):
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _LocalBridgeRedirects())
-    return opener.open(request, timeout=timeout)
+    headers = dict(request.header_items())
+    key = (request.host, hashlib.sha256(headers["Authorization"].encode("utf-8")).digest())
+    connection = _take_connection(key, timeout)
+    reusable = False
+    try:
+        # Never replay an ambiguous POST. Each request supplies its own authorization.
+        connection.request(request.get_method(), request.selector, request.data, headers)
+        with connection.getresponse() as response:
+            if not 200 <= response.status < 300:
+                raise urllib.error.HTTPError(
+                    request.full_url, response.status, response.reason, response.headers,
+                    io.BytesIO(response.read(64 * 1024)),
+                )
+            yield response
+            if response.length:
+                raise http.client.IncompleteRead(b"", response.length)
+            reusable = response.isclosed() and not response.will_close and connection.sock is not None
+    finally:
+        if reusable:
+            with _connection_lock:
+                _idle_connections.append((key, time.monotonic() + _IDLE_CONNECTION_SECONDS, connection))
+                if len(_idle_connections) > _MAX_IDLE_CONNECTIONS:
+                    _idle_connections.pop(0)[2].close()
+        else:
+            connection.close()
 
 
 def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -101,6 +164,10 @@ def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
     lease = _job_scope.get()
     if lease:
         payload["delegationToken"] = lease["token"]
+        if payload.get("method") in {"call", "scope"} and lease.get("track_stop"):
+            from .worker_stop import child_id
+            if worker := child_id.get():
+                payload["childId"] = worker
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -112,6 +179,14 @@ def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
     timeout = _READ_TIMEOUT_SECONDS if name in _readonly_tools else _TIMEOUT_SECONDS
     if name == "acp_run_agent":
         timeout = _timeout_number(arguments.get("timeoutSeconds", 180), 180, 15, 600) + 10
+    elif name == "n8n_run_agent":
+        timeout = _timeout_number(arguments.get("timeoutSeconds", 180), 180, 15, 600) + 125
+    elif name.startswith("n8n_") or name in {"swarm_start", "swarm_replan"}:
+        timeout = 125
+    elif name in {"workspace_design_editor_state", "workspace_design_execute", "workspace_design_read_skill", "workspace_design_save"}:
+        timeout = 95
+    elif name.startswith("comfyui_"):
+        timeout = 40
     elif name in {"linux_desktop_start", "sandbox_task_start"}:
         timeout = 185
     elif name.startswith("sandbox_vm_"):
@@ -124,18 +199,22 @@ def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
         timeout = 65
     elif name == "widget_wait_for":
         timeout = _timeout_number(arguments.get("timeoutMs", 10000), 10000, 100, 60000) / 1000 + 7
-    if payload.get("method") != "call":
+    if payload.get("method") in {"scope", "swarm_guard_ready"}:
+        timeout = _SWARM_SCOPE_TIMEOUT_SECONDS
+    elif payload.get("method") != "call":
         timeout = _MANIFEST_TIMEOUT_SECONDS
     try:
         with _open_request(request, timeout=timeout) as response:
             output = response.read(_MAX_OUTPUT_BYTES + 1)
+            if len(output) > _MAX_OUTPUT_BYTES:
+                raise _OversizedResponse
+    except _OversizedResponse:
+        return _transport_failure("KronTerm TypeScript tool bridge returned an oversized response", payload)
     except urllib.error.HTTPError as exc:
         message = _http_error_message(exc)
         return _transport_failure(message, payload) if exc.code >= 500 else {"error": message}
-    except (OSError, urllib.error.URLError) as exc:
+    except (OSError, http.client.HTTPException) as exc:
         return _transport_failure(f"KronTerm TypeScript tool bridge failed: {exc}", payload)
-    if len(output) > _MAX_OUTPUT_BYTES:
-        return _transport_failure("KronTerm TypeScript tool bridge returned an oversized response", payload)
     try:
         response = json.loads(output)
     except ValueError:
@@ -182,38 +261,58 @@ def _manifest_tools() -> list[Dict[str, Any]]:
     return []
 
 
-def _allowed_tools() -> frozenset[str]:
-    """Tools enabled for the active workspace, fetched with one bridge call and cached briefly.
-
-    Hermes probes every tool's check_fn when it builds a turn; one subprocess per tool
-    made the whole toolset flap as unavailable under load.
-    """
-    # Parallel tool checks share one refresh instead of flooding Electron on expiry.
-    with _allowed_lock:
-        return _refresh_allowed_tools()
-
-
-def _refresh_allowed_tools() -> frozenset[str]:
-    global _allowed_cache, _allowed_bridge, _allowed_ttl
+def _availability_key(identity: str, task_id: str = "") -> tuple[str, ...]:
     lease = _job_scope.get()
-    bridge = (os.environ.get(_URL_ENV, "").strip(), os.environ.get(_TOKEN_ENV, "").strip(),
-              _runtime_identity(), lease["token"] if lease else "")
-    if bridge != _allowed_bridge:
-        _allowed_cache = None
-        _allowed_bridge = bridge
-    now = time.monotonic()
-    if _allowed_cache is not None and now - _allowed_cache[0] < _allowed_ttl:
-        return _allowed_cache[1]
-    response = _bridge_request({"method": "list"})
-    tools = response.get("tools")
-    if not isinstance(tools, list):
-        _allowed_ttl = _ALLOWED_FAILURE_TTL_SECONDS
-        _allowed_cache = (now, frozenset())
-        return frozenset()
-    allowed = frozenset(str(tool.get("name")) for tool in tools if isinstance(tool, dict) and tool.get("name"))
-    _allowed_ttl = _ALLOWED_TTL_SECONDS
-    _allowed_cache = (now, allowed)
-    return allowed
+    return (os.environ.get(_URL_ENV, "").strip(), os.environ.get(_TOKEN_ENV, "").strip(),
+            identity, lease["token"] if lease else "", task_id)
+
+
+def _allowed_tools(identity: str | None = None, task_id: str = "") -> frozenset[str]:
+    if identity is None:
+        identity = _runtime_identity()
+    key = _availability_key(identity, task_id)
+    with _allowed_lock:
+        now = time.monotonic()
+        cached = _allowed_cache.get(key)
+        if cached and now < cached[0]:
+            _allowed_cache.move_to_end(key)
+            return cached[1]
+        refresh = _allowed_pending.get(key)
+        refresh_needed = refresh is None
+        if refresh_needed:
+            refresh = _allowed_pending[key] = Future()
+    if not refresh_needed:
+        return refresh.result()
+
+    try:
+        # Tool checks within one chat share a refresh without blocking other chats.
+        payload = {"method": "list", "namesOnly": True}
+        if identity:
+            payload["sessionId"] = identity
+        if task_id:
+            payload["taskId"] = task_id
+        tools = _bridge_request(payload).get("tools")
+        valid = isinstance(tools, list)
+        allowed = frozenset()
+        if valid:
+            allowed = frozenset(tool["name"] for tool in tools
+                                if isinstance(tool, dict) and isinstance(tool.get("name"), str))
+        ttl = _ALLOWED_TTL_SECONDS if valid else _ALLOWED_FAILURE_TTL_SECONDS
+        with _allowed_lock:
+            if _allowed_pending.get(key) is refresh:
+                _allowed_cache[key] = (time.monotonic() + ttl, allowed)
+                _allowed_cache.move_to_end(key)
+                if len(_allowed_cache) > _ALLOWED_CACHE_SIZE:
+                    _allowed_cache.popitem(last=False)
+        refresh.set_result(allowed)
+        return allowed
+    except BaseException as exc:
+        refresh.set_exception(exc)
+        raise
+    finally:
+        with _allowed_lock:
+            if _allowed_pending.get(key) is refresh:
+                del _allowed_pending[key]
 
 
 def _tool_allowed(name: str) -> bool:
@@ -260,22 +359,34 @@ def _normalize_result(response: Dict[str, Any]) -> str | Dict[str, Any]:
     return {"_multimodal": True, "content": multimodal, "text_summary": text or "KronTerm screenshot"}
 
 
-def _handler(original_name: str):
+def _handler(original_name: str, run_action=None):
     def call(args: Dict[str, Any], session_id: str | None = None, task_id: str | None = None, **_: Any) -> str | Dict[str, Any]:
-        global _allowed_cache
         if not isinstance(args, dict):
             return json.dumps({"error": "KronTerm tool arguments must be an object matching the tool schema"})
+        if original_name in {"terminal_open", "block_run_command"}:
+            if args.get("visible") is not True:
+                return json.dumps({"error": "Visible terminal creation requires visible=true and an explicit user request. "
+                                   "Use the existing terminal tool for headless commands in its configured environment. "
+                                   "Use terminal background=true and process_manage for long-running jobs. "
+                                   "For assigned sandbox work, use sandbox_vm_exec. No widget was opened."})
+            args = {key: value for key, value in args.items() if key != "visible"}
         if original_name == "tool_search" and isinstance(args.get("query"), str):
             args = {**args, "query": _rewrite_tool_names(args["query"], {value: key for key, value in _ALIASES.items()})}
-        # Dispatcher context, rather than model arguments, selects the owning chat.
-        identity = session_id or task_id
-        response = _bridge_request({"method": "call", "name": original_name, "arguments": args,
-                                    **({"sessionId": identity} if identity else {}),
-                                    **({"taskId": task_id} if task_id else {})})
-        if original_name in {"tool_search", "app_workflow", "surface_status"}:
-            response = _exposed_discovery_result(response)
+        # The dispatcher can supply an internal engine ID that the UI never registered.
+        identity = _runtime_identity() or session_id or task_id
+        payload = {"method": "call", "name": original_name, "arguments": args,
+                   **({"sessionId": identity} if identity else {}),
+                   **({"taskId": task_id} if task_id else {})}
+        response = (run_action(original_name, args, lambda: _bridge_request(payload))
+                    if run_action else _bridge_request(payload))
+        if original_name in {"tool_search", "app_workflow", "surface_status", "shared_skill_list", "shared_skill_read"}:
+            response = _exposed_discovery_result(response, skill_result=original_name.startswith("shared_skill_"))
         if response.get("error") or response.get("isError"):
-            _allowed_cache = None
+            with _allowed_lock:
+                for cache_task_id in {"", task_id or ""}:
+                    key = _availability_key(identity or "", cache_task_id)
+                    _allowed_cache.pop(key, None)
+                    _allowed_pending.pop(key, None)
         return _normalize_result(response)
 
     return call
@@ -286,14 +397,34 @@ def _rewrite_tool_names(text: str, names: Dict[str, str]) -> str:
     return re.sub(pattern, lambda match: names[match.group(0)], text)
 
 
-def _exposed_discovery_result(response: Dict[str, Any]) -> Dict[str, Any]:
+def _visible_terminal_tool(tool: Dict[str, Any]) -> Dict[str, Any]:
+    if tool.get("name") not in {"terminal_open", "block_run_command"}:
+        return tool
+    description = ("Open a visible terminal widget only when the user explicitly requests one; requires visible=true. "
+                   "For routine commands use the existing headless terminal tool, which preserves shell state. "
+                   "For long-running jobs use terminal background=true and process_manage. "
+                   "Respect the configured environment and use sandbox_vm_exec for assigned sandbox work. ")
+    result = {**tool, "description": description + str(tool.get("description") or "")}
+    schema = tool.get("inputSchema")
+    if isinstance(schema, dict):
+        result["inputSchema"] = {**schema, "properties": {**schema.get("properties", {}), "visible": {
+            "type": "boolean", "default": False,
+            "description": "Set true only when the user explicitly requested a visible terminal widget."
+        }}}
+    return result
+
+
+def _exposed_discovery_result(response: Dict[str, Any], skill_result: bool = False) -> Dict[str, Any]:
     def rewrite(value):
         if isinstance(value, str):
             return _rewrite_tool_names(value, _ALIASES)
         if isinstance(value, list):
             return [rewrite(item) for item in value]
         if isinstance(value, dict):
-            return {key: rewrite(item) for key, item in value.items()}
+            if not skill_result and "description" in value:
+                value = _visible_terminal_tool(value)
+            return {key: item if key == "scope" or (skill_result and key in {"id", "name", "source"}) else rewrite(item)
+                    for key, item in value.items()}
         return value
 
     content = response.get("content")
@@ -310,6 +441,7 @@ def _exposed_discovery_result(response: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _schema(tool: Dict[str, Any], exposed_name: str) -> Dict[str, Any]:
+    tool = _visible_terminal_tool(tool)
     annotations = tool.get("annotations") if isinstance(tool.get("annotations"), dict) else {}
     description = str(tool.get("description") or f"Call the KronTerm {exposed_name} surface tool.")
     description = _rewrite_tool_names(description, _ALIASES)
@@ -319,23 +451,126 @@ def _schema(tool: Dict[str, Any], exposed_name: str) -> Dict[str, Any]:
     return {"name": exposed_name, "description": description, "parameters": parameters}
 
 
+def _register_swarm_middleware(ctx, bridge_tools):
+    managed_tools = bridge_tools | _CODING_TOOLS
+
+    def allowed_for_session(session_id, task_id, tool_name=None):
+        if not os.environ.get(_URL_ENV, "").strip() or not os.environ.get(_TOKEN_ENV, "").strip():
+            return False, frozenset()
+        try:
+            identity = _runtime_identity() or session_id
+            if not identity and not task_id:
+                return True, frozenset()
+            response = _bridge_request({"method": "scope", "sessionId": identity, "taskId": task_id})
+            scope = response.get("scope")
+            scoped = scope.get("swarm") if isinstance(scope, dict) else None
+            if scoped is False:
+                if tool_name is not None and tool_name not in managed_tools:
+                    return False, frozenset()
+                builtin_tools = response.get("builtinTools")
+                coding = _CODING_TOOLS.intersection(
+                    name for name in builtin_tools if isinstance(name, str)
+                ) if isinstance(builtin_tools, list) else frozenset()
+                try:
+                    names = _allowed_tools(identity, task_id)
+                except Exception:
+                    logger.warning("Could not list the chat's KronOS tools", exc_info=True)
+                    names = frozenset()
+                return False, coding | bridge_tools.intersection(_ALIASES.get(name, name) for name in names)
+            tools = response.get("tools")
+            if scoped is True and isinstance(tools, list):
+                names = (tool["name"] for tool in tools
+                         if isinstance(tool, dict) and isinstance(tool.get("name"), str))
+                return True, bridge_tools.intersection(_ALIASES.get(name, name) for name in names)
+        except Exception:
+            logger.warning("Could not verify KronOS session tool scope", exc_info=True)
+        # Hermes skips failed middleware, so an unavailable authority must return a denial.
+        return True, frozenset()
+
+    def tool_name_from_schema(tool):
+        if isinstance(tool, dict):
+            function = tool.get("function", tool)
+            name = function.get("name") if isinstance(function, dict) else None
+            if isinstance(name, str):
+                return name
+        return None
+
+    def permitted(name, scoped, allowed):
+        return name in allowed or (not scoped and name not in managed_tools)
+
+    def filter_tools(request, next_call, session_id="", task_id="", **_):
+        scoped, allowed = allowed_for_session(session_id, task_id)
+        tools = request.get("tools")
+        filtered = (
+            [tool for tool in tools if permitted(tool_name_from_schema(tool), scoped, allowed)]
+            if isinstance(tools, list) else []
+        )
+        if not scoped and (not isinstance(tools, list) or len(filtered) == len(tools)):
+            return next_call(request)
+        request = {**request}
+        choice_name = tool_name_from_schema(request.get("tool_choice"))
+        if scoped or not filtered or (choice_name and not permitted(choice_name, scoped, allowed)):
+            request.pop("tool_choice", None)
+        if scoped or not filtered:
+            request.pop("parallel_tool_calls", None)
+        if filtered:
+            request["tools"] = filtered
+        else:
+            request.pop("tools", None)
+        return next_call(request)
+
+    def enforce(tool_name, args, next_call, session_id="", task_id="", **_):
+        if not isinstance(tool_name, str):
+            return json.dumps({"error": "Invalid KronOS tool name."})
+        scoped, allowed = allowed_for_session(session_id, task_id, tool_name)
+        if permitted(tool_name, scoped, allowed):
+            return next_call(args)
+        return json.dumps({"error": "This tool is outside the active KronOS tool grant."})
+
+    ctx.register_middleware("llm_execution", filter_tools)
+    ctx.register_middleware("tool_execution", enforce)
+
+
 def register(ctx) -> None:
     """Register every schema exported by the TypeScript bridge."""
+    middleware = callable(getattr(ctx, "register_middleware", None))
+    run_action = None
+    if middleware:
+        from .harness import run_action, register_action_middleware, worker_budget, worker_slots
+
+    mutations = set()
+    bridge_tools = set()
     for tool in _manifest_tools():
         original_name = tool.get("name")
         if not isinstance(original_name, str) or not original_name:
             continue
         exposed_name = _ALIASES.get(original_name, original_name)
-        ctx.register_tool(
+        schema = _schema(tool, exposed_name)
+        registration = ctx.register_tool(
             name=exposed_name,
             toolset=_TOOLSET,
-            schema=_schema(tool, exposed_name),
-            handler=_handler(original_name),
-            check_fn=lambda name=original_name: _tool_allowed(name),
-            description=_rewrite_tool_names(str(tool.get("description") or ""), _ALIASES),
+            schema=schema,
+            handler=_handler(original_name, run_action),
+            # Hermes caches schema availability by profile, so live chat authority belongs in middleware.
+            check_fn=None if middleware else lambda name=original_name: _tool_allowed(name),
+            description=schema["description"],
             emoji="🪐",
         )
+        if registration is not None:
+            bridge_tools.add(exposed_name)
+            if original_name not in _readonly_tools:
+                mutations.add(exposed_name)
 
-    if callable(getattr(ctx, "register_middleware", None)):
+    if middleware:
         from .delegation import register as register_delegation
-        register_delegation(ctx, _bridge_request, _job_scope)
+        if os.environ.get("KRONOS_HERMES_TRACE_DB"):
+            from .task_trace import register as register_task_trace
+            register_task_trace(ctx, bridge_tools)
+        _register_swarm_middleware(ctx, frozenset(bridge_tools))
+        register_action_middleware(ctx, mutations)
+        from .worker_stop import bind_worker_stop
+        register_delegation(ctx, _bridge_request, _job_scope, worker_budget, bind_worker_stop, worker_slots)
+        if bridge_tools:
+            guard = _bridge_request({"method": "swarm_guard_ready", "guardVersion": 1})
+            if guard.get("ok") is not True:
+                logger.warning("The managed KronOS tool server did not acknowledge the swarm guard")

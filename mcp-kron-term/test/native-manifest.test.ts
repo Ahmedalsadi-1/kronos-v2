@@ -23,6 +23,10 @@ test("native tool manifest respects the tool filter", () => {
     assert.equal(tools[0]?.name, "surface_status");
 });
 
+test("native tool manifest omits retired design tools", () => {
+    assert.deepEqual(nativeToolManifest((name) => name === "workspace_design" || name === "workspace_design_deploy"), []);
+});
+
 test("warm manifests preserve live authorization, metadata, enabled state, and schema replacement", () => {
     const registry = (server as unknown as { _registeredTools: Record<string, any> })._registeredTools;
     const tool = registry.surface_status;

@@ -33,12 +33,13 @@ const subscribe = (onChange: () => void) => {
  * OTHER sessions. The boolean snapshot bails out of all of that, re-rendering
  * only on the actual show/hide transition.
  */
-export function useSessionStatusPresence(sessionId: string | null): boolean {
-  return useSyncExternalStore(subscribe, () => {
-    if (!sessionId) {
-      return false
-    }
-
-    return FEEDS.some(feed => (feed.get()[sessionId]?.length ?? 0) > 0)
-  })
+export function useSessionStatusPresence(sessionId: string | null, storedSessionId?: string | null): boolean {
+  return useSyncExternalStore(subscribe, () =>
+    Boolean(
+      (sessionId && FEEDS.some(feed => (feed.get()[sessionId]?.length ?? 0) > 0)) ||
+      (storedSessionId &&
+        storedSessionId !== sessionId &&
+        $statusItemsBySession.get()[storedSessionId]?.some(item => item.swarm))
+    )
+  )
 }

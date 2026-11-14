@@ -5,6 +5,7 @@ import { resolveBlockView } from "@/app/block/retired-chat-view";
 import { BlockChromeProvider } from "@/app/block/block-chrome-context";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
 import { PersistentBlock as BlockView } from "@/app/block/persistent-block";
+import { KronOSSignInButton } from "@/app/components/ui/kronos-sign-in-button";
 import { ContextMenuModel } from "@/app/store/contextmenu";
 import { globalStore } from "@/app/store/jotaiStore";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -169,7 +170,7 @@ const WidgetTab = memo(
         const viewType = resolveBlockView(String(blockData?.meta?.view ?? "term"));
         const viewName = blockViewToName(viewType);
         const title = String(blockData?.meta?.["frame:title"] ?? "").trim() || viewName;
-        const displayTitle = viewType === "hermes" ? "KronTerm Agent" : title;
+        const displayTitle = viewType === "hermes" ? "KronOS Agent" : title;
         const icon = resolveBlockIcon(viewType, blockData?.meta);
         const closeAccessibility = getWidgetTabCloseAccessibility(active);
         const [isEditing, setIsEditing] = useState(false);
@@ -541,7 +542,7 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
         if (!tabStrip) {
             return;
         }
-        setTabStripScroll(computeWidgetTabStripScrollMetrics(tabStrip));
+        setTabStripScroll((previous) => computeWidgetTabStripScrollMetrics(tabStrip, previous));
     }, []);
 
     useEffect(() => {
@@ -975,6 +976,7 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
             style={{ "--widget-sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
         >
             <header className="widget-surface-tabbar" aria-label="Widget tabs">
+                <KronOSSignInButton />
                 <button
                     type="button"
                     className="widget-sidebar-toggle"
@@ -1108,7 +1110,7 @@ const WidgetTabsLayout = memo(({ tabAtom, contents }: WidgetTabsLayoutProps) => 
                     type="button"
                     className={`widget-surface-add ${widgetPickerOpen ? "is-open" : ""}`}
                     onClick={() => setWidgetPickerOpen((current) => !current)}
-                    aria-haspopup="menu"
+                    aria-haspopup="dialog"
                     aria-expanded={widgetPickerOpen}
                     aria-label="New tab"
                     title="New tab"

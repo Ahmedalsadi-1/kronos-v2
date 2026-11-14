@@ -28,6 +28,10 @@ describe("app-registry", () => {
             expect(searchApps([launcher], query).map((app) => app.id)).toEqual(["view:linux-vms"]);
         }
         expect(focusOrCreateDecision(launcher)).toEqual({ action: "focus", blockId: "machines-1" });
+        expect(focusOrCreateDecision(launcher, { newWindow: true })).toEqual({
+            action: "focus",
+            blockId: "machines-1",
+        });
     });
     test("device search launches the Computers app and reuses its live block", () => {
         const devices = makeViewAppDescriptor("computers", ["devices-1"]);

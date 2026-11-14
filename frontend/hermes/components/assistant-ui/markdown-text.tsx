@@ -8,13 +8,24 @@ import {
   tailBoundedRemend
 } from '@assistant-ui/react-streamdown'
 import type { code as streamdownCode } from '@streamdown/code'
-import { type ComponentProps, memo, useEffect, useMemo, useState } from 'react'
+import { type ComponentProps, memo, useEffect, useMemo, useRef, useState } from 'react'
 
+import { requestComposerInsertRefs } from '@hermes/app/chat/composer/focus'
 import { ExpandableBlock } from '@hermes/components/chat/expandable-block'
 import { PreviewAttachment } from '@hermes/components/chat/preview-attachment'
 import { chunkByLines, SyntaxHighlighter } from '@hermes/components/chat/shiki-highlighter'
 import { ZoomableImage } from '@hermes/components/chat/zoomable-image'
 import { ErrorBoundary } from '@hermes/components/error-boundary'
+import { Codicon } from '@hermes/components/ui/codicon'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@hermes/components/ui/context-menu'
+import { CopyButton } from '@hermes/components/ui/copy-button'
+import { useI18n } from '@hermes/i18n'
 import { detectArtifact } from '@hermes/lib/artifact-detect'
 import { normalizeExternalUrl, openExternalLink, PrettyLink } from '@hermes/lib/external-link'
 import { createMemoizedMathPlugin } from '@hermes/lib/katex-memo'
@@ -34,6 +45,7 @@ import {
 import { previewTargetFromMarkdownHref } from '@hermes/lib/preview-targets'
 import { sessionRefFromMarkdownHref } from '@hermes/lib/session-refs'
 import { cn } from '@hermes/lib/utils'
+import { notifyError } from '@hermes/store/notifications'
 
 import { ArtifactCard } from './artifact-card'
 import { SessionRefLink } from './directive-text'
@@ -299,8 +311,54 @@ function MarkdownLink({ children, className, href, ...props }: ComponentProps<'a
 
   const fallbackLabel = text && normalizeExternalUrl(text) !== target ? text : undefined
 
+  return <ChatLink className={cn('wrap-anywhere', className)} fallbackLabel={fallbackLabel} href={target} {...props} />
+}
+
+function ChatLink(props: ComponentProps<typeof PrettyLink>) {
+  const { t } = useI18n()
+  const linkRef = useRef<HTMLAnchorElement>(null)
+  const [composerTarget, setComposerTarget] = useState<string>()
+  const openBrowser = window.hermesDesktop?.openPreviewInBrowser ?? window.hermesDesktop?.openExternal
+
+  if (!openBrowser) {
+    return <PrettyLink {...props} />
+  }
+
   return (
-    <PrettyLink className={cn('wrap-anywhere', className)} fallbackLabel={fallbackLabel} href={target} {...props} />
+    <ContextMenu
+      onOpenChange={open => {
+        const target = open ? linkRef.current?.closest<HTMLElement>('[data-composer-target]') : null
+        setComposerTarget(target?.dataset.composerTarget)
+      }}
+    >
+      <ContextMenuTrigger asChild>
+        <PrettyLink {...props} ref={linkRef} />
+      </ContextMenuTrigger>
+      <ContextMenuContent aria-label={t.artifacts.kindLink}>
+        <ContextMenuItem
+          className="cursor-pointer"
+          onSelect={() =>
+            void openBrowser(props.href).catch(error => notifyError(error, t.artifactPreview.openInBrowserFailed))
+          }
+        >
+          <Codicon name="globe" size="0.875rem" />
+          {t.preview.openInBrowser}
+        </ContextMenuItem>
+        {composerTarget && (
+          <ContextMenuItem
+            className="cursor-pointer"
+            onSelect={() =>
+              requestComposerInsertRefs([{ kind: 'url', value: props.href }], { target: composerTarget })
+            }
+          >
+            <Codicon name="comment-discussion" size="0.875rem" />
+            {t.rightSidebar.addToChat}
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        <CopyButton appearance="context-menu-item" className="cursor-pointer" label={t.artifacts.copyUrl} text={props.href} />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 

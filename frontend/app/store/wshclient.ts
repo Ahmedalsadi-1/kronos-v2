@@ -10,6 +10,7 @@ class RpcResponseHelper {
     client: WshClient;
     cmdMsg: RpcMessage;
     done: boolean;
+    readonly cancellation = new AbortController();
 
     constructor(client: WshClient, cmdMsg: RpcMessage) {
         this.client = client;
@@ -42,12 +43,17 @@ class RpcResponseHelper {
 class WshClient {
     routeId: string;
     openRpcs: Map<string, ClientRpcEntry> = new Map();
+    private incomingRpcs = new Map<string, RpcResponseHelper>();
 
     constructor(routeId: string) {
         this.routeId = routeId;
     }
 
-    wshRpcCall(command: string, data: any, opts: RpcOpts & { signal?: AbortSignal }): Promise<any> {
+    wshRpcCall(
+        command: string,
+        data: any,
+        opts: RpcOpts & { signal?: AbortSignal; waitForCancelAck?: boolean }
+    ): Promise<any> {
         const msg: RpcMessage = {
             command: command,
             data: data,
@@ -62,7 +68,7 @@ class WshClient {
         if (opts?.route) {
             msg.route = opts.route;
         }
-        const rpcGen = sendRpcCommand(this.openRpcs, msg, (opts as RpcOpts & { signal?: AbortSignal })?.signal);
+        const rpcGen = sendRpcCommand(this.openRpcs, msg, opts?.signal, opts?.waitForCancelAck);
         if (rpcGen == null) {
             return null;
         }
@@ -95,6 +101,7 @@ class WshClient {
     async handleIncomingCommand(msg: RpcMessage) {
         // TODO implement a timeout (setTimeout + sendResponse)
         const helper = new RpcResponseHelper(this, msg);
+        if (msg.reqid) this.incomingRpcs.set(msg.reqid, helper);
         const handlerName = `handle_${msg.command}`;
         try {
             let result: any = null;
@@ -119,6 +126,7 @@ class WshClient {
                 console.log(`rpc-client[${this.routeId}] command[${msg.command}] error`, e.message);
             }
         } finally {
+            if (msg.reqid) this.incomingRpcs.delete(msg.reqid);
             if (!helper.done) {
                 helper.sendResponse({});
             }
@@ -127,6 +135,10 @@ class WshClient {
     }
 
     recvRpcMessage(msg: RpcMessage) {
+        if (msg.cancel && msg.reqid) {
+            this.incomingRpcs.get(msg.reqid)?.cancellation.abort();
+            return;
+        }
         const isRequest = msg.command != null || msg.reqid != null;
         if (isRequest) {
             this.handleIncomingCommand(msg);

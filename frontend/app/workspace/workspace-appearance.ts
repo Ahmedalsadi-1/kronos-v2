@@ -69,7 +69,7 @@ function publishWorkspaceAppearance(appearance: WorkspaceAppearance): void {
         window.localStorage.setItem(WorkspaceAppearanceStorageKey, JSON.stringify(appearance));
         window.dispatchEvent(new CustomEvent(WorkspaceAppearanceChangedEvent, { detail: appearance }));
     } catch (error) {
-        console.warn("[KronTerm] workspace appearance update failed", error);
+        console.warn("[KronOS] workspace appearance update failed", error);
     }
 }
 

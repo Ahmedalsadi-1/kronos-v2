@@ -85,13 +85,13 @@ export function StarAskPage({ onClose, page = "upgrade" }: StarAskPageProps) {
                     <Logo />
                 </div>
                 <div className="text-center text-[25px] font-normal text-foreground">
-                    Support open-source. Star KronTerm.
+                    Support open-source. Star KronOS.
                 </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center gap-5 unselectable">
                 <div className="flex flex-col items-center gap-4 max-w-[460px] text-center">
                     <div className="text-secondary text-sm leading-relaxed">
-                        KronTerm is free, open-source, and open-model. Stars help us stay visible against closed
+                        KronOS is free, open-source, and open-model. Stars help us stay visible against closed
                         alternatives. One click makes a difference.
                     </div>
                     <div

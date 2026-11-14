@@ -19,7 +19,7 @@ export function writeN8nWidgetNodes(directory: string, bridgeFile: string, widge
         const className = `KronTermWidget${id}`;
         const title = String(widget["display:name"] || widget["display:label"] || widget.label || key).slice(0, 160);
         const description = {
-            displayName: `KronTerm: ${title}`,
+            displayName: `KronOS: ${title}`,
             name: `kronTermWidget${id}`,
             version: 1,
             group: ["transform"],

@@ -88,7 +88,7 @@ const webSocketUrl = (baseUrl: string, candidate: string): string => {
     return url.toString();
 };
 
-const unwrapArray = <T>(payload: unknown, key: string): T[] => {
+const unwrapArray = <T>(payload: unknown, key: string): T[] | undefined => {
     if (Array.isArray(payload)) {
         return payload as T[];
     }
@@ -101,7 +101,6 @@ const unwrapArray = <T>(payload: unknown, key: string): T[] => {
             return record.data as T[];
         }
     }
-    return [];
 };
 
 export const messageText = (parts: KronosMessagePart[]): string =>
@@ -239,7 +238,11 @@ export class KronosHostClient {
 
     async listSessions(): Promise<KronosSession[]> {
         const payload = await this.request<unknown>("/session", { timeoutMs: 15_000 });
-        return unwrapArray<KronosSession>(payload, "sessions");
+        const sessions = unwrapArray<KronosSession>(payload, "sessions");
+        if (!sessions?.every((session) => typeof session?.id === "string" && session.id)) {
+            throw new Error("Host did not return a compatible iPhone session list");
+        }
+        return sessions;
     }
 
     async createSession(title = "KronTerm iPhone"): Promise<KronosSession> {
@@ -266,7 +269,7 @@ export class KronosHostClient {
         const payload = await this.request<unknown>(`/session/${encodeURIComponent(sessionId)}/message`, {
             timeoutMs: 20_000,
         });
-        return unwrapArray<KronosMessage>(payload, "messages").filter(
+        return (unwrapArray<KronosMessage>(payload, "messages") ?? []).filter(
             (message) => Boolean(message?.info?.id) && Array.isArray(message.parts)
         );
     }
@@ -430,7 +433,7 @@ export class KronosHostClient {
 
     async listSandboxes(): Promise<SandboxRecord[]> {
         const payload = await this.request<unknown>("/desktop-sandbox", { timeoutMs: 15_000 });
-        return unwrapArray<SandboxRecord>(payload, "sandboxes");
+        return unwrapArray<SandboxRecord>(payload, "sandboxes") ?? [];
     }
 
     async createSandbox(): Promise<SandboxRecord> {

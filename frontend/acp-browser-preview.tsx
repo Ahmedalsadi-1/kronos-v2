@@ -30,7 +30,7 @@ window.addEventListener("unhandledrejection", (event) => {
     showPreviewError(reason?.stack || reason?.message || String(reason));
 });
 
-document.title = "KronTerm Agent Preview";
+document.title = "KronOS Agent Preview";
 document.body.style.visibility = null;
 document.body.style.opacity = null;
 document.body.classList.remove("is-transparent");

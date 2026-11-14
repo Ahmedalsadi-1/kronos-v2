@@ -1,0 +1,142 @@
+.sandbox-login-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+}
+
+.sandbox-login-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal-backdrop, 900);
+    background: rgb(0 0 0 / 52%);
+    pointer-events: auto;
+}
+
+.sandbox-login-popup {
+    position: fixed;
+    top: var(--login-center-y, 50%);
+    left: var(--login-center-x, 50%);
+    translate: -50% -50%;
+    z-index: var(--z-modal, 901);
+    box-sizing: border-box;
+    width: min(480px, calc(var(--login-panel-width, 100%) - 24px));
+    max-height: calc(var(--login-panel-height, 100%) - 24px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: clamp(16px, 5vw, 32px);
+    border: 1px solid #424242;
+    border-radius: 16px;
+    background: #1b1b1b;
+    color: #f4f4f4;
+    color-scheme: dark;
+    font-size: 14px;
+    pointer-events: auto;
+}
+
+.sandbox-login-popup h2 {
+    font-size: 19px;
+    font-weight: 600;
+    outline: none;
+}
+.sandbox-login-form {
+    margin-top: 12px;
+    text-align: left;
+}
+
+.sandbox-login-popup p {
+    color: #b5b5b5;
+}
+
+.sandbox-login-popup .sandbox-login-input,
+.sandbox-login-popup .sandbox-login-primary,
+.sandbox-login-popup .sandbox-login-button {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 12px;
+    border-radius: 11px;
+    font-size: 14px;
+}
+
+.sandbox-login-popup .sandbox-login-input {
+    border: 1px solid #555;
+    background: #252525;
+}
+
+.sandbox-login-popup .sandbox-login-primary,
+.sandbox-login-popup .sandbox-login-button,
+.sandbox-login-reopen {
+    cursor: pointer;
+}
+.sandbox-login-popup .sandbox-login-primary {
+    margin-top: 16px;
+    background: #f0f0f0;
+    color: #161616;
+}
+.sandbox-login-popup .sandbox-login-button {
+    margin-top: 8px;
+    background: #313131;
+    color: #f4f4f4;
+}
+.sandbox-login-popup button:disabled {
+    opacity: 0.5;
+}
+
+.sandbox-login-divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 0 4px;
+    color: #b5b5b5;
+}
+
+.sandbox-login-divider::before,
+.sandbox-login-divider::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid #424242;
+}
+
+[data-hud-shell] [data-slot="composer-dock"] > .sandbox-login-reopen {
+    display: block !important;
+    pointer-events: auto;
+}
+
+.sandbox-login-popup .sandbox-login-close {
+    position: absolute;
+    inset: 12px 12px auto auto;
+    display: inline-grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 6px;
+    color: inherit;
+    cursor: pointer;
+}
+
+.sandbox-login-popup .sandbox-login-close:hover {
+    background: #313131;
+}
+
+.sandbox-login-popup .sandbox-login-close:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+.sandbox-login-heading {
+    padding-inline-end: 32px;
+}
+
+.sandbox-login-providers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(90px, 100%), 1fr));
+    gap: 8px;
+}

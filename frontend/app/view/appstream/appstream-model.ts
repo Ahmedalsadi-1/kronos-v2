@@ -252,7 +252,7 @@ export class AppStreamViewModel implements ViewModel {
                 if (generation !== this.captureGeneration || globalStore.get(this.statusAtom) !== "streaming") return;
                 try {
                     if (!getApi().appStreamInput) {
-                        throw new Error("Restart KronTerm to load native app input support.");
+                        throw new Error("Restart KronOS to load native app input support.");
                     }
                     await getApi().appStreamInput(request);
                     globalStore.set(this.inputErrorAtom, "");

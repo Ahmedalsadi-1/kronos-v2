@@ -37,26 +37,33 @@ import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import type { WebviewTag } from "electron";
 import { Atom, PrimitiveAtom, atom, useAtomValue, useSetAtom } from "jotai";
-import { Code2, Cookie, ExternalLink, Pause } from "lucide-react";
+import { Code2, Cookie, ExternalLink, Home, Pause } from "lucide-react";
 import { Fragment, createRef, memo, useCallback, useEffect, useRef, useState } from "react";
 import { makeBrowserPayload, publishCrossViewEvent } from "../../../types/cross-view-bus";
 import { getBrowserAnnotationsAtom } from "./browser-annotations";
 import { BrowserGrabController, type BrowserGrabIntent } from "./browser-grab-controller";
-import { BrowserGrabSheet } from "./browser-grab-sheet";
 import { BrowserMarkupOverlay } from "./browser-markup-overlay";
+import { BrowserPreviewActions, BrowserPreviewLinks, BrowserPreviewStatus } from "./browser-preview-chrome";
 import { BrowserResearchPanel } from "./browser-research-panel";
+import { BrowserAccountPanel } from "./browser-account-panel";
 import "./webview.scss";
 import type { WebViewEnv } from "./webviewenv";
+
+function hasBrowserPreviewChrome(meta: MetaType): boolean {
+    return (meta as MetaType & { "web:chrome"?: string })?.["web:chrome"] === "preview";
+}
 
 export const BrowserPageToolbar = memo(
     ({ model, islandControls }: { model: WebViewModel; islandControls?: React.ReactNode }) => {
         const block = useAtomValue(model.blockAtom);
+        const preview = hasBrowserPreviewChrome(block?.meta);
         const agentPresence = useAgentPresenceForBlock(model.blockId, "web");
         const currentUrl = useAtomValue(model.url);
         const homepageUrl = useAtomValue(model.homepageUrl);
         const canGoBack = useAtomValue(model.canGoBack);
         const canGoForward = useAtomValue(model.canGoForward);
         const isLoading = useAtomValue(model.isLoading);
+        const domReady = useAtomValue(model.domReady);
         const refreshIcon = useAtomValue(model.refreshIcon);
         const faviconUrl = useAtomValue(model.faviconUrl);
         const urlInputFocused = useAtomValue(model.urlInputFocused);
@@ -71,6 +78,8 @@ export const BrowserPageToolbar = memo(
         const [cookieStatus, setCookieStatus] = useState("");
         const markupSequence = useRef(0);
         const url = currentUrl ?? block?.meta?.url ?? homepageUrl ?? "";
+        const pageUrl = block?.meta?.url ?? homepageUrl ?? "";
+        const pageTitle = (block?.meta as MetaType & { "web:title"?: string })?.["web:title"] || pageUrl;
         useEffect(() => {
             markupSequence.current++;
             window.dispatchEvent(
@@ -167,15 +176,37 @@ export const BrowserPageToolbar = memo(
         };
 
         return (
-            <BrowserChromeToolbar>
+            <BrowserChromeToolbar preview={preview}>
                 <BrowserNavigationControlRow
                     addressSlot={
-                        <BrowserAddressBar model={model} url={url} focused={urlInputFocused} faviconUrl={faviconUrl} />
+                        <BrowserAddressBar
+                            model={model}
+                            url={url}
+                            focused={urlInputFocused}
+                            faviconUrl={faviconUrl}
+                            previewPageUrl={preview ? pageUrl : undefined}
+                        />
+                    }
+                    beforeAddress={
+                        preview && (
+                            <button
+                                type="button"
+                                onClick={() => model.handleHome()}
+                                aria-label="Home"
+                                title="Home"
+                                disabled={!domReady || !homepageUrl || pageUrl === homepageUrl}
+                            >
+                                <Home aria-hidden="true" />
+                            </button>
+                        )
                     }
                     controls={navControls}
                     reloadIcon={refreshIcon}
                     reloadLabel={isLoading ? "Stop" : "Reload"}
                 >
+                    {preview && (
+                        <BrowserPreviewActions model={model} page={{ title: pageTitle, url: pageUrl }} ready={domReady} />
+                    )}
                     <button
                         type="button"
                         className="webview-toolbar-secondary"
@@ -251,6 +282,7 @@ export const BrowserPageToolbar = memo(
                     )}
                     {islandControls}
                 </BrowserNavigationControlRow>
+                {preview && <BrowserPreviewLinks model={model} ready={domReady} />}
                 {toolError && (
                     <div className="flex items-center gap-2 bg-red-950 px-3 py-1 text-xs text-red-200" role="status">
                         {toolError}
@@ -422,7 +454,7 @@ export class WebViewModel implements ViewModel {
         this.isLoading = atom(false);
         this.refreshIcon = atom("rotate-right");
         this.viewIcon = atom("globe");
-        this.viewName = atom("Web");
+        this.viewName = atom((get) => (hasBrowserPreviewChrome(get(this.blockAtom)?.meta) ? "Browser Preview" : "Web"));
         this.hideViewName = atom(true);
         this.urlInputRef = createRef<HTMLInputElement>();
         this.webviewRef = createRef<WebviewTag>();
@@ -1317,6 +1349,8 @@ const BrowserAnnotationTrayLazy = BrowserAnnotationTray;
 const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps) => {
     const env = useWaveEnv<WebViewEnv>();
     const blockData = useAtomValue(model.blockAtom);
+    const preview = hasBrowserPreviewChrome(blockData?.meta);
+    const isLoading = useAtomValue(model.isLoading);
     const defaultUrl = useAtomValue(model.homepageUrl);
     const defaultSearchAtom = env.getSettingsKeyAtom("web:defaultsearch");
     const defaultSearch = useAtomValue(defaultSearchAtom);
@@ -1647,6 +1681,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         const requestPreviewCapture = (detail: AgentWidgetActivity) => {
             if (
                 document.hidden ||
+                webview.hasAttribute("data-browser-account-private") ||
                 Date.now() - lastPreviewCapturedAt < 1000 ||
                 detail.previewImageUrl ||
                 previewCapturePending ||
@@ -1656,7 +1691,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             }
             previewCapturePending = true;
             previewCaptureTimer = window.setTimeout(() => {
-                if (document.hidden || previewDisposed) {
+                if (document.hidden || previewDisposed || webview.hasAttribute("data-browser-account-private")) {
                     previewCapturePending = false;
                     return;
                 }
@@ -1664,7 +1699,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                 void webview
                     .capturePage()
                     .then((image) => {
-                        if (previewDisposed || document.hidden) return;
+                        if (previewDisposed || document.hidden || webview.hasAttribute("data-browser-account-private")) return;
                         const previewImageUrl = image.toDataURL();
                         if (!previewImageUrl || previewImageUrl === "data:image/png;base64,") {
                             return;
@@ -1717,10 +1752,16 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
 
     const { waterflowActive, markers } = useAgentOverlays("browser", model.blockId);
     const stageRef = useRef<HTMLDivElement>(null);
+    useEffect(
+        () => getApi().onBrowserElementSelection?.((guestId, intent, selection, comment) => {
+            model.grabController.acceptGuestSelection(guestId, intent, selection, comment);
+        }),
+        [model]
+    );
 
     return (
         <Fragment>
-            <div className="webview-shell">
+            <div className="webview-shell" data-browser-preview={preview || undefined}>
                 <div className="webview-stage" ref={stageRef} data-viewport={userAgentType}>
                     <MockBoundary fallback={<WebViewPreviewFallback url={metaUrl} />}>
                         <webview
@@ -1742,9 +1783,16 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                     <AgentSurfaceCursor surface="browser" blockId={model.blockId} webviewRef={model.webviewRef} />
                     <BrowserAnnotationTrayLazy blockId={model.blockId} url={metaUrl} />
                     <BrowserResearchPanel controller={model.grabController} />
-                    <BrowserGrabSheet controller={model.grabController} />
                     <BrowserMarkupOverlay blockId={model.blockId} />
+                    <BrowserAccountPanel key={webPartition ?? "default"} guestRef={model.webviewRef} ready={domReady} />
                 </div>
+                {preview && (
+                    <BrowserPreviewStatus
+                        url={domReady && !errorText ? metaUrl : ""}
+                        state={errorText ? "Page failed to load" : isLoading || !domReady ? "Loading…" : "Ready"}
+                        zoom={zoomFactor}
+                    />
+                )}
             </div>
             <Search {...searchProps} />
             <BookmarkTypeahead model={model} blockRef={blockRef} />

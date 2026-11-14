@@ -17,7 +17,7 @@ function reportBootstrapError(error: unknown): void {
     }
     console.error("Renderer bootstrap failed", error);
     const button = document.createElement("button");
-    button.textContent = "Reload KronTerm";
+    button.textContent = "Reload KronOS";
     button.style.cssText = "position:fixed;bottom:24px;left:24px;padding:8px 16px;cursor:pointer";
     button.onclick = () => window.location.reload();
     elem?.append(button);

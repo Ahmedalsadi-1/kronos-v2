@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[{"id":"title","type":"string","label":"Product name","default":"KronTerm"}]'>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=1920,height=1080"><title>KronTerm / The office comes alive</title>
+<script src="assets/vendor/gsap.min.js"></script><script src="assets/vendor/coucou-engine.js"></script><script src="assets/audio/energy.js"></script><script src="assets/vendor/three.min.js"></script><script src="assets/office-runtime.js"></script>
+<style>
+@font-face{font-family:Inter;src:url('assets/fonts/inter.woff2') format('woff2');font-weight:100 900;font-display:block}
+*{box-sizing:border-box}html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#08090c}
+body{font-family:Inter,sans-serif;color:#f0eff5}#root{width:100%;height:100%;position:relative;overflow:hidden;background:#08090c}
+.clip{position:absolute;inset:0;width:100%;height:100%}video{display:block;width:100%;height:100%;object-fit:contain}
+.product-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;perspective:2400px;overflow:hidden}
+.product-surface{position:relative;flex:none;border:1px solid #34343c;background:#0b0c0e;border-radius:16px;overflow:hidden;box-shadow:0 35px 95px #000b,0 2px 2px #ffffff0b;transform-style:preserve-3d}
+.browser-surface{width:1534px;height:978px}.selection-surface{width:1230px;height:902px}.canvas-surface{width:1450px;height:928px}
+.office-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.projected-screen{position:absolute;left:0;top:0;width:1600px;height:1000px;transform-origin:0 0;overflow:hidden;border-radius:18px;background:#030305}
+.office-footage{position:absolute;inset:0;background:#030305}.office-footage video{object-fit:contain}
+.physical-notch{position:absolute;top:-1px;left:723px;width:154px;height:39px;background:#050507;border-radius:0 0 13px 13px;z-index:2}
+.office-pet{position:absolute;width:320px;height:320px;z-index:3}.office-pet canvas{width:100%;height:100%}
+.power-dot{position:absolute;left:1180px;top:714px;width:46px;height:46px;border:2px solid #8f839f;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.power-dot span{width:14px;height:14px;border:2px solid #d8cce7;border-radius:50%}
+.closing-type{position:absolute;left:190px;top:417px;z-index:5;text-shadow:0 4px 35px #0009}.closing-type h1{font-size:100px;font-weight:500;letter-spacing:-5px;margin:0 0 19px}.closing-type p{font-size:30px;letter-spacing:.01em;color:#cecad7;margin:0}
+.music-credit{position:absolute;left:190px;bottom:90px;font-size:28px;color:#ded8e7;z-index:5;background:#08090ce8;padding:8px 12px;border-radius:5px}
+.fleet-space{position:absolute;inset:0;perspective:2400px;overflow:hidden}
+#fleet-camera{position:absolute;inset:0;transform-style:preserve-3d}
+.fleet-panel{position:absolute;background:#0b0c10;border:1px solid #383941;border-radius:16px;box-shadow:0 25px 70px #0009;overflow:visible;transform-style:preserve-3d}
+.fleet-panel video{border-radius:15px;overflow:hidden}.fleet-caption{position:absolute;left:12px;bottom:12px;font-size:36px;color:#e3ddec;line-height:42px;white-space:nowrap;background:#08090cf0;padding:4px 9px;border-radius:4px}
+#fleet-phone{left:1030px;top:360px;width:780px;height:497px}
+#fleet-flights{left:120px;top:180px;width:760px;height:396px}
+#fleet-browser{left:120px;top:660px;width:760px;height:484px}
+.fleet-status{position:absolute;left:100px;top:78px;font-size:30px;line-height:1.4;z-index:10;background:#08090ce8;padding:12px 18px;border-radius:8px}
+.fleet-status p{margin:3px 0 0;font-size:28px;color:#c4bbd6}
+</style></head><body><div id="root" data-composition-id="kronterm-film" data-width="1920" data-height="1080" data-duration="80" data-fps="30">
+<div id="scene-awakening" class="clip" data-composition-id="awakening" data-composition-src="compositions/awakening.html" data-start="0" data-duration="16" data-width="1920" data-height="1080" data-track-index="0" data-track-kind="graphics"></div>
+<div id="scene-browser" class="clip" data-composition-id="browser" data-composition-src="compositions/browser.html" data-start="16" data-duration="18" data-width="1920" data-height="1080" data-track-index="1" data-track-kind="graphics"></div>
+<div id="scene-selection" class="clip" data-composition-id="selection" data-composition-src="compositions/selection.html" data-start="34" data-duration="12" data-width="1920" data-height="1080" data-track-index="2" data-track-kind="graphics"></div>
+<div id="scene-sessions" class="clip" data-composition-id="sessions" data-composition-src="compositions/sessions.html" data-start="46" data-duration="15" data-width="1920" data-height="1080" data-track-index="3" data-track-kind="graphics"></div>
+<div id="scene-canvas" class="clip" data-composition-id="canvas" data-composition-src="compositions/canvas.html" data-start="61" data-duration="9" data-width="1920" data-height="1080" data-track-index="4" data-track-kind="graphics"></div>
+<div id="scene-return" class="clip" data-composition-id="return" data-composition-src="compositions/return.html" data-start="70" data-duration="10" data-width="1920" data-height="1080" data-track-index="5" data-track-kind="graphics"></div>
+<audio id="film-sound" src="assets/audio/mix.wav" data-start="0" data-duration="80" data-track-index="10" data-volume="1"></audio>
+</div><script>const tl=gsap.timeline({paused:true});window.__timelines['kronterm-film']=tl;</script></body></html>

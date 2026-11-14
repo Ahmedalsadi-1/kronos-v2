@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyMedia, filterMedia } from "./media-library-utils";
+import { canPreviewMedia, canThumbnailMedia, classifyMedia, filterMedia } from "./media-library-utils";
 
 describe("media inventory", () => {
     it("recognizes native assets and MIME types without claiming all files are media", () => {
@@ -18,5 +18,23 @@ describe("media inventory", () => {
             "/Assets/clip.mp4",
         ]);
         expect(filterMedia(items, "photo", "video")).toEqual([]);
+    });
+
+    it("opens supported media in the workspace and leaves other formats to native apps", () => {
+        expect(canPreviewMedia({ path: "/scenes/HOUSE.GLB" })).toBe(true);
+        expect(canPreviewMedia({ path: "/scenes/HOUSE.BLEND" })).toBe(false);
+        expect(canPreviewMedia({ path: "/scenes/clip.mp4" })).toBe(true);
+        expect(canPreviewMedia({ path: "/scenes/notes.txt", mimetype: "text/plain; charset=utf-8" })).toBe(true);
+        expect(canPreviewMedia({ path: "/scenes/report.pdf" })).toBe(true);
+        expect(canPreviewMedia({ path: "/scenes/notes.docx" })).toBe(false);
+        expect(canPreviewMedia({ path: "/scenes/folder.jpg", isdir: true })).toBe(false);
+    });
+
+    it("only requests thumbnails for small raster files", () => {
+        expect(canThumbnailMedia({ path: "/assets/panel.PNG", size: 8000 })).toBe(true);
+        expect(canThumbnailMedia({ path: "/assets/panel.PNG", size: 50 * 1024 * 1024 })).toBe(false);
+        expect(canThumbnailMedia({ path: "/assets/panel.PNG" })).toBe(false);
+        expect(canThumbnailMedia({ path: "/assets/panel.PNG", isdir: true, size: 8000 })).toBe(false);
+        expect(canThumbnailMedia({ path: "/assets/animation.gif", size: 8000 })).toBe(false);
     });
 });

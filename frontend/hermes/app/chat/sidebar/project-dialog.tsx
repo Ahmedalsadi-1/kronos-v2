@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react'
 import { useEffect, useRef, useState } from 'react'
+import krontermLogo from '../../../../app/asset/logo.svg?url'
 
 import { Button } from '@hermes/components/ui/button'
 import { Codicon } from '@hermes/components/ui/codicon'
@@ -150,10 +151,17 @@ export function ProjectDialog() {
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-md" onInteractOutside={event => event.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {mode === 'create' && <DialogDescription>{p.createDesc}</DialogDescription>}
+      <DialogContent
+        bodyClassName="grid-cols-[minmax(0,1fr)]"
+        className="w-[min(26rem,calc(100vw_-_24px))]"
+        onInteractOutside={event => event.preventDefault()}
+      >
+        <DialogHeader className={mode === 'create' ? 'flex-row items-center gap-3 pr-7 text-left' : undefined}>
+          {mode === 'create' && <img alt="" className="size-9 shrink-0 object-contain" src={krontermLogo} />}
+          <div className="min-w-0">
+            <DialogTitle>{title}</DialogTitle>
+            {mode === 'create' && <DialogDescription className="mt-1">{p.createDesc}</DialogDescription>}
+          </div>
         </DialogHeader>
 
         {mode !== 'add-folder' && (

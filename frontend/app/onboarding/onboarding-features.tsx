@@ -1,8 +1,6 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ProvidersPanel } from "@/app/aipanel/providers-panel";
-import { SettingsPanel } from "@/app/aipanel/settings-panel";
 import Logo from "@/app/asset/logo.svg";
 import { EmojiButton } from "@/app/element/emojibutton";
 import { MagnifyIcon } from "@/app/element/magnify";
@@ -34,7 +32,6 @@ function getPageStep(page: FeaturePageName): number {
 export const WaveAIPage = ({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) => {
     const isMac = isMacOS();
     const shortcutKey = isMac ? "⌘-Shift-A" : "Alt-Shift-A";
-    const [setupOpen, setSetupOpen] = useState(false);
 
     return (
         <div className="flex flex-col h-full">
@@ -42,39 +39,27 @@ export const WaveAIPage = ({ onNext, onSkip }: { onNext: () => void; onSkip: () 
                 <div>
                     <Logo />
                 </div>
-                <div className="text-[25px] font-normal text-foreground">KronosCode</div>
+                <div className="text-[25px] font-normal text-foreground">KronOS Agent</div>
             </header>
             <FeaturePageLayout
-                title="KronosCode"
+                title="KronOS Agent"
                 demo={
-                    <div className="w-full h-[400px] bg-background rounded-xl border border-border/50 overflow-hidden">
-                        <div className="h-full overflow-y-auto">
-                            {setupOpen ? <SettingsPanel /> : <ProvidersPanel />}
-                        </div>
+                    <div className="w-full rounded-xl border border-border/50 bg-background p-6">
+                        <h2 className="mb-4 text-base font-semibold text-primary">Connect a model</h2>
+                        <ol className="list-decimal space-y-3 pl-5 text-sm text-secondary">
+                            <li>Open KronOS Agent after the tour.</li>
+                            <li>In Settings, select Model.</li>
+                            <li>Choose a provider or a compatible local endpoint, then select a model.</li>
+                        </ol>
                     </div>
                 }
             >
-                <div className="flex flex-col items-start gap-4 text-secondary">
-                    <p>
-                        Check the live connection status before starting your first task. Connection settings let you
-                        choose the AI mode, endpoint, credentials, and model.
-                    </p>
-                    <button
-                        type="button"
-                        aria-expanded={setupOpen}
-                        onClick={() => setSetupOpen((open) => !open)}
-                        className="bg-accent/80 text-primary rounded px-3 py-2 hover:bg-accent transition-colors cursor-pointer"
-                    >
-                        {setupOpen ? "Check connection status" : "Connection settings"}
-                    </button>
-                    <p className="text-sm">
-                        Connection status comes from your running KronosCode runtime. Configuring credentials does not
-                        guarantee a successful request; check the status before starting your first task.
-                    </p>
-                </div>
+                <p className="text-secondary">
+                    KronOS Agent works alongside your terminal, browser, and files. Connect a model to start a
+                    conversation.
+                </p>
                 <FeatureBullet icon="fa fa-keyboard">
-                    After the tour, open KronosCode with {shortcutKey} and ask it to explain the output of your active
-                    terminal. Review its response before asking it to change files.
+                    Open KronOS Agent with {shortcutKey} and ask it to explain the output of your active terminal.
                 </FeatureBullet>
             </FeaturePageLayout>
             <OnboardingFooter
@@ -214,18 +199,18 @@ export const FilesPage = ({
 
                 <div className="flex flex-col items-start gap-4 text-secondary">
                     <p>
-                        KronTerm can preview markdown, images, and video files on both local <i>and remote</i> machines.
+                        KronOS can preview markdown, images, and video files on both local <i>and remote</i> machines.
                     </p>
                 </div>
 
                 <FeatureBullet icon="fa fa-eye">
                     <span className="font-mono font-semibold text-foreground">wsh view [filename]</span> — preview files
-                    in KronTerm's graphical viewer
+                    in KronOS's graphical viewer
                 </FeatureBullet>
 
                 <FeatureBullet icon="fa fa-pen-to-square">
                     <span className="font-mono font-semibold text-foreground">wsh edit [filename]</span> — open config
-                    files or code in KronTerm's graphical editor
+                    files or code in KronOS's graphical editor
                 </FeatureBullet>
 
                 <p className="text-secondary leading-relaxed italic">

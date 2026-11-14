@@ -13,7 +13,7 @@ export function registerNativeTaskGroupsIpc(): void {
                 success: false,
                 error: {
                     code: "untrusted-caller",
-                    message: "Only a KronTerm workspace can manage native task groups.",
+                    message: "Only a KronOS workspace can manage native task groups.",
                 },
             };
         }

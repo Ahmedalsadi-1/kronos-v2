@@ -6,7 +6,6 @@ import { globalStore } from "@/app/store/jotaiStore";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { SuggestionControl } from "@/app/suggestion/suggestion";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
-import { NativeFileWorkbench } from "@/app/workspace/native-file-workbench";
 import { isBlank, makeConnRoute } from "@/util/util";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { memo, useEffect, useRef } from "react";
@@ -14,6 +13,7 @@ import { CSVView } from "./csvview";
 import { DirectoryPreview } from "./preview-directory";
 import { CodeEditPreview } from "./preview-edit";
 import { ErrorOverlay } from "./preview-error-overlay";
+import { HermesDirectoryPreview } from "./preview-hermes-directory";
 import { MarkdownPreview } from "./preview-markdown";
 import type { PreviewModel } from "./preview-model";
 import { StreamingPreview } from "./preview-streaming";
@@ -50,6 +50,7 @@ const SpecializedView = memo(({ parentRef, model }: SpecializedViewProps) => {
     const mimeType = useAtomValue(model.fileMimeType);
     const setCanPreview = useSetAtom(model.canPreview);
     const path = useAtomValue(model.statFilePath);
+    const connection = useAtomValue(model.connectionImmediate);
 
     useEffect(() => {
         setCanPreview(canPreview(mimeType));
@@ -57,6 +58,9 @@ const SpecializedView = memo(({ parentRef, model }: SpecializedViewProps) => {
 
     if (specializedView.errorStr != null) {
         return <CenteredDiv>{specializedView.errorStr}</CenteredDiv>;
+    }
+    if (specializedView.specializedView === "directory" && (isBlank(connection) || connection === "local")) {
+        return <HermesDirectoryPreview key={path} model={model} />;
     }
     const SpecializedViewComponent = SpecializedViewMap[specializedView.specializedView];
     if (!SpecializedViewComponent) {
@@ -150,23 +154,16 @@ function PreviewView({
     };
 
     return (
-        <NativeFileWorkbench
-            blockId={model.blockId}
-            previewModel={model}
-            searchAnchorRef={searchAnchorRef}
-            overlay={
-                <SuggestionControl
-                    anchorRef={searchAnchorRef}
-                    isOpen={openFileModal}
-                    onClose={() => model.updateOpenFileModalAndError(false)}
-                    onSelect={handleSelect}
-                    onTab={handleTab}
-                    fetchSuggestions={fetchSuggestionsFn}
-                    placeholderText="Open File..."
-                    className="ade-suggestions"
-                />
-            }
-        >
+        <div ref={searchAnchorRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <SuggestionControl
+                anchorRef={searchAnchorRef}
+                isOpen={openFileModal}
+                onClose={() => model.updateOpenFileModalAndError(false)}
+                onSelect={handleSelect}
+                onTab={handleTab}
+                fetchSuggestions={fetchSuggestionsFn}
+                placeholderText="Open file…"
+            />
             <div
                 key="fullpreview"
                 className="flex min-h-0 flex-1 flex-col w-full overflow-hidden scrollbar-hide-until-hover"
@@ -176,7 +173,7 @@ function PreviewView({
                     <SpecializedView parentRef={contentRef} model={model} />
                 </div>
             </div>
-        </NativeFileWorkbench>
+        </div>
     );
 }
 

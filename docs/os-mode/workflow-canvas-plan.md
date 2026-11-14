@@ -47,7 +47,7 @@ that the new bundle has passed rendered mixed-object acceptance.
 | Hermes                                        | Existing HUD or explicitly docked Side chat. Original Assistant actions invoke the existing Hermes conversation. There is no separate workflow-builder chat form.                                  |
 | Credentials and data tables                   | Original page bodies and dialogs in the OS detail slot, with the editable graph kept mounted behind them.                                                                                          |
 | Evaluations, insights, users, roles, API keys | Workflow/account navigation opens the related original management content in the detail slot. Upstream permission and feature checks remain in force. Templates remain disabled.                   |
-| Shared account setup                          | One KronTerm first-run gate uses the same account form as the workflow rail. Existing configured accounts do not receive another signup. Session renewal occurs in Electron main.                  |
+| Managed workflow session                      | Workflow access inherits the Hermes desktop session, with a private loopback capability exchange and automatic session renewal in Electron main. No separate workflow login is required. |
 
 The implementation removes the earlier right-panel launcher dashboard. Files remains the file browser on workflow routes; Nodes and Executions are explicit inspector choices. It also removes the earlier hand-built React node cards from the active OS integration.
 
@@ -59,7 +59,7 @@ The implementation removes the earlier right-panel launcher dashboard. Files rem
 - Original UI requests and Hermes tools use the managed authenticated runtime. Session cookies and bridge tokens stay in Electron main; the renderer uses a scoped API bridge.
 - The bridge supports upload/binary transport, cancellation, session renewal, and the push reference needed for live execution updates. WebSocket request grants are restricted to the managed endpoint and authorized renderer and are revoked on teardown.
 - The runtime remains attached to its originating workspace and tab. Stops and scope changes preserve the database while removing runtime capabilities.
-- Genuine account connection failures surface in KronTerm UI rather than navigating to an independent upstream login page. The account form submits user-entered fields through IPC for main-process encrypted storage.
+- Session connection failures surface in KronTerm UI. The workflow runtime exchanges a private desktop capability for a browser-bound session; it does not request or store the user's Hermes password.
 
 ## Source map
 
@@ -67,7 +67,7 @@ The implementation removes the earlier right-panel launcher dashboard. Files rem
 - OS scene registry, shared order, and gestures: `frontend/app/tab/os-workspace.tsx`, `os-workspace-model.ts`, and `os-scene-order.ts`.
 - Original component build and native layout adapters: `integrations/n8n/build-native-editor.mjs` and `integrations/n8n/editor/`.
 - Left navigation and right inspector: `frontend/hermes/app/workflows/` and `frontend/hermes/app/contrib/`.
-- Shared first-run gate: `frontend/app/workspace/kronterm-account-gate.tsx`.
+- Managed session adapter: `integrations/n8n/session-hook.cjs` and `integrations/n8n/managed-session.cjs`. Production Hermes identity-provider integration remains separate work.
 - Scoped runtime, authenticated transport, and document commands: `emain/n8n-*.ts`, `emain/workflow-account.ts`, and `emain/authkey.ts`.
 - Hermes graph tools: `mcp-kron-term/src/n8n-tools.ts`.
 

@@ -250,3 +250,7 @@
     --chrome-action-hover: var(--ui-control-hover-background);
     color: var(--coucou-label);
 }
+
+.ade-hermes-tree .row-hover:is(:hover, [aria-selected="true"]) {
+    color: var(--coucou-label);
+}

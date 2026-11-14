@@ -2,10 +2,17 @@ import { atom } from "nanostores";
 
 export const $krontermSidebarTarget = atom<HTMLElement>(null);
 export const $krontermInspectorTarget = atom<HTMLElement>(null);
+export const $comfyLibraryTarget = atom<HTMLDivElement>(null);
+export const $penDesignTarget = atom<HTMLDivElement>(null);
+export const $comfyPropertiesTarget = atom<HTMLDivElement>(null);
+export const $workspaceCanvasPanels = atom(false);
+export const $comfyPropertiesAvailable = atom(false);
+export const $comfyControlsOpen = atom(false);
 export const $krontermInspectorOpen = atom(false);
 export const $krontermInspectorHasFiles = atom(false);
 export type KrontermInspectorSection =
-    "files" | "changes" | "chat" | "workflows" | "workflow-nodes" | "workflow-executions" | "diff" | `file:${string}`;
+    "files" | "changes" | "chat" | "workflows" | "workflow-nodes" | "workflow-executions" |
+    "comfy-properties" | "diff" | `file:${string}`;
 export const $krontermInspectorSection = atom<KrontermInspectorSection>("files");
 export const $krontermInspectorExpanded = atom(false);
 

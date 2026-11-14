@@ -24,7 +24,7 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
 
     const setValues = useCallback((values: Record<string, any>) => {
         void RpcApi.SetConfigCommand(TabRpcClient, values).catch((error) => {
-            console.warn("[KronTerm settings] config update failed", error);
+            console.warn("[KronOS settings] config update failed", error);
         });
     }, []);
 
@@ -109,9 +109,7 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
                     options={[
                         { value: "widgets", label: "Widgets" },
                         { value: "tabs", label: "Widget tabs" },
-                        { value: "canvas", label: "Canvas" },
                         { value: "os", label: "OS Mode" },
-                        { value: "web", label: "Web" },
                     ]}
                 />
                 <SelectSetting
@@ -131,7 +129,7 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
                 <SectionHeader title="Privacy" icon="shield-halved" description="Data collection preferences." />
                 <ToggleSetting
                     title="Telemetry"
-                    description="Send anonymous usage data to help improve KronTerm."
+                    description="Send anonymous usage data to help improve KronOS."
                     checked={telemetryEnabled}
                     onChange={(v) => setValues({ "telemetry:enabled": v })}
                 />

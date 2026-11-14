@@ -57,7 +57,7 @@ const CommandActions: CommandPaletteAction[] = [
     },
 ];
 
-const ApplicationViews = ["term", "web", "hermes", "preview", "sysinfo", "sandbox"];
+const ApplicationViews = ["term", "web", "preview", "sysinfo", "sandbox"];
 
 function makeApplicationResults(): CommandPaletteAction[] {
     const byView = new Map(getBuiltinViewDescriptors([]).map((descriptor) => [descriptor.view, descriptor]));
@@ -187,7 +187,7 @@ function CommandPaletteModal() {
     const palette = (
         <div className="command-palette-wrapper" role="presentation">
             <div className="command-palette-backdrop" onMouseDown={close} />
-            <section className="command-palette" role="dialog" aria-modal="true" aria-label="KronTerm commands">
+            <section className="command-palette" role="dialog" aria-modal="true" aria-label="KronOS commands">
                 <div className="command-palette-search">
                     <Search aria-hidden="true" size={19} />
                     <input

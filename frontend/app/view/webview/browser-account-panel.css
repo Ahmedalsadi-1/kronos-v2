@@ -1,0 +1,125 @@
+.browser-account-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    background: rgb(0 0 0 / 50%);
+}
+
+.browser-account-card {
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    width: min(420px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 18px;
+    border: 1px solid var(--kt-separator, #424242);
+    border-radius: 12px;
+    background: var(--kt-content, #1b1b1b);
+    color: var(--kt-label, #f4f4f4);
+    font-size: 13px;
+}
+
+.browser-account-card h2 {
+    margin-inline-end: 34px;
+    font-size: 17px;
+    font-weight: 650;
+    outline: none;
+}
+
+.browser-account-card p {
+    overflow-wrap: anywhere;
+    color: var(--kt-label-secondary, #b5b5b5);
+}
+
+.browser-account-card button,
+.browser-account-handoff button,
+.browser-account-chip {
+    min-height: 32px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--kt-fill, #313131);
+    color: inherit;
+    cursor: pointer;
+}
+
+.browser-account-card button:disabled,
+.browser-account-handoff button:disabled {
+    opacity: 0.5;
+}
+
+.browser-account-card .browser-account-primary {
+    background: var(--kt-accent, #f4f4f4);
+    color: var(--kt-on-accent, #171717);
+}
+
+.browser-account-card .browser-account-close {
+    position: absolute;
+    inset: 10px 10px auto auto;
+    display: grid;
+    width: 32px;
+    padding: 0;
+    place-items: center;
+    background: transparent;
+}
+
+.browser-account-providers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(78px, 100%), 1fr));
+    gap: 6px;
+}
+
+.browser-account-signup {
+    padding-top: 8px;
+    border-top: 1px solid var(--kt-separator, #424242);
+    text-align: center;
+}
+
+.browser-account-remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.browser-account-label {
+    display: grid;
+    gap: 4px;
+}
+
+.browser-account-label input {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--kt-separator, #424242);
+    border-radius: 6px;
+}
+
+.browser-account-handoff,
+.browser-account-chip {
+    position: absolute;
+    inset: auto 10px 10px auto;
+    z-index: 30;
+}
+
+.browser-account-chip {
+    background: var(--kt-content, #1b1b1b);
+    color: var(--kt-label, #f4f4f4);
+}
+
+.browser-account-handoff {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 20px);
+    padding: 6px;
+    border: 1px solid var(--kt-separator, #424242);
+    border-radius: 10px;
+    background: var(--kt-content, #1b1b1b);
+    color: var(--kt-label, #f4f4f4);
+}

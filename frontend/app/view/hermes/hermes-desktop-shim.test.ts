@@ -204,6 +204,32 @@ describe("HUD owner surface inventory", () => {
             { id: "sandbox", view: "sandbox", title: "Sandbox", focused: false, active: false, surfaceKind: "widget" },
         ]);
     });
+    it("retains exact machine identity for reuse without exposing arbitrary metadata", () => {
+        expect(
+            workspaceSnapshotSurfaces({
+                blocks: [
+                    {
+                        blockid: "vm",
+                        view: "linux-vms",
+                        meta: {
+                            "machine:target": "VM-1",
+                            "machine:kind": "desktop",
+                            token: "secret",
+                        },
+                    },
+                ],
+            })[0]
+        ).toEqual({
+            id: "vm",
+            view: "linux-vms",
+            title: "Widget",
+            focused: false,
+            active: false,
+            surfaceKind: "widget",
+            machineTarget: "VM-1",
+            machineKind: "desktop",
+        });
+    });
     it("handles absent workspace inventory", () => {
         expect(workspaceSnapshotSurfaces(null)).toEqual([]);
         expect(workspaceSnapshotSurfaces({ blocks: {} })).toEqual([]);

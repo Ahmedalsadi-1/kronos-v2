@@ -31,6 +31,7 @@ export interface ComposerStatusItem {
    *  (livestreamed by the gateway's child-session mirror). */
   sessionId?: string
   state: StatusItemState
+  swarm?: true
   title: string
   /** todo: the full four-state status driving the row's checkmark glyph. */
   todoStatus?: TodoStatus
@@ -141,6 +142,7 @@ const subToItem = (s: SubagentProgress): ComposerStatusItem => ({
   id: s.id,
   sessionId: s.sessionId,
   state: 'running',
+  swarm: s.swarm ? true : undefined,
   title: s.goal,
   type: 'subagent'
 })
@@ -182,7 +184,8 @@ const sameStatusItem = (a: ComposerStatusItem, b: ComposerStatusItem) =>
   a.currentTool === b.currentTool &&
   a.goalStatus === b.goalStatus &&
   a.todoStatus === b.todoStatus &&
-  a.sessionId === b.sessionId
+  a.sessionId === b.sessionId &&
+  a.swarm === b.swarm
 
 const stabilizeItems = (prev: ComposerStatusItem[] | undefined, next: ComposerStatusItem[]): ComposerStatusItem[] => {
   if (!prev) {

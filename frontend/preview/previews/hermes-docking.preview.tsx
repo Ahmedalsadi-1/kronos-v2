@@ -11,7 +11,7 @@ function PreviewConversation() {
             className="flex h-full min-h-0 flex-col border border-neutral-700 bg-neutral-950 p-4 text-neutral-100"
         >
             <header className="flex justify-between border-b border-neutral-700 pb-3 text-sm">
-                <span>KronTerm Agent</span>
+                <span>KronOS Agent</span>
                 <span>ACP</span>
             </header>
             <div className="flex-1 overflow-auto py-4 text-sm">

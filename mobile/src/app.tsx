@@ -158,28 +158,32 @@ export const App = () => {
     );
 
     const refreshHost = useCallback(
-        async (profile: HostProfile): Promise<HostSnapshot | null> => {
+        async (
+            profile: HostProfile,
+            initialHealth?: Awaited<ReturnType<KronosHostClient["health"]>>
+        ): Promise<HostSnapshot | null> => {
             if (!authorizedHosts.current.has(profile.id)) return null;
             const client = clientFor(profile);
-            setHostStates((current) => ({
-                ...current,
-                [profile.id]: {
-                    ...(current[profile.id] ?? emptyRuntime(profile)),
-                    profile,
-                    connection: "connecting",
-                    detail: "Connecting…",
-                },
-            }));
+            setHostStates((current) =>
+                current[profile.id]?.lastCheckedAt
+                    ? current
+                    : {
+                          ...current,
+                          [profile.id]: { profile, connection: "connecting", detail: "Checking host compatibility…" },
+                      }
+            );
             try {
-                const health = await client.health();
-                const [sessions, statuses, sandboxes, phoneControl] = await Promise.all([
-                    client.listSessions().catch(() => snapshotsRef.current[profile.id]?.sessions ?? []),
+                const health = initialHealth ?? (await client.health());
+                const agentUnavailable = health.connected === false || health.ready === false;
+                const [sessionList, statuses, sandboxes, phoneControl] = await Promise.all([
+                    agentUnavailable ? null : client.listSessions().catch(() => null),
                     client.getSessionStatuses().catch(() => snapshotsRef.current[profile.id]?.statuses ?? {}),
                     client.listSandboxes().catch(() => snapshotsRef.current[profile.id]?.sandboxes ?? []),
                     health.phoneControl?.available
                         ? Promise.resolve(health.phoneControl)
                         : client.getPhoneStatus().catch(() => health.phoneControl),
                 ]);
+                const sessions = sessionList ?? snapshotsRef.current[profile.id]?.sessions ?? [];
                 const browserStates = (
                     await Promise.all(
                         sessions
@@ -196,13 +200,22 @@ export const App = () => {
                             )
                     )
                 ).filter((state): state is BrowserRuntimeState => Boolean(state?.enabled));
-                const degraded = health.connected === false || health.ready === false;
+                const degraded = sessionList == null;
+                const capabilities = Array.isArray(health.capabilities) ? health.capabilities : profile.capabilities;
                 const runtime: HostRuntimeState = {
-                    profile: { ...profile, lastConnectedAt: Date.now() },
+                    profile: {
+                        ...profile,
+                        capabilities: degraded
+                            ? capabilities.filter((capability) => capability !== "kronoscode")
+                            : capabilities,
+                        lastConnectedAt: Date.now(),
+                    },
                     connection: degraded ? "degraded" : "online",
-                    detail: degraded
-                        ? health.detail || "Host reachable; engine is starting"
-                        : health.engine || health.service || "Ready",
+                    detail: agentUnavailable
+                        ? health.detail || "The iPhone session API is unavailable."
+                        : degraded
+                          ? "iPhone chat could not reach a compatible session API."
+                          : health.engine || health.service || "Ready",
                     version: typeof health.version === "string" ? health.version : undefined,
                     lastCheckedAt: Date.now(),
                 };
@@ -353,6 +366,10 @@ export const App = () => {
                 let reconnectTimer: number | undefined;
                 const connect = async () => {
                     if (disposed || !lifecycleActiveRef.current || !navigator.onLine) {
+                        return;
+                    }
+                    if (snapshotsRef.current[profile.id]?.host.connection !== "online") {
+                        scheduleReconnect();
                         return;
                     }
                     try {
@@ -512,6 +529,7 @@ export const App = () => {
     const currentChatHost = profiles.find(
         (profile) => profile.id === chatHostId && authorizedHosts.current.has(profile.id)
     );
+    const chatConnection = hostStates[chatHostId ?? ""];
 
     useEffect(() => {
         if (chatSession?.id || !chatHostId) return;
@@ -641,23 +659,28 @@ export const App = () => {
 
     const chooseHost = useCallback(
         (capability?: string): HostProfile => {
-            const selected = profiles.find((profile) => profile.id === selectedHostId);
-            const eligible = profiles.filter(
-                (profile) =>
-                    authorizedHosts.current.has(profile.id) &&
-                    (!capability || profile.capabilities.includes(capability))
-            );
-            const host = selected && eligible.some((profile) => profile.id === selected.id) ? selected : eligible[0];
+            const eligible = hostRuntimes
+                .map(({ profile }) => profile)
+                .filter(
+                    (profile) =>
+                        authorizedHosts.current.has(profile.id) &&
+                        (!capability || profile.capabilities.includes(capability))
+                );
+            const host = eligible.find((profile) => profile.id === selectedHostId) ?? eligible[0];
             if (!host) {
                 throw new Error(capability ? `Add a host with ${capability} capability` : "Add a host first");
             }
             return host;
         },
-        [profiles, selectedHostId]
+        [hostRuntimes, selectedHostId]
     );
 
     const ensureSession = useCallback(
         async (host: HostProfile, title = "KronTerm iPhone"): Promise<KronosSession> => {
+            const runtime = hostStates[host.id];
+            if (runtime?.connection !== "online") {
+                throw new Error(runtime?.detail || "The iPhone session API is unavailable.");
+            }
             if (chatHostId === host.id && chatSession?.id) {
                 return chatSession;
             }
@@ -667,7 +690,7 @@ export const App = () => {
             setChatSession(session);
             return session;
         },
-        [chatHostId, chatSession, clientFor, snapshots]
+        [chatHostId, chatSession, clientFor, hostStates, snapshots]
     );
 
     const loadPreview = useCallback(
@@ -909,23 +932,24 @@ export const App = () => {
                     { label, baseUrl, kind: input.kind, token, capabilities },
                     profiles.length
                 );
-                await clientFor(profile).health();
+                const health = await clientFor(profile).health();
                 const next = [...profiles, profile];
-                authorizedHosts.current.add(profile.id);
                 await saveHosts(next);
+                authorizedHosts.current.add(profile.id);
                 setProfiles(next);
                 setHostStates((current) => ({ ...current, [profile.id]: emptyRuntime(profile) }));
                 setSelectedHostId(profile.id);
-                await refreshHost(profile);
+                const snapshot = await refreshHost(profile, health);
                 setChatHostId(profile.id);
+                setChatSession(snapshot?.sessions[0]);
                 setChatOpen(true);
                 setHostsOpen(false);
-                pushToast(
-                    "success",
-                    `${profile.label} connected`,
-                    "Its Kronos, browser, shell, and sandbox surfaces are now available."
-                );
-                void resultHaptic(true);
+                if (snapshot?.host.connection === "online") {
+                    pushToast("success", `${profile.label} connected`, "iPhone chat is available.");
+                    void resultHaptic(true);
+                } else {
+                    pushToast("neutral", `${profile.label} saved`, snapshot?.host.detail || "The host is unavailable.");
+                }
             } finally {
                 setConnecting(false);
             }
@@ -970,12 +994,21 @@ export const App = () => {
                 const snapshot = await refreshHost(host);
                 const matchingSurfaces = snapshot?.surfaces.filter((surface) => surface.sandboxId === sandbox.id) ?? [];
                 const surface = findPreferredSurface(matchingSurfaces, preferredKind, host.id);
-                if (!surface && preferredKind === "terminal") {
-                    throw new Error("This sandbox did not expose a terminal connection");
+                if (!surface) {
+                    if (preferredKind === "terminal") {
+                        throw new Error("This sandbox did not expose a terminal connection");
+                    }
+                    pushToast("neutral", "Sandbox requested", "Refresh Workspace to check for the desktop.");
+                    return;
                 }
-                if (surface) {
-                    openSurface(surface);
+                if (surface.status === "working") {
+                    pushToast("neutral", "Sandbox starting", "Check its progress in Workspace.");
+                    return;
                 }
+                if (surface.status !== "live") {
+                    throw new Error(sandbox.lastError || "The host returned a sandbox that is unavailable.");
+                }
+                openSurface(surface);
                 pushToast("success", "Sandbox ready", "It is isolated from your iPhone and personal computer.");
                 void resultHaptic(true);
                 return surface;
@@ -1015,9 +1048,11 @@ export const App = () => {
 
     const chooseAgentHost = useCallback(
         (target: RuntimeTarget): HostProfile => {
-            const eligible = profiles.filter(
-                (profile) => authorizedHosts.current.has(profile.id) && profile.capabilities.includes("kronoscode")
-            );
+            const eligible = hostRuntimes
+                .map(({ profile }) => profile)
+                .filter(
+                    (profile) => authorizedHosts.current.has(profile.id) && profile.capabilities.includes("kronoscode")
+                );
             if (target === "sandbox") {
                 const sandbox = eligible.find((profile) => profile.capabilities.includes("sandbox"));
                 if (sandbox) {
@@ -1031,13 +1066,13 @@ export const App = () => {
                 }
             }
             const selected = eligible.find((profile) => profile.id === selectedHostId);
-            const host = selected ?? currentChatHost ?? eligible[0];
+            const host = selected ?? eligible.find((profile) => profile.id === chatHostId) ?? eligible[0];
             if (!host) {
                 throw new Error("Connect Kron Sandbox or a KronosCode runtime to start this objective");
             }
             return host;
         },
-        [currentChatHost, profiles, selectedHostId]
+        [chatHostId, hostRuntimes, selectedHostId]
     );
 
     const sendAgentObjective = useCallback(
@@ -1578,6 +1613,7 @@ export const App = () => {
                     const host = profiles.find((profile) => profile.id === id);
                     if (!host) return;
                     authorizedHosts.current.add(id);
+                    if (id !== chatHostId) setChatSession(undefined);
                     setChatHostId(id);
                     setSelectedHostId(id);
                     setProfiles((current) => [...current]);
@@ -1631,9 +1667,9 @@ export const App = () => {
                 )}
                 onOpenSurface={openSurface}
                 connectionError={
-                    hostStates[chatHostId ?? ""]?.connection === "offline"
-                        ? (hostStates[chatHostId ?? ""]?.detail ?? "Host offline")
-                        : undefined
+                    chatConnection?.connection === "online"
+                        ? undefined
+                        : (chatConnection?.detail ?? "Checking host compatibility…")
                 }
             />
 

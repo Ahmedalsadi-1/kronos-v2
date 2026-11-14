@@ -74,12 +74,11 @@ it("opens real workflow and management content from one left navigation without 
     }
 });
 
-it("immediately retires the rail signup after shared app-wide setup succeeds", async () => {
+it("connects through the managed session without a separate signup", async () => {
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
     const previous = window.hermesDesktop;
-    let accountRequired = true;
     let running = false;
     const api = vi.fn(async (request) => {
         if (request.body.operation === "open") {
@@ -87,17 +86,55 @@ it("immediately retires the rail signup after shared app-wide setup succeeds", a
             return {};
         }
         if (request.body.operation === "workflows") return [];
-        return { running, folders: [], workflows: [], accountRequired };
+        return { running, folders: [], workflows: [] };
     });
     window.hermesDesktop = { ...previous, api: api as unknown as Window["hermesDesktop"]["api"] };
     try {
         await act(async () => root.render(<N8nWorkflows />));
-        expect(host.querySelector('[aria-label="KronTerm account setup"]')).toBeTruthy();
-        accountRequired = false;
-        await act(async () => window.dispatchEvent(new Event("kronterm:account-connected")));
-        expect(host.querySelector('[aria-label="KronTerm account setup"]')).toBeNull();
+        expect(host.querySelector('input[type="password"]')).toBeNull();
         expect(host.querySelector('[aria-label="Workflow navigation"]')).toBeTruthy();
-        expect(api).toHaveBeenCalledTimes(5);
+        expect(api.mock.calls.map(([request]) => request.body.operation)).toEqual([
+            "state",
+            "open",
+            "state",
+            "workflows",
+        ]);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+        window.hermesDesktop = previous;
+    }
+});
+
+it("waits for an explicit connection switch when another tab owns the workflow runtime", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const previous = window.hermesDesktop;
+    let switched = false;
+    let confirm = false;
+    const api = vi.fn(async (request) => {
+        const { operation, expectedGeneration } = request.body;
+        if (operation === "state") return { running: switched, occupiedGeneration: switched ? undefined : 5, folders: [] };
+        if (operation === "switch-workspace") {
+            expect(expectedGeneration).toBe(5);
+            switched = confirm;
+            return confirm ? { desktop: true } : { cancelled: true };
+        }
+        if (operation === "workflows") return [{ id: "mine", name: "My workflow" }];
+        throw new Error(`Unexpected operation: ${operation}`);
+    });
+    window.hermesDesktop = { ...previous, api: api as unknown as Window["hermesDesktop"]["api"] };
+    try {
+        await act(async () => root.render(<N8nWorkflows />));
+        expect(api.mock.calls.map(([request]) => request.body.operation)).toEqual(["state"]);
+        expect(host.textContent).toContain("Workflows are connected to another tab.");
+        const switchButton = host.querySelector("button");
+        await act(async () => switchButton.click());
+        expect(host.textContent).toContain("Workflows are connected to another tab.");
+        confirm = true;
+        await act(async () => switchButton.click());
+        expect(host.textContent).toContain("My workflow");
     } finally {
         await act(async () => root.unmount());
         host.remove();
@@ -196,25 +233,6 @@ it("reconnects a stopped configured runtime once and restores saved rows without
     }
 });
 
-it("does not start the runtime while shared account setup is pending", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    const previous = window.hermesDesktop;
-    const api = vi.fn(async () => ({ running: false, accountRequired: true, folders: [], workflows: [] }));
-    window.hermesDesktop = { ...previous, api: api as unknown as Window["hermesDesktop"]["api"] };
-    try {
-        await act(async () => root.render(<N8nWorkflows />));
-        expect(host.querySelector('[aria-label="KronTerm account setup"]')).toBeTruthy();
-        expect(api.mock.calls).toHaveLength(1);
-        expect(api).toHaveBeenCalledWith(expect.objectContaining({ body: { operation: "state" } }));
-    } finally {
-        await act(async () => root.unmount());
-        host.remove();
-        window.hermesDesktop = previous;
-    }
-});
-
 it("waits for explicit workflow navigation before reconnecting and preserves navigation on re-entry", async () => {
     const host = document.createElement("div");
     document.body.append(host);
@@ -232,7 +250,6 @@ it("waits for explicit workflow navigation before reconnecting and preserves nav
     window.hermesDesktop = { ...previous, api: api as unknown as Window["hermesDesktop"]["api"] };
     try {
         await act(async () => root.render(<N8nWorkflows active={false} />));
-        window.dispatchEvent(new Event("kronterm:account-connected"));
         expect(api).not.toHaveBeenCalled();
         await act(async () => root.render(<N8nWorkflows active />));
         expect(host.textContent).toContain("Recovered saved workflow");

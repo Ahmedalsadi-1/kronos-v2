@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 function shouldIncludeWidgetForWorkspace(widget: WidgetConfigType, workspaceId?: string): boolean {
+    if (widget.blockdef?.meta?.view === "medialibrary") return false;
     const workspaces = widget.workspaces;
     return !Array.isArray(workspaces) || workspaces.length === 0 || (workspaceId != null && workspaces.includes(workspaceId));
 }

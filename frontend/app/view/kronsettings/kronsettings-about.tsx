@@ -5,6 +5,7 @@ import { useAtomValue } from "jotai";
 import { memo } from "react";
 import { SettingsCard, InfoCallout } from "./kronsettings-shared";
 import type { KronSettingsViewModel } from "./kronsettings-model";
+import { KronSettingsDiagnostics } from "./kronsettings-diagnostics";
 
 interface KronSettingsAboutContentProps {
     model: KronSettingsViewModel;
@@ -20,8 +21,8 @@ const KronSettingsAboutContent = memo(({ model }: KronSettingsAboutContentProps)
                 <div className="kron-settings-about-hero">
                     <i className="fa fa-solid fa-terminal" />
                     <div>
-                        <div className="kron-settings-about-name">KronTerm</div>
-                        <div className="kron-settings-about-tagline">The AI-native terminal</div>
+                        <div className="kron-settings-about-name">KronOS</div>
+                        <div className="kron-settings-about-tagline">Your workspace. Your models. Your keys.</div>
                     </div>
                 </div>
 
@@ -37,29 +38,26 @@ const KronSettingsAboutContent = memo(({ model }: KronSettingsAboutContentProps)
 
             <SettingsCard>
                 <div className="kron-settings-links">
-                    <a href="https://kronterm.dev" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
+                    <a href="https://ahmedalsadi-1.github.io/kronos-releases/" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
                         <i className="fa fa-solid fa-globe" />
                         Website
                     </a>
-                    <a href="https://github.com/krontermdev/kronterm" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
+                    <a href="https://github.com/Ahmedalsadi-1/kronos-releases/releases" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
                         <i className="fa fa-brands fa-github" />
-                        GitHub
+                        Downloads & release notes
                     </a>
-                    <a href="https://docs.kronterm.dev" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
+                    <a href="https://ahmedalsadi-1.github.io/kronos-releases/docs/" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
                         <i className="fa fa-solid fa-book" />
                         Docs
-                    </a>
-                    <a href="https://discord.gg/XfvZ334gwU" target="_blank" rel="noopener noreferrer" className="kron-settings-link">
-                        <i className="fa fa-brands fa-discord" />
-                        Discord
                     </a>
                 </div>
             </SettingsCard>
 
             <InfoCallout>
                 <i className="fa-solid fa-circle-info" />
-                KronTerm is open source under the Apache 2.0 license. Report issues on GitHub.
+                KronOS builds on open-source software. Bundled license and attribution notices remain available with the application.
             </InfoCallout>
+            <KronSettingsDiagnostics />
         </div>
     );
 });

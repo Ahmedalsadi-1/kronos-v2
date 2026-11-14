@@ -52,7 +52,7 @@ export const DurableSessionPage = ({
                 </FeatureBadge>
 
                 <div className="flex flex-col items-start gap-4 text-secondary">
-                    <p>Close your laptop, switch networks, restart KronTerm — your remote sessions keep running.</p>
+                    <p>Close your laptop, switch networks, restart KronOS — your remote sessions keep running.</p>
                 </div>
 
                 <FeatureBullet icon="fa-sharp fa-solid fa-link">

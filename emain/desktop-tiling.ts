@@ -21,7 +21,7 @@ type NativeWindow = {
     frame: { x: number; y: number; w: number; h: number };
     "is-floating": boolean;
 };
-const Excluded = /^(KronTerm HUD|KronTerm Overlay|KronTerm Pet|Coucou|Kronterm - T\d+|Developer Tools)/i;
+const Excluded = /^(Kron(?:Term|OS) (?:HUD|Overlay|Pet)|Coucou|Kron(?:term|OS) - T\d+|Developer Tools)/i;
 
 export function desktopWindowArgs(input: DesktopWindowAction): string[] {
     if (!Number.isSafeInteger(input.windowId) || input.windowId <= 0)
@@ -87,7 +87,7 @@ export class DesktopTiling {
                     Number.isSafeInteger(row.id) &&
                     !excludedPids.includes(row.pid) &&
                     !Excluded.test(row.title ?? "") &&
-                    !/Coucou|KronTerm Pet/i.test(row.app ?? "")
+                    !/Coucou|Kron(?:Term|OS) Pet/i.test(row.app ?? "")
             );
         };
         if (input.action === "launch") {

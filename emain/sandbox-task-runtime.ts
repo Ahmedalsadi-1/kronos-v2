@@ -6,7 +6,17 @@ import type { LinuxDesktop } from "../frontend/types/linux-desktops";
 import type { LinuxDesktopFleetRuntime } from "./linux-desktops-runtime";
 
 type TaskStart = { desktopId: string; assignedAgentId: string; expectedGeneration: number; taskId: string };
-type TaskSession = TaskStart & { sessionId: string; startedByTask: boolean; finished: boolean };
+type TaskSession = TaskStart & { sessionId: string; startedByTask: boolean; finished?: "complete" | "preserved" };
+
+function preservedResult(sessionId: string) {
+    return {
+        sessionId,
+        finished: true,
+        stopped: false,
+        preserved: true,
+        reason: "Control changed; sandbox left untouched.",
+    };
+}
 
 class SandboxControlChanged extends Error {
     constructor(message: string) {
@@ -49,33 +59,30 @@ export class SandboxTaskRuntime {
         if (typeof args.taskId !== "string" || !args.taskId.trim() || args.taskId.length > 128)
             throw new Error("A bounded task ID is required.");
         if (this.pending.has(args.desktopId)) throw new Error("Sandbox task operation already pending.");
-        const existing = [...this.sessions.values()].find(
-            (item) => !item.finished && item.desktopId === args.desktopId
-        );
-        if (existing) {
-            if (
-                existing.taskId !== args.taskId ||
-                existing.assignedAgentId !== args.assignedAgentId ||
-                existing.expectedGeneration !== args.expectedGeneration
-            )
-                throw new Error("Sandbox already has an active task.");
-            return {
-                sessionId: existing.sessionId,
-                desktop: await this.current(existing),
-                startedByTask: existing.startedByTask,
-            };
-        }
-        if (this.sessions.size >= 128) {
-            for (const [id, session] of this.sessions) if (session.finished) this.sessions.delete(id);
-            if (this.sessions.size >= 128) throw new Error("Finish an existing sandbox task first.");
-        }
         this.pending.add(args.desktopId);
         try {
             let desktop = await this.current(args);
+            const existing = [...this.sessions.values()].find(
+                (item) => !item.finished && item.desktopId === args.desktopId
+            );
+            if (existing) {
+                if (
+                    existing.assignedAgentId === args.assignedAgentId &&
+                    existing.expectedGeneration === args.expectedGeneration
+                ) {
+                    if (existing.taskId !== args.taskId) throw new Error("Sandbox already has an active task.");
+                    return { sessionId: existing.sessionId, desktop, startedByTask: existing.startedByTask };
+                }
+                existing.finished = "preserved";
+            }
+            if (this.sessions.size >= 128) {
+                for (const [id, session] of this.sessions) if (session.finished) this.sessions.delete(id);
+                if (this.sessions.size >= 128) throw new Error("Finish an existing sandbox task first.");
+            }
             if (!["running", "stopped"].includes(desktop.status))
                 throw new Error("Prepare the sandbox in its settings before starting a task.");
             const startedByTask = desktop.status === "stopped";
-            const session: TaskSession = { ...args, sessionId: randomUUID(), startedByTask, finished: false };
+            const session: TaskSession = { ...args, sessionId: randomUUID(), startedByTask };
             // Keep the lease even if startup fails so the caller can explicitly clean up a partial start.
             this.sessions.set(session.sessionId, session);
             try {
@@ -94,6 +101,7 @@ export class SandboxTaskRuntime {
     async finish(sessionId: string) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error("Unknown sandbox task session; cleanup cannot stop an arbitrary desktop.");
+        if (session.finished === "preserved") return preservedResult(sessionId);
         if (session.finished) return { sessionId, finished: true };
         if (this.pending.has(session.desktopId)) throw new Error("Sandbox task operation already pending.");
         this.pending.add(session.desktopId);
@@ -103,19 +111,13 @@ export class SandboxTaskRuntime {
                 desktop = await this.current(session);
             } catch (error) {
                 if (!(error instanceof SandboxControlChanged)) throw error;
-                session.finished = true;
-                return {
-                    sessionId,
-                    finished: true,
-                    stopped: false,
-                    preserved: true,
-                    reason: "Control changed; sandbox left untouched.",
-                };
+                session.finished = "preserved";
+                return preservedResult(sessionId);
             }
             if (desktop.status === "running") {
                 desktop = (await this.desktops.performAgent({ ...session, action: "stop" })).desktop;
             }
-            session.finished = true;
+            session.finished = "complete";
             return { sessionId, finished: true, stopped: desktop.status === "stopped", desktop };
         } finally {
             this.pending.delete(session.desktopId);

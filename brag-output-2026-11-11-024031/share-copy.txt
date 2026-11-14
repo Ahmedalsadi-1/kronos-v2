@@ -1,0 +1,2 @@
+KronOS. Your whole workflow, within reach.
+A look at our private-beta workspace: notch agent, live widgets, sandbox, n8n, and ComfyUI. Development UI concept.

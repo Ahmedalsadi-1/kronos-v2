@@ -1,0 +1,413 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 1,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "nested_media_start_basis_ambiguous",
+        "severity": "warning",
+        "message": "<video id=\"awakening-video\"> has data-start=\"4.8\" inside a sub-composition. Nested media timing is local to its composition by default; a nonzero value can be confused with a legacy root-global timestamp.",
+        "selector": "#awakening-video",
+        "dataAttributes": {},
+        "sourceFile": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/compositions/awakening.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Keep data-start=\"4.8\" if it is composition-local. If this is a legacy root-global timestamp, add data-hf-media-start-basis=\"global\"; otherwise convert it to local time by subtracting the host start."
+      }
+    ],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 4,
+    "infoCount": 2,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 73,
+        "selector": "#return-screen",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "containerSelector": "#scene-return > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 1088.01,
+          "right": 1087.85,
+          "bottom": 1738.44
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": -1088.01,
+          "y": 291.96,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "firstSeen": 73,
+        "lastSeen": 78,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          73,
+          78
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 73,
+        "selector": "#return-screen > div:nth-of-type(2)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 781.69,
+          "top": 289.68,
+          "right": 1138.31,
+          "bottom": 378.8,
+          "width": 356.62,
+          "height": 89.12
+        },
+        "containerSelector": "#return-screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "overflow": {
+          "top": 2.28
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": 781.69,
+          "y": 289.68,
+          "width": 356.62,
+          "height": 89.12
+        },
+        "firstSeen": 73,
+        "lastSeen": 78,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          73,
+          78
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 73,
+        "selector": "#return-pet-wrap",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 878.83,
+          "top": 253.31,
+          "right": 1041.17,
+          "bottom": 413.27,
+          "width": 162.34,
+          "height": 159.95
+        },
+        "containerSelector": "#return-screen",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "overflow": {
+          "top": 38.65
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": 878.83,
+          "y": 253.31,
+          "width": 162.34,
+          "height": 159.95
+        },
+        "firstSeen": 73,
+        "lastSeen": 78,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          73,
+          78
+        ]
+      },
+      {
+        "code": "escaped_container",
+        "severity": "warning",
+        "time": 73,
+        "selector": "#return-screen",
+        "message": "Positioned element renders far outside its offset parent — its coordinates were likely computed in a different frame (canvas/viewport pixels).",
+        "rect": {
+          "left": -1088.01,
+          "top": 291.96,
+          "right": 3007.85,
+          "bottom": 2818.44,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "containerSelector": "#scene-return > div:nth-of-type(1)",
+        "text": "",
+        "fixHint": "Compute left/top in the offset parent's frame (subtract its rect), or mark intentional placement with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/return.html",
+        "bbox": {
+          "x": -1088.01,
+          "y": 291.96,
+          "width": 4095.86,
+          "height": 2526.49
+        },
+        "firstSeen": 73,
+        "lastSeen": 78,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          73,
+          78
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 18,
+        "selector": "#browser-camera",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 278.24,
+          "top": -125.92,
+          "right": 2241.76,
+          "bottom": 1125.92,
+          "width": 1963.52,
+          "height": 1251.84
+        },
+        "containerSelector": "#scene-browser > div:nth-of-type(1) > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "right": 321.76,
+          "top": 125.92,
+          "bottom": 45.92
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/browser.html",
+        "bbox": {
+          "x": 278.24,
+          "y": -125.92,
+          "width": 1963.52,
+          "height": 1251.84
+        },
+        "firstSeen": 18,
+        "lastSeen": 25,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          18,
+          25
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 58,
+        "selector": "#fleet-camera",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 219.74,
+          "top": -458.74,
+          "right": 2540.32,
+          "bottom": 851.72,
+          "width": 2320.58,
+          "height": 1310.46
+        },
+        "containerSelector": "div.fleet-space",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "right": 620.32,
+          "top": 458.74
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/sessions.html",
+        "bbox": {
+          "x": 219.74,
+          "y": -458.74,
+          "width": 2320.58,
+          "height": 1310.46
+        },
+        "firstSeen": 58,
+        "lastSeen": 58,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          58
+        ]
+      }
+    ],
+    "duration": 80,
+    "samples": [
+      1.8,
+      4.8,
+      8,
+      13,
+      18,
+      25,
+      32,
+      38,
+      44,
+      50,
+      55,
+      58,
+      65,
+      73,
+      78
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 6,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.8,
+      13,
+      38,
+      55,
+      78
+    ],
+    "checked": 5,
+    "passed": 5
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "step": 0.134,
+    "samples": 599
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": true,
+    "files": [
+      ".hyperframes/artifacts/snapshots/10d7dc07-127b-4d30-887f-abfecff1a5c6/frame-00-at-1.8s.png",
+      ".hyperframes/artifacts/snapshots/10d7dc07-127b-4d30-887f-abfecff1a5c6/frame-01-at-13.0s.png",
+      ".hyperframes/artifacts/snapshots/10d7dc07-127b-4d30-887f-abfecff1a5c6/frame-02-at-38.0s.png",
+      ".hyperframes/artifacts/snapshots/10d7dc07-127b-4d30-887f-abfecff1a5c6/frame-03-at-55.0s.png",
+      ".hyperframes/artifacts/snapshots/10d7dc07-127b-4d30-887f-abfecff1a5c6/frame-04-at-78.0s.png"
+    ],
+    "times": [
+      1.8,
+      13,
+      38,
+      55,
+      78
+    ],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "9baf4fae-5057-4d8d-ac14-b48df8fc1ca9",
+    "revision": "eb8da1c3-ddb8-46ab-a4d5-3566bfc8321d",
+    "report": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/checks/9baf4fae-5057-4d8d-ac14-b48df8fc1ca9.json",
+    "attribution": "recorded-revision"
+  },
+  "_meta": {
+    "version": "0.9.22",
+    "latestVersion": "0.9.22",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-08T02:01:11.331Z",
+    "skillsOutdated": 4,
+    "skillsMissing": 0
+  }
+}

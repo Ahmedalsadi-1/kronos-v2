@@ -4,12 +4,14 @@ import { KronTermSettingsMount } from "@/app/view/hermes/kronterm-settings-mount
 import { KronSettingsViewModel, SETTINGS_SECTIONS } from "@/app/view/kronsettings/kronsettings-model";
 import { useReducedAgentMotion } from "@/app/view/use-reduced-agent-motion";
 import { WaveEnvContext } from "@/app/waveenv/waveenv";
+import { WorkspaceWallpaperSettings } from "@/app/workspace/workspace-wallpaper";
 import { getApi } from "@/store/global";
 import App from "@hermes/app";
 import { setTerminalTakeover } from "@hermes/app/right-sidebar/store";
 import { KronTermSettingsHostProvider } from "@hermes/app/settings/kronterm-settings-host";
 import { RootErrorBoundary } from "@hermes/components/error-boundary";
 import { removeTreePane, resetLayoutTree, revealTreePane } from "@hermes/components/pane-shell/tree/store";
+import { Button } from "@hermes/components/ui/button";
 import { RootTooltipProvider } from "@hermes/components/ui/tooltip";
 import { I18nProvider } from "@hermes/i18n";
 import { HermesShellModeProvider, markKronTermHudHost, type HermesHostMode } from "@hermes/lib/kronterm-host";
@@ -75,6 +77,7 @@ export function HermesApp({
             hudSettingsModel
                 ? ({
                       appearance: { reducedMotion },
+                      renderAppearance: () => <WorkspaceWallpaperSettings />,
                       sections: SETTINGS_SECTIONS.map(({ id, label }) => ({ id, label })),
                       renderSection: (sectionId: string) => (
                           <KronTermSettingsMount model={hudSettingsModel} sectionId={sectionId} />
@@ -175,9 +178,12 @@ export function HermesApp({
                     className="absolute inset-x-2 top-2 z-50 flex items-center gap-3 rounded border border-[var(--coucou-border)] bg-[var(--coucou-card)] p-3 text-xs text-[var(--coucou-label)]"
                 >
                     <span className="flex-1">{runtimeError}</span>
-                    <button
-                        className="cursor-pointer rounded px-2 py-1 outline-offset-2 focus-visible:outline focus-visible:outline-2"
+                    <Button
+                        aria-busy={retrying || undefined}
                         disabled={retrying}
+                        size="sm"
+                        type="button"
+                        variant="outline"
                         onClick={async () => {
                             setRetrying(true);
                             try {
@@ -191,7 +197,7 @@ export function HermesApp({
                         }}
                     >
                         {retrying ? "Restarting…" : "Retry"}
-                    </button>
+                    </Button>
                 </div>
             )}
             <div

@@ -1,56 +1,82 @@
 const JPEG_START = Buffer.from([0xff, 0xd8])
 const JPEG_END = Buffer.from([0xff, 0xd9])
-const DEFAULT_MAX_PENDING_BYTES = 2 * 1024 * 1024
+const DEFAULT_MAX_FRAME_BYTES = 2 * 1024 * 1024
 
-export type MjpegFrameParseResult = {
-  frames: Buffer<ArrayBufferLike>[]
-  pending: Buffer<ArrayBufferLike>
-}
+export class MjpegFrameParser {
+  private partial?: Buffer<ArrayBufferLike>
+  private frameBytes = 0
+  private trailingFF = false
 
-function trimPendingBuffer(
-  buffer: Buffer<ArrayBufferLike>,
-  maxBytes: number
-): Buffer<ArrayBufferLike> {
-  if (buffer.length <= maxBytes) {
-    return Buffer.from(buffer)
-  }
-  return Buffer.from(buffer.subarray(buffer.length - maxBytes))
-}
+  constructor(private readonly maxFrameBytes = DEFAULT_MAX_FRAME_BYTES) {}
 
-export function extractJpegFrames(
-  pending: Buffer<ArrayBufferLike>,
-  chunk: Buffer<ArrayBufferLike>,
-  maxPendingBytes = DEFAULT_MAX_PENDING_BYTES
-): MjpegFrameParseResult {
-  // Why: when there are no leftover bytes the chunk already holds whole frames,
-  // so read it directly instead of copying — frames below are views consumed
-  // synchronously (the IPC layer copies into a transferable ArrayBuffer), and
-  // any retained `pending` is copied out via trimPendingBuffer, so no chunk
-  // memory is held across calls. At ~30fps this avoids a full-frame copy/frame.
-  let cursor = pending.length > 0 ? Buffer.concat([pending, chunk]) : chunk
-  const frames: Buffer[] = []
-
-  while (cursor.length > 0) {
-    const frameStart = cursor.indexOf(JPEG_START)
-    if (frameStart === -1) {
-      const keepLastByte = cursor.at(-1) === 0xff
-      return { frames, pending: keepLastByte ? Buffer.from([0xff]) : Buffer.alloc(0) }
-    }
-    if (frameStart > 0) {
-      cursor = cursor.subarray(frameStart)
-    }
-
-    const frameEnd = cursor.indexOf(JPEG_END, JPEG_START.length)
-    if (frameEnd === -1) {
-      return { frames, pending: trimPendingBuffer(cursor, maxPendingBytes) }
-    }
-
-    const nextOffset = frameEnd + JPEG_END.length
-    // A view, not a copy: the caller consumes each frame synchronously before
-    // the next chunk arrives, and `cursor` is only ever re-sliced (never mutated).
-    frames.push(cursor.subarray(0, nextOffset))
-    cursor = cursor.subarray(nextOffset)
+  reset(): void {
+    this.partial = undefined
+    this.frameBytes = 0
+    this.trailingFF = false
   }
 
-  return { frames, pending: Buffer.alloc(0) }
+  push(chunk: Buffer<ArrayBufferLike>, onFrame: (frame: Buffer<ArrayBufferLike>) => void): void {
+    let offset = 0
+    while (offset < chunk.length) {
+      if (this.frameBytes === 0) {
+        if (this.trailingFF && chunk[offset] === 0xd8) {
+          this.reserve(JPEG_START.length)
+          this.frameBytes = JPEG_START.length
+          offset++
+        } else {
+          const start = chunk.indexOf(JPEG_START, offset)
+          if (start === -1) {
+            this.trailingFF = chunk.at(-1) === 0xff
+            return
+          }
+          offset = start + JPEG_START.length
+          this.frameBytes = JPEG_START.length
+        }
+        this.trailingFF = false
+      }
+
+      const splitEnd = this.trailingFF && chunk[offset] === 0xd9
+      const end = splitEnd ? offset : chunk.indexOf(JPEG_END, offset)
+      const nextOffset = end === -1 ? chunk.length : end + (splitEnd ? 1 : JPEG_END.length)
+      const total = this.frameBytes + nextOffset - offset
+      if (total > this.maxFrameBytes) {
+        // Resume scanning at the size limit, even if a later JPEG supplied the end marker.
+        offset += this.maxFrameBytes - this.frameBytes
+        this.reset()
+        continue
+      }
+
+      if (end === -1) {
+        const partial = this.reserve(total)
+        if (nextOffset > offset) {
+          chunk.copy(partial, this.frameBytes, offset, nextOffset)
+          this.trailingFF = chunk.at(-1) === 0xff
+        }
+        this.frameBytes = total
+        return
+      }
+
+      let frame = chunk.subarray(offset - JPEG_START.length, nextOffset)
+      if (this.partial) {
+        const partial = this.reserve(total)
+        chunk.copy(partial, this.frameBytes, offset, nextOffset)
+        frame = partial.subarray(0, total)
+      }
+      this.reset()
+      offset = nextOffset
+      onFrame(frame)
+    }
+  }
+
+  private reserve(size: number): Buffer<ArrayBufferLike> {
+    if (this.partial && this.partial.length >= size) return this.partial
+    const capacity = Math.min(this.maxFrameBytes, Math.max(size, (this.partial?.length ?? 0) * 2, 4096))
+    const next = Buffer.allocUnsafe(capacity)
+    if (this.partial) {
+      this.partial.copy(next, 0, 0, this.frameBytes)
+    } else {
+      JPEG_START.copy(next)
+    }
+    return (this.partial = next)
+  }
 }

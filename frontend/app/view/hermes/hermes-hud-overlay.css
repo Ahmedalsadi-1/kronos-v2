@@ -64,7 +64,7 @@
 }
 [data-chat-placement="island"] [data-slot="composer-root"],
 [data-chat-placement="island"] [data-slot="composer-surface"] {
-    border-radius: 12px !important;
+    border-radius: var(--hermes-composer-radius, 4px) !important;
 }
 [data-chat-placement="island"] [data-slot="composer-rich-input"] {
     width: 100%;

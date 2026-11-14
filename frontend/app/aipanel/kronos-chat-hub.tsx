@@ -85,7 +85,7 @@ type KronosChatHubProps = {
 const fallbackAgents: CatalogAgent[] = [
     { id: "kronoscode", name: "KronosCode", kind: "kronoscode", status: "ready", available: true, icon: "⬡" },
     { id: "computer-use-mcp", name: "Kron Computer Use", kind: "mcp", status: "ready", available: true, icon: "▣" },
-    { id: "kronterm-desktop", name: "Kronterm Desktop", kind: "desktop", status: "ready", available: true, icon: "▤" },
+    { id: "kronterm-desktop", name: "KronOS Desktop", kind: "desktop", status: "ready", available: true, icon: "▤" },
     { id: "codex", name: "Codex", kind: "acp", status: "missing", available: false, icon: "◈" },
     { id: "gemini", name: "Gemini", kind: "acp", status: "missing", available: false, icon: "✦" },
 ];
@@ -214,7 +214,7 @@ async function makeDirectFallbackSnapshot(mode: string, reason: string): Promise
             error:
                 resolvedMcpStatus === "connected" && resolvedDesktopStatus === "connected"
                     ? ""
-                    : "Kronterm Desktop endpoint unavailable",
+                    : "KronOS Desktop endpoint unavailable",
         },
         errors,
     };
@@ -516,7 +516,7 @@ export const KronosChatHub = memo(
                 );
             } catch (err) {
                 const reason = err instanceof Error ? err.message : String(err);
-                setSnapshot(await makeDirectFallbackSnapshot(currentMode, `KronTerm BFF unavailable: ${reason}`));
+                setSnapshot(await makeDirectFallbackSnapshot(currentMode, `KronOS BFF unavailable: ${reason}`));
             } finally {
                 setLoading(false);
             }
@@ -682,7 +682,7 @@ export const KronosChatHub = memo(
                             </div>
                             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
                                 <div className="mb-2 font-semibold text-zinc-200">MCP</div>
-                                <div>Kronterm Desktop: {snapshot?.krontermDesktop.mcpStatus}</div>
+                                <div>KronOS Desktop: {snapshot?.krontermDesktop.mcpStatus}</div>
                                 <div className="truncate font-mono text-zinc-500">
                                     {snapshot?.krontermDesktop.mcpUrl}
                                 </div>
@@ -721,8 +721,8 @@ export const KronosChatHub = memo(
                                 </div>
                                 <div className="text-2xl font-bold">KronosCode Cowork</div>
                                 <div className="mt-2 max-w-lg text-sm leading-6 text-zinc-400">
-                                    Multi-agent local coding, widget control, Kronterm Desktop automation, MCP tools,
-                                    and KronTerm context in one chat surface.
+                                    Multi-agent local coding, widget control, KronOS Desktop automation, MCP tools,
+                                    and KronOS context in one chat surface.
                                 </div>
                                 <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs text-zinc-400">
                                     <span className="rounded-full border border-zinc-800 px-3 py-1">

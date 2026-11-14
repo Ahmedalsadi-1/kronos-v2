@@ -4,19 +4,21 @@
 import { ipcMain, nativeTheme, systemPreferences, webContents } from "electron";
 import { makeSystemAppearanceSnapshot } from "./system-appearance";
 
+export function readNativeSystemAppearance(): SystemAppearanceSnapshot {
+    return makeSystemAppearanceSnapshot({
+        dark: nativeTheme.shouldUseDarkColors,
+        highContrast: nativeTheme.shouldUseHighContrastColors,
+        reducedTransparency: nativeTheme.prefersReducedTransparency,
+        reducedMotion: systemPreferences.getAnimationSettings().prefersReducedMotion,
+    });
+}
+
 export function registerSystemAppearanceIpc(): void {
-    const snapshot = () =>
-        makeSystemAppearanceSnapshot({
-            dark: nativeTheme.shouldUseDarkColors,
-            highContrast: nativeTheme.shouldUseHighContrastColors,
-            reducedTransparency: nativeTheme.prefersReducedTransparency,
-            reducedMotion: systemPreferences.getAnimationSettings().prefersReducedMotion,
-        });
     ipcMain.on("get-system-appearance", (event) => {
-        event.returnValue = snapshot();
+        event.returnValue = readNativeSystemAppearance();
     });
     nativeTheme.on("updated", () => {
-        const value = snapshot();
+        const value = readNativeSystemAppearance();
         for (const target of webContents.getAllWebContents()) {
             if (!target.isDestroyed()) target.send("system-appearance-change", value);
         }

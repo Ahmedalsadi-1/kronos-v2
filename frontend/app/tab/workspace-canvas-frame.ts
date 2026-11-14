@@ -1,6 +1,19 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+export function finishCanvasPan(
+    eventType: string,
+    elapsedSinceMovement: number,
+    startMomentum: () => void,
+    persist: () => void
+) {
+    if (eventType === "pointerup" && elapsedSinceMovement < 80) {
+        startMomentum();
+        return;
+    }
+    persist();
+}
+
 export function makeCanvasFrameScheduler<T>(
     apply: (value: T) => void,
     requestFrame: (callback: FrameRequestCallback) => number,

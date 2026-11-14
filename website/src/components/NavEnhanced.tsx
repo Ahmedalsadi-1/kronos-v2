@@ -16,7 +16,7 @@ export function NavEnhanced() {
             <nav className="nav-shell" aria-label="Main navigation">
                 <Link className="brand" to="/" onClick={() => setOpen(false)}>
                     <img src="/assets/product/kronterm-icon.svg" alt="" />
-                    <span>Kronterm</span>
+                    <span>KronOS</span>
                 </Link>
 
                 <div className="desktop-nav" onMouseLeave={() => setActiveGroup(null)}>

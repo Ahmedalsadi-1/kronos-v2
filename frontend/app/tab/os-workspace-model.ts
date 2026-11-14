@@ -3,6 +3,8 @@ import { resolveBlockView } from "@/app/block/retired-chat-view";
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SpatialRect, SpatialViewport } from "@/app/spatial/spatial-engine";
+import { getSingleDeviceWorkspaceWidth } from "@/app/view/computers/device-workspace-layout";
+import type { PenLayer } from "./os-pen-import";
 import { raiseOSSceneOrder, reconcileOSSceneOrder } from "./os-scene-order";
 import { getOSTabGroup, reconcileOSTabGroups, reduceOSTabs, type OSTabAction, type OSTabGroup } from "./os-tab-groups";
 
@@ -41,9 +43,8 @@ export type OSWindowState = {
 export type OSWindowGroup = {
     id: string;
     primaryBlockId: string;
-    sideBlockId: string;
-    side: "left" | "right";
-    dividerRatio: number;
+    blockIds: string[];
+    weights: Record<string, number>;
 };
 
 export type OSCanvasObjectKind =
@@ -59,6 +60,7 @@ export type OSCanvasObjectKind =
     | "rectangle"
     | "ellipse"
     | "diamond"
+    | "pen-layer"
     | "connector"
     | "workflow-node";
 export type OSCanvasColor = "amber" | "blue" | "green" | "rose" | "slate";
@@ -69,6 +71,8 @@ export type OSCanvasObject = SpatialRect & {
     id: string;
     kind: OSCanvasObjectKind;
     text?: string;
+    name?: string;
+    pen?: PenLayer;
     color?: OSCanvasColor;
     fromObjectId?: string;
     toObjectId?: string;
@@ -85,8 +89,10 @@ export type OSModeState = {
     zOrder: string[];
     sceneOrder?: string[];
     groups: Record<string, OSWindowGroup>;
+    carouselWeights?: Record<string, number>;
     tabGroups?: OSTabGroup[];
     objects: OSCanvasObject[];
+    loadedPenPaths?: string[];
     scene: OSScene;
     desktopLayout?: "focused" | "freeform";
     previousScene?: Exclude<OSScene, { kind: "overview" }>;
@@ -129,7 +135,7 @@ export type OSSpatialAction =
     | { type: "os.window.overview"; selectedBlockId?: string }
     | { type: "spatial.restoreScene" }
     | { type: "spatial.freeform" }
-    | { type: "spatial.setDivider"; groupId: string; dividerRatio: number }
+    | { type: "spatial.setDivider"; groupId?: string; left: string; right: string; ratio: number }
     | { type: "os.view.set"; view: KronTermOSView }
     | { type: "spatial.setWidgetPresentation"; presentation: KronTermOSView }
     | { type: "os.window.setBounds"; blockId: string; bounds: SpatialRect }
@@ -263,6 +269,7 @@ const OSCanvasObjectKinds = new Set<OSCanvasObjectKind>([
     "rectangle",
     "ellipse",
     "diamond",
+    "pen-layer",
     "connector",
 ]);
 
@@ -274,9 +281,11 @@ function normalizeSeedObjects(objects: any[] | undefined): OSCanvasObject[] {
             kind: object.kind,
             x: Number(object.x) || 0,
             y: Number(object.y) || 0,
-            width: Math.max(24, Number(object.width) || 240),
-            height: Math.max(24, Number(object.height) || 176),
+            width: Math.max(object.kind === "pen-layer" ? 1 : 24, Number(object.width) || 240),
+            height: Math.max(object.kind === "pen-layer" ? 1 : 24, Number(object.height) || 176),
             text: object.text,
+            name: object.name,
+            pen: object.kind === "pen-layer" ? object.pen : undefined,
             color: object.color,
             fromObjectId: object.fromObjectId,
             toObjectId: object.toObjectId,
@@ -308,7 +317,27 @@ export function migrateOSModeState(stored: Partial<OSModeState> | undefined): Pa
             ])
         ),
         zOrder: stored.zOrder ?? [],
-        groups: stored.groups ?? {},
+        groups: Object.fromEntries(
+            Object.entries(stored.groups ?? {}).map(([id, group]) => {
+                if (Array.isArray(group.blockIds)) return [id, group];
+                const legacy = group as OSWindowGroup & {
+                    sideBlockId: string;
+                    side: "left" | "right";
+                    dividerRatio: number;
+                };
+                const { primaryBlockId, sideBlockId, side, dividerRatio } = legacy;
+                const ratio = Number.isFinite(dividerRatio) ? Math.max(0.2, Math.min(0.8, dividerRatio)) : 0.31;
+                return [
+                    id,
+                    {
+                        id,
+                        primaryBlockId,
+                        blockIds: side === "left" ? [sideBlockId, primaryBlockId] : [primaryBlockId, sideBlockId],
+                        weights: { [sideBlockId]: 2 * ratio, [primaryBlockId]: 2 * (1 - ratio) },
+                    },
+                ];
+            })
+        ),
         objects: stored.objects == null ? undefined : normalizeSeedObjects(stored.objects),
         scene: stored.scene ?? { kind: "freeform" },
         view:
@@ -316,6 +345,27 @@ export function migrateOSModeState(stored: Partial<OSModeState> | undefined): Pa
                 ? "file"
                 : "canvas",
     };
+}
+
+function filterOSGroups(
+    groups: OSModeState["groups"],
+    keep: (blockId: string) => boolean
+): OSModeState["groups"] {
+    const next: OSModeState["groups"] = {};
+    for (const group of Object.values(groups)) {
+        const blockIds = group.blockIds.filter(keep);
+        if (blockIds.length < 2) continue;
+        next[group.id] =
+            blockIds.length === group.blockIds.length
+                ? group
+                : {
+                      ...group,
+                      blockIds,
+                      primaryBlockId: blockIds.includes(group.primaryBlockId) ? group.primaryBlockId : blockIds[0],
+                      weights: Object.fromEntries(blockIds.map((id) => [id, group.weights?.[id] ?? 1])),
+                  };
+    }
+    return next;
 }
 
 export function makeInitialOSModeState(
@@ -364,8 +414,10 @@ export function makeInitialOSModeState(
             zOrder,
             sceneOrder: stored?.sceneOrder,
             groups: stored?.groups ?? {},
+            carouselWeights: stored?.carouselWeights,
             tabGroups: stored?.tabGroups ?? [],
             objects: stored?.objects ?? normalizeSeedObjects(seed.objects),
+            loadedPenPaths: stored?.loadedPenPaths,
             scene:
                 stored?.scene && (stored.scene.kind !== "freeform" || stored.desktopLayout === "freeform")
                     ? stored.scene
@@ -416,15 +468,7 @@ export function reconcileOSModeState(
     });
     const zOrder = state.zOrder.filter((blockId) => blockIds.includes(blockId));
     for (const blockId of blockIds) if (!zOrder.includes(blockId)) zOrder.push(blockId);
-    const groups = Object.fromEntries(
-        Object.entries(state.groups).filter(
-            ([, group]) =>
-                blockIds.includes(group.primaryBlockId) &&
-                blockIds.includes(group.sideBlockId) &&
-                !windows[group.primaryBlockId]?.collapsed &&
-                !windows[group.sideBlockId]?.collapsed
-        )
-    );
+    const groups = filterOSGroups(state.groups, (id) => !!windows[id] && !windows[id].collapsed);
     let scene = state.scene;
     if (scene.kind === "focused" && !blockIds.includes(scene.blockId)) scene = { kind: "freeform" };
     if (scene.kind === "focused" && windows[scene.blockId]?.collapsed) scene = { kind: "freeform" };
@@ -492,11 +536,19 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         return reduceOSTabs(state, action);
     if (action.type === "spatial.focus" || action.type === "os.window.focus") {
         if (!state.windows[action.blockId]) return state;
+        const group =
+            action.type === "spatial.focus"
+                ? Object.values(state.groups).find((item) => item.blockIds.includes(action.blockId))
+                : undefined;
         const keepCanvas =
             action.type === "os.window.focus" && state.scene.kind === "freeform" && state.desktopLayout === "freeform";
         return {
             ...state,
-            scene: keepCanvas ? state.scene : { kind: "focused", blockId: action.blockId },
+            scene: keepCanvas
+                ? state.scene
+                : group
+                  ? { kind: "grouped", groupId: group.id }
+                  : { kind: "focused", blockId: action.blockId },
             desktopLayout: keepCanvas ? state.desktopLayout : "focused",
             selectedEntityId: action.blockId,
             tabGroups: state.tabGroups?.map((group) =>
@@ -532,11 +584,7 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
             ...state,
             windows,
             // Arranged windows are side by side, so any grouping or maximized scene is dissolved.
-            groups: Object.fromEntries(
-                Object.entries(state.groups).filter(
-                    ([, group]) => !ids.includes(group.primaryBlockId) && !ids.includes(group.sideBlockId)
-                )
-            ),
+            groups: filterOSGroups(state.groups, (id) => !ids.includes(id)),
             scene: { kind: "freeform" },
             selectedEntityId: action.type === "os.window.setBounds" ? action.blockId : state.selectedEntityId,
             zOrder: [...state.zOrder.filter((id) => !raised.includes(id)), ...raised],
@@ -568,30 +616,44 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         ) {
             return state;
         }
-        const groups = Object.fromEntries(
-            Object.entries(state.groups).filter(
-                ([, group]) => ![action.blockId, action.targetBlockId].includes(group.sideBlockId)
-            )
-        );
-        const groupId = `group-${action.targetBlockId}-${action.blockId}`;
+        const activeGroup = state.scene.kind === "grouped" ? state.groups[state.scene.groupId] : undefined;
+        const targetGroup = activeGroup?.blockIds.includes(action.targetBlockId)
+            ? activeGroup
+            : Object.values(state.groups).find((group) => group.blockIds.includes(action.targetBlockId));
+        const groups = filterOSGroups(state.groups, (id) => id !== action.blockId);
+        const groupId = targetGroup?.id ?? `group-${action.targetBlockId}-${action.blockId}`;
+        const blockIds = targetGroup?.blockIds.filter((id) => id !== action.blockId) ?? [action.targetBlockId];
+        const targetIndex = blockIds.indexOf(action.targetBlockId);
+        blockIds.splice(targetIndex + (action.side === "right" ? 1 : 0), 0, action.blockId);
         groups[groupId] = {
             id: groupId,
-            primaryBlockId: action.targetBlockId,
-            sideBlockId: action.blockId,
-            side: action.side,
-            dividerRatio: 0.31,
+            primaryBlockId: targetGroup?.primaryBlockId ?? action.targetBlockId,
+            blockIds,
+            weights: targetGroup?.weights ?? { [action.blockId]: 0.62, [action.targetBlockId]: 1.38 },
         };
-        return { ...state, groups, scene: { kind: "grouped", groupId }, selectedEntityId: action.targetBlockId };
-    }
-    if (action.type === "spatial.detach") {
-        const current = Object.values(state.groups).find((group) => group.sideBlockId === action.blockId);
-        const groups = Object.fromEntries(
-            Object.entries(state.groups).filter(([, group]) => group.sideBlockId !== action.blockId)
-        );
         return {
             ...state,
             groups,
-            scene: current ? { kind: "focused", blockId: current.primaryBlockId } : state.scene,
+            windows: {
+                ...state.windows,
+                [action.blockId]: { ...state.windows[action.blockId], collapsed: false, maximized: false },
+                [action.targetBlockId]: { ...state.windows[action.targetBlockId], collapsed: false, maximized: false },
+            },
+            scene: { kind: "grouped", groupId },
+            selectedEntityId: action.targetBlockId,
+        };
+    }
+    if (action.type === "spatial.detach") {
+        const current = Object.values(state.groups).find((group) => group.blockIds.includes(action.blockId));
+        if (!current) return state;
+        const groups = filterOSGroups(state.groups, (id) => id !== action.blockId);
+        const active = state.scene.kind === "grouped" && state.scene.groupId === current.id;
+        const remaining = groups[current.id]?.primaryBlockId ?? current.blockIds.find((id) => id !== action.blockId);
+        return {
+            ...state,
+            groups,
+            scene: active && !groups[current.id] ? { kind: "focused", blockId: remaining } : state.scene,
+            selectedEntityId: active && state.selectedEntityId === action.blockId ? remaining : state.selectedEntityId,
         };
     }
     if (
@@ -604,14 +666,10 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         if (!current) return state;
         const minimizing = action.type === "spatial.collapse" || action.type === "os.window.minimize";
         const containingGroup = Object.values(state.groups).find(
-            (group) => group.primaryBlockId === action.blockId || group.sideBlockId === action.blockId
+            (group) => group.blockIds.includes(action.blockId)
         );
         const groups = minimizing
-            ? Object.fromEntries(
-                  Object.entries(state.groups).filter(
-                      ([, group]) => group.sideBlockId !== action.blockId && group.primaryBlockId !== action.blockId
-                  )
-              )
+            ? filterOSGroups(state.groups, (id) => id !== action.blockId)
             : state.groups;
         let scene = state.scene;
         if (
@@ -620,11 +678,9 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
             state.scene.kind === "grouped" &&
             state.scene.groupId === containingGroup.id
         ) {
-            const remainingBlockId =
-                containingGroup.primaryBlockId === action.blockId
-                    ? containingGroup.sideBlockId
-                    : containingGroup.primaryBlockId;
-            scene = { kind: "focused", blockId: remainingBlockId };
+            if (!groups[containingGroup.id]) {
+                scene = { kind: "focused", blockId: containingGroup.blockIds.find((id) => id !== action.blockId) };
+            }
         } else if (minimizing && state.scene.kind === "focused" && state.scene.blockId === action.blockId) {
             const nextId = [...state.zOrder]
                 .reverse()
@@ -643,6 +699,14 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
             ...state,
             groups,
             scene,
+            selectedEntityId:
+                minimizing && state.selectedEntityId === action.blockId
+                    ? scene.kind === "grouped"
+                        ? groups[scene.groupId]?.primaryBlockId
+                        : scene.kind === "focused"
+                          ? scene.blockId
+                          : undefined
+                    : state.selectedEntityId,
             windows: {
                 ...state.windows,
                 [action.blockId]: {
@@ -685,19 +749,42 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         };
     }
     if (action.type === "spatial.restoreScene") {
-        return { ...state, scene: state.previousScene ?? { kind: "freeform" }, previousScene: undefined };
+        const previous = state.previousScene;
+        const scene = previous?.kind === "grouped" && !state.groups[previous.groupId] ? undefined : previous;
+        return { ...state, scene: scene ?? { kind: "freeform" }, previousScene: undefined };
     }
     if (action.type === "spatial.freeform") {
         return { ...state, scene: { kind: "freeform" }, desktopLayout: "freeform", previousScene: undefined };
     }
     if (action.type === "spatial.setDivider") {
-        const group = state.groups[action.groupId];
-        if (!group) return state;
+        const group = action.groupId ? state.groups[action.groupId] : undefined;
+        if (
+            !Number.isFinite(action.ratio) ||
+            action.left === action.right ||
+            !state.windows[action.left] ||
+            !state.windows[action.right] ||
+            (action.groupId
+                ? !group?.blockIds.includes(action.left) || !group.blockIds.includes(action.right)
+                : state.scene.kind !== "focused" || state.windows[state.scene.blockId]?.maximized)
+        )
+            return state;
+        const combined =
+            getOSPaneWeight(state, action.left, group) + getOSPaneWeight(state, action.right, group);
+        const ratio = Math.max(0.2, Math.min(0.8, action.ratio));
+        const weights = {
+            ...(group ? group.weights : state.carouselWeights),
+            [action.left]: combined * ratio,
+            [action.right]: combined * (1 - ratio),
+        };
+        if (!group) return { ...state, carouselWeights: weights };
         return {
             ...state,
             groups: {
                 ...state.groups,
-                [action.groupId]: { ...group, dividerRatio: Math.min(0.42, Math.max(0.22, action.dividerRatio)) },
+                [action.groupId]: {
+                    ...group,
+                    weights,
+                },
             },
         };
     }
@@ -747,25 +834,142 @@ export function getOSCarouselNeighbor(state: OSModeState, direction: -1 | 1): st
     return index < 0 ? undefined : order[index + direction];
 }
 
+export const OSPaneGap = 6;
+export const OSMinimumPaneWidth = 180;
+
+export function getOSPaneWeight(state: OSModeState, id: string, group?: OSWindowGroup): number {
+    if (group) return group.weights?.[id] || 1;
+    return state.carouselWeights?.[id] || (state.scene.kind === "focused" && state.scene.blockId === id ? 2 : 1);
+}
+
+export function getOSAdjacentPanes(layouts: Record<string, OSWindowLayout>, compact: ReadonlySet<string>) {
+    const panes = Object.entries(layouts)
+        .filter(([, layout]) =>
+            layout.opacity > 0 && ["focused", "carousel", "docked-left", "docked-right"].includes(layout.presentation)
+        )
+        .map(([id, { bounds }]) => ({ id, bounds }))
+        .sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
+    return panes.slice(1).flatMap((right, index) => {
+        const left = panes[index];
+        const gap = right.bounds.x - left.bounds.x - left.bounds.width;
+        if (left.bounds.y !== right.bounds.y || gap < -1 || gap > OSPaneGap + 1) return [];
+        if (compact.has(left.id) || compact.has(right.id)) return [];
+        if (left.bounds.width + right.bounds.width <= 2 * OSMinimumPaneWidth) return [];
+        return [{ left, right }];
+    });
+}
+
+export function getOSPaneTakeover(
+    state: OSModeState,
+    blockId: string,
+    dragged: SpatialRect,
+    adjacent: ReturnType<typeof getOSAdjacentPanes>
+): Extract<OSSpatialAction, { type: "spatial.setDivider" }> | undefined {
+    if (state.scene.kind !== "focused" && state.scene.kind !== "grouped") return;
+    const group = state.scene.kind === "grouped" ? state.groups[state.scene.groupId] : undefined;
+    for (const { left, right } of adjacent) {
+        const fromLeft = left.id === blockId;
+        if (!fromLeft && right.id !== blockId) continue;
+        const source = (fromLeft ? left : right).bounds;
+        const target = (fromLeft ? right : left).bounds;
+        const overlap = Math.min(dragged.x + dragged.width, target.x + target.width) - Math.max(dragged.x, target.x);
+        const height = Math.min(dragged.y + dragged.height, target.y + target.height) - Math.max(dragged.y, target.y);
+        if (overlap < 8 || height < Math.min(source.height, target.height) / 2) continue;
+        const leftWeight = getOSPaneWeight(state, left.id, group);
+        const rightWeight = getOSPaneWeight(state, right.id, group);
+        const share = (fromLeft ? leftWeight : rightWeight) / (leftWeight + rightWeight);
+        const gain = Math.min(0.28, overlap / target.width);
+        const next = Math.min(0.8, Math.max(0.6, share + gain));
+        return { type: "spatial.setDivider", groupId: group?.id, left: left.id, right: right.id, ratio: fromLeft ? next : 1 - next };
+    }
+}
+
+function layoutOSRow(
+    ids: string[],
+    area: SpatialRect,
+    gap: number,
+    compact: ReadonlySet<string> | undefined,
+    weight: (id: string) => number
+): Record<string, SpatialRect> {
+    const available = Math.max(ids.length, area.width - gap * (ids.length - 1));
+    const regular = ids.filter((id) => !compact?.has(id));
+    const compactCount = ids.length - regular.length;
+    const compactWidth = compactCount
+        ? getSingleDeviceWorkspaceWidth(
+              Math.max(1, (available - Math.min(regular.length * OSMinimumPaneWidth, available / 2)) / compactCount),
+              area.height
+          )
+        : 0;
+    const regularWidth = available - compactCount * compactWidth;
+    const minimum = regular.length ? Math.min(OSMinimumPaneWidth, regularWidth / regular.length) : 0;
+    const flexible = regularWidth - minimum * regular.length;
+    const totalWeight = regular.reduce((sum, id) => sum + weight(id), 0);
+    let x = regular.length ? area.x : area.x + (available - compactCount * compactWidth) / 2;
+    return Object.fromEntries(
+        ids.map((id) => {
+            const width = compact?.has(id) ? compactWidth : minimum + (flexible * weight(id)) / totalWeight;
+            const bounds = { ...area, x, width };
+            x += width + gap;
+            return [id, bounds];
+        })
+    );
+}
+
+export function getOSGroupAdditions(state: OSModeState, group: OSWindowGroup): string[] {
+    return getOSCarouselOrder(state).filter((id) => !group.blockIds.includes(id));
+}
+
+function layoutOSGroup(
+    state: OSModeState,
+    group: OSWindowGroup,
+    viewport: { width: number; height: number; rightInset?: number },
+    compactDeviceBlocks?: ReadonlySet<string>
+): Record<string, SpatialRect> {
+    const gap = OSPaneGap;
+    const margin = viewport.width < 900 ? 12 : 20;
+    const width = Math.max(1, viewport.width - margin * 2 - (viewport.rightInset ?? 0));
+    const top = 76;
+    const bottom = getOSGroupAdditions(state, group).length ? 126 : 44;
+    const maxColumns = Math.max(1, Math.floor((width + gap) / 300));
+    const rows = Math.ceil(group.blockIds.length / maxColumns);
+    const rowHeight = Math.max(1, (viewport.height - top - bottom - gap * (rows - 1)) / rows);
+    const panes: Record<string, SpatialRect> = {};
+    let offset = 0;
+    for (let row = 0; row < rows; row++) {
+        const size = Math.ceil((group.blockIds.length - offset) / (rows - row));
+        const ids = group.blockIds.slice(offset, offset + size);
+        Object.assign(
+            panes,
+            layoutOSRow(
+                ids,
+                { x: margin, y: top + row * (rowHeight + gap), width, height: rowHeight },
+                gap,
+                compactDeviceBlocks,
+                (id) => getOSPaneWeight(state, id, group)
+            )
+        );
+        offset += size;
+    }
+    return panes;
+}
+
 export function computeOSWindowLayout(
     state: OSModeState,
     blockId: string,
     view: string,
     viewport: { width: number; height: number; rightInset?: number },
-    phoneAspect?: number
+    compactDeviceBlocks?: ReadonlySet<string>
 ): OSWindowLayout {
-    const layout = computeOSWindowLayoutBase(state, blockId, view, viewport);
-    if (!(phoneAspect > 0)) return layout;
+    const layout = computeOSWindowLayoutBase(state, blockId, view, viewport, compactDeviceBlocks);
+    if (!compactDeviceBlocks?.has(blockId)) return layout;
     const bounds = layout.bounds;
-    const width = Math.min(bounds.width, bounds.height * phoneAspect);
-    const height = width / phoneAspect;
+    const width = getSingleDeviceWorkspaceWidth(bounds.width, bounds.height);
     return {
         ...layout,
         bounds: {
-            x: bounds.x + (bounds.width - width) / 2,
-            y: bounds.y + (bounds.height - height) / 2,
+            ...bounds,
+            x: layout.presentation === "freeform" ? bounds.x : bounds.x + (bounds.width - width) / 2,
             width,
-            height,
         },
     };
 }
@@ -774,7 +978,8 @@ function computeOSWindowLayoutBase(
     state: OSModeState,
     blockId: string,
     view: string,
-    viewport: { width: number; height: number; rightInset?: number }
+    viewport: { width: number; height: number; rightInset?: number },
+    compactDeviceBlocks?: ReadonlySet<string>
 ): OSWindowLayout {
     // a block can render one frame before reconcile registers its window
     const window: OSWindowState = state.windows[blockId] ?? {
@@ -833,44 +1038,40 @@ function computeOSWindowLayoutBase(
     } else {
         primaryBlockId = state.scene.blockId;
     }
-    if (group && (blockId === group.primaryBlockId || blockId === group.sideBlockId)) {
-        const outerWidth = Math.min(1540, viewport.width * 0.92);
-        const outerHeight = Math.min(860, viewport.height * 0.78);
-        const outerX = (viewport.width - outerWidth) / 2;
-        const outerY = 72 + (viewport.height - 72 - outerHeight) / 2;
-        const sideWidth = Math.max(280, outerWidth * group.dividerRatio);
-        const gap = 8;
-        const isSide = blockId === group.sideBlockId;
-        const sideX = group.side === "left" ? outerX : outerX + outerWidth - sideWidth;
-        const primaryX = group.side === "left" ? outerX + sideWidth + gap : outerX;
+    if (group?.blockIds.includes(blockId)) {
+        const index = group.blockIds.indexOf(blockId);
+        const primaryIndex = group.blockIds.indexOf(group.primaryBlockId);
         return {
-            bounds: {
-                x: Math.round(isSide ? sideX : primaryX),
-                y: Math.round(outerY),
-                width: Math.round(isSide ? sideWidth : outerWidth - sideWidth - gap),
-                height: Math.round(outerHeight),
-            },
-            presentation: isSide ? (group.side === "left" ? "docked-left" : "docked-right") : "focused",
+            bounds: layoutOSGroup(state, group, viewport, compactDeviceBlocks)[blockId],
+            presentation: index === primaryIndex ? "focused" : index < primaryIndex ? "docked-left" : "docked-right",
             rotateY: 0,
             scale: 1,
             opacity: 1,
-            zIndex: isSide ? 602 : 601,
+            zIndex: 601 + index,
         };
     }
     if (state.scene.kind === "focused" && !state.windows[primaryBlockId]?.maximized) {
         const order = getOSCarouselOrder(state);
-        const offset = order.indexOf(blockId) - order.indexOf(primaryBlockId);
-        const bounds = preferredFocusBounds("web", viewport);
-        const peek = order.length > 1 ? Math.min(48, Math.round(viewport.width * 0.035)) : 0;
-        const width = Math.max(1, bounds.width - peek * 2);
+        const index = order.indexOf(blockId);
+        const primaryIndex = order.indexOf(primaryBlockId);
+        const offset = index - primaryIndex;
+        const area = preferredFocusBounds("web", viewport);
+        const count = Math.max(1, Math.min(order.length, Math.floor((area.width + OSPaneGap) / 360)));
+        const start = Math.max(0, Math.min(primaryIndex - Math.floor((count - 1) / 2), order.length - count));
+        const visible = order.slice(start, start + count);
+        if (!visible.includes(blockId) && index >= 0)
+            return { ...base, opacity: 0, presentation: "collapsed" };
+        const tabsInset = visible.some((id) => getOSTabGroup(state, id)) ? 36 : 0;
+        const row = layoutOSRow(
+            visible.includes(blockId) ? visible : [blockId],
+            { ...area, y: area.y + tabsInset, height: Math.max(1, area.height - (order.length > 1 ? 32 : 0) - tabsInset) },
+            OSPaneGap,
+            compactDeviceBlocks,
+            (id) => getOSPaneWeight(state, id)
+        );
         return {
             ...base,
-            bounds: {
-                x: bounds.x + peek + offset * (width + 20),
-                y: bounds.y + (tabGroup ? 36 : 0),
-                width,
-                height: Math.max(1, bounds.height - (order.length > 1 ? 44 : 0) - (tabGroup ? 36 : 0)),
-            },
+            bounds: row[blockId],
             presentation: offset === 0 ? "focused" : "carousel",
             zIndex: offset === 0 ? 600 : 590 - Math.abs(offset),
         };

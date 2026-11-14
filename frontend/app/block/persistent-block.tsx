@@ -62,6 +62,7 @@ function makeRegistry() {
     let version = 0;
     return {
         entries,
+        alternateSlots: new Map<string, { element: HTMLElement; chrome: BlockChromeMode }>(),
         snapshot: () => version,
         subscribe: (listener: () => void) => {
             listeners.add(listener);
@@ -80,6 +81,8 @@ type Registry = ReturnType<typeof makeRegistry>;
 const RegistryContext = createContext<Registry>(null);
 
 function LiveBlock({ entry }: { entry: Entry }) {
+    const registry = useContext(RegistryContext);
+    const alternate = registry.alternateSlots.get(entry.id);
     const host = useRef<HTMLDivElement>(null);
     useLayoutEffect(() => {
         let frame: number;
@@ -90,8 +93,21 @@ function LiveBlock({ entry }: { entry: Entry }) {
         let previewHeight = 560;
         const position = () => {
             const element = host.current;
-            const slot = entry.slot;
+            const slot = registry.alternateSlots.get(entry.id)?.element ?? entry.slot;
             if (!element) return;
+            const hud = kronTermHudController.getSnapshot();
+            const hudPreview =
+                document.visibilityState === "hidden" &&
+                hud.active &&
+                !hud.keepWorkspaceVisible &&
+                hud.selectedBlockId === entry.id;
+            if (!slot && !hudPreview) {
+                if (previous !== "display:none") {
+                    element.style.cssText = "display:none";
+                    previous = "display:none";
+                }
+                return;
+            }
             let visible = slot?.isConnected && slot.offsetWidth > 0 && slot.offsetHeight > 0;
             let zIndex = 0;
             let opacity = 1;
@@ -117,7 +133,7 @@ function LiveBlock({ entry }: { entry: Entry }) {
 
             const slotStyle = slot ? getComputedStyle(slot) : undefined;
             const rect = visible ? slot.getBoundingClientRect() : undefined;
-            const rootRect = element.parentElement.getBoundingClientRect();
+            const rootRect = rect && !hudPreview ? element.parentElement.getBoundingClientRect() : undefined;
             let clipPath = "none";
             const osRoot = slot?.closest(".os-mode-root");
             const ownerWindow = slot?.closest<HTMLElement>(".os-window");
@@ -146,12 +162,6 @@ function LiveBlock({ entry }: { entry: Entry }) {
                 previewWidth = slot.offsetWidth;
                 previewHeight = slot.offsetHeight;
             }
-            const hud = kronTermHudController.getSnapshot();
-            const hudPreview =
-                document.visibilityState === "hidden" &&
-                hud.active &&
-                !hud.keepWorkspaceVisible &&
-                hud.selectedBlockId === entry.id;
             const className = cn(
                 presentation === "os" ? "os-window-surface" : "h-full w-full",
                 hudPreview &&
@@ -207,26 +217,30 @@ function LiveBlock({ entry }: { entry: Entry }) {
             unsubscribe();
             document.removeEventListener("visibilitychange", position);
         };
-    }, [entry]);
+    }, [entry, registry]);
     return (
         <div
             ref={host}
             data-live-blockid={entry.id}
+            data-alternate-chrome={alternate?.chrome}
             className="h-full w-full"
             onPointerDownCapture={(event) => {
-                entry.surfaceInput?.onPointerDownCapture?.(event);
-                if (!event.defaultPrevented) entry.binding.model.focusNode();
+                if (!alternate) entry.surfaceInput?.onPointerDownCapture?.(event);
+                if (!event.defaultPrevented && !alternate) entry.binding.model.focusNode();
             }}
             onWheel={(event) => {
-                entry.surfaceInput?.onWheel?.(event);
+                if (!alternate) entry.surfaceInput?.onWheel?.(event);
                 event.stopPropagation();
             }}
         >
             <SystemAppearanceContext.Provider value={entry.appearance}>
-                <BlockChromeProvider mode={entry.chrome} toolbarHost={entry.toolbarHost}>
+                <BlockChromeProvider
+                    mode={alternate?.chrome ?? entry.chrome}
+                    toolbarHost={alternate ? undefined : entry.toolbarHost}
+                >
                     <Block nodeModel={entry.binding.model} preview={false} />
-                    {entry.overlay}
-                    {entry.surfaceInput?.capturePointer && (
+                    {!alternate && entry.overlay}
+                    {!alternate && entry.surfaceInput?.capturePointer && (
                         <div
                             data-live-block-pan-capture=""
                             className="absolute inset-0 z-[2147483647] pointer-events-auto cursor-grab"
@@ -237,6 +251,23 @@ function LiveBlock({ entry }: { entry: Entry }) {
             </SystemAppearanceContext.Provider>
         </div>
     );
+}
+
+export function PersistentBlockSlot({ blockId, chrome = "default" }: { blockId: string; chrome?: BlockChromeMode }) {
+    const registry = useContext(RegistryContext);
+    const slot = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        if (!registry || !slot.current) return;
+        const owner = { element: slot.current, chrome };
+        registry.alternateSlots.set(blockId, owner);
+        registry.changed();
+        return () => {
+            if (registry.alternateSlots.get(blockId) !== owner) return;
+            registry.alternateSlots.delete(blockId);
+            registry.changed();
+        };
+    }, [blockId, chrome, registry]);
+    return <div ref={slot} className="h-full w-full" data-block-slot={blockId} />;
 }
 
 function LiveBlockLayer({ registry, blockIds }: { registry: Registry; blockIds: string[] }) {

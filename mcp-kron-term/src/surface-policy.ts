@@ -1,6 +1,11 @@
 import type { SurfaceCapability } from "./wsh-bridge.js";
 
 export function isToolAllowedBySurfaceCapability(name: string, capability?: SurfaceCapability): boolean {
+    if (name.startsWith("swarm_")) return !capability?.delegationScope && capability?.hostMode !== "web-fullscreen";
+    if (name.startsWith("comfyui_"))
+        return capability?.hostMode !== "web-fullscreen" &&
+            (!capability?.delegationScope || capability.delegationScope === "inherit") &&
+            (!capability?.sandboxComputerId || capability.sandboxComputerMode === "hybrid");
     if (capability?.delegationScope === "sandbox")
         return (
             name.startsWith("sandbox_vm_") ||
@@ -27,6 +32,24 @@ export function isToolAllowedBySurfaceCapability(name: string, capability?: Surf
                 "widget_mouse_move",
             ].includes(name)
         );
+    if (capability?.sandboxComputerId && capability.sandboxComputerMode === "hybrid") {
+        return (
+            name.startsWith("sandbox_vm_") ||
+            ["surface_status", "delegation_status", "tool_search", "app_workflow"].includes(name) ||
+            [
+                "shared_skill_",
+                "workspace_",
+                "widget_",
+                "browser_",
+                "terminal_",
+                "file_",
+                "block_",
+                "canvas_",
+                "lsp_",
+                "n8n_",
+            ].some((prefix) => name.startsWith(prefix))
+        );
+    }
     if (capability?.sandboxComputerId) {
         return (
             name === "surface_status" ||

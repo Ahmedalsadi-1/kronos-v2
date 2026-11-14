@@ -85,15 +85,24 @@ export function resolveWidgetNativePath(meta: Record<string, unknown> | undefine
 }
 
 export function computeWidgetTabStripScrollMetrics(
-    element: Pick<HTMLElement, "scrollWidth" | "clientWidth" | "scrollLeft">
+    element: Pick<HTMLElement, "scrollWidth" | "clientWidth" | "scrollLeft">,
+    previous?: WidgetTabStripScrollMetrics
 ): WidgetTabStripScrollMetrics {
     const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
     const hasOverflow = maxScrollLeft > 1;
-    return {
+    const next = {
         hasOverflow,
         canScrollStart: hasOverflow && element.scrollLeft > 1,
         canScrollEnd: hasOverflow && element.scrollLeft < maxScrollLeft - 1,
     };
+    if (
+        previous?.hasOverflow === next.hasOverflow &&
+        previous.canScrollStart === next.canScrollStart &&
+        previous.canScrollEnd === next.canScrollEnd
+    ) {
+        return previous;
+    }
+    return next;
 }
 
 function getVisibleWidgetPaneIds(

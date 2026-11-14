@@ -33,6 +33,18 @@ function fixture() {
     };
     return { backend, workspaces, blocks };
 }
+it("shares one durable three-widget desktop across project teammates", async () => {
+    const { backend, workspaces } = fixture();
+    const registry = new BotWorkspaceRegistry(backend);
+    const room = { id: "room-one", name: "Project" };
+    const teammates = ["Researcher", "Builder", "Reviewer"].map((name) => ({ id: name, name, room, cwd: "/project" }));
+    const desktops = await Promise.all(teammates.map((bot) => registry.ensure(bot)));
+    expect(new Set(desktops.map((desktop) => desktop.workspaceId)).size).toBe(1);
+    expect(desktops.map((desktop) => desktop.botId)).toEqual(teammates.map((bot) => bot.id));
+    expect(workspaces).toHaveLength(1);
+    expect(backend.createBlock).toHaveBeenCalledTimes(3);
+    expect(await new BotWorkspaceRegistry(backend).ensure(teammates[2])).toEqual(desktops[2]);
+});
 it("deduplicates concurrent requests and reuses durable bot identity across restarts", async () => {
     const { backend, workspaces } = fixture();
     const registry = new BotWorkspaceRegistry(backend);

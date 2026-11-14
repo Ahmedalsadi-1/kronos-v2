@@ -41,7 +41,7 @@ it("preserves XFCE and stock Chromium and only adds focused normal-window behavi
 it("keeps the bundled guest payload synchronized with its editable sources", async () => {
     const { readFile } = await import("node:fs/promises");
     const { LinuxGuestSources } = await import("./guest-assets");
-    for (const name of ["appearance.sh", "focus-one.sh", "session.sh"] as const) {
+    for (const name of ["appearance.sh", "focus-one.sh", "open-app.sh", "session.sh"] as const) {
         expect(LinuxGuestSources[name]).toBe(await readFile(new URL(`./guest/${name}`, import.meta.url), "utf8"));
     }
 });
@@ -92,4 +92,27 @@ it("includes the static wallpaper only in provisioning data and rejects payload 
     expect(seed).toContain("path: /usr/local/share/backgrounds/kronterm/liquid-chrome.png");
     expect(seed).toContain("encoding: b64\n    content: aGVsbG8=");
     expect(() => makeLinuxVmCloudInit("ssh-ed25519 AAAA test", "bad\nruncmd: evil")).toThrow("Invalid wallpaper");
+});
+
+it("focuses an existing app instead of launching another process from the dock", async () => {
+    const { mkdtemp, readFile, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const dir = await mkdtemp(join(tmpdir(), "kronterm-app-reuse-"));
+    const log = join(dir, "actions");
+    await writeFile(
+        join(dir, "wmctrl"),
+        '#!/bin/sh\nprintf "focus %s\\n" "$*" >> "$APP_TEST_LOG"\nexit "$APP_EXISTS"\n',
+        { mode: 0o755 }
+    );
+    await writeFile(join(dir, "xfce4-terminal"), '#!/bin/sh\nprintf "launch\\n" >> "$APP_TEST_LOG"\n', { mode: 0o755 });
+    const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, APP_TEST_LOG: log, APP_EXISTS: "0" };
+    const script = new URL("./guest/open-app.sh", import.meta.url).pathname;
+    await promisify(execFile)("sh", [script, "terminal"], { env, timeout: 2000 });
+    expect(await readFile(log, "utf8")).toBe("focus -xa xfce4-terminal\n");
+    await writeFile(log, "");
+    await promisify(execFile)("sh", [script, "terminal"], { env: { ...env, APP_EXISTS: "1" }, timeout: 2000 });
+    expect(await readFile(log, "utf8")).toBe("focus -xa xfce4-terminal\nlaunch\n");
 });

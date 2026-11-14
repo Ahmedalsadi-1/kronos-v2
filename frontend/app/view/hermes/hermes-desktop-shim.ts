@@ -1,6 +1,10 @@
-import { installSubagentSurfaceSource } from "./subagent-surface-source";
+import { $comfyControlsOpen } from "@hermes/lib/kronterm-sidebar";
 import { createComputerToolWake } from "./computer-tool-wake";
+import { reportClientFailure } from "@/util/client-diagnostics";
 import { OpenMausBotHermesBackend, onBotConversationFocus, parseBotSessionId } from "./openmausbot-hermes-backend";
+import { installSwarmSubagentSource } from "./swarm-subagent-source";
+import { captureSubagentSurface } from "./capture-subagent-surface";
+import { installSubagentSurfaceSource } from "./subagent-surface-source";
 // Copyright (c) 2026 KronTerm. Licensed under the Apache License, Version 2.0 (the "License").
 // This shim implements `window.hermesDesktop` inside the KronTerm renderer so the
 // vendored Hermes UI (frontend/hermes) can run as a widget without the Electron
@@ -30,7 +34,7 @@ import { subscribeHermesQuickSubmit } from "@/app/view/hermes/hermes-quick-submi
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { hermesToolActivityToAgentActivity, subscribeAgentTakeover } from "@/app/view/hermes/hermes-tool-activity";
 import { KronosCodeHermesBackend } from "@/app/view/hermes/kronoscode-hermes-backend";
-import { openSystemCenter } from "@/app/workspace/command-center-events";
+import { comfyWorkflowOpenAtom, openSystemCenter } from "@/app/workspace/command-center-events";
 import { hudLocationForMeta } from "@/app/workspace/hud-surface-location";
 import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
 import * as WOS from "@/store/wos";
@@ -273,7 +277,7 @@ function useOwnerHudRoute(): boolean {
 
 function ownerTabRoute(): string {
     const tabId = globalStore.get(atoms.staticTabId);
-    if (!tabId) throw new Error("No KronTerm workspace tab is connected.");
+    if (!tabId) throw new Error("No KronOS workspace tab is connected.");
     return makeTabRouteId(tabId);
 }
 
@@ -302,6 +306,12 @@ export function workspaceSnapshotSurfaces(snapshot: unknown): HermesKronTermSurf
                 focused: Boolean(block.focused),
                 active: Boolean(block.active),
                 surfaceKind: "widget",
+                ...(typeof block.meta?.["machine:target"] === "string"
+                    ? { machineTarget: block.meta["machine:target"] }
+                    : {}),
+                ...(typeof block.meta?.["machine:kind"] === "string"
+                    ? { machineKind: block.meta["machine:kind"] }
+                    : {}),
             },
         ];
     });
@@ -313,7 +323,7 @@ async function listKronTermSurfaces(): Promise<HermesKronTermSurface[]> {
     const snapshot = await RpcApi.WorkspaceSurfaceSnapshotCommand(TabRpcClient, { route: ownerTabRoute() });
     return workspaceSnapshotSurfaces(JSON.parse(snapshot)).map((surface) => {
         const local = widgets.find((widget) => widget.id === surface.id);
-        return local ? { ...local, focused: surface.focused } : surface;
+        return local ? { ...local, ...surface } : surface;
     });
 }
 
@@ -343,7 +353,11 @@ async function promoteKronTermSurface(blockId: string): Promise<{ ok: boolean; e
 async function previewKronTermSurface(blockId: string): Promise<string> {
     if (!useOwnerHudRoute()) {
         if (!listAgentWidgets().some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
-        return RpcApi.CaptureBlockScreenshotCommand(TabRpcClient, { blockid: blockId, passive: true }, { timeout: 5000 });
+        return RpcApi.CaptureBlockScreenshotCommand(
+            TabRpcClient,
+            { blockid: blockId, passive: true },
+            { timeout: 5000 }
+        );
     }
     const surfaces = await listKronTermSurfaces();
     if (!surfaces.some((surface) => surface.id === blockId)) throw new Error("widget-not-in-current-tab");
@@ -364,9 +378,9 @@ const kronosCodeBackend = new KronosCodeHermesBackend(() => {
     }
 });
 
-const wakeComputerForTool = createComputerToolWake(async (desktopId) => {
-    const access = await getApi().sandboxComputerAccess();
-    const result = await shim.krontermSurfaces.openMachines("desktop", false, access.desktopId || desktopId);
+const wakeComputerForTool = createComputerToolWake(async (desktopId, sessionId) => {
+    const access = await getApi().sandboxComputerAccess({ sessionIds: sessionId ? [sessionId] : [] });
+    const result = await shim.krontermSurfaces.openMachines("desktop", false, desktopId || access.desktopId);
     if (!result.ok) throw new Error(result.error);
     window.dispatchEvent(new Event("kronterm:computer-wake"));
 });
@@ -377,6 +391,14 @@ const shim: Window["hermesDesktop"] = {
     getGatewayWsUrl,
     getGatewayWsUrlFor,
     getAgentRoster,
+    swarmRecovery: (command) => getApi().swarmRecovery(command),
+    projectRooms: {
+        command: (command) => getApi().projectRoomCommand(command),
+        openDesktop: async (botId) => {
+            const desktop = await getApi().openBotDesktop(botId);
+            getApi().switchWorkspace(desktop.workspaceId);
+        },
+    },
     krontermSurfaces: {
         computerManager: {
             list: async () => {
@@ -400,6 +422,7 @@ const shim: Window["hermesDesktop"] = {
                 return result.data;
             },
             access: (input) => getApi().sandboxComputerAccess(input),
+            login: (input) => getApi().sandboxLogin(input),
         },
         list: listKronTermSurfaces,
         toggleChatLayout: () => getApi().syncNativeNotch({ chatLayout: "toggle" }),
@@ -409,9 +432,11 @@ const shim: Window["hermesDesktop"] = {
                 const running = surfaces
                     .filter((surface) => {
                         const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", surface.id)));
-                        if (desktopId && block?.meta?.["machine:target"] !== desktopId) return false;
+                        if (desktopId && (surface.machineTarget ?? block?.meta?.["machine:target"]) !== desktopId)
+                            return false;
                         return (
-                            (surface.view === "linux-vms" && (block?.meta?.["machine:kind"] ?? "desktop") === kind) ||
+                            (surface.view === "linux-vms" &&
+                                (surface.machineKind ?? block?.meta?.["machine:kind"] ?? "desktop") === kind) ||
                             (kind === "desktop" && surface.view === "sandbox")
                         );
                     })
@@ -473,6 +498,13 @@ const shim: Window["hermesDesktop"] = {
             }
             if (action === "activity" || action === "control") {
                 openSystemCenter(action);
+                return;
+            }
+            if (action === "comfy-workflow") {
+                globalStore.set(comfyWorkflowOpenAtom, true);
+                $comfyControlsOpen.set(true);
+                publishWorkspacePresentation("os");
+                await RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": "os" });
                 return;
             }
             const views = {
@@ -620,7 +652,7 @@ const shim: Window["hermesDesktop"] = {
         frontmost: null,
         window: null,
         platform: getApi().getPlatform(),
-        note: "Native window enumeration is unavailable in KronTerm. Use workspace_snapshot to inspect open widgets, browser_get_html for browser content, or widget_snapshot for an accessible widget snapshot.",
+        note: "Native window enumeration is unavailable in KronOS. Use workspace_snapshot to inspect open widgets, browser_get_html for browser content, or widget_snapshot for an accessible widget snapshot.",
     }),
     krontermActivity: {
         report: (activity) => {
@@ -672,12 +704,8 @@ const shim: Window["hermesDesktop"] = {
                 getApi().requestNativeHudExit();
                 return { ok: true };
             }
-            try {
-                await hermesSurfaceController.expandToWidget();
-                return { ok: true };
-            } catch {
-                return { ok: false };
-            }
+            hermesSurfaceController.dismiss();
+            return { ok: true };
         },
         dock: async () => {
             kronTermHudController.setActive(false);
@@ -685,12 +713,9 @@ const shim: Window["hermesDesktop"] = {
             return { ok: true };
         },
         expand: async () => {
-            try {
-                await hermesSurfaceController.expandToWidget();
-                return { ok: true };
-            } catch {
-                return { ok: false };
-            }
+            kronTermHudController.setActive(false);
+            hermesSurfaceController.requestOpenPanel();
+            return { ok: true };
         },
         dismiss: async () => {
             if (isNativeHudSurface()) {
@@ -960,7 +985,10 @@ const shim: Window["hermesDesktop"] = {
 
     revealLogs: async () => ({ ok: false, path: "", error: "not-supported" }),
     getRecentLogs: async () => ({ path: "", lines: [] }),
-    reportRendererError: (report: { label: string; boundary: string; message: string; componentStack: string }) => {
+    reportRendererError: (report: { label: string; boundary: string; message: string; componentStack: string; stack?: string }) => {
+        const failure = new Error("React render failure");
+        failure.stack = report.stack;
+        reportClientFailure(failure);
         console.warn(`[hermes-shim] renderer error boundary ${report.boundary}: ${report.message}`);
     },
     readDir: (path: string): Promise<HermesReadDirResult> =>
@@ -1080,7 +1108,8 @@ const shim: Window["hermesDesktop"] = {
 /** Installs the Hermes desktop bridge shim (idempotent). */
 export function installHermesDesktopShim(config?: HermesDesktopShimConfig): void {
     configureHermesDesktopShim(config);
-    installSubagentSurfaceSource(previewKronTermSurface);
+    installSwarmSubagentSource(async () => (await getApi().hermesGetConnection()).wsUrl);
+    installSubagentSurfaceSource((activity) => captureSubagentSurface(activity, previewKronTermSurface, getApi()));
 
     if (!window.hermesDesktop) {
         window.hermesDesktop = shim;

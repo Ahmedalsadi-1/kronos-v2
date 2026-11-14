@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { launchSystemApp, makeViewAppDescriptor } from "@/app/store/app-registry";
+import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { atoms, createBlock, globalStore, refocusNode } from "@/store/global";
 import * as WOS from "@/store/wos";
 import { openCommandPalette } from "@hermes/store/command-palette";
+import { $krontermSidebarOwner, $workspaceCanvasPanels } from "@hermes/lib/kronterm-sidebar";
 import { useEffect } from "react";
 import { CommandCenterToggleEvent } from "./command-center-events";
 import { applyWorkspaceAppearance, readWorkspaceAppearance } from "./workspace-appearance";
@@ -39,8 +41,8 @@ function shouldOpenKronarchyLauncher(
     event: Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey">,
     legacyCommandSpace: boolean
 ): boolean {
-    const isCommandSpace = event.code === "Space" && event.metaKey && !event.altKey && !event.ctrlKey;
-    return isCommandSpace && (event.shiftKey || legacyCommandSpace);
+    const isLauncherSpace = event.code === "Space" && !event.altKey && event.metaKey !== event.ctrlKey;
+    return isLauncherSpace && (event.shiftKey || (event.metaKey && legacyCommandSpace));
 }
 
 export function shouldUseNativeLauncherActivation(target: Pick<HTMLElement, "closest">): boolean {
@@ -51,25 +53,12 @@ const WorkspacePaletteShortcuts = () => {
     useEffect(() => {
         applyWorkspaceAppearance(readWorkspaceAppearance());
         const legacyCommandSpace = readKronarchyEnabled();
-        const open = async () => {
-            const tabId = globalStore.get(atoms.staticTabId);
-            const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
-            const running = (tab?.blockids ?? []).filter((blockId) => {
-                const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
-                return block?.meta?.view === "hermes";
-            });
-            await launchSystemApp(makeViewAppDescriptor("hermes", running), {
-                focusBlock: refocusNode,
-                createView: async () => {
-                    await createBlock({ meta: { view: "hermes" } });
-                },
-                createAppStream: async () => {},
-            });
-            openCommandPalette();
-        };
         const onToggle = (event?: Event) => {
             if (event?.defaultPrevented) return;
-            void open().catch((error) => console.warn("Could not open command palette", error));
+            if (!$workspaceCanvasPanels.get() || !$krontermSidebarOwner.get()) {
+                hermesSurfaceController.requestOpenChat();
+            }
+            openCommandPalette();
         };
         let openingReview: Promise<void>;
         const onReview = (event: CustomEvent<{ scopeCwd?: string }>) => {
@@ -94,9 +83,10 @@ const WorkspacePaletteShortcuts = () => {
                 });
         };
         const onKey = (event: KeyboardEvent) => {
-            if (!shouldOpenKronarchyLauncher(event, legacyCommandSpace)) return;
+            if (event.defaultPrevented || !shouldOpenKronarchyLauncher(event, legacyCommandSpace)) return;
             event.preventDefault();
-            event.stopPropagation();
+            // The Hermes keybind listener also runs on window.
+            event.stopImmediatePropagation();
             window.dispatchEvent(new CustomEvent(CommandCenterToggleEvent, { cancelable: true }));
         };
         window.addEventListener("keydown", onKey, true);

@@ -52,7 +52,7 @@ export class QemuVncBridge {
             });
             child.stderr.resume();
             child.on("error", () => ws.close(1011, "VM connection unavailable"));
-            child.on("exit", () => {
+            child.on("close", () => {
                 this.children.delete(child);
                 ws.close();
             });
@@ -62,14 +62,23 @@ export class QemuVncBridge {
                 if ([4, 5, 6].includes((data as Buffer)[0])) this.onInput();
                 if (!child.stdin.destroyed && !child.stdin.write(data as Buffer)) ws.pause();
             });
-            ws.on("close", () => child.kill());
-            ws.on("error", () => child.kill());
+            const killChild = () => {
+                if (this.children.has(child) && !child.killed) child.kill();
+            };
+            ws.on("close", killChild);
+            ws.on("error", killChild);
         });
         try {
             await new Promise<void>((resolve, reject) => {
                 server.once("error", reject);
-                server.listen(0, "127.0.0.1", resolve);
+                const onClose = () => reject(new Error("Computer bridge closed before binding."));
+                server.once("close", onClose);
+                server.listen(0, "127.0.0.1", () => {
+                    server.removeListener("close", onClose);
+                    resolve();
+                });
             });
+            if (this.server !== server) throw new Error("Computer bridge closed before binding.");
             server.unref();
             const address = server.address();
             if (!address || typeof address === "string") throw new Error("Computer bridge failed to bind.");
@@ -77,7 +86,7 @@ export class QemuVncBridge {
             process.once("exit", this.onExit);
             return this.url;
         } catch (error) {
-            this.close();
+            if (this.server === server) this.close();
             throw error;
         }
     }
@@ -85,10 +94,14 @@ export class QemuVncBridge {
     close() {
         process.removeListener("exit", this.onExit);
         for (const ws of this.sockets?.clients ?? []) ws.terminate();
-        for (const child of this.children) child.kill();
+        for (const child of this.children) {
+            if (!child.killed) child.kill();
+        }
         this.children.clear();
         this.sockets?.close();
         this.server?.close();
+        this.sockets = undefined;
+        this.server = undefined;
         this.url = "";
     }
 }

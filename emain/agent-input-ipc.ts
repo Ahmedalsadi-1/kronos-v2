@@ -1,9 +1,22 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ipcMain, type WebContents } from "electron";
+import { clipboard, ipcMain, type WebContents } from "electron";
 
 export function registerAgentInputIpc(isTrusted: (sender: WebContents) => boolean): void {
+    ipcMain.handle("agent-read-clipboard", async (event) => {
+        if (event.senderFrame !== event.sender.mainFrame || !isTrusted(event.sender))
+            throw new Error("Clipboard requires a trusted workspace surface");
+        return clipboard.readText();
+    });
+
+    ipcMain.handle("agent-write-clipboard", async (event, text) => {
+        if (event.senderFrame !== event.sender.mainFrame || !isTrusted(event.sender))
+            throw new Error("Clipboard requires a trusted workspace surface");
+        if (typeof text !== "string" || text.length > 1_000_000) throw new Error("Invalid clipboard text");
+        clipboard.writeText(text);
+    });
+
     ipcMain.handle("agent-send-input-event", async (event, input) => {
         if (event.senderFrame !== event.sender.mainFrame || !isTrusted(event.sender)) {
             throw new Error("Input requires a trusted workspace surface");

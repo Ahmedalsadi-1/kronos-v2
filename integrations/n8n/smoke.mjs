@@ -24,6 +24,8 @@ for (const filename of fs.readdirSync(path.join(root, "nodes"))) {
 }
 const bin = path.join(root, "upstream/packages/cli/bin/n8n");
 const token = randomBytes(24).toString("hex");
+const sessionToken = randomBytes(32).toString("hex");
+const browserId = "component-fixture";
 const calls = [];
 const bridge = createServer(async (request, response) => {
   if (request.headers.authorization !== `Bearer ${token}`) {
@@ -32,9 +34,17 @@ const bridge = createServer(async (request, response) => {
   }
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
-  calls.push(JSON.parse(Buffer.concat(chunks).toString()));
+  const payload = JSON.parse(Buffer.concat(chunks).toString());
+  calls.push(payload);
+  const image = { filename: "smoke.png", subfolder: "", type: "output" };
+  const render = payload.name === "comfyui_submit"
+    ? { id: "smoke-prompt", status: "queued", images: [] }
+    : payload.name === "comfyui_job"
+      ? { id: "smoke-prompt", status: "completed", images: [image] }
+      : undefined;
+  const text = render ? JSON.stringify({ origin: "http://127.0.0.1:8190", jobs: [render] }) : "smoke-ok";
   response.setHeader("content-type", "application/json");
-  response.end(JSON.stringify({ content: [{ type: "text", text: "smoke-ok" }] }));
+  response.end(JSON.stringify({ content: [{ type: "text", text }] }));
 });
 const listen = (server) =>
   new Promise((resolve, reject) => {
@@ -66,6 +76,10 @@ const env = {
   N8N_TEMPLATES_ENABLED: "false",
   N8N_DIAGNOSTICS_ENABLED: "false",
   N8N_PERSONALIZATION_ENABLED: "false",
+  EXTERNAL_HOOK_FILES: path.join(root, "session-hook.cjs"),
+  EXTERNAL_HOOK_FILES_SEPARATOR: path.delimiter,
+  KRONTERM_N8N_BIN: bin,
+  KRONTERM_N8N_SESSION_TOKEN: sessionToken,
   KRONTERM_N8N_TOOL_URL: `http://127.0.0.1:${bridgePort}/native`,
   KRONTERM_N8N_TOOL_TOKEN: token,
 };
@@ -128,24 +142,31 @@ try {
   assert.ok(ready, `n8n did not become ready; see ${data}/server.log`);
   const html = await (await fetch(url)).text();
   assert.match(html, /<html/i);
-  const setup = await fetch(`${url}/rest/owner/setup`, {
+  const sessionUrl = `${url}/rest/kronterm/session`;
+  assert.equal((await fetch(sessionUrl, { method: "POST" })).status, 401);
+  assert.equal((await fetch(sessionUrl, {
+    method: "POST", headers: { authorization: `Bearer ${"b".repeat(64)}`, "browser-id": browserId },
+  })).status, 401);
+  const setup = await fetch(sessionUrl, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      email: "smoke@example.invalid",
-      firstName: "Smoke",
-      lastName: "Test",
-      password: `Aa1!${randomBytes(18).toString("hex")}`,
-    }),
+    headers: { authorization: `Bearer ${sessionToken}`, "browser-id": browserId },
   });
-  assert.equal(setup.status, 200, `Owner setup failed: ${await setup.text()}`);
+  assert.equal(setup.status, 200, `Managed session failed: ${await setup.text()}`);
   const cookie = setup.headers
     .getSetCookie()
     .map((value) => value.split(";")[0])
     .join("; ");
+  const authenticated = { cookie, "browser-id": browserId };
+  assert.equal((await fetch(`${url}/rest/workflows`, { headers: { cookie, "browser-id": "wrong-browser" } })).status, 401);
+  assert.equal((await fetch(`${url}/rest/workflows`, { headers: authenticated })).status, 200);
+  const renewed = await fetch(sessionUrl, {
+    method: "POST", headers: { authorization: `Bearer ${sessionToken}`, "browser-id": browserId },
+  });
+  assert.equal(renewed.status, 200);
+  console.log("Managed Hermes workflow access: no account form, capability guard and browser binding verified.");
   let nodes;
   for (let attempt = 0; attempt < 60; attempt++) {
-    const types = await fetch(`${url}/types/nodes.json`, { headers: { cookie } });
+    const types = await fetch(`${url}/types/nodes.json`, { headers: { cookie, "browser-id": browserId } });
     assert.equal(types.status, 200);
     try {
       nodes = await types.json();
@@ -156,20 +177,20 @@ try {
     await delay(500);
   }
   assert.ok(Array.isArray(nodes), "The n8n node catalog did not finish writing.");
-  for (const name of ["CUSTOM.kronTermTool", "CUSTOM.kronTermHarness", "CUSTOM.kronTermWidget", "CUSTOM.hermesAgent"]) {
+  for (const name of ["CUSTOM.kronTermTool", "CUSTOM.kronTermHarness", "CUSTOM.kronTermWidget", "CUSTOM.hermesAgent", "CUSTOM.comfyUiWorkflow"]) {
     assert.ok(
       nodes.some((node) => node.name === name),
       `Missing custom node ${name}`
     );
   }
-  assert.ok(
-    nodes.some((node) => node.displayName === "KronTerm: Smoke widget"),
-    "Generated widget node missing"
+  const widgetNode = nodes.find(
+    (node) => /^CUSTOM\.kronTermWidget[0-9a-f]{12}$/.test(node.name) && node.defaults?.name === "Smoke widget"
   );
-  console.log(`n8n editor and backend ready; ${nodes.length} node types, including all four KronTerm nodes.`);
+  assert.ok(widgetNode, "Generated widget node missing");
+  console.log(`n8n editor and backend ready; ${nodes.length} node types, including KronOS ComfyUI.`);
   const nativeWorkflowId = await verifyNativeOSWorkflow(url, cookie, nodes);
   if (process.argv.includes("--components")) await inspectOriginalComponents(url, cookie, nativeWorkflowId);
-  const widgetNodeType = nodes.find((node) => node.displayName === "KronTerm: Smoke widget").name;
+  const widgetNodeType = widgetNode.name;
   await stop(server);
   if (calls.length) console.log("Component fixture tool calls:", calls.map((call) => call.name));
   calls.length = 0;
@@ -219,12 +240,34 @@ try {
         position: [600, 0],
         parameters: { operation: "call", tool: "list_blocks", arguments: "{}" },
       },
+      {
+        id: "queue",
+        name: "Queue render",
+        type: "CUSTOM.comfyUiWorkflow",
+        typeVersion: 1,
+        position: [800, 0],
+        parameters: {
+          operation: "submit",
+          origin: "http://127.0.0.1:8190",
+          workflow: JSON.stringify({ 1: { class_type: "CLIPTextEncode", inputs: { text: "Smoke test" } } }),
+        },
+      },
+      {
+        id: "check",
+        name: "Check render",
+        type: "CUSTOM.comfyUiWorkflow",
+        typeVersion: 1,
+        position: [1000, 0],
+        parameters: { operation: "job", promptId: "={{ $json.promptId }}" },
+      },
     ],
     connections: {
       Start: { main: [[{ node: "Launch widget", type: "main", index: 0 }]] },
       "Launch widget": { main: [[{ node: "Harness", type: "main", index: 0 }]] },
       Harness: { main: [[{ node: "Widget", type: "main", index: 0 }]] },
       Widget: { main: [[{ node: "Tool", type: "main", index: 0 }]] },
+      Tool: { main: [[{ node: "Queue render", type: "main", index: 0 }]] },
+      "Queue render": { main: [[{ node: "Check render", type: "main", index: 0 }]] },
     },
   };
   const filename = path.join(data, "workflow.json");
@@ -233,12 +276,16 @@ try {
   await command(["execute", `--id=${workflow.id}`, "--rawOutput"], "execute.log");
   assert.deepEqual(
     calls.map((call) => call.name),
-    ["trigger_widget", "n8n_run_agent", "widget_snapshot", "list_blocks"]
+    ["trigger_widget", "n8n_run_agent", "widget_snapshot", "list_blocks", "comfyui_submit", "comfyui_job"]
   );
   assert.equal(calls[2].arguments.blockId, "smoke-widget");
-  assert.match(fs.readFileSync(path.join(data, "execute.log"), "utf8"), /"finished": true/);
+  assert.equal(calls[5].arguments.id, "smoke-prompt");
+  assert.equal(calls[5].arguments.origin, "http://127.0.0.1:8190");
+  const execution = fs.readFileSync(path.join(data, "execute.log"), "utf8");
+  assert.match(execution, /"finished": true/);
+  assert.match(execution, /"filename": "smoke\.png"/);
   console.log(
-    "Full n8n workflow executed Generated widget → Hermes Agent → Widget → Tool through the authenticated test bridge."
+    "Full n8n workflow executed widget, Hermes, tool, and ComfyUI nodes through the authenticated test bridge."
   );
 } catch (error) {
   console.error(`Smoke diagnostics: ${data}`);

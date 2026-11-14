@@ -38,12 +38,14 @@ export const KronTermToolFamilies = {
         description: "Discover compact metadata, then read the exact allowlisted skill ID.",
     },
     agents: {
-        label: "ACP specialists",
-        description: "Discover installed specialists and delegate bounded, scoped tasks.",
+        label: "Agents & delegation",
+        description:
+            "Discover enabled specialists, swarms and scoped delegation. Harness delegation is available only when supplied by the current runtime.",
     },
     workflow: {
         label: "Workflows",
-        description: "Inspect and manage durable workflows; reconcile interrupted effects before retrying.",
+        description:
+            "Build n8n workflows, render ComfyUI workflows and inspect their executions.",
     },
     productivity: {
         label: "Productivity",
@@ -63,15 +65,14 @@ export function kronTermToolFamily(name: string): KronTermToolFamilyId | null {
     if (/^(linux_desktop_|sandbox_task_|sandbox_vm_|device_)/.test(name)) return "sandbox";
     if (name.startsWith("kron_computer_")) return "desktop";
     if (name.startsWith("shared_skill_")) return "skills";
-    if (name.startsWith("acp_") || name === "delegation_status") return "agents";
-    if (name.startsWith("n8n_")) return "agents";
+    if (name.startsWith("acp_") || name.startsWith("swarm_") || name === "delegation_status") return "agents";
     if (name.startsWith("lsp_")) return "lsp";
     if (name.startsWith("hud_")) return "hud";
     if (name.startsWith("browser_")) return "browser";
     if (name.startsWith("file_")) return "file";
     if (name.startsWith("widget_") || ["trigger_widget", "list_widgets", "get_block_content"].includes(name))
         return "widget";
-    if (name.startsWith("workflow_")) return "workflow";
+    if (/^(workflow_|n8n_|comfyui_)/.test(name)) return "workflow";
     if (name.startsWith("productivity_")) return "productivity";
     if (name.startsWith("tool_") || name === "app_workflow") return "discovery";
     if (

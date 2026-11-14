@@ -9,7 +9,7 @@ import "@vscode/codicons/dist/codicon.css";
 import { useEffect, useRef, useState } from "react";
 
 const Surfaces: HermesKronTermSurface[] = [
-    { id: "browser", view: "web", title: "KronTerm", location: "https://kronterm.dev", focused: true, active: false },
+    { id: "browser", view: "web", title: "KronOS", location: "https://kronterm.dev", focused: true, active: false },
     { id: "terminal", view: "term", title: "Terminal", location: "~/Projects/kronterm", focused: false, active: false },
     {
         id: "diff",

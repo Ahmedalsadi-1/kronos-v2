@@ -1,6 +1,8 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
+import { BrowserLoginSignals } from "./browser-login-signals";
+
 export function guestPython(source: string, input: Record<string, unknown>): string {
     const code = Buffer.from(source).toString("base64");
     const data = Buffer.from(JSON.stringify(input)).toString("base64");
@@ -29,6 +31,21 @@ elif op=='mkdir': p.mkdir(parents=True,exist_ok=True);result={'path':str(p)}
 else: raise ValueError('Unknown file action')
 print(json.dumps(result,ensure_ascii=False))
 `;
+
+const BrowserStateExpression = `(() => {
+    const { autoPrompt } = (${BrowserLoginSignals})();
+    const signInOrigin = location.protocol === "https:" && autoPrompt ? location.origin : null;
+    return JSON.stringify({
+        url: location.href,
+        signInOrigin,
+        title: document.title,
+        text: document.body.innerText.slice(0, 8000),
+        links: [...document.links].slice(0, 15).map((link) => ({
+            text: link.innerText.slice(0, 100),
+            url: link.href.slice(0, 400),
+        })),
+    });
+})()`;
 
 export const GuestBrowser = `import base64,json,sys,urllib.request,socket,struct,os,subprocess,time,shutil
 args=json.loads(base64.b64decode(sys.argv[1]))
@@ -87,7 +104,7 @@ if op=='navigate':
  if urlparse(url).scheme not in ['https','http','about']:raise ValueError('Use an HTTP or HTTPS browser URL')
  payload={'id':1,'method':'Page.navigate','params':{'url':url}}
 else:
- expression=args.get('expression') if op=='evaluate' else 'JSON.stringify({url:location.href,title:document.title,text:document.body.innerText.slice(0,8000),links:Array.from(document.links).slice(0,15).map(a=>({text:a.innerText.slice(0,100),url:a.href.slice(0,400)}))})'
+ expression=args.get('expression') if op=='evaluate' else ${JSON.stringify(BrowserStateExpression)}
  payload={'id':1,'method':'Runtime.evaluate','params':{'expression':expression,'returnByValue':True,'awaitPromise':True}}
 send(payload);response=receive();s.close()
 if response.get('error') or response.get('result',{}).get('exceptionDetails'):raise ValueError(json.dumps(response))

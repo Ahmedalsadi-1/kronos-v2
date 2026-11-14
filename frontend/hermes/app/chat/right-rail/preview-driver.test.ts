@@ -33,7 +33,7 @@ describe("built-in Kronos browser driver", () => {
 
     it("returns an explicit error when no built-in browser is open", async () => {
         await expect(actOnActivePreview({ kind: "elements" })).resolves.toEqual({
-            error: "No live page is open in the built-in KronTerm Agent browser.",
+            error: "No live page is open in the built-in KronOS Agent browser.",
             success: false,
         });
     });

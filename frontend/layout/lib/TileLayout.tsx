@@ -24,6 +24,7 @@ import { LayoutModel } from "./layoutModel";
 import { useNodeModel, useTileLayout } from "./layoutModelHooks";
 import "./tilelayout.scss";
 import {
+    FlexDirection,
     LayoutNode,
     LayoutTreeActionType,
     LayoutTreeComputeMoveNodeAction,
@@ -54,6 +55,7 @@ export interface TileLayoutProps {
 
 const DragPreviewWidth = 300;
 const DragPreviewHeight = 300;
+const KeyboardResizeStepPx = 16;
 
 function TileLayoutComponent({ tabAtom, contents, getCursorPoint }: TileLayoutProps) {
     const layoutModel = useTileLayout(tabAtom, contents);
@@ -61,6 +63,7 @@ function TileLayoutComponent({ tabAtom, contents, getCursorPoint }: TileLayoutPr
     const setActiveDrag = useSetAtom(layoutModel.activeDrag);
     const setReady = useSetAtom(layoutModel.ready);
     const isResizing = useAtomValue(layoutModel.isResizing);
+    const numLeafs = useAtomValue(layoutModel.numLeafs);
 
     const { activeDrag, dragClientOffset, dragItemType } = useDragLayer((monitor) => ({
         activeDrag: monitor.isDragging(),
@@ -73,39 +76,44 @@ function TileLayoutComponent({ tabAtom, contents, getCursorPoint }: TileLayoutPr
         setActiveDrag(activeTileDrag);
     }, [activeDrag, dragItemType]);
 
-    const checkForCursorBounds = useCallback(
-        debounce(100, (dragClientOffset: XYCoord) => {
-            const cursorPoint = dragClientOffset ?? getCursorPoint?.();
-            if (cursorPoint && layoutModel.displayContainerRef?.current) {
-                const displayContainerRect = layoutModel.displayContainerRef.current.getBoundingClientRect();
-                const normalizedX = cursorPoint.x - displayContainerRect.x;
-                const normalizedY = cursorPoint.y - displayContainerRect.y;
-                if (
-                    normalizedX <= 0 ||
-                    normalizedX >= displayContainerRect.width ||
-                    normalizedY <= 0 ||
-                    normalizedY >= displayContainerRect.height
-                ) {
-                    layoutModel.treeReducer({ type: LayoutTreeActionType.ClearPendingAction });
+    const checkForCursorBounds = useMemo(
+        () =>
+            debounce(100, (dragClientOffset: XYCoord) => {
+                const cursorPoint = dragClientOffset ?? getCursorPoint?.();
+                if (cursorPoint && layoutModel.displayContainerRef?.current) {
+                    const displayContainerRect = layoutModel.displayContainerRef.current.getBoundingClientRect();
+                    const normalizedX = cursorPoint.x - displayContainerRect.x;
+                    const normalizedY = cursorPoint.y - displayContainerRect.y;
+                    if (
+                        normalizedX <= 0 ||
+                        normalizedX >= displayContainerRect.width ||
+                        normalizedY <= 0 ||
+                        normalizedY >= displayContainerRect.height
+                    ) {
+                        layoutModel.treeReducer({ type: LayoutTreeActionType.ClearPendingAction });
+                    }
                 }
-            }
-        }),
-        [getCursorPoint]
+            }),
+        [getCursorPoint, layoutModel]
     );
 
     // Effect to detect when the cursor leaves the TileLayout hit trap so we can remove any placeholders. This cannot be done using pointer capture
     // because that conflicts with the DnD layer.
-    useEffect(() => checkForCursorBounds(dragClientOffset), [dragClientOffset]);
+    useEffect(() => {
+        if (activeDrag && dragItemType === tileItemType) checkForCursorBounds(dragClientOffset);
+        return () => checkForCursorBounds.cancel({ upcomingOnly: true });
+    }, [activeDrag, checkForCursorBounds, dragClientOffset, dragItemType]);
 
     // Ensure that we don't see any jostling in the layout when we're rendering it the first time.
     // `animate` will be disabled until after the transforms have all applied the first time.
     const [animate, setAnimate] = useState(false);
     useEffect(() => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             setAnimate(true);
             setReady(true);
         }, 50);
-    }, []);
+        return () => clearTimeout(timer);
+    }, [setReady]);
 
     const gapSizePx = useAtomValue(layoutModel.gapSizePx);
     const animationTimeS = useAtomValue(layoutModel.animationTimeS);
@@ -121,14 +129,17 @@ function TileLayoutComponent({ tabAtom, contents, getCursorPoint }: TileLayoutPr
     return (
         <Suspense>
             <div
-                className={clsx("tile-layout", contents.className, { animate: animate && !isResizing })}
+                className={clsx("tile-layout", contents.className, {
+                    animate: animate && !isResizing,
+                    "has-splits": numLeafs > 1,
+                })}
                 style={tileStyle}
             >
                 <div key="display" ref={layoutModel.displayContainerRef} className="display-container">
-                    <ResizeHandleWrapper layoutModel={layoutModel} />
                     <DisplayNodesWrapper layoutModel={layoutModel} />
                     <NodeBackdrops layoutModel={layoutModel} />
                 </div>
+                <ResizeHandleWrapper layoutModel={layoutModel} />
                 <Placeholder key="placeholder" layoutModel={layoutModel} style={{ top: 10000, ...overlayTransform }} />
                 <OverlayNodeWrapper layoutModel={layoutModel} />
             </div>
@@ -245,7 +256,7 @@ const DisplayNode = ({ layoutModel, node }: DisplayNodeProps) => {
 
     const previewElement = useMemo(() => {
         return (
-            <div key="preview" className="tile-preview-container">
+            <div key="preview" className="tile-preview-container" aria-hidden="true">
                 <div
                     className="tile-preview"
                     ref={previewRef}
@@ -261,20 +272,6 @@ const DisplayNode = ({ layoutModel, node }: DisplayNodeProps) => {
         );
     }, [devicePixelRatio, nodeModel]);
 
-    const generatePreviewImage = useCallback(() => {
-        const offsetX = (DragPreviewWidth * devicePixelRatio - DragPreviewWidth) / 2 + 10;
-        const offsetY = (DragPreviewHeight * devicePixelRatio - DragPreviewHeight) / 2 + 10;
-        if (previewRef.current) {
-            void toPng(previewRef.current, { filter: shouldIncludeDragPreviewNode, skipFonts: true })
-                .then((url) => {
-                    const img = new Image();
-                    img.src = url;
-                    dragPreview(img, { offsetY, offsetX });
-                })
-                .catch(() => undefined);
-        }
-    }, [dragPreview, previewRef.current, devicePixelRatio]);
-
     const leafContent = useMemo(() => {
         return (
             <div key="leaf" className="tile-leaf">
@@ -283,10 +280,38 @@ const DisplayNode = ({ layoutModel, node }: DisplayNodeProps) => {
         );
     }, [nodeModel]);
 
-    // Register the display node as a draggable item
     useEffect(() => {
         drag(nodeModel.dragHandleRef);
-    }, [drag, nodeModel.dragHandleRef.current]);
+        const handle = nodeModel.dragHandleRef.current;
+        if (!handle || isEphemeral || isMagnified || !layoutModel.renderPreview) return;
+
+        let cancelled = false;
+        let capturing = false;
+        const generatePreviewImage = async () => {
+            if (capturing || !previewRef.current) return;
+            capturing = true;
+            try {
+                const url = await toPng(previewRef.current, { filter: shouldIncludeDragPreviewNode, skipFonts: true });
+                if (cancelled) return;
+                const img = new Image();
+                img.src = url;
+                dragPreview(img, {
+                    offsetX: (DragPreviewWidth * devicePixelRatio - DragPreviewWidth) / 2 + 10,
+                    offsetY: (DragPreviewHeight * devicePixelRatio - DragPreviewHeight) / 2 + 10,
+                });
+            } catch {
+                // The browser's native drag image is available if rasterizing the preview fails.
+            } finally {
+                capturing = false;
+            }
+        };
+        // Hovering file and media content is much more common than dragging a widget header.
+        handle.addEventListener("pointerenter", generatePreviewImage);
+        return () => {
+            cancelled = true;
+            handle.removeEventListener("pointerenter", generatePreviewImage);
+        };
+    }, [devicePixelRatio, drag, dragPreview, isEphemeral, isMagnified, layoutModel, nodeModel]);
 
     return (
         <div
@@ -297,7 +322,6 @@ const DisplayNode = ({ layoutModel, node }: DisplayNodeProps) => {
             ref={tileNodeRef}
             id={node.id}
             style={addlProps?.transform}
-            onPointerEnter={generatePreviewImage}
             onPointerOver={(event) => event.stopPropagation()}
         >
             {leafContent}
@@ -401,11 +425,15 @@ interface ResizeHandleWrapperProps {
 
 const ResizeHandleWrapper = memo(({ layoutModel }: ResizeHandleWrapperProps) => {
     const resizeHandles = useAtomValue(layoutModel.resizeHandles) as Atom<ResizeHandleProps>[];
+    const magnifiedNodeId = useAtomValue(layoutModel.magnifiedNodeIdAtom);
+    const ephemeralNode = useAtomValue(layoutModel.ephemeralNode);
+    if (magnifiedNodeId || ephemeralNode) return null;
 
-    return resizeHandles.map((resizeHandleAtom, i) => (
-        <ResizeHandle key={`resize-handle-${i}`} layoutModel={layoutModel} resizeHandleAtom={resizeHandleAtom} />
+    return resizeHandles.map((resizeHandleAtom) => (
+        <ResizeHandle key={String(resizeHandleAtom)} layoutModel={layoutModel} resizeHandleAtom={resizeHandleAtom} />
     ));
 });
+ResizeHandleWrapper.displayName = "ResizeHandleWrapper";
 
 interface ResizeHandleComponentProps {
     resizeHandleAtom: Atom<ResizeHandleProps>;
@@ -414,55 +442,69 @@ interface ResizeHandleComponentProps {
 
 const ResizeHandle = memo(({ resizeHandleAtom, layoutModel }: ResizeHandleComponentProps) => {
     const resizeHandleProps = useAtomValue(resizeHandleAtom);
-    const resizeHandleRef = useRef<HTMLDivElement>(null);
+    const pointer = useRef<number>(undefined);
+    const pendingPoint = useRef<Point>(undefined);
+    const frame = useRef<number>(undefined);
+    const row = resizeHandleProps.flexDirection === FlexDirection.Row;
 
-    // The pointer currently captured, or undefined.
-    const [trackingPointer, setTrackingPointer] = useState<number>(undefined);
+    const flushPointerMove = () => {
+        if (frame.current != null) cancelAnimationFrame(frame.current);
+        frame.current = undefined;
+        const point = pendingPoint.current;
+        pendingPoint.current = undefined;
+        if (point) layoutModel.onResizeMove(resizeHandleProps, point.x, point.y);
+    };
 
-    // Calculates the new size of the two nodes on either side of the handle, based on the position of the cursor
-    const handlePointerMove = useCallback(
-        throttle(10, (event: React.PointerEvent<HTMLDivElement>) => {
-            if (trackingPointer === event.pointerId) {
-                const { clientX, clientY } = event;
-                layoutModel.onResizeMove(resizeHandleProps, clientX, clientY);
-            }
-        }),
-        [trackingPointer, layoutModel.onResizeMove, resizeHandleProps]
-    );
-
-    // We want to use pointer capture so the operation continues even if the pointer leaves the bounds of the handle
-    function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-        resizeHandleRef.current?.setPointerCapture(event.pointerId);
-    }
-
-    // This indicates that we're ready to start tracking the resize operation via the pointer
-    function onPointerCapture(event: React.PointerEvent<HTMLDivElement>) {
-        setTrackingPointer(event.pointerId);
-    }
-
-    // We want to wait a bit before committing the pending resize operation in case some events haven't arrived yet.
-    const onPointerRelease = useCallback(
-        debounce(30, (event: React.PointerEvent<HTMLDivElement>) => {
-            setTrackingPointer(undefined);
-            layoutModel.onResizeEnd();
-        }),
+    useEffect(
+        () => () => {
+            if (frame.current != null) cancelAnimationFrame(frame.current);
+            if (pointer.current != null) layoutModel.onResizeEnd();
+        },
         [layoutModel]
     );
 
     return (
         <div
-            ref={resizeHandleRef}
             className={clsx("resize-handle", `flex-${resizeHandleProps.flexDirection}`)}
-            onPointerDown={onPointerDown}
-            onGotPointerCapture={onPointerCapture}
-            onLostPointerCapture={onPointerRelease}
+            role="separator"
+            tabIndex={0}
+            aria-label="Resize adjacent widgets"
+            aria-orientation={row ? "vertical" : "horizontal"}
+            aria-valuemin={resizeHandleProps.minPercentage}
+            aria-valuemax={resizeHandleProps.maxPercentage}
+            aria-valuenow={resizeHandleProps.beforePercentage}
+            onKeyDown={(event) => {
+                const backwards = row ? "ArrowLeft" : "ArrowUp";
+                const forwards = row ? "ArrowRight" : "ArrowDown";
+                if (event.key !== backwards && event.key !== forwards) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const step = event.shiftKey ? KeyboardResizeStepPx * 3 : KeyboardResizeStepPx;
+                layoutModel.nudgeResizeHandle(resizeHandleProps, event.key === forwards ? step : -step);
+            }}
+            onPointerDown={(event) => {
+                if (event.button !== 0 || event.isPrimary === false || pointer.current != null) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                pointer.current = event.pointerId;
+            }}
+            onLostPointerCapture={(event) => {
+                if (pointer.current !== event.pointerId) return;
+                flushPointerMove();
+                pointer.current = undefined;
+                layoutModel.onResizeEnd();
+            }}
             style={resizeHandleProps.transform}
-            onPointerMove={handlePointerMove}
+            onPointerMove={(event) => {
+                if (pointer.current !== event.pointerId) return;
+                pendingPoint.current = { x: event.clientX, y: event.clientY };
+                if (frame.current == null) frame.current = requestAnimationFrame(flushPointerMove);
+            }}
         >
             <div className="line" />
         </div>
     );
 });
+ResizeHandle.displayName = "ResizeHandle";
 
 interface PlaceholderProps {
     /**

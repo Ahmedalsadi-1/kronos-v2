@@ -337,6 +337,48 @@
     outline-offset: 2px;
 }
 
+.kt-vm-screen-selection {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    container-type: size;
+    background: #090b0a;
+    color: #edf1ef;
+}
+.kt-vm-screen-selection .kt-device-selection-frame {
+    max-height: 100%;
+}
+.kt-vm-screen-selection .kt-device-selection-frame img {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+}
+.kt-vm-screen-selection .kt-device-selection-frame:focus-visible {
+    outline: 0;
+}
+.kt-vm-screen-selection .kt-vm-selection-cancel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 11;
+    background: #111514;
+    color: #edf1ef;
+}
+.kt-vm-screen-selection > [role="status"] {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    max-width: calc(100% - 70px);
+    margin: 0;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #111514;
+    color: #edf1ef;
+}
+
 .kt-computers-toolbar {
     border-block: 1px solid var(--kt-separator);
 }

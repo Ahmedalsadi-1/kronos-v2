@@ -51,7 +51,7 @@ function bridge() {
     const desktop = window.hermesDesktop;
 
     if (!desktop) {
-        throw new Error("KronTerm Agent desktop bridge is unavailable");
+        throw new Error("KronOS Agent desktop bridge is unavailable");
     }
 
     return desktop;

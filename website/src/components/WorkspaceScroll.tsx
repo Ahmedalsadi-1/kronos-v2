@@ -16,7 +16,7 @@ type StoryItem = {
 const storyItems: StoryItem[] = [
     {
         id: "workspace",
-        label: "Kronterm workspace",
+        label: "KronOS workspace",
         title: "Start in one programmable workspace",
         text: "Open terminal sessions, browser previews, files, sandboxes, memory panels, and agent controls in one focused desktop command center.",
         cta: "Learn more",
@@ -24,7 +24,7 @@ const storyItems: StoryItem[] = [
         media: {
             type: "image",
             src: productAssets.hero,
-            alt: "Kronterm workspace with terminal, browser, sandbox, system graph, files, and side controls"
+            alt: "KronOS workspace with terminal, browser, sandbox, system graph, files, and side controls"
         }
     },
     {
@@ -37,7 +37,7 @@ const storyItems: StoryItem[] = [
         media: {
             type: "image",
             src: productAssets.agent,
-            alt: "KronosCode agent prompt inside the Kronterm workspace"
+            alt: "KronosCode agent prompt inside the KronOS workspace"
         }
     },
     {
@@ -50,7 +50,7 @@ const storyItems: StoryItem[] = [
         media: {
             type: "video",
             src: productAssets.browserVideo,
-            alt: "Kronterm browser widget demonstration"
+            alt: "KronOS browser widget demonstration"
         }
     },
     {
@@ -63,7 +63,7 @@ const storyItems: StoryItem[] = [
         media: {
             type: "video",
             src: productAssets.sandboxVideo,
-            alt: "Kronterm sandbox demonstration"
+            alt: "KronOS sandbox demonstration"
         }
     }
 ];
@@ -100,11 +100,11 @@ export function WorkspaceScroll() {
     return (
         <section className="workspace-scroll" id="why-kronterm">
             <div className="workspace-scroll-heading">
-                <p className="eyebrow">Why Kronterm</p>
+                <p className="eyebrow">Why KronOS</p>
                 <h2>Be more productive. Stay in control.</h2>
             </div>
             <div className="workspace-scroll-grid">
-                <aside className="workspace-rail" aria-label="Kronterm workspace sections">
+                <aside className="workspace-rail" aria-label="KronOS workspace sections">
                     {storyItems.map((item) => (
                         <a className={item.id === activeId ? "active" : ""} href={`#${item.id}`} key={item.id}>
                             <span className="rail-icon" aria-hidden="true" />

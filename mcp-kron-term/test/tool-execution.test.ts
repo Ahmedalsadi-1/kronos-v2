@@ -88,6 +88,26 @@ test("caller cancellation stops future RPC work without replay", async () => {
     assert.equal(JSON.parse(result.content[0].text).code, "CANCELLED");
 });
 
+test("tracks the actual operation when the cancelled caller returns before it settles", async () => {
+    const controller = new AbortController();
+    let settle: () => void;
+    const operation = new Promise<void>((resolve) => { settle = resolve; });
+    const tracked: Promise<unknown>[] = [];
+    const response = executeTool(
+        "widget_wait_for",
+        {},
+        true,
+        () => operation,
+        controller.signal,
+        (running) => tracked.push(running)
+    );
+    controller.abort();
+    assert.equal(JSON.parse((await response).content[0].text).code, "CANCELLED");
+    assert.deepEqual(tracked, [operation]);
+    settle!();
+    await Promise.all(tracked);
+});
+
 test("already cancelled requests never execute", async () => {
     const controller = new AbortController();
     controller.abort();

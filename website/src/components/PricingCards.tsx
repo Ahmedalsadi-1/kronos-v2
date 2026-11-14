@@ -2,13 +2,13 @@ const plans = [
     {
         name: "Builder",
         price: "Private beta",
-        description: "For individual developers and founders evaluating Kronterm.",
-        features: ["Kronterm workspace access", "KronosCode beta", "Local/cloud model setup", "Human-approved execution"]
+        description: "For individual developers and founders evaluating KronOS.",
+        features: ["KronOS workspace access", "KronosCode beta", "Local/cloud model setup", "Human-approved execution"]
     },
     {
         name: "Pro",
         price: "Commercial",
-        description: "For serious builders using Kronterm as a daily workspace.",
+        description: "For serious builders using KronOS as a daily workspace.",
         features: ["Expanded KronosCode usage", "Advanced workflows", "Browser and sandbox workflows", "Priority onboarding"]
     },
     {

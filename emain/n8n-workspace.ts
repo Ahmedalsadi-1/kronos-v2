@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { hasKronTermAccount, workflowAccount, WorkflowBrowserId } from "./workflow-account";
+import { workflowAccount, WorkflowBrowserId } from "./workflow-account";
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -27,10 +27,13 @@ export type N8nWorkspaceCommand = {
         | "hide-desktop"
         | "account"
         | "state"
+        | "runtime-status"
         | "open"
+        | "switch-workspace"
         | "folders"
         | "workflows"
         | "workspace-widgets"
+        | "workspace-computers"
         | "select-workflow"
         | "create-workflow"
         | "search-nodes"
@@ -55,8 +58,11 @@ export type N8nWorkspaceCommand = {
     edits?: Parameters<typeof editN8nDraft>[1];
     expectedVersionId?: string;
     task?: string;
+    computerId?: string;
+    computerGeneration?: number;
     timeoutSeconds?: number;
     executionId?: string;
+    expectedGeneration?: number;
     input?: unknown;
 };
 
@@ -108,11 +114,11 @@ export class N8nWorkspace {
             context: HermesSurfaceContext,
             signal?: AbortSignal
         ) => Promise<unknown>,
-        private store = new N8nWorkspaceStore(path.join(os.homedir(), ".kronterm/runtimes/n8n"))
+        private store = new N8nWorkspaceStore(path.join(os.homedir(), ".kronterm/runtimes/n8n")),
+        private onHandoff?: () => void
     ) {}
 
     private async ensureConnected(context: HermesSurfaceContext) {
-        if (!hasKronTermAccount()) throw new Error("Connect your KronTerm account from the Workflows panel first.");
         let status = this.runtime.status();
         if (!status.running) {
             if (context.n8nWorkerId) this.runtime.assertScope(context);
@@ -126,10 +132,14 @@ export class N8nWorkspace {
         return status;
     }
 
-    private async savedCanvases(context: HermesSurfaceContext, workflowId?: string): Promise<Electron.WebContents[]> {
+    private async savedCanvases(
+        context: HermesSurfaceContext,
+        workflowId?: string,
+        checkNativeEditors = true
+    ): Promise<Electron.WebContents[]> {
         this.runtime.assertScope(context);
         const key = n8nScopeKey(context);
-        for (const senderId of this.editors.get(key) ?? []) {
+        for (const senderId of (checkNativeEditors ? this.editors.get(key) : undefined) ?? []) {
             const contents = webContents.fromId(senderId);
             if (!contents || contents.isDestroyed()) continue;
             const document = await contents.executeJavaScript(
@@ -177,7 +187,13 @@ export class N8nWorkspace {
                 const document = await contents.executeJavaScript(
                     "window.__KRONTERM_WORKFLOW_HOST__?.getDocumentState?.()"
                 );
-                if (document?.workflowId !== workflowId) continue;
+                if (
+                    workflowId == null &&
+                    !document &&
+                    !(await contents.executeJavaScript("Boolean(window.__KRONTERM_WORKFLOW_HOST__)"))
+                )
+                    continue;
+                if (workflowId != null && document?.workflowId !== workflowId) continue;
                 const acquired = await contents.executeJavaScript(
                     "window.__KRONTERM_WORKFLOW_HOST__?.beginDocumentMutation?.()"
                 );
@@ -195,6 +211,38 @@ export class N8nWorkspace {
                     )
             );
         }
+    }
+
+    private async switchWorkspace(input: N8nWorkspaceCommand, context: HermesSurfaceContext, signal?: AbortSignal) {
+        if (context.n8nEditorId == null || !Number.isSafeInteger(input.expectedGeneration))
+            throw new Error("Switch the workflow connection from the desktop Workflows panel.");
+        const owner = this.runtime.handoffOwner(context, input.expectedGeneration);
+        const oldKey = n8nScopeKey(owner);
+        const bridge = new KronTermNativeToolBridge(() => context);
+        const config = JSON.parse(await bridge.listWidgets());
+        const release = () => {
+            signal?.throwIfAborted();
+            this.runtime.handoffOwner(context, input.expectedGeneration);
+            if (this.mutations.has(oldKey))
+                throw new Error("A workflow change is still in progress in the other tab. Try again when it finishes.");
+            this.onHandoff?.();
+            this.runtime.stop();
+            this.desktops.delete(oldKey);
+            const starting = this.runtime.start(context, { ...config.defaultwidgets, ...config.widgets });
+            void starting.catch(() => {});
+            return { starting };
+        };
+        const { starting } = this.runtime.status().running
+            ? await this.withEditorLease(owner, undefined, async () => {
+                  if ((await this.savedCanvases(owner, undefined, false)).length)
+                      throw new Error(
+                          "Save and close the workflow canvas in the other tab before switching the connection."
+                      );
+                  return release();
+              })
+            : release();
+        await starting;
+        return this.execute({ operation: "open", surface: "canvas", workflowId: input.workflowId }, context);
     }
 
     private async publishNativeDocument(
@@ -256,9 +304,15 @@ export class N8nWorkspace {
             /^\/rest\/workflows(?:\/|$)/.test(editorRequest?.route);
         const serialize =
             documentWrite ||
-            ["editor-state", "edit-workflow", "select-workflow", "create-workflow", "open", "hide-desktop"].includes(
-                input.operation
-            );
+            [
+                "editor-state",
+                "edit-workflow",
+                "select-workflow",
+                "create-workflow",
+                "open",
+                "hide-desktop",
+                "switch-workspace",
+            ].includes(input.operation);
         if (!serialize) return execute();
         const key = n8nScopeKey(context);
         const previous = this.mutations.get(key) ?? Promise.resolve();
@@ -278,6 +332,11 @@ export class N8nWorkspace {
         signal?: AbortSignal
     ): Promise<any> {
         if (signal?.aborted) throw new Error("Workflow operation cancelled.");
+        if (input.operation === "runtime-status") {
+            if (!context?.workspaceId || !context.tabId) throw new Error("Open a workspace tab first.");
+            const { running, occupiedGeneration } = this.runtime.status(context);
+            return { running, occupied: occupiedGeneration != null };
+        }
         const bridge = new KronTermNativeToolBridge(() => context);
         const state = this.store.read(context);
         if (context.n8nWorkflowId && input.workflowId && input.workflowId !== context.n8nWorkflowId)
@@ -285,6 +344,7 @@ export class N8nWorkspace {
         const workflowId = input.workflowId ?? context.n8nWorkflowId ?? state.selectedWorkflowId;
         if (workflowId != null) n8nSurfacePath("canvas", workflowId);
         const desktopKey = n8nScopeKey(context);
+        if (input.operation === "switch-workspace") return this.switchWorkspace(input, context, signal);
         if (
             [
                 "workflows",
@@ -317,6 +377,18 @@ export class N8nWorkspace {
             )
                 throw new Error("Select a workflow first.");
             await this.ensureConnected(context);
+        }
+        if (input.operation === "workspace-computers") {
+            if (!context.workspaceId || !context.tabId) throw new Error("Open a workspace tab first.");
+            const { getLinuxDesktopsRuntime } = await import("./linux-desktops-runtime");
+            return (await getLinuxDesktopsRuntime().list()).map((desktop) => ({
+                id: desktop.id,
+                label: desktop.name || desktop.id,
+                ready:
+                    desktop.ready &&
+                    desktop.controlOwner === "agent" &&
+                    desktop.assignedAgentId === `sandbox:${context.tabId}`,
+            }));
         }
         if (input.operation === "workspace-widgets") {
             if (!context.workspaceId || !context.tabId) throw new Error("Open a workspace tab first.");
@@ -441,9 +513,27 @@ export class N8nWorkspace {
                     request,
                     signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
                 );
-                const match = request.route.match(/^\/rest\/workflows\/([a-zA-Z0-9_-]+)(?:\?|$)/);
-                if (match && ["PATCH", "PUT", "DELETE"].includes(request.method) && result.status < 400)
-                    this.markDocumentChanged(desktopKey, match[1]);
+                if (documentMatch) {
+                    const id = documentMatch[1];
+                    const desktop = this.desktops.get(desktopKey);
+                    const openId = desktop && new URL(desktop.url).pathname.match(/^\/workflow\/([^/]+)/)?.[1];
+                    const succeeded = result.status >= 200 && result.status < 300;
+                    const deleted = request.method === "DELETE" && succeeded;
+                    const missing = request.method === "GET" && result.status === 404 && openId === id;
+                    if (deleted || missing) {
+                        if (deleted) this.store.removeWorkflow(context, id);
+                        else if (this.store.read(context).selectedWorkflowId === id)
+                            this.store.command(context, { action: "select-workflow" });
+                        if (desktop?.documentWorkflowId === id) delete desktop.documentWorkflowId;
+                        if (openId === id) {
+                            desktop.surface = "canvas";
+                            desktop.url = new URL(n8nSurfacePath("canvas"), origin).toString();
+                            desktop.dirty = false;
+                        }
+                    } else if (succeeded && ["PATCH", "PUT"].includes(request.method)) {
+                        this.markDocumentChanged(desktopKey, id);
+                    }
+                }
                 return result;
             } finally {
                 if (key) this.requests.delete(key);
@@ -466,13 +556,15 @@ export class N8nWorkspace {
             return { attached: true };
         }
         if (input.operation === "account") {
+            if (input.account)
+                throw new Error("Workflow access is managed by your Hermes session. No separate login is needed.");
             const config = JSON.parse(await bridge.listWidgets());
             const status = await this.runtime.start(context, { ...config.defaultwidgets, ...config.widgets });
-            await workflowAccount(status.url, input.account);
+            await workflowAccount(status.url);
             return { connected: true };
         }
         if (input.operation === "state") {
-            const status = this.runtime.status();
+            const status = this.runtime.status(context);
             if (status.running && !context.n8nWorkerId && !this.desktops.has(desktopKey)) {
                 const blocks = JSON.parse(await bridge.listBlocks());
                 const canvas = blocks.find((block: any) => block.meta?.["n8n:surface"] === "canvas");
@@ -501,7 +593,7 @@ export class N8nWorkspace {
                 ...status,
                 ...state,
                 desktop: status.running ? this.desktops.get(desktopKey) : undefined,
-                accountRequired: !hasKronTermAccount(),
+                accountRequired: false,
                 documentRevision: this.desktops.get(desktopKey)?.revision ?? 0,
                 documentWorkflowId: this.desktops.get(desktopKey)?.documentWorkflowId ?? state.selectedWorkflowId,
             };
@@ -517,13 +609,15 @@ export class N8nWorkspace {
             const surfacePath = n8nSurfacePath(surface, workflowId);
             const status = await this.ensureConnected(context);
             const url = new URL(surfacePath, status.url).toString();
+            const previous = this.desktops.get(desktopKey);
             const documentWorkflowId =
                 ["canvas", "executions", "evaluations"].includes(surface) && workflowId && workflowId !== "new"
                     ? workflowId
                     : undefined;
             if (documentWorkflowId)
                 this.store.command(context, { action: "select-workflow", workflowId: documentWorkflowId });
-            this.desktops.set(desktopKey, { surface, url, documentWorkflowId });
+            const mounted = previous && new URL(previous.url).origin === new URL(url).origin;
+            this.desktops.set(desktopKey, { ...(mounted ? previous : {}), surface, url, documentWorkflowId });
             return { ...status, surface, desktop: true };
         }
         if (input.operation === "select-workflow") {
@@ -550,8 +644,8 @@ export class N8nWorkspace {
         if (input.operation === "workflows") return this.request(context, "/rest/workflows?take=200&skip=0");
         if (input.operation === "create-workflow") {
             await this.savedCanvases(context);
-            const draft = {
-                name: input.name?.trim() || "New Hermes workflow",
+            let draft: N8nWorkflowDraft = {
+                name: input.name?.trim() || "New KronOS workflow",
                 nodes: [
                     {
                         id: "trigger",
@@ -561,18 +655,27 @@ export class N8nWorkspace {
                         position: [0, 0],
                         parameters: {},
                     },
-                    {
-                        id: "hermes",
-                        name: "Hermes Agent",
-                        type: "CUSTOM.hermesAgent",
-                        typeVersion: 1,
-                        position: [260, 0],
-                        parameters: { task: input.task || "Describe the task for this workflow.", timeoutSeconds: 180 },
-                    },
                 ],
-                connections: { Start: { main: [[{ node: "Hermes Agent", type: "main", index: 0 }]] } },
+                connections: {},
                 settings: { executionOrder: "v1" },
             };
+            if (input.edits != null) {
+                if (input.task != null) throw new Error("Use either the KronOS Agent task or graph edits.");
+                draft = editN8nDraft(draft, input.edits);
+                const validation = await this.runtime.validateDraft(context, draft);
+                if (!validation.valid) throw new Error(validation.errors.join("\n"));
+            } else {
+                const agentName = "KronOS Agent";
+                draft.nodes.push({
+                    id: "hermes",
+                    name: agentName,
+                    type: "CUSTOM.hermesAgent",
+                    typeVersion: 1,
+                    position: [260, 0],
+                    parameters: { task: input.task || "Describe the task for this workflow.", timeoutSeconds: 180 },
+                });
+                draft.connections.Start = { main: [[{ node: agentName, type: "main", index: 0 }]] };
+            }
             const created = await this.request(context, "/rest/workflows", "POST", draft);
             if (context.n8nWorkerId) selectWorkflowWorkerTarget(context.n8nWorkerId, created.id);
             this.store.command(context, { action: "select-workflow", workflowId: created.id });
@@ -604,7 +707,31 @@ export class N8nWorkspace {
                     outputs,
                 }));
         }
-        if (input.operation === "run-agent") return this.runAgent({ ...input, workflowId }, context, signal);
+        if (input.operation === "run-agent") {
+            let scope = context;
+            if (input.computerId) {
+                const { getLinuxDesktopsRuntime } = await import("./linux-desktops-runtime");
+                const desktop = (await getLinuxDesktopsRuntime().list()).find((entry) => entry.id === input.computerId);
+                if (
+                    !desktop?.ready ||
+                    desktop.controlOwner !== "agent" ||
+                    desktop.assignedAgentId !== `sandbox:${context.tabId}` ||
+                    !Number.isSafeInteger(desktop.controlGeneration) ||
+                    (input.computerGeneration != null && input.computerGeneration !== desktop.controlGeneration)
+                )
+                    throw new Error(
+                        "The selected VM is not ready or Computer control is not assigned to this workspace."
+                    );
+                scope = {
+                    ...context,
+                    sandboxComputerId: desktop.id,
+                    sandboxComputerGeneration: desktop.controlGeneration,
+                    sandboxComputerMode: "sandbox",
+                    delegationScope: "sandbox",
+                };
+            }
+            return this.runAgent({ ...input, workflowId }, scope, signal);
+        }
         if (!workflowId) throw new Error("Select a workflow first.");
         const workflow = (await this.request(
             context,

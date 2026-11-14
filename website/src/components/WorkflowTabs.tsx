@@ -12,12 +12,12 @@ export function WorkflowTabs() {
                 <p className="eyebrow">Workspace control</p>
                 <h2>Be more productive. Stay in control.</h2>
                 <p>
-                    Kronterm adapts Warp-style product storytelling into a Kronterm-native system: terminal,
+                    KronOS adapts Warp-style product storytelling into a KronOS-native system: terminal,
                     browser, sandbox, files, and KronosCode all share one workspace.
                 </p>
             </div>
             <div className="tab-panel">
-                <div className="tab-list" role="tablist" aria-label="Kronterm workspace surfaces">
+                <div className="tab-list" role="tablist" aria-label="KronOS workspace surfaces">
                     {workflowTabs.map((tab, index) => (
                         <button
                             className={index === active ? "active" : ""}

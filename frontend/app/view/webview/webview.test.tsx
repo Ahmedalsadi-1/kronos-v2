@@ -188,9 +188,37 @@ describe("webview preview fallback", () => {
         expect(markup).toContain('aria-label="Open browser DevTools"');
         expect(markup).toContain('aria-label="Browser menu"');
         expect(markup).toContain("Viewport profile");
+        expect(markup).not.toContain("data-browser-preview");
         expect(markup).not.toContain("webview-tab-strip");
         expect(markup).not.toContain('role="tablist"');
         expect(markup).not.toContain('role="tab"');
         expect(markup).not.toContain('aria-label="New browser tab"');
+    });
+
+    it("renders the alternate chrome only for the preview launcher", () => {
+        const blockId = "browser-preview-block";
+        const model = new WebViewModel({
+            blockId,
+            nodeModel: {} as any,
+            tabModel: {} as any,
+            waveEnv: makeMockWaveEnv({
+                mockWaveObjs: {
+                    [`block:${blockId}`]: {
+                        otype: "block",
+                        oid: blockId,
+                        version: 1,
+                        meta: { view: "web", "web:chrome": "preview", url: "https://example.com/" },
+                    } as Block,
+                },
+            }),
+        });
+        const markup = renderToStaticMarkup(<>{globalStore.get(model.headerTop)}</>);
+
+        expect(model.viewType).toBe("web");
+        expect(markup).toContain('data-browser-preview="true"');
+        expect(markup).toContain('aria-label="Home"');
+        expect(markup).toContain('aria-label="Bookmark this page"');
+        expect(markup).toContain('aria-label="History"');
+        expect(markup).toContain('aria-label="Browser menu"');
     });
 });

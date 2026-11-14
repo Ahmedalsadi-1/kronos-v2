@@ -18,7 +18,14 @@ patch('server/index.ts','"cache-control": "no-cache", ...PAGE_HEADERS','"cache-c
 patch('server/index.ts','  console.log(`openmausbot server on http://127.0.0.1:${PORT}`);','  console.log(`openmausbot server on http://127.0.0.1:${PORT}`);\n  utilityParentPort?.postMessage({type:"kronterm:ready",port:PORT});');
 
 patch('src/App.tsx','import { useCallback, useEffect, useRef, useState } from "react";','import { KronTermDesktopLink } from "./kronterm/desktop-link";\nimport { useCallback, useEffect, useRef, useState } from "react";');
-patch('src/App.tsx','    <div className="flex h-full flex-col">','    <div className="flex h-full flex-col">\n      <KronTermDesktopLink />');
+patch('src/App.tsx','    <div className="flex h-full flex-col">','    <div className="flex h-full flex-col">\n      {new URLSearchParams(location.search).get("roomOnly") !== "1" && <KronTermDesktopLink />}');
 patch('server/drivers/acp/core.ts','import { augmentedPath } from "../../env-path.ts";','import { krontermDesktopTools } from "../../kronterm/bot-desktop.ts";\nimport { augmentedPath } from "../../env-path.ts";');
 patch('server/drivers/acp/core.ts','        stripControlPlaneEnv(env);','        stripControlPlaneEnv(env);\n        delete env.KRONTERM_BOT_BRIDGE_URL;\n        delete env.KRONTERM_BOT_BRIDGE_TOKEN;');
 patch('server/drivers/acp/core.ts','        const mcpServers = acpMcpServers(turn, { http: support.ownMcpOverHttp === true });','        const mcpServers = acpMcpServers(turn, { http: support.ownMcpOverHttp === true });\n        const krontermTools = await krontermDesktopTools(turn, DRIVER_KIND);\n        requireRunning();\n        if (krontermTools) mcpServers.push(krontermTools);');
+
+patch('src/App.tsx', '{!calendarFocus && <Sidebar', '{!calendarFocus && !(group && new URLSearchParams(location.search).get("roomOnly") === "1") && <Sidebar');
+patch('src/App.tsx', '{!calendarFocus && <button', '{!calendarFocus && !(group && new URLSearchParams(location.search).get("roomOnly") === "1") && <button');
+patch('src/App.tsx', '  const viewer = useWelcomeViewer();', '  const viewer = useWelcomeViewer();\n  const projectRoom = location.pathname === "/kronterm-app" && new URLSearchParams(location.search).get("roomOnly") === "1";');
+patch('src/App.tsx', '        <WelcomeGate viewer={viewer} />', '        {!projectRoom && <WelcomeGate viewer={viewer} />}');
+patch('src/App.tsx', '        <GuidedTour />', '        {!projectRoom && <GuidedTour />}');
+patch('src/App.tsx', '        <FirstConversationTour quiet={spotlightsQuiet(viewer)} />', '        {!projectRoom && <FirstConversationTour quiet={spotlightsQuiet(viewer)} />}');

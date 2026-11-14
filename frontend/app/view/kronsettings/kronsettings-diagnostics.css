@@ -1,0 +1,30 @@
+/* Copyright 2026, KronOS. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.kt-system-ui .kron-settings-card.kronos-diagnostics {
+    color: var(--kt-label);
+    background: var(--kt-window);
+    border-color: var(--kt-separator);
+}
+.kt-system-ui .kronos-diagnostics .kron-settings-section-title {
+    color: var(--kt-label);
+}
+.kt-system-ui .kronos-diagnostics .kron-settings-section-desc {
+    color: var(--kt-label-secondary);
+}
+.kt-system-ui .kronos-diagnostics .kron-settings-section-icon {
+    color: var(--kt-label-secondary);
+}
+.kt-system-ui .kronos-diagnostics .kt-system-button {
+    color: var(--kt-label);
+}
+.kt-system-ui .kronos-diagnostics a {
+    color: var(--kt-label);
+    text-underline-offset: 3px;
+}
+.kronos-diagnostics textarea:focus-visible,
+.kronos-diagnostics summary:focus-visible,
+.kronos-diagnostics a:focus-visible {
+    outline: 2px solid var(--kt-focus-ring, var(--accent-color));
+    outline-offset: 3px;
+}

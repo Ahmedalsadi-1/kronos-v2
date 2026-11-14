@@ -1,4 +1,5 @@
 import { resolveBlockView } from "@/app/block/retired-chat-view";
+import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -57,12 +58,6 @@ function sortByDisplayOrder(wmap: { [key: string]: WidgetConfigType } | null | u
             "display:order": 14,
             blockdef: { meta: { view: "blenderproject" } },
         },
-        "kronterm@medialibrary": {
-            label: "Media Library",
-            icon: "photo-film",
-            "display:order": 13,
-            blockdef: { meta: { view: "medialibrary" } },
-        },
         "kronterm@imagestudio": {
             label: "Image Studio",
             icon: "image",
@@ -76,7 +71,9 @@ function sortByDisplayOrder(wmap: { [key: string]: WidgetConfigType } | null | u
             blockdef: { meta: { view: "gamestudio" } },
         },
     };
-    const wlist = Object.values({ ...builtins, ...(wmap ?? {}) });
+    const wlist = Object.values({ ...builtins, ...(wmap ?? {}) }).filter(
+        (widget) => widget.blockdef?.meta?.view !== "medialibrary"
+    );
     wlist.sort((a, b) => (a["display:order"] ?? 0) - (b["display:order"] ?? 0));
     return wlist;
 }
@@ -196,7 +193,7 @@ export class LauncherViewModel implements ViewModel {
             widget.blockdef?.meta?.view === "waveai" ||
             resolveBlockView(String(widget.blockdef?.meta?.view)) === "hermes"
         ) {
-            await replaceBlock(this.blockId, { meta: { view: "hermes" } }, true);
+            hermesSurfaceController.requestOpenPanel();
             return;
         }
         try {
@@ -295,7 +292,7 @@ function LauncherView({ blockId, model }: ViewComponentProps<LauncherViewModel>)
             {/* Logo */}
             {showLogo && (
                 <div className="mb-6" style={{ width: logoWidth, maxWidth: 300 }}>
-                    <img src={logoUrl} className="w-full h-auto filter grayscale brightness-70 opacity-70" alt="Logo" />
+                    <img src={logoUrl} className="w-full h-auto opacity-80" alt="KronTerm" />
                 </div>
             )}
 

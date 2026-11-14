@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { host } from "@hermes/plugin-sdk";
+import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { BotsPlugin, openBotsWorkspace } from "./plugin";
 
@@ -25,7 +26,11 @@ it("uses the upstream roster and preserves routines and composer integration", (
         registerMany: (items) => contributions.push(...items),
     } as any);
     const pane = contributions.find((item) => item.id === "workspace");
-    expect(pane.render()).toBe("roster");
+    expect(renderToStaticMarkup(pane.render())).toContain("roster");
+    expect(renderToStaticMarkup(pane.render())).toContain("Project rooms");
+    expect(contributions.find((item) => item.id === "project-rooms-navigation").data.pane).toBe(
+        "kronterm-bots:project-rooms"
+    );
     expect(contributions.find((item) => item.id === "navigation").data).toMatchObject({
         label: "Bot mode",
         pane: "kronterm-bots:workspace",

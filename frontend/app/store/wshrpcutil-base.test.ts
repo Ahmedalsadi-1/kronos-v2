@@ -41,6 +41,26 @@ describe("RPC request cancellation", () => {
         expect(pending.size).toBe(0);
     });
 
+    it("keeps a renderer wait pending until it acknowledges cancellation", async () => {
+        const recvRpcMessage = vi.fn();
+        setDefaultRouter({ recvRpcMessage } as any);
+        const pending = new Map();
+        const controller = new AbortController();
+        const generator = sendRpcCommand(
+            pending,
+            { reqid: "wait", command: "widgetwaitcondition" },
+            controller.signal,
+            true
+        );
+        const response = generator.next();
+        controller.abort();
+        expect(recvRpcMessage).toHaveBeenLastCalledWith({ reqid: "wait", cancel: true });
+        expect(pending.has("wait")).toBe(true);
+        pending.get("wait").msgFn({ resid: "wait", error: "Renderer cancelled the wait" });
+        await expect(response).rejects.toThrow("Renderer cancelled the wait");
+        expect(pending.size).toBe(0);
+    });
+
     it("never dispatches an already cancelled command", () => {
         const recvRpcMessage = vi.fn();
         setDefaultRouter({ recvRpcMessage } as any);

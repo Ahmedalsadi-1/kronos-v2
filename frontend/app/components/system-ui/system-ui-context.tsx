@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { atoms, getApi } from "@/store/global";
+import { systemMaterialVariables } from "@/types/system-materials";
+import { useKronTermColorMode } from "@hermes/themes/context";
 import { useAtomValue } from "jotai";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -32,10 +34,15 @@ const SystemAppearanceContext = createContext<SystemAppearanceSnapshot>(DefaultS
 
 function SystemUIProvider({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
     const reducedMotion = useAtomValue(atoms.prefersReducedMotionAtom);
+    const colorMode = useKronTermColorMode();
     const [nativeAppearance, setNativeAppearance] = useState(readSystemAppearance);
     const appearance = useMemo(
-        () => ({ ...nativeAppearance, reducedMotion: nativeAppearance.reducedMotion || reducedMotion }),
-        [nativeAppearance, reducedMotion]
+        () => ({
+            ...nativeAppearance,
+            colorScheme: colorMode ?? nativeAppearance.colorScheme,
+            reducedMotion: nativeAppearance.reducedMotion || reducedMotion,
+        }),
+        [nativeAppearance, colorMode, reducedMotion]
     );
 
     useEffect(() => {
@@ -50,6 +57,7 @@ function SystemUIProvider({ children, enabled = true }: { children: ReactNode; e
         <SystemAppearanceContext.Provider value={appearance}>
             <div
                 className={enabled ? "kt-system-host kt-system-ui" : "kt-system-host"}
+                style={enabled ? systemMaterialVariables(appearance) : undefined}
                 data-color-scheme={appearance.colorScheme}
                 data-contrast={appearance.contrast}
                 data-reduced-motion={appearance.reducedMotion || undefined}
@@ -65,4 +73,10 @@ function useSystemAppearance(): SystemAppearanceSnapshot {
     return useContext(SystemAppearanceContext);
 }
 
-export { SystemAppearanceContext, DefaultSystemAppearance, readSystemAppearance, SystemUIProvider, useSystemAppearance };
+export {
+    DefaultSystemAppearance,
+    readSystemAppearance,
+    SystemAppearanceContext,
+    SystemUIProvider,
+    useSystemAppearance,
+};

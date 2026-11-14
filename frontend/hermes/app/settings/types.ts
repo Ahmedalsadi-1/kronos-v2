@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import type { HermesGateway } from "@hermes/hermes";
 import type { IconComponent } from "@hermes/lib/icons";
@@ -23,6 +23,8 @@ export type EnvPatch = Partial<Pick<EnvVarInfo, "is_set" | "redacted_value">>;
 
 export interface SettingsPageProps {
     gateway?: HermesGateway | null;
+    embedded?: boolean;
+    connectionStatus?: ReactNode;
     onClose: () => void;
     onConfigSaved?: () => void;
     onMainModelChanged?: (provider: string, model: string) => void;

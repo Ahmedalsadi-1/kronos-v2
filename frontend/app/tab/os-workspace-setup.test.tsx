@@ -5,117 +5,60 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { OSWorkspaceSetup } from "./os-workspace-setup";
-const runtime = vi.hoisted(() => ({ openAgentWorkspace: vi.fn(), openBotDesktop: vi.fn(), switchWorkspace: vi.fn() }));
-vi.mock("@/store/global", () => ({ getApi: () => runtime }));
 
-it("loads the upstream source UI and accepts a channel only from its exact frame and origin", async () => {
+it("creates a KronOS workspace without mounting the OpenMausBot UI", async () => {
     HTMLDialogElement.prototype.showModal = vi.fn();
-    runtime.openAgentWorkspace.mockResolvedValue({
-        origin: "http://127.0.0.1:9012",
-        parentOrigin: "http://localhost:9124",
-    });
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
     const onCreate = vi.fn().mockResolvedValue(undefined);
     try {
         await act(async () => root.render(<OSWorkspaceSetup onCreate={onCreate} onClose={() => {}} />));
-        const frame = container.querySelector("iframe");
-        expect(new URL(frame.src).pathname).toBe("/kronterm-setup");
-        const data = { source: "kronterm-openmausbot", type: "created", group: { id: "channel-1", name: "Research" } };
-        await act(async () =>
-            window.dispatchEvent(
-                new MessageEvent("message", { origin: "https://example.com", source: frame.contentWindow, data })
-            )
-        );
-        expect(onCreate).not.toHaveBeenCalled();
-        await act(async () =>
-            window.dispatchEvent(new MessageEvent("message", { origin: "http://127.0.0.1:9012", source: window, data }))
-        );
-        expect(onCreate).not.toHaveBeenCalled();
-        await act(async () =>
-            window.dispatchEvent(
-                new MessageEvent("message", { origin: "http://127.0.0.1:9012", source: frame.contentWindow, data })
-            )
-        );
-        expect(onCreate).toHaveBeenCalledWith(
-            "Research",
-            expect.objectContaining({ id: "build" }),
-            expect.objectContaining({ status: "active", upstreamGroupId: "channel-1" })
-        );
-        await act(async () =>
-            window.dispatchEvent(
-                new MessageEvent("message", { origin: "http://127.0.0.1:9012", source: frame.contentWindow, data })
-            )
-        );
-        expect(onCreate).toHaveBeenCalledTimes(1);
+        expect(host.querySelector("iframe")).toBeNull();
+        const input = host.querySelector("input");
+        const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+        await act(async () => {
+            setValue.call(input, " Research ");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await act(async () => host.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true })));
+        expect(onCreate).toHaveBeenCalledWith("Research", expect.objectContaining({ id: "build" }), undefined);
     } finally {
-        act(() => root.unmount());
-        container.remove();
+        await act(async () => root.unmount());
+        host.remove();
     }
 });
 
-it("opens a saved upstream channel in the actual messaging app", async () => {
+it("keeps the linked channel when renaming an existing workspace", async () => {
     HTMLDialogElement.prototype.showModal = vi.fn();
-    runtime.openAgentWorkspace.mockResolvedValue({ origin: "http://127.0.0.1:9012", parentOrigin: "null" });
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const onCreate = vi.fn().mockResolvedValue(undefined);
+    const channel = {
+        version: 1,
+        status: "active",
+        engine: "kronoscode",
+        companion: "coucou",
+        upstreamGroupId: "saved-group",
+        bots: [],
+    } as const;
     try {
         await act(async () =>
             root.render(
                 <OSWorkspaceSetup
                     editing
-                    initialChannel={{
-                        version: 1,
-                        status: "active",
-                        engine: "kronoscode",
-                        companion: "coucou",
-                        bots: [],
-                        upstreamGroupId: "saved-group",
-                    }}
-                    onCreate={async () => {}}
+                    initialName="Research"
+                    initialChannel={{ ...channel, bots: [] }}
+                    onCreate={onCreate}
                     onClose={() => {}}
                 />
             )
         );
-        const url = new URL(container.querySelector("iframe").src);
-        expect(url.pathname).toBe("/kronterm-app");
-        expect(url.searchParams.get("group")).toBe("saved-group");
+        await act(async () => host.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true })));
+        expect(onCreate).toHaveBeenCalledWith("Research", expect.objectContaining({ id: "build" }), channel);
     } finally {
-        act(() => root.unmount());
-        container.remove();
-    }
-});
-
-it("opens only the trusted bot desktop and switches to its saved workspace", async () => {
-    HTMLDialogElement.prototype.showModal = vi.fn();
-    runtime.openAgentWorkspace.mockResolvedValue({ origin: "http://127.0.0.1:9012", parentOrigin: "null" });
-    runtime.openBotDesktop.mockResolvedValue({ botId: "bot-one", workspaceId: "bot-workspace" });
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    const onClose = vi.fn();
-    try {
-        await act(async () => root.render(<OSWorkspaceSetup onCreate={async () => {}} onClose={onClose} />));
-        const frame = container.querySelector("iframe");
-        const data = { source: "kronterm-openmausbot", type: "open-desktop", botId: "bot-one" };
-        await act(async () =>
-            window.dispatchEvent(
-                new MessageEvent("message", { origin: "https://example.com", source: frame.contentWindow, data })
-            )
-        );
-        expect(runtime.openBotDesktop).not.toHaveBeenCalled();
-        await act(async () =>
-            window.dispatchEvent(
-                new MessageEvent("message", { origin: "http://127.0.0.1:9012", source: frame.contentWindow, data })
-            )
-        );
-        expect(runtime.openBotDesktop).toHaveBeenCalledWith("bot-one");
-        expect(runtime.switchWorkspace).toHaveBeenCalledWith("bot-workspace");
-        expect(onClose).toHaveBeenCalledOnce();
-    } finally {
-        act(() => root.unmount());
-        container.remove();
+        await act(async () => root.unmount());
+        host.remove();
     }
 });

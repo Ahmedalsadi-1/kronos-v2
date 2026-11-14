@@ -11,9 +11,16 @@ function publish() {
     })
   );
 }
-onMounted(publish);
+function replay(event: Event) {
+  if ((event as CustomEvent).detail?.tabId === host?.tabId) publish();
+}
+onMounted(() => {
+  window.addEventListener("kronterm:original-node-picker", replay);
+  publish();
+});
 watch(() => props.query, publish, { flush: "post" });
 onBeforeUnmount(() => {
+  window.removeEventListener("kronterm:original-node-picker", replay);
   if (host?.tabId)
     window.dispatchEvent(
       new CustomEvent("kronterm:workflow-widget-picker-target", {

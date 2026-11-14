@@ -1,5 +1,5 @@
 // The native proxy keeps the stdio MCP contract for ACP sessions and the
-// KronTerm gateway, but must land every manifest/call on the in-process
+// KronOS gateway, but must land every manifest/call on the in-process
 // /native endpoint. These tests spawn the built proxy against a mock bridge.
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -43,7 +43,7 @@ before(async () => {
                             {
                                 name: "surface_status",
                                 title: "Surface status",
-                                description: "Inspect the active KronTerm surface",
+                                description: "Inspect the active KronOS surface",
                                 inputSchema: { type: "object", properties: {} },
                                 annotations: { readOnlyHint: true },
                             },
@@ -95,7 +95,7 @@ test("proxy lists tools from the native bridge manifest", async () => {
         const tools = await client.listTools();
         const status = tools.tools.find((tool) => tool.name === "surface_status");
         assert(status, "surface_status should be exposed by the proxy");
-        assert.equal(status.description, "Inspect the active KronTerm surface");
+        assert.equal(status.description, "Inspect the active KronOS surface");
         assert.deepEqual(bridgeCalls.at(-1), { method: "list" });
     } finally {
         await client.close();

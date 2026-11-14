@@ -9,6 +9,10 @@ import {
     fitOSWindowToContentAspect,
     getOSCarouselNeighbor,
     getOSCarouselOrder,
+    getOSAdjacentPanes,
+    getOSPaneTakeover,
+    OSPaneGap,
+    type OSModeState,
     makeInitialOSModeState,
     migrateOSModeState,
     reconcileOSModeState,
@@ -21,8 +25,9 @@ function tab(meta: Record<string, unknown> = {}): Tab {
     return { oid: "tab-1", blockids: ["browser", "hermes", "term"], meta } as Tab;
 }
 
-it("fits phone window bounds to the handset in every desktop presentation", () => {
+it("fits Single mode to the Devices frame and keeps the full height for its toolbar", () => {
     const state = makeInitialOSModeState(tab(), ["browser"]);
+    const compact = new Set(["browser"]);
     for (const scene of [
         { kind: "freeform" },
         { kind: "focused", blockId: "browser" },
@@ -34,22 +39,54 @@ it("fits phone window bounds to the handset in every desktop presentation", () =
                 scene,
                 windows: { ...state.windows, browser: { ...state.windows.browser, maximized } },
             };
-            for (const aspect of [380 / 830, 433 / 882]) {
-                const original = computeOSWindowLayout(current, "browser", "linux-vms", { width: 1440, height: 900 });
-                const phone = computeOSWindowLayout(
-                    current,
-                    "browser",
-                    "linux-vms",
-                    { width: 1440, height: 900 },
-                    aspect
-                );
-                expect(phone.bounds.width / phone.bounds.height).toBeCloseTo(aspect, 8);
-                expect(phone.bounds.width).toBeLessThanOrEqual(original.bounds.width);
-                expect(phone.bounds.height).toBeLessThanOrEqual(original.bounds.height);
-                expect(phone.presentation).toBe(original.presentation);
-            }
+            const viewport = { width: 1440, height: 900 };
+            const farm = computeOSWindowLayout(current, "browser", "linux-vms", viewport);
+            const phone = computeOSWindowLayout(current, "browser", "linux-vms", viewport, compact);
+            expect(phone.bounds.width).toBeLessThan(farm.bounds.width);
+            expect(phone.bounds.width).toBeLessThanOrEqual(340);
+            expect(phone.bounds.height).toBe(farm.bounds.height);
+            expect(phone.bounds.x).toBeCloseTo(
+                scene.kind === "freeform" ? farm.bounds.x : farm.bounds.x + (farm.bounds.width - phone.bounds.width) / 2
+            );
+            expect(phone.presentation).toBe(farm.presentation);
         }
     }
+});
+
+it("places Carousel neighbors beside the actual width of a Single device window", () => {
+    const initial = makeInitialOSModeState(tab(), ["browser", "hermes", "term"]);
+    const [left, center, right] = getOSCarouselOrder(initial);
+    const state = { ...initial, scene: { kind: "focused", blockId: center } as const };
+    const viewport = { width: 1440, height: 900 };
+    const layout = (id: string, compact?: ReadonlySet<string>) =>
+        computeOSWindowLayout(state, id, "web", viewport, compact).bounds;
+    const compact = new Set([center]);
+    const phone = layout(center, compact);
+    const previous = layout(left, compact);
+    const next = layout(right, compact);
+    expect(previous.x + previous.width + OSPaneGap).toBeCloseTo(phone.x);
+    expect(next.x).toBeCloseTo(phone.x + phone.width + OSPaneGap);
+    expect(next.x).toBeLessThan(layout(right).x);
+});
+
+it("gives a dragged Carousel pane more width than its neighbor without moving the third pane", () => {
+    const ids = ["browser", "hermes", "term"];
+    const state = reduceOSModeState(makeInitialOSModeState(tab(), ids), { type: "os.window.focus", blockId: "browser" });
+    const viewport = { width: 1440, height: 900 };
+    const layouts = (current: OSModeState) =>
+        Object.fromEntries(ids.map((id) => [id, computeOSWindowLayout(current, id, "web", viewport)]));
+    const before = layouts(state);
+    const source = before.hermes.bounds;
+    const adjacent = getOSAdjacentPanes(before, new Set());
+    expect(getOSPaneTakeover(state, "hermes", source, adjacent)).toBeUndefined();
+    const takeover = getOSPaneTakeover(state, "hermes", { ...source, x: source.x - 120 }, adjacent);
+    expect(takeover).toMatchObject({ left: "browser", right: "hermes" });
+    const next = reduceOSModeState(state, takeover);
+    const after = layouts(next);
+    expect(next.scene).toEqual(state.scene);
+    expect(after.hermes.bounds.width).toBeGreaterThan(after.browser.bounds.width);
+    expect(after.term.bounds.x).toBeCloseTo(before.term.bounds.x);
+    expect(after.term.bounds.width).toBeCloseTo(before.term.bounds.width);
 });
 
 describe("OS workspace state", () => {
@@ -149,7 +186,7 @@ describe("OS workspace state", () => {
             side: "left",
         });
         expect(state.scene.kind).toBe("grouped");
-        expect(Object.values(state.groups)[0]).toMatchObject({ primaryBlockId: "browser", sideBlockId: "hermes" });
+        expect(Object.values(state.groups)[0]).toMatchObject({ primaryBlockId: "browser", blockIds: ["hermes", "browser"] });
         state = reduceOSModeState(state, { type: "spatial.showOverview" });
         expect(state.scene.kind).toBe("overview");
         state = reduceOSModeState(state, { type: "spatial.restoreScene" });
@@ -157,6 +194,55 @@ describe("OS workspace state", () => {
         state = reduceOSModeState(state, { type: "spatial.detach", blockId: "hermes" });
         expect(state.scene).toEqual({ kind: "focused", blockId: "browser" });
         expect(Object.keys(state.windows)).toEqual(["browser", "hermes", "term"]);
+    });
+
+    it("adds a third pane beside the drop target and preserves the remaining split after close", () => {
+        const ids = ["browser", "phone", "term"];
+        const initial = makeInitialOSModeState(tab(), ids);
+        const pair = reduceOSModeState(initial, {
+            type: "spatial.dock",
+            blockId: "phone",
+            targetBlockId: "browser",
+            side: "right",
+        });
+        const three = reduceOSModeState(pair, {
+            type: "spatial.dock",
+            blockId: "term",
+            targetBlockId: "phone",
+            side: "left",
+        });
+        expect(three.scene).toEqual(pair.scene);
+        expect(Object.values(three.groups).map((group) => group.blockIds)).toEqual([["browser", "term", "phone"]]);
+        const wide = { width: 1920, height: 1080 };
+        const compact = new Set(["phone"]);
+        const panes = ["browser", "term", "phone"].map(
+            (id) => computeOSWindowLayout(three, id, "web", wide, compact).bounds
+        );
+        expect(panes.map((pane) => pane.y)).toEqual([76, 76, 76]);
+        expect(panes[1].x).toBeCloseTo(panes[0].x + panes[0].width + OSPaneGap);
+        expect(panes[2].x + panes[2].width).toBeCloseTo(wide.width - 20);
+        expect(panes[2].width).toBeLessThanOrEqual(340);
+        const narrow = { width: 850, height: 800 };
+        expect(computeOSWindowLayout(three, "phone", "web", narrow, compact).bounds.y).toBeGreaterThan(76);
+        const closed = reconcileOSModeState(three, ["term", "phone"]);
+        expect(closed.scene).toEqual(three.scene);
+        expect(Object.values(closed.groups)[0]).toMatchObject({ primaryBlockId: "term", blockIds: ["term", "phone"] });
+    });
+
+    it("restores a saved two-widget split in its original order", () => {
+        const data = tab({
+            "layout:os": {
+                version: 4,
+                scene: { kind: "grouped", groupId: "legacy" },
+                groups: {
+                    legacy: { id: "legacy", primaryBlockId: "browser", sideBlockId: "term", side: "left", dividerRatio: 0.3 },
+                },
+            },
+        });
+        const state = makeInitialOSModeState(data, ["browser", "term"]);
+        expect(state.scene).toEqual({ kind: "grouped", groupId: "legacy" });
+        expect(state.groups.legacy.blockIds).toEqual(["term", "browser"]);
+        expect(state.groups.legacy.weights).toEqual({ term: 0.6, browser: 1.4 });
     });
 
     it("supports canonical maximize, minimize, and restore without remounting window identity", () => {
@@ -342,6 +428,7 @@ describe("focused desktop geometry", () => {
         );
         expect(layouts[0].bounds.x + layouts[0].bounds.width).toBeLessThan(layouts[1].bounds.x);
         expect(layouts[2].bounds.x).toBeGreaterThan(layouts[1].bounds.x + layouts[1].bounds.width);
+        expect(layouts.every(({ bounds }) => bounds.x >= 0 && bounds.x + bounds.width <= viewport.width)).toBe(true);
         expect(getOSCarouselNeighbor(state, -1)).toBe("browser");
         expect(getOSCarouselNeighbor(state, 1)).toBe("term");
         state = reduceOSModeState(state, { type: "os.window.focus", blockId: "browser" });
@@ -427,7 +514,7 @@ describe("resolveOSControlAction", () => {
         expect(resolveOSControlAction({ action: "os.resource.open" }).action).toBe("spatial.openFile");
     });
 
-    it("launches native apps or KronTerm views from os.app.launch", () => {
+    it("launches native apps or KronOS views from os.app.launch", () => {
         expect(resolveOSControlAction({ action: "os.app.launch", appid: "com.x" }).action).toBe("spatial.openApp");
         expect(resolveOSControlAction({ action: "os.app.launch", view: "term" }).action).toBe("spatial.open");
     });

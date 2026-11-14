@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Electron main process: window management, IPC bridge, managed agent runtimes (KronosCode via ACP, Hermes), LSP, audio, pet/overlay windows.
+Electron main process: window management, IPC bridge, managed KronOS Agent runtime (Hermes) and ACP specialists, LSP, audio, pet/overlay windows.
 
 ## STRUCTURE
 
@@ -17,8 +17,8 @@ emain/
 ├── preload-webview.ts     # Webview widget preload
 ├── preload-overlay.ts     # Overlay window preload
 ├── preload-pet.ts         # Desktop pet preload
-├── acp/                   # ACP transport/harness/agent-manager for KronosCode sessions
-├── kronoscode-runtime.ts  # KronosCode managed runtime lifecycle
+├── acp/                   # ACP transport/harness/agent-manager for specialist sessions
+├── kronoscode-runtime.ts  # Legacy KronosCode runtime compatibility
 ├── hermes-runtime.ts      # Hermes agent backend lifecycle
 ├── emain-lsp.ts           # Language server management (frontend client in frontend/app/lsp/)
 ├── emain-audio.ts         # Voice/audio-engine process bridge

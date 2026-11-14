@@ -53,7 +53,7 @@ export function OSConnectedFramePreview() {
                         color: "white",
                     }}
                 >
-                    <span>KronTerm　 1　 2　 3　 +</span>
+                    <span>KronOS　 1　 2　 3　 +</span>
                     <div className="kt-system-segmented">
                         <button className="kt-system-button is-small" onClick={advance}>
                             Advance agent

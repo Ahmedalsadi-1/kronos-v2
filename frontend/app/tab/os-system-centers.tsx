@@ -40,7 +40,6 @@ import {
 } from "@/app/components/system-ui/os-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
-type OSSystemCenter = "activity" | "control";
 type OSActivityView = "attention" | "timeline" | "artifacts";
 
 const CapabilityLabels: Record<string, string> = {
@@ -916,7 +915,7 @@ function OSWorkspaceScriptsSection({ spaceId }: { spaceId: string }) {
     );
 }
 
-function OSControlCenter() {
+export function OSWorkspaceControls() {
     const model = OSSystemModel.getInstance();
     const profile = useAtomValue(model.profileAtom);
     const spaceId = useAtomValue(model.activeSpaceIdAtom);
@@ -968,7 +967,7 @@ function OSControlCenter() {
             <section>
                 <header><div><strong>Appearance</strong><span>{appearance.colorScheme === "dark" ? "Dark" : "Light"} · follows your system</span></div></header>
                 <div className="os-control-feature">
-                    <span><strong>Accent color</strong><small>Used across KronTerm controls and selections</small></span>
+                    <span><strong>Accent color</strong><small>Used across KronOS controls and selections</small></span>
                     <input type="color" aria-label="Accent color" defaultValue="#1677d2" onChange={(event) => {
                         const hex = event.target.value.slice(1);
                         applyCustomAccent(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16));
@@ -990,7 +989,7 @@ function OSControlCenter() {
                 <header>
                     <div>
                         <strong>Host permissions</strong>
-                        <span>macOS controls KronTerm itself</span>
+                        <span>macOS controls KronOS itself</span>
                     </div>
                     <SystemButton
                         type="button"
@@ -1060,7 +1059,7 @@ function OSControlCenter() {
                 <header>
                     <div>
                         <strong>Agent grants</strong>
-                        <span>KronTerm Agent access for this space</span>
+                        <span>KronOS Agent access for this space</span>
                     </div>
                     <span>{activeGrants.length}</span>
                 </header>
@@ -1147,12 +1146,10 @@ function OSControlCenter() {
 }
 
 export function OSSystemCenterPanel({
-    center,
     onClose,
     onFocusBlock,
     onPinResource,
 }: {
-    center: OSSystemCenter;
     onClose: () => void;
     onFocusBlock: (blockId: string) => void;
     onPinResource: (resource: OSResourceReference) => void;
@@ -1172,14 +1169,14 @@ export function OSSystemCenterPanel({
 
     useEffect(() => {
         closeRef.current?.focus();
-    }, [center]);
+    }, []);
 
     return (
         <SystemPopover
             ref={panelRef}
-            className={cn("os-system-center", `is-${center}`)}
+            className="os-system-center is-activity"
             role="dialog"
-            aria-label={`${center === "activity" ? "Activity" : "Control"} Center`}
+            aria-label="Activity Center"
             onKeyDown={(event) => {
                 if (event.key !== "Escape" || event.defaultPrevented) return;
                 event.preventDefault();
@@ -1189,25 +1186,17 @@ export function OSSystemCenterPanel({
         >
             <header className="os-system-center-header">
                 <div>
-                    {center === "activity" ? <Bell aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
+                    <Bell aria-hidden="true" />
                     <span>
-                        <strong>{center === "activity" ? "Activity Center" : "Control Center"}</strong>
-                        <small>
-                            {center === "activity" ? "Jobs, approvals, and recovery" : "Host and agent permissions"}
-                        </small>
+                        <strong>Activity Center</strong>
+                        <small>Jobs, approvals, and recovery</small>
                     </span>
                 </div>
-                <SystemButton ref={closeRef} type="button" size="small" onClick={onClose} aria-label={`Close ${center} center`}>
+                <SystemButton ref={closeRef} type="button" size="small" onClick={onClose} aria-label="Close activity center">
                     <X aria-hidden="true" />
                 </SystemButton>
             </header>
-            {center === "activity" ? (
-                <OSActivityCenter onFocusBlock={onFocusBlock} onPinResource={onPinResource} />
-            ) : (
-                <OSControlCenter />
-            )}
+            <OSActivityCenter onFocusBlock={onFocusBlock} onPinResource={onPinResource} />
         </SystemPopover>
     );
 }
-
-export type { OSSystemCenter };

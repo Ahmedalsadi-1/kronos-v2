@@ -1,11 +1,8 @@
-import { safeStorage, session } from "electron";
+import { session } from "electron";
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { refreshManagedRuntimeSocketHeaders } from "./authkey";
 
-const AccountFile = path.join(os.homedir(), ".kronterm", "account.enc");
+const Capabilities = new Map<string, string>();
 const Sessions = new Map<string, string>();
 const Pending = new Map<string, Promise<string>>();
 const Generations = new Map<string, number>();
@@ -19,6 +16,7 @@ export function forgetWorkflowSession(origin: string, cookie?: string): void {
 }
 export function releaseWorkflowSession(origin: string): void {
     origin = new URL(origin).origin;
+    Capabilities.delete(origin);
     const cookie = Sessions.get(origin);
     forgetWorkflowSession(origin);
     if (!cookie) return;
@@ -34,17 +32,21 @@ export function releaseWorkflowSession(origin: string): void {
         })
         .catch(() => {});
 }
-export function hasKronTermAccount() {
-    return fs.existsSync(AccountFile);
+export function registerWorkflowSession(origin: string, token: string): void {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || url.origin !== origin)
+        throw new Error("Managed workflow sessions require an exact loopback origin.");
+    if (!/^[a-f0-9]{64}$/.test(token)) throw new Error("Invalid workflow session capability.");
+    forgetWorkflowSession(origin);
+    Capabilities.set(origin, token);
 }
-type WorkflowAccount = { email: string; password: string; firstName: string; lastName: string };
-export function workflowAccount(origin: string, account?: WorkflowAccount): Promise<string> {
+export function workflowAccount(origin: string): Promise<string> {
     origin = new URL(origin).origin;
-    if (Sessions.has(origin) && !account) return Promise.resolve(Sessions.get(origin));
-    if (!account && Pending.has(origin)) return Pending.get(origin);
-    if (account) forgetWorkflowSession(origin);
+    if (!Capabilities.has(origin)) return Promise.reject(new Error("Start the workflow canvas in Hermes first."));
+    if (Sessions.has(origin)) return Promise.resolve(Sessions.get(origin));
+    if (Pending.has(origin)) return Pending.get(origin);
     const generation = Generations.get(origin) ?? 0;
-    const pending = connectAccount(origin, account, generation);
+    const pending = connectAccount(origin, generation);
     Pending.set(origin, pending);
     void pending
         .finally(() => {
@@ -53,35 +55,20 @@ export function workflowAccount(origin: string, account?: WorkflowAccount): Prom
         .catch(() => {});
     return pending;
 }
-async function connectAccount(origin: string, account: WorkflowAccount, generation: number): Promise<string> {
-    if (!safeStorage.isEncryptionAvailable())
-        throw new Error("Unlock the system keychain to connect your KronTerm account.");
-    const saved =
-        account ?? (hasKronTermAccount() ? JSON.parse(safeStorage.decryptString(fs.readFileSync(AccountFile))) : null);
-    if (!saved) throw new Error("Create your KronTerm account first.");
-    const signal = AbortSignal.timeout(30000);
-    const headers = { "content-type": "application/json", "browser-id": WorkflowBrowserId };
-    let response = await fetch(`${origin}/rest/login`, {
+async function connectAccount(origin: string, generation: number): Promise<string> {
+    const response = await fetch(`${origin}/rest/kronterm/session`, {
         method: "POST",
-        signal,
-        headers,
-        body: JSON.stringify({ emailOrLdapLoginId: saved.email, password: saved.password }),
+        redirect: "error",
+        signal: AbortSignal.timeout(30000),
+        headers: { authorization: `Bearer ${Capabilities.get(origin)}`, "browser-id": WorkflowBrowserId },
     });
     if (!response.ok) {
-        const settings = (await (await fetch(`${origin}/rest/settings`, { signal })).json()) as any;
-        if (!settings.data?.userManagement?.showSetupOnFirstLoad)
-            throw new Error("KronTerm account could not sign in. Check your account details.");
-        response = await fetch(`${origin}/rest/owner/setup`, {
-            method: "POST",
-            signal,
-            headers,
-            body: JSON.stringify(saved),
-        });
+        const message =
+            response.status === 403
+                ? "The existing workflow owner requires MFA. Complete its MFA recovery before connecting through Hermes."
+                : `Hermes workflow session could not connect (${response.status}). Restart the workflow runtime.`;
+        throw Object.assign(new Error(message), { status: response.status });
     }
-    if (!response.ok)
-        throw new Error(
-            "Account setup failed. Use a valid email and a password of at least eight characters including a number and capital letter."
-        );
     if ((Generations.get(origin) ?? 0) !== generation) throw new Error("Workflow account connection was cancelled.");
     const cookies = response.headers.getSetCookie();
     const cookie = cookies.map((value) => value.split(";")[0]).join("; ");
@@ -98,10 +85,6 @@ async function connectAccount(origin: string, account: WorkflowAccount, generati
         });
     }
     if ((Generations.get(origin) ?? 0) !== generation) throw new Error("Workflow account connection was cancelled.");
-    if (account) {
-        fs.mkdirSync(path.dirname(AccountFile), { recursive: true, mode: 0o700 });
-        fs.writeFileSync(AccountFile, safeStorage.encryptString(JSON.stringify(account)), { mode: 0o600 });
-    }
     Sessions.set(origin, cookie);
     refreshManagedRuntimeSocketHeaders(origin.replace(/^http/, "ws"), {
         Origin: new URL(origin).origin,

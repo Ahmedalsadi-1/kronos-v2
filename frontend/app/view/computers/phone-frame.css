@@ -1,6 +1,5 @@
 .kt-phone-frame {
-    --phone-edge: #404040;
-    --phone-body: #262626;
+    --phone-edge: #55565b;
     position: relative;
     cursor: grab;
     flex: none;
@@ -34,7 +33,10 @@
 .kt-phone-frame.kt-phone-frame-adaptive {
     width: min(calc(100cqw - 40px), calc((100cqh - 16px) * var(--device-aspect)));
     aspect-ratio: var(--device-aspect);
-    outline: 4px solid var(--phone-edge);
+    box-shadow:
+        0 0 0 2px #121316,
+        0 0 0 3px var(--phone-edge),
+        -1px -1px 0 3px #77787c;
     border-radius: 9.1667% / 4.125%;
 }
 .kt-phone-frame-adaptive .kt-phone-screen {

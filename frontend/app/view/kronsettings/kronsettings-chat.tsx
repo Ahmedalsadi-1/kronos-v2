@@ -44,7 +44,7 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
 
     const setValues = useCallback((values: Record<string, any>) => {
         void RpcApi.SetConfigCommand(TabRpcClient, values).catch((error) => {
-            console.warn("[KronTerm settings] config update failed", error);
+            console.warn("[KronOS settings] config update failed", error);
         });
     }, []);
 
@@ -134,7 +134,7 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                 />
                 <InputSetting
                     title="Default Assistant"
-                    description="Which assistant setup KronTerm should use when a new chat starts."
+                    description="Which assistant setup KronOS should use when a new chat starts."
                     value={defaultMode}
                     onChange={setDefaultMode}
                     placeholder="waveai@kronos"
@@ -158,7 +158,7 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                 />
                 <InputSetting
                     title="Model Name"
-                    description="The model KronTerm should ask, for example gpt-4.1 or a local Ollama model."
+                    description="The model KronOS should ask, for example gpt-4.1 or a local Ollama model."
                     value={aiModel}
                     onChange={setAiModel}
                     placeholder="gpt-4o"
@@ -173,14 +173,14 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                 />
                 <ToggleSetting
                     title="Automatically Name Chats"
-                    description="Let KronTerm create readable conversation titles for you."
+                    description="Let KronOS create readable conversation titles for you."
                     checked={autoNameChats}
                     onChange={setAutoNameChats}
                 />
             </SettingsCard>
             <SettingsCard>
                 <SectionHeader
-                    title="KronTerm Chat UI"
+                    title="KronOS Chat UI"
                     icon="wand-magic-sparkles"
                     description="Control the Kronos inspector and workspace layout."
                 />
@@ -195,15 +195,13 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                     options={[
                         { value: "widgets", label: "Widgets" },
                         { value: "tabs", label: "Widget tabs" },
-                        { value: "canvas", label: "Canvas" },
                         { value: "os", label: "OS Mode" },
-                        { value: "web", label: "Web" },
                     ]}
                 />
             </SettingsCard>
             <InfoCallout>
                 <i className="fa-solid fa-circle-info" />
-                API keys are stored locally and never sent to KronTerm servers.
+                API keys are stored locally and never sent to KronOS servers.
             </InfoCallout>
         </div>
     );

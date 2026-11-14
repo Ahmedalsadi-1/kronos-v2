@@ -10,6 +10,7 @@ export type PreviewEnv = WaveEnvSubset<{
     rpc: {
         ConnEnsureCommand: WaveEnv["rpc"]["ConnEnsureCommand"];
         FileInfoCommand: WaveEnv["rpc"]["FileInfoCommand"];
+        FileListCommand: WaveEnv["rpc"]["FileListCommand"];
         FileReadCommand: WaveEnv["rpc"]["FileReadCommand"];
         FileWriteCommand: WaveEnv["rpc"]["FileWriteCommand"];
         FileMoveCommand: WaveEnv["rpc"]["FileMoveCommand"];

@@ -1,4 +1,5 @@
 import { ComposerPrimitive } from '@assistant-ui/react'
+import { SandboxLoginCard } from '@hermes/components/sandbox-login-card'
 import { HudComposerSurfaceControls } from '@hermes/app/hud/island-controls'
 import { useStore } from '@nanostores/react'
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -100,6 +101,7 @@ export function ChatBar({
   queueSessionKey,
   sessionId,
   state,
+  storedSessionId,
   onCancel,
   onAddUrl,
   onAttachDroppedItems,
@@ -173,14 +175,12 @@ export function ChatBar({
   const blockingPrompt = useStore(useMemo(() => sessionBlockingPrompt(sessionId ?? null), [sessionId]))
   const activeQueueSessionKey = queueSessionKey || sessionId || null
 
-  // Status items (subagents, background processes) are keyed by the RUNTIME
-  // session id — gateway events and process.list both speak that id. Only the
-  // queue uses the stored-session fallback key (prompts can queue pre-resume).
+  // Gateway status follows the runtime ID, while swarm workers can outlive it.
   const statusSessionId = sessionId ?? null
 
   // Coarse edge: re-renders ChatBar only when the stack shows/hides, NOT on
   // every per-item status mutation or other sessions' churn (see the hook).
-  const statusPresent = useSessionStatusPresence(statusSessionId)
+  const statusPresent = useSessionStatusPresence(statusSessionId, storedSessionId)
 
   // Publishes contributed micro actions for this session; the status stack
   // renders them as the pill strip at the top of the overlay lane.
@@ -1174,6 +1174,7 @@ export function ChatBar({
               grows upward over the thread and the dock's own measurement covers
               it. Collapses to nothing when every status is empty. */}
           <ComposerStatusStack
+            onStopSubagents={!busy && !reconnecting ? haltRun : undefined}
             queue={
               activeQueueSessionKey && queuedPrompts.length > 0 ? (
                 <QueuePanel
@@ -1202,7 +1203,9 @@ export function ChatBar({
               ) : null
             }
             sessionId={statusSessionId}
+            storedSessionId={storedSessionId}
           />
+          <SandboxLoginCard hudMode={hudMode} />
           <ComposerPrimitive.Root
             className={cn(
               'group/composer relative w-full overflow-visible rounded-2xl',
@@ -1304,7 +1307,7 @@ export function ChatBar({
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Button
-                          className="h-6 rounded-md px-2 text-[0.68rem]"
+                          size="xs"
                           onClick={() => exitQueuedEdit('cancel')}
                           type="button"
                           variant="ghost"
@@ -1312,7 +1315,7 @@ export function ChatBar({
                           {t.common.cancel}
                         </Button>
                         <Button
-                          className="h-6 rounded-md px-2 text-[0.68rem]"
+                          size="xs"
                           onClick={() => exitQueuedEdit('save')}
                           type="button"
                         >
@@ -1327,7 +1330,7 @@ export function ChatBar({
                     className={cn(
                       'grid w-full',
                       stacked
-                        ? 'grid-cols-[auto_1fr] gap-(--composer-row-gap) [grid-template-areas:"input_input"_"menu_controls"]'
+                        ? 'grid-cols-[auto_minmax(0,1fr)] gap-(--composer-row-gap) [grid-template-areas:"input_input"_"menu_controls"]'
                         : 'grid-cols-[auto_1fr_auto] items-center gap-(--composer-control-gap) [grid-template-areas:"menu_input_controls"]'
                     )}
                   >
@@ -1336,7 +1339,7 @@ export function ChatBar({
                       <ContribSlot area={COMPOSER_AREAS.leading} />
                     </div>
                     <div className="min-w-0 [grid-area:input]">{input}</div>
-                    <div className="flex items-center justify-end gap-(--composer-control-gap) [grid-area:controls]">
+                    <div className="flex min-w-0 flex-wrap items-center gap-(--composer-control-gap) [grid-area:controls]">
                       <ContribSlot area={COMPOSER_AREAS.actions} />
                       {hudMode && <HudComposerSurfaceControls />}
                       {(!hudMode || embedded) && !poppedOut && <ComposerPositionToggle hud={hudMode} />}

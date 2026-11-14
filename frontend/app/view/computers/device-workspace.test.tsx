@@ -1,11 +1,14 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 // @vitest-environment jsdom
+import { globalStore } from "@/app/store/jotaiStore";
+import { WaveEnvContext } from "@/app/waveenv/waveenv";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import type { ComputersApi, ComputersController, ComputersState } from "./computers-state";
 import { DeviceWorkspace } from "./device-workspace";
+import { CompactDeviceBlocksAtom } from "./device-workspace-layout";
 
 vi.mock("./computers", () => ({ ComputersPanel: () => <div>Live screen</div> }));
 const targets: ComputersState["targets"] = [
@@ -40,18 +43,25 @@ it("defaults to one iPhone, exposes both platforms in farm, and limits settings 
     const state: ComputersState = { targets, selectedId: "android", loading: false, busy: false, error: "" };
     await act(async () =>
         root.render(
-            <DeviceWorkspace state={state} controller={{ refresh } as unknown as ComputersController} api={api} />
+            <DeviceWorkspace
+                blockId="device-workspace-test"
+                state={state}
+                controller={{ refresh } as unknown as ComputersController}
+                api={api}
+            />
         )
     );
     const visibleTiles = () =>
         Array.from(host.querySelectorAll<HTMLElement>(".kt-device-tile")).filter((tile) => !tile.hidden);
     expect(visibleTiles().map((tile) => tile.getAttribute("aria-label"))).toEqual(["iPhone"]);
+    expect(globalStore.get(CompactDeviceBlocksAtom).has("device-workspace-test")).toBe(true);
     await act(async () =>
         Array.from(host.querySelectorAll("button"))
             .find((button) => button.textContent === "Farm")
             .click()
     );
     expect(visibleTiles()).toHaveLength(2);
+    expect(globalStore.get(CompactDeviceBlocksAtom).has("device-workspace-test")).toBe(false);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Settings for Pixel 8"]').click());
     const inspector = host.querySelector('[aria-label="Device settings for Pixel 8"]');
     expect(inspector.textContent).toContain("Start device");
@@ -70,6 +80,7 @@ it("releases hidden farm sessions while preserving the selected live session", a
     const host = document.createElement("div");
     const root = createRoot(host);
     const stop = vi.fn(async () => ({ success: true as const, data: undefined }));
+    const showContextMenu = vi.fn();
     const start = vi.fn(async (targetId: string) => ({
         success: true as const,
         data: { id: `session-${targetId}`, targetId, controlGeneration: 1, live: true as const },
@@ -88,11 +99,13 @@ it("releases hidden farm sessions while preserving the selected live session", a
     };
     await act(async () =>
         root.render(
-            <DeviceWorkspace
-                state={state}
-                controller={{ refresh: vi.fn() } as unknown as ComputersController}
-                api={api}
-            />
+            <WaveEnvContext.Provider value={{ showContextMenu } as unknown as React.ContextType<typeof WaveEnvContext>}>
+                <DeviceWorkspace
+                    state={state}
+                    controller={{ refresh: vi.fn() } as unknown as ComputersController}
+                    api={api}
+                />
+            </WaveEnvContext.Provider>
         )
     );
     expect(start.mock.calls.map(([id]) => id)).toEqual(["ios"]);
@@ -102,6 +115,15 @@ it("releases hidden farm sessions while preserving the selected live session", a
             .click()
     );
     expect(start.mock.calls.map(([id]) => id)).toEqual(["ios", "android"]);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Devices window menu"]').click());
+    await act(async () => showContextMenu.mock.lastCall[0][0].click());
+    expect(stop).toHaveBeenCalledWith("session-ios");
+    expect(stop).toHaveBeenCalledWith("session-android");
+    expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(0);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Devices window menu"]').click());
+    await act(async () => showContextMenu.mock.lastCall[0][0].click());
+    expect(start.mock.calls.map(([id]) => id)).toEqual(["ios", "android", "ios", "android"]);
+    stop.mockClear();
     await act(async () =>
         Array.from(host.querySelectorAll("button"))
             .find((button) => button.textContent === "Single")
@@ -134,6 +156,9 @@ it("lists more than two devices and supports close, restore, minimize and expand
             .click()
     );
     expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(3);
+    const openSettings = () =>
+        act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Settings for Third phone"]').click());
+    await openSettings();
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close Third phone"]').click());
     expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(2);
     await act(async () => {
@@ -141,6 +166,7 @@ it("lists more than two devices and supports close, restore, minimize and expand
         selector.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(3);
+    await openSettings();
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Minimize Third phone"]').click());
     expect(host.querySelector('[aria-label="Third phone"] .kt-device-live').hasAttribute("hidden")).toBe(true);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Expand Third phone"]').click());
@@ -148,7 +174,7 @@ it("lists more than two devices and supports close, restore, minimize and expand
     await act(async () => root.unmount());
 });
 
-it("routes the close icon to the owning widget when hosted in KronTerm", async () => {
+it("routes the close icon to the owning widget when hosted in KronOS", async () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     const closeWidget = vi.fn();
@@ -162,9 +188,21 @@ it("routes the close icon to the owning widget when hosted in KronTerm", async (
             />
         )
     );
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close device workspace"]').click());
+    expect(closeWidget).toHaveBeenCalledTimes(1);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Settings for iPhone"]').click());
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close iPhone"]').click());
-    expect(closeWidget).toHaveBeenCalledOnce();
+    expect(closeWidget).toHaveBeenCalledTimes(2);
     expect(host.querySelector<HTMLElement>('[aria-label="iPhone"]').hidden).toBe(false);
+    await act(async () =>
+        Array.from(host.querySelectorAll("button"))
+            .find((button) => button.textContent === "Farm")
+            .click()
+    );
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Settings for iPhone"]').click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close iPhone"]').click());
+    expect(closeWidget).toHaveBeenCalledTimes(2);
+    expect(host.querySelector<HTMLElement>('[aria-label="iPhone"]').hidden).toBe(true);
     await act(async () => root.unmount());
 });
 

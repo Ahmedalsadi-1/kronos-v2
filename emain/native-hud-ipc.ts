@@ -3,6 +3,7 @@
 
 import { ipcMain } from "electron";
 import { registerBrowserToolsIpc } from "./browser/browser-tools-ipc";
+import { beginDesktopGrab, cancelDesktopGrab } from "./desktop-picker";
 import * as hud from "./emain-hud";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { getAllWaveWindows } from "./emain-window";
@@ -50,6 +51,16 @@ export function registerNativeHudIpc(): void {
     handle("capture-native-hud-block", hud.captureNativeHudBlock);
     handle("send-hermes-context", hud.forwardHermesContext);
     handle("send-hermes-selection", hud.forwardHermesSelection);
+    for (const channel of ["desktop-grab", "cancel-desktop-grab"]) {
+        ipcMain.handle(channel, (event, operationId: unknown) => {
+            if (!trusted(event.sender) || event.senderFrame !== event.sender.mainFrame)
+                throw new Error("Untrusted desktop picker caller");
+            if (typeof operationId !== "string" || !/^[a-f0-9-]{36}$/i.test(operationId))
+                throw new Error("Invalid desktop picker operation");
+            if (channel === "desktop-grab") return beginDesktopGrab(event.sender, operationId);
+            cancelDesktopGrab(event.sender.id, operationId);
+        });
+    }
     handle("workflow-command", (_id, command) => workflowCommand(command));
     handle("workflow-context", async (id) => {
         const context = hud.nativeHudTaskContext(id);

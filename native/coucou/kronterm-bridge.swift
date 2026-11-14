@@ -125,6 +125,19 @@ final class KronTermBridge: ObservableObject {
     @Published var voice = KronTermVoiceState()
     @Published var voiceExpanded = false
     @Published var reducedMotion = false
+    @Published var systemAppearance: KronTermSystemAppearance?
+    var labelColor: Color { systemAppearance.map { Color(hex: $0.materials.label) } ?? Color(nsColor: .labelColor) }
+    var secondaryColor: Color { systemAppearance.map { Color(hex: $0.materials.secondary) } ?? Color(nsColor: .secondaryLabelColor) }
+    var contentColor: Color { systemAppearance.map { Color(hex: $0.materials.content) } ?? Color(nsColor: .windowBackgroundColor) }
+    var cardColor: Color { systemAppearance.map { Color(hex: $0.materials.window) } ?? Color(nsColor: .controlBackgroundColor) }
+    var separatorColor: Color { systemAppearance.map { Color(hex: $0.materials.separator) } ?? Color(nsColor: .separatorColor) }
+    var focusColor: Color { systemAppearance.map { Color(hex: $0.materials.focus) } ?? Color(nsColor: .controlAccentColor) }
+    var colorScheme: ColorScheme { systemAppearance?.colorScheme == "light" ? .light : .dark }
+    var controlFill: Color { labelColor.opacity(systemAppearance?.contrast == "high" ? 0.16 : 0.07) }
+    var presentationScreen: NSScreen? {
+        if AppState.shared.mode == .expanded, let screen = controller?.window?.screen { return screen }
+        return IslandWindowController.notchScreen() ?? NSScreen.main
+    }
     @Published var followAgent = false
     @Published var widgetFocused = false
     @Published var widgetDocked = false
@@ -157,10 +170,11 @@ final class KronTermBridge: ObservableObject {
     private var voicePreviousView: IslandView?
 
     var chatSize: (CGFloat, CGFloat) {
-        let screen = IslandWindowController.notchScreen() ?? NSScreen.main
-        if browserDetached && !voice.active { return (min(680, (screen?.visibleFrame.width ?? 1000) - 24), min(440, (screen?.visibleFrame.height ?? 800) - 24)) }
+        let screen = presentationScreen
+        let availableHeight = screen?.visibleFrame.height ?? 800
+        if browserDetached && !voice.active { return (min(680, (screen?.visibleFrame.width ?? 1000) - 24), KronTermPanelSizing.chatHeight(available: availableHeight, enlarged: workspaceLarge, detached: true)) }
         return (max(1, min(720, (screen?.visibleFrame.width ?? 1000) - 24)),
-                max(1, min(760, (screen?.visibleFrame.height ?? 800) - 24)))
+                KronTermPanelSizing.chatHeight(available: availableHeight, enlarged: workspaceLarge, detached: false))
     }
 
     var splitChat: Bool {
@@ -178,11 +192,11 @@ final class KronTermBridge: ObservableObject {
     }
 
     var workspaceSize: (CGFloat, CGFloat) {
-        let screen = IslandWindowController.notchScreen() ?? NSScreen.main
+        let screen = presentationScreen
         if browserDetached && !voice.active { return microBrowser ? (min(480, (screen?.visibleFrame.width ?? 1000) - 24), 64) : chatSize }
         let wide = ["web", "term", "preview", "codeeditor", "appstream", "installedapps", "linux-vms", "computers"].contains(previewView)
         return (min(workspaceLarge ? 1240 : wide ? 1100 : 900, (screen?.visibleFrame.width ?? 1000) - 24),
-                min(workspaceLarge ? 800 : wide ? 680 : 540, (screen?.visibleFrame.height ?? 720) - 24))
+                KronTermPanelSizing.workspaceHeight(available: screen?.visibleFrame.height ?? 720, enlarged: workspaceLarge, wide: wide))
     }
 
     func focusBrowserAddress() {
@@ -292,6 +306,10 @@ final class KronTermBridge: ObservableObject {
         if let decoded = KronTermJSON.decode(KronTermProductivity.self, from: value["productivity"]) { productivity = decoded }
         if let appearance = value["appearance"] as? [String: Any] {
             reducedMotion = appearance["reducedMotion"] as? Bool ?? false
+            if let decoded = KronTermJSON.decode(KronTermSystemAppearance.self, from: appearance) {
+                systemAppearance = decoded
+                controller?.window?.appearance = NSAppearance(named: decoded.colorScheme == "light" ? .aqua : .darkAqua)
+            }
             if let name = appearance["theme"] as? String, KronTermPalette.all.contains(where: { $0.name == name }) {
                 paletteName = name
             }
@@ -480,7 +498,7 @@ final class KronTermBridge: ObservableObject {
     }
 
     private func emit(_ event: String, action: String? = nil, route: String? = nil, extra: [String: Any] = [:]) {
-        guard let screen = IslandWindowController.notchScreen() ?? NSScreen.main,
+        guard let screen = presentationScreen,
               let primary = NSScreen.screens.first else { return }
         let frame = screen.frame
         var message: [String: Any] = ["event": event, "x": frame.minX,

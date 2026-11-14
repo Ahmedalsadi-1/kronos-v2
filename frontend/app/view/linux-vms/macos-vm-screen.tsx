@@ -1,7 +1,9 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ScreenSelectorToolbar, type ScreenSelectorAction } from "@/app/lib/screen-selector-toolbar";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
+import { ComputerSelection, type VmSelectionSnapshot } from "@/app/view/computers/computer-selection-panel";
 import { getApi } from "@/store/global";
 import RFB from "@novnc/novnc";
 import { useEffect, useRef, useState } from "react";
@@ -24,13 +26,16 @@ export function MacVmScreen({
     const [error, setError] = useState("");
     const [connected, setConnected] = useState(false);
     const [fit, setFit] = useState(true);
+    const [selection, setSelection] = useState<
+        Extract<VmSelectionSnapshot, { kind: "macos" }> & { action: ScreenSelectorAction }
+    >();
     const host = useRef<HTMLDivElement>(null);
     const rfb = useRef<RFB>(null);
     const session = useRef<MacVmConnection>(null);
     const mounted = useRef(false);
 
     const refresh = async () => {
-        if (!getApi().listMacVms) throw new Error("Restart KronTerm to enable macOS VM support.");
+        if (!getApi().listMacVms) throw new Error("Restart KronOS to enable macOS VM support.");
         const result = await getApi().listMacVms();
         if (!mounted.current) return;
         if (result.success === false) {
@@ -64,6 +69,7 @@ export function MacVmScreen({
         client.addEventListener("connect", () => setConnected(true));
         client.addEventListener("disconnect", () => {
             setConnected(false);
+            setSelection(undefined);
             setError("The macOS VM display disconnected. Stop and restart the VM to reconnect.");
         });
         client.addEventListener("securityfailure", () => setError("The macOS VM display could not authenticate."));
@@ -72,6 +78,29 @@ export function MacVmScreen({
             rfb.current = null;
         };
     }, [connection]);
+    const selectionActive = connected && selection?.sessionId === connection?.sessionId && selection != null;
+    const captureSelection = (action: ScreenSelectorAction) => {
+        if (!connected || !connection) {
+            setError("Connect to the VM to select a target.");
+            return;
+        }
+        try {
+            const imageDataUrl = rfb.current?.toDataURL("image/png");
+            if (!imageDataUrl?.startsWith("data:image/png;base64,")) throw new Error("The VM screen is unavailable.");
+            setError("");
+            setSelection({
+                kind: "macos",
+                action,
+                imageDataUrl,
+                blockId,
+                capturedAt: Date.now(),
+                name: connection.name,
+                sessionId: connection.sessionId,
+            });
+        } catch (error) {
+            setError(error instanceof Error ? error.message : "Could not capture the VM screen.");
+        }
+    };
     useEffect(() => {
         if (rfb.current) rfb.current.scaleViewport = fit;
     }, [fit, connection]);
@@ -199,14 +228,30 @@ export function MacVmScreen({
                 </p>
             )}
             <div className="relative min-h-0 flex-1 overflow-hidden">
-                <div ref={host} className="h-full w-full" />
+                <div ref={host} className="h-full w-full" inert={selectionActive} />
+                {selectionActive && (
+                    <ComputerSelection
+                        key={selection.action}
+                        vm={selection}
+                        action={selection.action}
+                        onClose={() => setSelection(undefined)}
+                    />
+                )}
+                <ScreenSelectorToolbar
+                    title="macOS VM element selector"
+                    onSelect={(action) => {
+                        if (selectionActive)
+                            setSelection(action === selection.action ? undefined : { ...selection, action });
+                        else captureSelection(action);
+                    }}
+                />
                 {!connection && (
                     <div className="absolute inset-0 flex items-center justify-center p-6">
                         <div className="max-w-md space-y-3 text-sm">
                             <p>
                                 {appName
                                     ? `Run ${appName} inside an isolated macOS desktop.`
-                                    : "Run Mac apps on a separate desktop inside KronTerm."}
+                                    : "Run Mac apps on a separate desktop inside KronOS."}
                             </p>
                             {appName && (
                                 <p className="text-xs opacity-70">

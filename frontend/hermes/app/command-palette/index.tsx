@@ -1,3 +1,6 @@
+import { WorkflowPickerResults } from '@hermes/app/workflows/workflow-picker-results'
+import { $workspaceCanvasPanels } from '@hermes/lib/kronterm-sidebar'
+import { createPortal } from 'react-dom'
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import { Dialog as DialogPrimitive } from 'radix-ui'
@@ -63,8 +66,11 @@ import { $repoWorktrees } from '@hermes/store/coding-status'
 import {
   $commandPaletteOpen,
   $commandPalettePage,
+  $workflowPickerCommandTarget,
+  $workflowPickerSource,
   closeCommandPalette,
   setCommandPaletteOpen,
+  type WorkflowPickerTarget,
 } from '@hermes/store/command-palette'
 import { $bindings, bindingsFor } from '@hermes/store/keybinds'
 import { $dismissedAutoProjectIds, filterVisibleProjects } from '@hermes/store/layout'
@@ -497,6 +503,9 @@ function themeSupportsMode(name: string, target: 'light' | 'dark'): boolean {
  */
 export function CommandPalette() {
   const open = useStore($commandPaletteOpen)
+  const canvasPanels = useStore($workspaceCanvasPanels)
+  const pickerTarget = useStore($workflowPickerCommandTarget)
+  const pickerSource = useStore($workflowPickerSource)
   const [mounted, setMounted] = useState(open)
   const [openCount, setOpenCount] = useState(0)
 
@@ -524,6 +533,14 @@ export function CommandPalette() {
     return () => clearTimeout(timer)
   }, [open, retire])
 
+  if (canvasPanels) {
+    if (!pickerTarget) return null
+    return createPortal(
+      <CommandPaletteBody onExited={retire} pickerTarget={pickerTarget} preferred={pickerSource === 'commands'} />,
+      pickerTarget.element
+    )
+  }
+
   return (
     <DialogPrimitive.Root onOpenChange={setCommandPaletteOpen} open={open}>
       {mounted && <CommandPaletteBody key={openCount} onExited={retire} />}
@@ -531,7 +548,16 @@ export function CommandPalette() {
   )
 }
 
-function CommandPaletteBody({ onExited }: { onExited: () => void }) {
+function CommandPaletteBody({
+  onExited,
+  pickerTarget,
+  preferred,
+}: {
+  onExited: () => void
+  pickerTarget?: WorkflowPickerTarget
+  preferred?: boolean
+}) {
+  const embedded = pickerTarget != null
   const { t } = useI18n()
   const pendingPage = useStore($commandPalettePage)
   const bindings = useStore($bindings)
@@ -541,9 +567,10 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   const navigate = useNavigate()
   const kronTermSettingsHost = useKronTermSettingsHost()
   const { availableThemes, mode, resolvedMode, setMode, setTheme, themeName } = useTheme()
-  const [search, setSearch] = useState('')
+  const [localSearch, setSearch] = useState('')
+  const search = pickerTarget?.query ?? localSearch
   const [page, setPage] = useState<string | null>(null)
-  const workflowItems = useWorkflowPaletteItems(open && !page, useDeferredValue(search))
+  const workflowItems = useWorkflowPaletteItems(!embedded && !page, useDeferredValue(search))
 
   // The Update row names the same install the statusbar names — same target
   // selection, same resolver. Reduced to the label string: an in-flight apply
@@ -830,12 +857,13 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
                   ['files', 'Files'],
                   ['connections', 'Connections'],
                   ['scratchpad', 'Scratchpad'],
+                  ['comfy-workflow', 'KronRender workflow'],
                   ['activity', 'Activity Center'],
-                  ['control', 'Control Center'],
+                  ['control', 'Hermes Settings'],
                   ['widgets', 'Tiled Widgets'],
                   ['tabs', 'Widget Tabs'],
                   ['canvas', 'Canvas'],
-                  ['os', 'KronTerm OS'],
+                  ['os', 'KronOS'],
                 ] as const
               ).map(([action, label]) => ({
                 id: `workspace-${action}`,
@@ -1072,12 +1100,12 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
       ...(kronTermSettingsHost && kronTermSettingsHost.sections.length > 0
         ? [
             {
-              heading: `KronTerm ${cc.settings}`,
+              heading: `KronOS ${cc.settings}`,
               items: kronTermSettingsHost.sections.map((section) => ({
                 icon: Monitor,
                 id: `set-${makeKronTermSettingsViewId(section.id)}`,
                 keywords: ['kronterm', 'settings', 'command center', section.label, section.id],
-                label: `KronTerm: ${section.label}`,
+                label: `KronOS: ${section.label}`,
                 run: go(settingsTab(makeKronTermSettingsViewId(section.id))),
               })),
             },
@@ -1391,13 +1419,24 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
 
   const activePage = page ? subPages[page] : null
   const unrankedGroups = activePage ? activePage.groups : groups
-  const visibleGroups = useMemo(() => rankGroups(unrankedGroups, search), [unrankedGroups, search])
+  const rankedSearch = embedded && search.trim().toLowerCase() === 'super space' ? '' : search
+  const visibleGroups = useMemo(() => rankGroups(unrankedGroups, rankedSearch), [unrankedGroups, rankedSearch])
   const placeholder = activePage ? activePage.placeholder : t.commandCenter.searchPlaceholder
 
   const handleSelect = (item: PaletteItem) => {
     if (item.to) {
       setPage(item.to)
       setSearch('')
+      if (embedded) {
+        const root = $workflowPickerCommandTarget.get()?.element.getRootNode()
+        const input = root instanceof ShadowRoot
+          ? root.querySelector<HTMLInputElement>('[data-test-id="node-creator-search-bar"]')
+          : null
+        if (input) {
+          input.value = ''
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+      }
 
       return
     }
@@ -1421,6 +1460,128 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
     // report (a toggle's on/off) so the note isn't showing the previous state.
     setSelectTick((tick) => tick + 1)
   }
+
+  if (embedded) {
+    const unique = new Map<string, PaletteItem>()
+    for (const group of visibleGroups) {
+      for (const item of group.items) {
+        if (!unique.has(item.id)) unique.set(item.id, item)
+      }
+    }
+    const specialPage = page === 'pets' || page === 'install-theme'
+    return (
+      <>
+        {activePage && (
+          <button className="kronterm-catalog-row" type="button" onClick={goBack}>
+            <span className="kronterm-catalog-icon">
+              <ChevronLeft size={20} />
+            </span>
+            {t.commandCenter.back} / {activePage.title}
+          </button>
+        )}
+        <WorkflowPickerResults
+          overflow={pickerTarget.overflow}
+          previewCount={activePage ? 5 : preferred ? 3 : 1}
+          entries={[...unique.values()].map((item) => ({
+            id: item.id,
+            label: item.label,
+            detail: item.detail ? `Super Space · ${item.detail}` : 'Super Space',
+            icon: <item.icon size={20} />,
+            onSelect: (event) => {
+              noteSelectMods(event)
+              handleSelect(item)
+            },
+          }))}
+        />
+        {specialPage && (
+          <Command shouldFilter={false}>
+            <CommandList>
+              {page === 'pets' ? (
+                <PetPalettePage
+                  onGenerate={() => {
+                    closeCommandPalette()
+                    openPetGenerate()
+                  }}
+                  search={search}
+                />
+              ) : (
+                <MarketplaceThemePage onPickTheme={setTheme} search={search} />
+              )}
+            </CommandList>
+          </Command>
+        )}
+      </>
+    )
+  }
+
+  const command = (
+    <Command className="bg-transparent" loop shouldFilter={false}>
+      {activePage && (
+        <button
+          className="flex w-full items-center gap-1.5 border-b border-border px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+          onClick={goBack}
+          type="button"
+        >
+          <ChevronLeft className="size-3.5" />
+          <span>{t.commandCenter.back}</span>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="font-medium text-foreground">{activePage.title}</span>
+        </button>
+      )}
+      <CommandInput
+        className={HUD_TEXT}
+        wrapperClassName="gap-[37px] bg-black px-[19px]"
+        onKeyDown={(event) => {
+          // Capture modifiers before cmdk's Enter fires onSelect (which
+          // swipes the inviting MouseEvent and hands us nothing).
+          noteSelectMods(event)
+
+          if (!activePage) {
+            return
+          }
+
+          // In a submenu: Esc and empty-input Backspace step back out
+          // instead of closing the whole palette.
+          if (event.key === 'Escape' || (event.key === 'Backspace' && search === '')) {
+            event.preventDefault()
+            event.stopPropagation()
+            goBack()
+
+            return
+          }
+        }}
+        onValueChange={setSearch}
+        placeholder={placeholder}
+        right={page === 'pets' ? <PetInlineToggle /> : undefined}
+        value={search}
+      />
+      <CommandList className={cn("dt-portal-scrollbar", embedded ? "min-h-0 max-h-none flex-1" : "max-h-[404px] border-white bg-black text-[84px] text-[#a3a3a3]")}>
+        {!page && workflowItems.error && <p role="alert" className="px-3 py-2 text-sm text-destructive">{workflowItems.error}</p>}
+        {/* Server-driven pages render their own list; the rest show groups. */}
+        {page === 'pets' ? (
+          <PetPalettePage
+            onGenerate={() => {
+              closeCommandPalette()
+              openPetGenerate()
+            }}
+            search={search}
+          />
+        ) : page === 'install-theme' ? (
+          <MarketplaceThemePage onPickTheme={setTheme} search={search} />
+        ) : (
+          <PaletteGroups
+            bindings={bindings}
+            groups={visibleGroups}
+            modHeld={modHeld}
+            noResultsLabel={t.commandCenter.noResults}
+            onSelectItem={handleSelect}
+            onSelectMods={noteSelectMods}
+            search={search}
+          />
+        )}
+      </CommandList>
+    </Command>
+  )
 
   return (
     <DialogPrimitive.Portal>
@@ -1447,72 +1608,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
         }}
       >
         <DialogPrimitive.Title className="sr-only">{t.commandCenter.paletteTitle}</DialogPrimitive.Title>
-        <Command className="bg-transparent" loop shouldFilter={false}>
-          {activePage && (
-            <button
-              className="flex w-full items-center gap-1.5 border-b border-border px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
-              onClick={goBack}
-              type="button"
-            >
-              <ChevronLeft className="size-3.5" />
-              <span>{t.commandCenter.back}</span>
-              <span className="text-muted-foreground/50">/</span>
-              <span className="font-medium text-foreground">{activePage.title}</span>
-            </button>
-          )}
-          <CommandInput
-            className={HUD_TEXT}
-            wrapperClassName="gap-[37px] bg-black px-[19px]"
-            onKeyDown={(event) => {
-              // Capture modifiers before cmdk's Enter fires onSelect (which
-              // swipes the inviting MouseEvent and hands us nothing).
-              noteSelectMods(event)
-
-              if (!activePage) {
-                return
-              }
-
-              // In a submenu: Esc and empty-input Backspace step back out
-              // instead of closing the whole palette.
-              if (event.key === 'Escape' || (event.key === 'Backspace' && search === '')) {
-                event.preventDefault()
-                event.stopPropagation()
-                goBack()
-
-                return
-              }
-            }}
-            onValueChange={setSearch}
-            placeholder={placeholder}
-            right={page === 'pets' ? <PetInlineToggle /> : undefined}
-            value={search}
-          />
-          <CommandList className="dt-portal-scrollbar max-h-[404px] text-[84px] border-white bg-black text-[#a3a3a3]">
-            {!page && workflowItems.error && <p role="alert" className="px-3 py-2 text-sm text-destructive">{workflowItems.error}</p>}
-            {/* Server-driven pages render their own list; the rest show groups. */}
-            {page === 'pets' ? (
-              <PetPalettePage
-                onGenerate={() => {
-                  closeCommandPalette()
-                  openPetGenerate()
-                }}
-                search={search}
-              />
-            ) : page === 'install-theme' ? (
-              <MarketplaceThemePage onPickTheme={setTheme} search={search} />
-            ) : (
-              <PaletteGroups
-                bindings={bindings}
-                groups={visibleGroups}
-                modHeld={modHeld}
-                noResultsLabel={t.commandCenter.noResults}
-                onSelectItem={handleSelect}
-                onSelectMods={noteSelectMods}
-                search={search}
-              />
-            )}
-          </CommandList>
-        </Command>
+        {command}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   )

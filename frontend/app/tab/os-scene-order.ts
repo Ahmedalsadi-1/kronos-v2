@@ -58,6 +58,9 @@ export function selectOSSceneEntity(state: OSModeState, id?: string): OSModeStat
     if (id == null) return state.selectedEntityId == null ? state : { ...state, selectedEntityId: undefined };
     const sceneOrder = reconcileOSSceneOrder(state.sceneOrder, liveWindowOrder(state), state.objects);
     if (!sceneOrder.includes(id)) return state;
+    if (state.objects.some((object) => object.id === id && object.kind === "pen-layer")) {
+        return { ...state, selectedEntityId: id };
+    }
     const sameOrder =
         state.sceneOrder?.length === sceneOrder.length &&
         sceneOrder.every((entry, index) => entry === state.sceneOrder[index]);

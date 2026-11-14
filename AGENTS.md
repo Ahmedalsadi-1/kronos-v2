@@ -1,26 +1,26 @@
-# KronTerm — Project Knowledge Base
+# KronOS — Project Knowledge Base
 
 **Type:** Agent-aware Electron + Go desktop workspace
-**Base version:** Wave Terminal 0.14.3 with the KronTerm private-beta product layer
+**Base version:** Wave Terminal 0.14.3 with the KronOS private-beta product layer
 **Go module:** `github.com/wavetermdev/waveterm` (retained for source compatibility)
 
 ## Product Model
 
-KronTerm is the user-facing product name. It combines terminal, browser, file, preview, sandbox, remote, native-app, and
-AI surfaces in one persistent workspace. KronosCode is the agent execution engine; KronosChamber is its primary chat and
-control surface.
+KronOS is the user-facing product name. It combines terminal, browser, file, preview, sandbox, remote, native-app, and
+AI surfaces in one persistent workspace. KronOS Agent is the current agent and chat surface, backed by the managed
+Hermes runtime. KronosCode is retired; its remaining paths and identifiers are legacy compatibility code.
 
 The desktop has four workspace presentations that share the same blocks (`app:layoutmode` — `widgets` | `tabs` | `canvas` | `os`):
 
 - `widgets`: resizable tiled splits.
 - `tabs`: focused widgets in a browser-style tab strip with pane splitting.
 - `canvas`: a pan-and-zoom spatial workspace with live widgets, notes, shapes, connectors, and agent task cards.
-- `os`: KronTerm OS spatial desktop — calm window composition, flat grid overview, Cover Flow app switcher, connected shell dock, and typed `os.*` surface actions for agent control (current development line, see `frontend/app/workspace/kronarchy-shell.tsx` and `.kilocode/skills/kronterm-os/SKILL.md`).
+- `os`: KronOS spatial desktop — calm window composition, flat grid overview, Cover Flow app switcher, connected shell dock, and typed `os.*` surface actions for agent control (current development line, see `frontend/app/workspace/kronarchy-shell.tsx` and `.kilocode/skills/kronterm-os/SKILL.md`).
 
-The current development line also includes the KronTerm OS shell (dock, overview, app-stream rails, native app launches via shared `AppIcon`, no-overshoot springs, quiet menu entrances), Hermes agent panel with slash commands and working badges (`/files`, `/terminal`, `/preview`), grouped file browser with drag-to-canvas, command center palette at `Cmd+Shift+Space`, live agent activity overlays, task/evidence graphs, selection-to-agent context, a managed KronosChamber runtime, LSP-backed editing, improved computer-use streams, an optional voice engine, and desktop pet / overlay windows. The `mobile/` client and phone-control bridge are Labs work. Do not present experimental or Labs functionality as generally available.
+The current development line also includes the KronOS shell (dock, overview, app-stream rails, native app launches via shared `AppIcon`, no-overshoot springs, quiet menu entrances), Hermes agent panel with slash commands and working badges (`/files`, `/terminal`, `/preview`), grouped file browser with drag-to-canvas, command center palette at `Cmd+Shift+Space`, live agent activity overlays, task/evidence graphs, selection-to-agent context, a managed KronosChamber runtime, LSP-backed editing, improved computer-use streams, an optional voice engine, and desktop pet / overlay windows. The `mobile/` client and phone-control bridge are Labs work. Do not present experimental or Labs functionality as generally available.
 
 Legacy `Wave`, `WaveAI`, `waveai:*`, `.waveterm`, and Go module names remain in compatibility-sensitive code and config.
-Use KronTerm and KronosCode in new user-facing copy, but never rename compatibility identifiers as part of an unrelated
+Use KronOS and KronOS Agent in new user-facing copy, but never rename compatibility identifiers as part of an unrelated
 change.
 
 ## Quick Reference
@@ -34,13 +34,13 @@ change.
 | Workspace layout model      | `frontend/app/workspace/workspace-layout-model.ts`                             |
 | KronosChamber view          | `frontend/app/view/chathubv2/` (has its own AGENTS.md)                         |
 | KronosChamber runtime       | `emain/chathubv2-*.ts`, `emain/acp/`, `emain/kronoscode-runtime.ts`            |
-| Kronarchy / KronTerm OS shell | `frontend/app/workspace/kronarchy-shell.tsx` + `.kilocode/skills/kronterm-os/SKILL.md` (`os.*` typed actions, Overview, Cover Flow, AppStream rails) |
+| Kronarchy / KronOS shell | `frontend/app/workspace/kronarchy-shell.tsx` + `.kilocode/skills/kronterm-os/SKILL.md` (`os.*` typed actions, Overview, Cover Flow, AppStream rails) |
 | Hermes agent UI             | `frontend/hermes/`, `agents/hermes/`, `emain/hermes-runtime.ts` + `frontend/app/workspace/workspace-hermes-panel.ts` (`/files`, `/terminal`, `/preview` slash commands) |
 | Desktop pet and overlay     | `desktop-pet/`, `emain/emain-pet.ts`, `emain/emain-overlay.ts`, `frontend/pet/`|
 | Agent activity and overlays | `frontend/types/agent-activity.ts`, `frontend/app/view/use-agent-overlays.ts`  |
 | KronosCode package boundary | `agents/kronoscode/`                                                           |
 | AI backends                 | `pkg/waveai/`, `pkg/aiusechat/`                                                |
-| KronTerm MCP bridge         | `mcp-kron-term/`                                                               |
+| KronOS MCP bridge         | `mcp-kron-term/`                                                               |
 | Code intelligence           | `frontend/app/lsp/`, `emain/emain-lsp.ts`                                      |
 | Voice                       | `audio-engine/`, `emain/emain-audio.ts`, `frontend/app/aipanel/voice-model.ts` |
 | Sandbox                     | `pkg/sandbox/`, `frontend/app/view/sandbox/`                                   |
@@ -110,10 +110,10 @@ kronterm/
 ├── cmd/                # Go CLI apps (wsh daemon, server, generators)
 ├── pkg/                # Go packages (wshrpc, waveai, wps, wconfig, etc.)
 ├── agents/             # Packaged agent boundaries (kronoscode, hermes)
-├── mcp-kron-term/      # KronTerm workspace and computer-use MCP server
+├── mcp-kron-term/      # KronOS workspace and computer-use MCP server
 ├── audio-engine/       # Optional Python speech capture, STT, and TTS process
 ├── desktop-pet/        # Standalone desktop pet window content
-├── mobile/             # KronTerm for iPhone Labs client and connector
+├── mobile/             # KronOS for iPhone Labs client and connector
 ├── tsunami/            # Embedded VDOM rendering engine (Go + frontend)
 ├── db/                 # SQLite migrations
 ├── website/            # Vite product website

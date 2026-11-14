@@ -414,7 +414,7 @@ export function PersonalProductivity({ api }: { api: PersonalProductivityBridge 
                                     Start focus
                                 </button>
                                 <p className="text-sm text-[var(--coucou-secondary)]">
-                                    Sessions pause when KronTerm restarts.
+                                    Sessions pause when KronOS restarts.
                                 </p>
                             </form>
                         ))}

@@ -7,6 +7,19 @@ import { expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { QemuVncBridge } from "./qemu-vnc-bridge";
 
+it("does not retain a viewer when closed during binding", async () => {
+    const bridge = new QemuVncBridge();
+    const abandoned = bridge.open([]);
+    bridge.close();
+    const active = bridge.open([]);
+    try {
+        await expect(abandoned).rejects.toThrow("closed before binding");
+        await expect(active).resolves.toMatch(/^ws:\/\/127\.0\.0\.1:\d+\//);
+    } finally {
+        bridge.close();
+    }
+});
+
 it("authenticates the viewer URL, forwards VNC over SSH, and tears down the child", async () => {
     const child = Object.assign(new EventEmitter(), {
         stdin: new PassThrough(),

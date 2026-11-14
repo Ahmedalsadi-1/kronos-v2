@@ -21,15 +21,15 @@ const deckSections: DeckSection[] = [
         eyebrow: "KronosCode engine",
         title: "The AI engine gets the same workspace evidence you use.",
         text: "KronosCode reads terminal output, browser state, file trees, diffs, sandbox activity, and project context before it proposes the next move.",
-        media: { type: "image", src: productAssets.agent, alt: "KronosCode agent prompt with workspace context inside Kronterm" },
+        media: { type: "image", src: productAssets.agent, alt: "KronosCode agent prompt with workspace context inside KronOS" },
         icon: Bot,
         points: ["Workspace-aware reasoning", "Plan inspection", "Human-approved actions"]
     },
     {
-        eyebrow: "Kronterm workspace",
+        eyebrow: "KronOS workspace",
         title: "Terminal, browser, editor, files, and agents stay in one command center.",
-        text: "Kronterm gives KronosCode a structured desktop surface instead of isolated chat. Every block can become context for debugging, coding, browsing, testing, and automation.",
-        media: { type: "image", src: productAssets.hero, alt: "Kronterm desktop workspace with terminal, browser, files, and side panels" },
+        text: "KronOS gives KronosCode a structured desktop surface instead of isolated chat. Every block can become context for debugging, coding, browsing, testing, and automation.",
+        media: { type: "image", src: productAssets.hero, alt: "KronOS desktop workspace with terminal, browser, files, and side panels" },
         icon: MonitorPlay,
         points: ["Programmable layouts", "Files and previews", "Shared workspace memory"]
     },
@@ -37,7 +37,7 @@ const deckSections: DeckSection[] = [
         eyebrow: "Sandbox execution",
         title: "Run experiments inside controlled environments.",
         text: "Use sandboxes for browser automation, tests, dev servers, and agent-assisted execution while keeping risky work visible and contained.",
-        media: { type: "video", src: productAssets.sandboxVideo, alt: "Kronterm sandbox workflow demonstration" },
+        media: { type: "video", src: productAssets.sandboxVideo, alt: "KronOS sandbox workflow demonstration" },
         icon: Boxes,
         points: ["Isolated workflows", "Approval checkpoints", "Local and cloud model support"]
     },
@@ -45,7 +45,7 @@ const deckSections: DeckSection[] = [
         eyebrow: "Browser context",
         title: "Validate what KronosCode changes against the running product.",
         text: "KronosCode can reason with browser context, app previews, screenshots, and live failures so frontend work is grounded in what actually renders.",
-        media: { type: "video", src: productAssets.browserVideo, alt: "Kronterm browser widget showing live app validation" },
+        media: { type: "video", src: productAssets.browserVideo, alt: "KronOS browser widget showing live app validation" },
         icon: Globe,
         points: ["Live app previews", "Bug reproduction", "Visual feedback loops"]
     },
@@ -53,15 +53,15 @@ const deckSections: DeckSection[] = [
         eyebrow: "Terminal control",
         title: "Commands remain readable, reversible, and approval-driven.",
         text: "KronosCode watches command output, explains failures, proposes fixes, and asks before execution so builders stay in control of serious work.",
-        media: { type: "image", src: productAssets.diff, alt: "KronosCode diff and terminal output review inside Kronterm" },
+        media: { type: "image", src: productAssets.diff, alt: "KronosCode diff and terminal output review inside KronOS" },
         icon: Terminal,
         points: ["Terminal output awareness", "Diff review", "User-approved execution"]
     },
     {
         eyebrow: "Agent-ready workspace",
         title: "Coordinate agents without losing the thread.",
-        text: "Kronterm is built for serious builders who want to supervise local agents, cloud agents, sandboxes, files, browser tasks, and code changes in one place.",
-        media: { type: "image", src: productAssets.apps, alt: "Kronterm streamable apps and agent workflow surface" },
+        text: "KronOS is built for serious builders who want to supervise local agents, cloud agents, sandboxes, files, browser tasks, and code changes in one place.",
+        media: { type: "image", src: productAssets.apps, alt: "KronOS streamable apps and agent workflow surface" },
         icon: Code2,
         points: ["Agent orchestration", "Visible work logs", "Commercial team workflows"]
     }
@@ -117,7 +117,7 @@ export function KronosCodePage() {
                                     <span>Terminal</span>
                                     <span>Files</span>
                                 </div>
-                                <img src={productAssets.hero} alt="Kronterm full workspace controlled by KronosCode" />
+                                <img src={productAssets.hero} alt="KronOS full workspace controlled by KronosCode" />
                                 <button type="button">Take control</button>
                             </div>
                         </div>
@@ -138,7 +138,7 @@ export function KronosCodePage() {
                 <div className="section-heading">
                     <p className="eyebrow">Across every workspace surface</p>
                     <h2 id="kronos-deck-title">Each KronosCode capability gets its own product section.</h2>
-                    <p>KronosCode is not a homepage feature block. It is the intelligence layer for the full Kronterm workspace.</p>
+                    <p>KronosCode is not a homepage feature block. It is the intelligence layer for the full KronOS workspace.</p>
                 </div>
                 <div className="kronos-deck-list">
                     {deckSections.map((section) => {

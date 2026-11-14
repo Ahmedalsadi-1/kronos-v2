@@ -6,6 +6,7 @@
     min-height: 0;
     background: var(--os-frame-color, var(--color-black, #000));
     color: var(--ui-text-primary);
+    container-type: inline-size;
 }
 .kronterm-inspector-resize {
     position: absolute;
@@ -26,46 +27,66 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    height: 48px;
+    height: 38px;
     flex-shrink: 0;
-    padding: 3px 6px 3px 8px;
+    padding: 3px 4px 3px 8px;
     background: var(--os-frame-color, var(--color-black, #000));
     border-bottom: 1px solid var(--ui-stroke-secondary);
 }
 .kronterm-inspector-tabs {
     display: flex;
     flex: 1;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
-    background: var(--color-black, #000);
 }
 .kronterm-inspector .kronterm-inspector-tab {
+    position: relative;
     display: flex;
     align-items: center;
-    min-width: 100px;
-    max-width: 240px;
-    height: 38px;
-    border: 1px solid transparent;
-    border-radius: 11px !important;
-    color: var(--ui-text-tertiary);
+    flex: 0 1 128px;
+    min-width: 64px;
+    max-width: 152px;
+    height: 30px;
+    padding: 0 3px 0 7px;
+    border-radius: 5px !important;
+    color: var(--ui-text-secondary);
 }
-.kronterm-inspector-tab[data-active] {
-    background: var(--ui-control-hover-background, #363636);
-    border-color: var(--ui-stroke-secondary, #494949);
+.kronterm-inspector:not(.is-compact) .kronterm-inspector-tab:has(> #inspector-tab-comfy-properties) {
+    min-width: 138px;
+}
+.kronterm-inspector .kronterm-inspector-tab:is(:hover, :focus-within) {
+    background: var(--ui-control-hover-background);
     color: var(--ui-text-primary);
+}
+.kronterm-inspector .kronterm-inspector-tab[data-active] {
+    background: var(--ui-control-hover-background, #363636);
+    color: var(--ui-text-primary);
+}
+.kronterm-inspector:not(.is-compact) .kronterm-inspector-tab[data-active]::after {
+    content: "";
+    position: absolute;
+    inset: auto 7px 0;
+    height: 1px;
+    background: var(--ui-text-tertiary);
+    pointer-events: none;
 }
 .kronterm-inspector-tab > button:first-child {
     display: flex;
+    flex: 1;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
     min-width: 0;
     height: 100%;
-    padding: 0 8px 0 12px;
-    font-size: 13px;
+    padding: 0 3px 0 0;
+    font-size: 12px;
+    text-align: left;
 }
-.kronterm-inspector-tab span {
+.kronterm-inspector-tab .codicon {
+    flex-shrink: 0;
+}
+.kronterm-inspector-tab-label {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -73,11 +94,14 @@
 .kronterm-inspector-tab > button:last-child {
     display: grid;
     place-items: center;
-    width: 26px;
-    height: 28px;
+    width: 20px;
+    height: 22px;
     flex-shrink: 0;
-    margin-right: 3px;
     color: var(--ui-text-tertiary);
+    opacity: 0;
+}
+.kronterm-inspector-tab:is([data-active], :hover, :focus-within) > button:last-child {
+    opacity: 1;
 }
 .kronterm-inspector button {
     cursor: pointer;
@@ -89,11 +113,11 @@
 .kronterm-inspector-tool {
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     flex-shrink: 0;
     color: var(--ui-text-tertiary);
-    border-radius: 8px;
+    border-radius: 5px;
 }
 .kronterm-inspector-tool:hover,
 .kronterm-inspector-tab > button:last-child:hover {
@@ -149,20 +173,38 @@
     gap: 4px;
     overflow: visible;
 }
+.kronterm-inspector.is-compact .kronterm-inspector-tool {
+    align-self: center;
+}
 .kronterm-inspector.is-compact .kronterm-inspector-tab {
+    flex: none;
     min-width: 0;
     max-width: none;
     width: 100%;
     height: 34px;
+    padding: 0;
     justify-content: center;
 }
 .kronterm-inspector.is-compact .kronterm-inspector-tab > button:first-child {
     justify-content: center;
     padding: 0 4px;
 }
-.kronterm-inspector.is-compact .kronterm-inspector-tab span,
+.kronterm-inspector.is-compact .kronterm-inspector-tab-label,
 .kronterm-inspector.is-compact .kronterm-inspector-tab > button:last-child {
     display: none;
+}
+@container (max-width: 320px) {
+    .kronterm-inspector:not(.is-compact) .kronterm-inspector-tab {
+        flex: 0 0 43px;
+        min-width: 0;
+        padding-inline: 4px 2px;
+    }
+    .kronterm-inspector:not(.is-compact) .kronterm-inspector-tab-label {
+        display: none;
+    }
+    .kronterm-inspector:not(.is-compact) .kronterm-inspector-tab > button:last-child {
+        width: 17px;
+    }
 }
 .kronterm-inspector.is-compact .kronterm-inspector-pane {
     display: none;

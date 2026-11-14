@@ -7,10 +7,13 @@ import { kronTermHudController } from "./kronterm-hud-controller";
 
 afterEach(() => kronTermHudController.resetForTests());
 
-describe("KronTerm HUD controller", () => {
+describe("KronOS HUD controller", () => {
     it("restores island IDs only for their owning workspace", () => {
         const stored = new Map<string, string>();
-        vi.stubGlobal("localStorage", { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value) });
+        vi.stubGlobal("localStorage", {
+            getItem: (key: string) => stored.get(key) ?? null,
+            setItem: (key: string, value: string) => stored.set(key, value),
+        });
         kronTermHudController.setOwnerTab("space-a");
         kronTermHudController.setActive(true);
         kronTermHudController.registerIsland("browser-a");
@@ -27,6 +30,7 @@ describe("KronTerm HUD controller", () => {
         expect(kronTermHudController.getSnapshot().active).toBe(false);
         expect(kronTermHudController.toggle()).toBe(true);
         expect(kronTermHudController.getSnapshot().active).toBe(true);
+        expect(kronTermHudController.getSnapshot().keepWorkspaceVisible).toBe(true);
         expect(kronTermHudController.toggle()).toBe(false);
     });
 
@@ -73,7 +77,7 @@ describe("KronTerm HUD controller", () => {
 
         kronTermHudController.setActive(false);
         kronTermHudController.toggle();
-        expect(kronTermHudController.getSnapshot()).toMatchObject({ active: true, keepWorkspaceVisible: false });
+        expect(kronTermHudController.getSnapshot()).toMatchObject({ active: true, keepWorkspaceVisible: true });
     });
 
     it("switches an active HUD to workspace placement without losing its islands", () => {

@@ -7,7 +7,7 @@ import { emptyProductivityState } from "../../types/productivity";
 const PreviewBridge: PersonalProductivityBridge = {
     getProductivityState: async () => emptyProductivityState(),
     updateProductivity: async () => {
-        throw new Error("This appearance preview cannot save personal data. Open the Personal widget in KronTerm.");
+        throw new Error("This appearance preview cannot save personal data. Open the Personal widget in KronOS.");
     },
     onProductivityState: () => () => {},
 };

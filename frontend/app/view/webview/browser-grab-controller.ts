@@ -38,6 +38,23 @@ export class BrowserGrabController {
         private guest: () => Electron.WebviewTag
     ) {}
 
+    acceptGuestSelection(guestId: number, intent: BrowserGrabIntent, payload: BrowserGrabPayload, comment = ""): void {
+        const guest = this.guest();
+        if (!guest) return;
+        try {
+            if (guest.getWebContentsId() !== guestId) return;
+        } catch {
+            return;
+        }
+        this.generation++;
+        this.guestId = guestId;
+        window.dispatchEvent(new Event("kronterm:workspace-picker-deactivate"));
+        globalStore.set(this.error, "");
+        globalStore.set(this.intent, comment ? null : intent);
+        globalStore.set(this.selection, payload);
+        if (comment.trim()) this.publishAnnotation(payload, comment, "change");
+    }
+
     async setIntent(intent: BrowserGrabIntent): Promise<void> {
         const generation = ++this.generation;
         const previousId = this.guestId;
@@ -48,9 +65,19 @@ export class BrowserGrabController {
             await getApi()
                 .browserCancelGrab(previousId)
                 .catch(() => {});
-        if (!intent || generation !== this.generation) return;
+        if (generation !== this.generation) return;
         try {
-            this.guestId = this.guest()?.getWebContentsId();
+            const guest = this.guest();
+            if (guest?.executeJavaScript) {
+                const ready = await guest
+                    .executeJavaScript(
+                        `window.__KRONTERM_BROWSER_ELEMENT_TOOL__?.setIntent(${JSON.stringify(intent)}) === true`
+                    )
+                    .catch(() => false);
+                if (ready || generation !== this.generation) return;
+            }
+            if (!intent) return;
+            this.guestId = guest?.getWebContentsId();
             if (!this.guestId) throw new Error("Wait for the browser page to load before selecting");
             await this.arm(generation);
         } catch (error) {
@@ -110,7 +137,7 @@ export class BrowserGrabController {
         if (settings.includeScreenshot && !screenshot?.dataUrl)
             throw new Error("Element screenshot is unavailable. Retry or turn off Include screenshot.");
         await getApi().sendHermesSelection({
-            text: browserSelectionPrompt(payload, comment, settings.depth),
+            text: browserSelectionPrompt(payload, comment, settings.depth, this.blockId),
             target: settings.destination,
             ...(screenshot ? { images: [{ filename: "browser-selection.png", dataUrl: screenshot.dataUrl }] } : {}),
         });
@@ -143,14 +170,23 @@ export class BrowserGrabController {
     annotate(comment: string, intent: "fix" | "change" | "question" | "approve"): void {
         const payload = globalStore.get(this.selection);
         if (!payload || !comment.trim()) return;
+        this.publishAnnotation(payload, comment, intent);
+        void this.rearm();
+    }
+
+    private publishAnnotation(
+        payload: BrowserGrabPayload,
+        comment: string,
+        intent: "fix" | "change" | "question" | "approve"
+    ): void {
         const target = payload.target;
         publishAgentWidgetDesignSelection({
             blockId: this.blockId,
             url: payload.page.sanitizedUrl,
             element: {
                 ref: target.selector,
-                role: target.accessibility.role ?? target.tagName,
-                name: target.accessibility.accessibleName ?? target.textSnippet,
+                role: target.accessibility?.role ?? target.tagName,
+                name: target.accessibility?.accessibleName ?? target.textSnippet,
                 ...target.rectViewport,
                 focusable: false,
                 visible: true,
@@ -162,7 +198,6 @@ export class BrowserGrabController {
             annotationIntent: intent,
             grabPayload: { ...payload, screenshot: null },
         });
-        void this.rearm();
     }
 
     async rearm(): Promise<void> {

@@ -5,13 +5,13 @@ const { callTool, toolOutput } = require("./bridge");
 
 class HermesAgent {
     description = {
-        displayName: "Hermes Agent",
+        displayName: "KronOS Agent",
         name: "hermesAgent",
         group: ["transform"],
         version: 1,
         icon: "fa:robot",
-        description: "Run a scoped Hermes workflow worker with KronTerm tools",
-        defaults: { name: "Hermes Agent" },
+        description: "Run a scoped KronOS workflow worker with workspace tools",
+        defaults: { name: "KronOS Agent" },
         inputs: ["main"],
         outputs: ["main"],
         usableAsTool: true,

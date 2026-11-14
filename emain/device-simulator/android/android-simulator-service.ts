@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
+import { SaxesParser } from "saxes";
+import type { DeviceSelectedElement } from "../../../frontend/types/computer-targets";
 import { parseAdbDevices, parseWmSize } from "./vendor/orca/android/adb-devices";
 import { androidButtonKeycode, normalizedToDevicePixels } from "./vendor/orca/android/android-input-mapping";
 import { AndroidSdkPaths, discoverAndroidSdk } from "./vendor/orca/android/android-sdk-discovery";
@@ -66,6 +69,8 @@ export class AndroidSimulatorService {
     private readonly sleep: AndroidServiceOptions["sleep"];
     private readonly bootTimeoutMs: number;
     private readonly starts = new Map<string, Promise<AndroidSimulatorDevice>>();
+    private discovery?: Promise<AndroidSimulatorDevice[]>;
+    private readonly captures = new Map<string, Promise<string>>();
     private inventory: AndroidSimulatorDevice[] = [];
     private inventoryUpdatedAt = 0;
     private screenSizes = new Map<string, { width: number; height: number; time: number }>();
@@ -89,7 +94,13 @@ export class AndroidSimulatorService {
               };
     }
 
-    async discover(): Promise<AndroidSimulatorDevice[]> {
+    discover(): Promise<AndroidSimulatorDevice[]> {
+        return (this.discovery ??= this.readInventory().finally(() => {
+            this.discovery = undefined;
+        }));
+    }
+
+    private async readInventory(): Promise<AndroidSimulatorDevice[]> {
         if (!this.sdk) {
             return [];
         }
@@ -135,6 +146,12 @@ export class AndroidSimulatorService {
                     runtime: "Android emulator",
                 })),
         ];
+        const connectedSerials = new Set(
+            mapped.filter((device) => device.status === "booted").map((device) => device.serial)
+        );
+        for (const serial of this.screenSizes.keys()) {
+            if (!connectedSerials.has(serial)) this.screenSizes.delete(serial);
+        }
         this.inventoryUpdatedAt = Date.now();
         return this.inventory;
     }
@@ -209,15 +226,67 @@ export class AndroidSimulatorService {
         }
         await this.run(this.sdk.adb, emuKillArgs(device.serial));
         this.inventoryUpdatedAt = 0;
+        this.screenSizes.delete(device.serial);
     }
 
-    async screenshot(id: string): Promise<string> {
+    async screenshot(id: string, generation = 0): Promise<string> {
         const device = await this.connected(id);
-        const png = await this.run(this.sdk.adb, ["-s", device.serial, "exec-out", "screencap", "-p"]);
+        const captureKey = JSON.stringify([id, device.serial, generation]);
+        const active = this.captures.get(captureKey);
+        if (active) return active;
+        const capture = this.capture(device.serial).finally(() => this.captures.delete(captureKey));
+        this.captures.set(captureKey, capture);
+        return capture;
+    }
+
+    private async capture(serial: string): Promise<string> {
+        const png = await this.run(this.sdk.adb, ["-s", serial, "exec-out", "screencap", "-p"]);
         if (png.length < 8 || !png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
             throw new Error("Android returned an invalid screenshot.");
         }
         return `data:image/png;base64,${png.toString("base64")}`;
+    }
+
+    async pickElement(id: string, x: number, y: number, width: number, height: number): Promise<DeviceSelectedElement> {
+        const device = await this.connected(id);
+        const target = ["-s", device.serial, "shell"];
+        const dumpPath = `/data/local/tmp/kronterm-pick-${randomUUID()}.xml`;
+        try {
+            await this.run(this.sdk.adb, [...target, "uiautomator", "dump", dumpPath]);
+            const data = await this.run(this.sdk.adb, [...target, "cat", dumpPath]);
+            if (data.length > 4 * 1024 * 1024) throw new Error("Android element tree is too large.");
+            let selected: DeviceSelectedElement;
+            let smallestArea = Infinity;
+            const parser = new SaxesParser();
+            parser.on("opentag", ({ name, attributes }) => {
+                if (name !== "node") return;
+                const match = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/.exec(attributes.bounds);
+                if (!match) return;
+                const [left, top, right, bottom] = match.slice(1).map(Number);
+                const area = (right - left) * (bottom - top);
+                if (left >= right || top >= bottom || area > smallestArea) return;
+                if (x * width < left || x * width >= right || y * height < top || y * height >= bottom) return;
+                const role = attributes.class || "Element";
+                const secure = attributes.password === "true" || role.endsWith("EditText");
+                selected = {
+                    application: attributes.package?.slice(0, 300),
+                    role: role.slice(0, 150),
+                    name: secure ? undefined : (attributes["content-desc"] || attributes.text)?.slice(0, 250),
+                    id: attributes["resource-id"]?.slice(0, 300),
+                    frame: {
+                        x: left / width,
+                        y: top / height,
+                        width: (right - left) / width,
+                        height: (bottom - top) / height,
+                    },
+                };
+                smallestArea = area;
+            });
+            parser.write(data.toString()).close();
+            return selected ?? null;
+        } finally {
+            await this.run(this.sdk.adb, [...target, "rm", "-f", dumpPath]).catch(() => {});
+        }
     }
 
     private async screen(id: string) {

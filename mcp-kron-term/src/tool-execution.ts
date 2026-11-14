@@ -8,6 +8,7 @@ export type ToolOperation = {
     deadline: number;
     signal: AbortSignal;
     readOnly: boolean;
+    tracksSettlement?: boolean;
     attempts: number;
     routingMs?: number;
     rpcMs?: number;
@@ -19,7 +20,11 @@ export type ToolOperation = {
 export const ToolOperationContext = new AsyncLocalStorage<ToolOperation>();
 
 export function toolTimeoutMs(name: string, args: Record<string, unknown>, readOnly: boolean): number {
+    if (["workspace_design_editor_state", "workspace_design_execute", "workspace_design_read_skill", "workspace_design_save"].includes(name))
+        return 90_000;
+    if (name.startsWith("comfyui_")) return 35_000;
     if (name.startsWith("sandbox_vm_")) return name === "sandbox_vm_status" ? 30_000 : 120_000;
+    if (name === "swarm_start" || name === "swarm_replan") return 120_000;
     if (name.startsWith("kron_computer_")) return 125_000;
     if (
         ["linux_desktop_exec", "linux_desktop_apps", "linux_desktop_launch_app", "linux_desktop_open_url"].includes(
@@ -111,7 +116,8 @@ export async function executeTool(
     args: Record<string, unknown>,
     readOnly: boolean,
     operation: () => Promise<any>,
-    externalSignal?: AbortSignal
+    externalSignal?: AbortSignal,
+    trackOperation?: (operation: Promise<unknown>) => void
 ): Promise<any> {
     const start = performance.now();
     const controller = new AbortController();
@@ -122,6 +128,7 @@ export async function executeTool(
         deadline: Date.now() + budget,
         signal: controller.signal,
         readOnly,
+        tracksSettlement: trackOperation != null,
         attempts: 0,
     };
     let timer: ReturnType<typeof setTimeout>;
@@ -136,9 +143,11 @@ export async function executeTool(
     });
     try {
         if (externalSignal?.aborted) throw new ToolFailure("CANCELLED", `${name} was cancelled before execution`);
-        result = await ToolOperationContext.run(context, () =>
-            Promise.race([
-                operation().then(normalizeToolResult),
+        result = await ToolOperationContext.run(context, () => {
+            const running = operation();
+            trackOperation?.(running);
+            return Promise.race([
+                running.then(normalizeToolResult),
                 interrupted,
                 new Promise((_, reject) => {
                     timer = setTimeout(() => {
@@ -153,8 +162,8 @@ export async function executeTool(
                         );
                     }, budget);
                 }),
-            ])
-        );
+            ]);
+        });
         if (result?.isError) {
             result = {
                 ...result,

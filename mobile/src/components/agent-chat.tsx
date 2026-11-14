@@ -99,7 +99,7 @@ export function AgentChat({
     const submit = async (event: FormEvent) => {
         event.preventDefault();
         const text = draft.trim();
-        if (!text || !host || !client || submission.current || busy) return;
+        if (!text || !host || !client || submission.current || busy || connectionError) return;
         const submittedScope = scope;
         let targetScope = scope;
         submission.current = true;
@@ -177,7 +177,7 @@ export function AgentChat({
                 <div className="agent-chat-mobile-body">
                     {connectionError && (
                         <div className="agent-connection-note" role="status">
-                            <span>Host offline. Your draft stays here.</span>
+                            <span>{connectionError} Your draft stays here.</span>
                             <button type="button" onClick={onOpenHosts}>
                                 Reconnect
                             </button>

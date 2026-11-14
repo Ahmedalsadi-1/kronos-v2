@@ -13,7 +13,6 @@ import { globalStore } from "@/app/store/jotaiStore";
 import { getTabModelByTabId, TabModelContext } from "@/app/store/tab-model";
 import { WaveEnvContext } from "@/app/waveenv/waveenv";
 import { makeWaveEnvImpl } from "@/app/waveenv/waveenvimpl";
-import { KronTermAccountGate } from "@/app/workspace/kronterm-account-gate";
 import { Workspace } from "@/app/workspace/workspace";
 import { getLayoutModelForStaticTab } from "@/layout/lib/layoutModelHooks";
 import { ContextMenuModel } from "@/store/contextmenu";
@@ -33,6 +32,7 @@ import { DndProvider } from "react-dnd";
 import { AppBackground } from "./app-bg";
 import { CenteredDiv } from "./element/quickelems";
 import { MinimalUiController } from "./minimal-ui";
+import { installClientDiagnostics } from "@/util/client-diagnostics";
 
 import "./app.scss";
 
@@ -47,6 +47,7 @@ const focusLog = debug("wave:focus");
 const App = ({ onFirstRender }: { onFirstRender: () => void }) => {
     const tabId = useAtomValue(atoms.staticTabId);
     const waveEnvRef = useRef(makeWaveEnvImpl());
+    useEffect(installClientDiagnostics, []);
     useEffect(() => {
         onFirstRender();
     }, []);
@@ -311,7 +312,6 @@ const AppInner = () => {
             <BadgeAutoClearing />
             <DndProvider manager={getFileTreeDndManager()}>
                 <Workspace />
-                <KronTermAccountGate />
             </DndProvider>
         </div>
     );

@@ -6,6 +6,7 @@ import type {
     LinuxDesktopAction,
     LinuxDesktopActionResult,
     SandboxComputerAccess,
+    SandboxComputerAccessRequest,
 } from "./linux-desktops";
 import type { MacVmConnection, MacVmInventory } from "./macos-vms";
 import type { NativeTaskGroupAction, NativeTaskGroupPreview, NativeTaskGroupsSnapshot } from "./native-task-groups";
@@ -198,22 +199,7 @@ declare global {
         appId?: string;
     };
 
-    type KronSettingsKey =
-        | keyof SettingsType
-        | "app:defaulteditor"
-        | "desktop:control"
-        | "desktop:screenshare"
-        | "desktop:autominimize"
-        | "git:username"
-        | "git:useremail"
-        | "github:token"
-        | "github:owner"
-        | "notify:desktop"
-        | "notify:sound"
-        | "notify:taskcomplete"
-        | "notify:error"
-        | "term:autodelete"
-        | "term:autodeletedays";
+    type KronSettingsKey = keyof SettingsType;
 
     type CommandMakeDraftFromLocalData = {
         localappid: string;
@@ -253,6 +239,10 @@ declare global {
     };
 
     type ElectronApi = {
+        projectRoomCommand: (command: import("./project-room").ProjectRoomCommand) => Promise<import("./project-room").ProjectRoomState>; // project-room-command
+        getDiagnosticReport: () => Promise<import("./diagnostics").DiagnosticReport>; // get-diagnostic-report
+        clearDiagnosticReport: () => Promise<void>; // clear-diagnostic-report
+        recordRendererFailure: (failure: import("./diagnostics").DiagnosticFailure) => void; // record-renderer-failure
         agentBotCommand: (
             command: import("./agent-bot").AgentBotCommand
         ) => Promise<import("./agent-bot").AgentBotResult>;
@@ -260,6 +250,7 @@ declare global {
             botId: string
         ) => Promise<{ botId: string; workspaceId: string; tabId: string; blockIds: string[] }>;
         openAgentWorkspace: () => Promise<{ origin: string; parentOrigin: string }>;
+        openKronosSignIn: () => void;
         onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => () => void; // os-overview-gesture
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -323,13 +314,24 @@ declare global {
         ) => Promise<import("./productivity").ProductivityState>; // productivity-update
         isProductivityAppAllowed: (input: { name: string; identifier: string }) => Promise<boolean>; // productivity-check-app
         onProductivityState: (callback: (state: import("./productivity").ProductivityState) => void) => () => void; // productivity-state
-        desktopGrab: () => Promise<import("./desktop-grab").DesktopGrabResult>;
-        cancelDesktopGrab: () => Promise<void>;
+        desktopGrab: (operationId: string) => Promise<import("./desktop-grab").DesktopGrabResult>;
+        cancelDesktopGrab: (operationId: string) => Promise<void>;
+        browserAccount: (
+            input: import("./browser-account").BrowserAccountCommand
+        ) => Promise<import("./browser-account").BrowserAccountState>;
         browserNavigationHistory: (
             guestId: number,
             snapshot?: import("./browser-navigation").BrowserNavigationSnapshot
         ) => Promise<import("./browser-navigation").BrowserNavigationSnapshot>;
         browserGrab: (input: { guestId: number; opId: string }) => Promise<import("./browser-grab").BrowserGrabResult>;
+        onBrowserElementSelection: (
+            callback: (
+                guestId: number,
+                intent: "grab" | "annotate",
+                selection: import("./browser-grab").BrowserGrabPayload,
+                comment?: string
+            ) => void
+        ) => () => void;
         browserCancelGrab: (guestId: number) => Promise<void>;
         browserAccessibilitySnapshot: (guestId: number) => Promise<WidgetElementData[]>;
         captureBrowserPage: (input: {
@@ -419,6 +421,7 @@ declare global {
         saveTextFile: (fileName: string, content: string) => Promise<boolean>; // save-text-file
         selectDirectory: () => Promise<string | null>; // select-directory
         selectFiles: () => Promise<string[]>; // select-files
+        getPathForFile: (file: File) => string;
         selectWallpaper: () => Promise<string | null>; // select-wallpaper
         searchSystemItems: (query: string) => Promise<SystemSearchItem[]>; // search-system-items
         getNativeAppIcons: (appPaths: string[]) => Promise<Record<string, string>>; // get-native-app-icons
@@ -499,12 +502,9 @@ declare global {
         manageComputerPlugins: (
             command: ComputerManagerCommand
         ) => Promise<ComputerTargetsResult<ComputerManagerState>>;
-        sandboxComputerAccess: (input?: {
-            desktopId?: string;
-            enabled?: boolean;
-            sessionIds?: string[];
-        }) => Promise<SandboxComputerAccess>;
+        sandboxComputerAccess: (input?: SandboxComputerAccessRequest) => Promise<SandboxComputerAccess>;
         listLinuxDesktops: () => Promise<ComputerTargetsResult<LinuxDesktop[]>>;
+        sandboxLogin: (input: import("./sandbox-login").SandboxLoginUiCommand) => Promise<import("./sandbox-login").SandboxLoginUiResult>;
         listMacVms: () => Promise<ComputerTargetsResult<MacVmInventory>>;
         startMacVm: (name: string) => Promise<ComputerTargetsResult<MacVmConnection>>;
         stopMacVm: (sessionId: string) => Promise<ComputerTargetsResult<void>>;
@@ -531,6 +531,14 @@ declare global {
         performComputerTargetAction: (
             action: ComputerTargetAction
         ) => Promise<ComputerTargetsResult<ComputerTargetSnapshot>>;
+        pickComputerTargetElement: (input: {
+            targetId: string;
+            expectedGeneration: number;
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        }) => Promise<ComputerTargetsResult<import("./computer-targets").DeviceSelectedElement | null>>;
         takeOverComputerTarget: (targetId: string) => Promise<ComputerTargetsResult<ComputerTargetSnapshot>>;
         resumeComputerTarget: (
             targetId: string,
@@ -683,6 +691,7 @@ declare global {
         hermesGetConnection: (context?: HermesSurfaceContext) => Promise<HermesConnectionDescriptor>; // hermes-get-connection
         getKronTermAccountStatus: () => Promise<{ configured: boolean; encryptionAvailable: boolean }>;
         hermesApi: <T = unknown>(input: HermesApiIpcRequest) => Promise<T>; // hermes-api
+        swarmRecovery: (command: import("./swarm").SwarmRecoveryCommand) => Promise<import("./swarm").SwarmRecoveryItem[]>; // swarm-recovery
         onHermesConnection: (callback: (connection: HermesConnectionDescriptor) => void) => () => void; // hermes-connection
         onHermesRuntimeFailure: (callback: (failure: { message: string }) => void) => () => void; // hermes-runtime-failure
         kronoscodeGetConnection: () => Promise<KronosCodeConnectionDescriptor>; // kronoscode-get-connection

@@ -16,7 +16,7 @@ vars:
 
 tasks:
     electron:dev:
-        desc: Run the Electron application via the Vite dev server (enables hot reloading).
+        desc: Run Electron with live UI updates. Restart the task after main or preload changes.
         cmd: npm run dev
         aliases:
             - dev
@@ -125,7 +125,9 @@ tasks:
         desc: Package the application for the current platform.
         cmds:
             - node scripts/validate-kronoscode-artifact.mjs
-            - npm run build:prod && npm exec electron-builder -- -c electron-builder.config.cjs -p never {{.CLI_ARGS}}
+            - npm run build:prod
+            - npm run stage:release-runtime
+            - node scripts/package-kronos.mjs {{.CLI_ARGS}}
         deps:
             - clean
             - npm:install

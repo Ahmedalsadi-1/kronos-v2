@@ -73,10 +73,10 @@ export const navGroups = [
     {
         label: "Product",
         links: [
-            { href: "/product", title: "Kronterm Workspace", text: "Terminal, browser, editor, files, sandboxes, and agents in one desktop command center." },
+            { href: "/product", title: "KronOS Workspace", text: "Terminal, browser, editor, files, sandboxes, and agents in one desktop command center." },
             { href: "/kronoscode", title: "KronosCode", text: "The AI engine that reads workspace context and helps operate across it." },
             { href: "/terminal", title: "Terminal", text: "A serious terminal surface built for AI-assisted execution." },
-            { href: "/download", title: "Download", text: "Private beta installers, platform notes, and setup guidance." }
+            { href: "/download", title: "Download", text: "Desktop installers, platform notes, and setup guidance." }
         ]
     },
     {
@@ -93,7 +93,7 @@ export const navGroups = [
         links: [
             { href: "/teams", title: "Teams", text: "Commercial workflows for developers, founders, and technical teams." },
             { href: "/security", title: "Security", text: "Human-approved execution, private beta controls, and data boundaries." },
-            { href: "/customers", title: "Customers", text: "How serious builders use Kronterm to reduce context switching." },
+            { href: "/customers", title: "Customers", text: "How serious builders use KronOS to reduce context switching." },
             { href: "/research", title: "Research", text: "Field notes on AI-native workspaces and agent-ready development." }
         ]
     },
@@ -103,7 +103,7 @@ export const navGroups = [
             { href: "/blog", title: "Blog", text: "Product updates and essays on workspace-native AI." },
             { href: "/docs", title: "Docs", text: "Concepts, setup, configuration, and workflow guides." },
             { href: "/faq", title: "FAQ", text: "Common questions about private beta, models, and product scope." },
-            { href: "/contact-sales", title: "Contact Sales", text: "Request access, ask about teams, or discuss deployment needs." }
+            { href: "/contact-sales", title: "Contact Sales", text: "Download KronOS, ask about teams, or discuss deployment needs." }
         ]
     }
 ];
@@ -126,7 +126,7 @@ export const pillars: Feature[] = [
     },
     {
         title: "Agent-ready desktop",
-        text: "Kronterm is designed as a desktop command center for coding agents, automation, browser tasks, and product validation.",
+        text: "KronOS is designed as a desktop command center for coding agents, automation, browser tasks, and product validation.",
         icon: Bot
     }
 ];
@@ -136,77 +136,77 @@ export const workflowTabs = [
         label: "Terminal",
         title: "Start with the command line, then keep the whole workspace in view.",
         text: "Run commands, watch output, inspect failures, and let KronosCode turn terminal state into actionable next steps.",
-        media: { type: "image", src: productAssets.hero, alt: "Kronterm workspace with terminal, browser, sandbox, memory, and files panels" } satisfies Media
+        media: { type: "image", src: productAssets.hero, alt: "KronOS workspace with terminal, browser, sandbox, memory, and files panels" } satisfies Media
     },
     {
         label: "KronosCode",
         title: "Give the AI engine the context developers actually use.",
-        text: "KronosCode reads workspace state, reasons over files and command output, proposes edits, and coordinates AI agents inside Kronterm.",
-        media: { type: "image", src: productAssets.agent, alt: "KronosCode agent prompt inside the Kronterm workspace" } satisfies Media
+        text: "KronosCode reads workspace state, reasons over files and command output, proposes edits, and coordinates AI agents inside KronOS.",
+        media: { type: "image", src: productAssets.agent, alt: "KronosCode agent prompt inside the KronOS workspace" } satisfies Media
     },
     {
         label: "Browser",
         title: "Validate products where they run.",
         text: "Keep browser previews beside terminals and files, so AI-assisted fixes can be checked against the live app without switching context.",
-        media: { type: "video", src: productAssets.browserVideo, alt: "Kronterm browser widget demonstration" } satisfies Media
+        media: { type: "video", src: productAssets.browserVideo, alt: "KronOS browser widget demonstration" } satisfies Media
     },
     {
         label: "Sandbox",
         title: "Operate in controlled environments.",
         text: "Use sandboxes for isolated workflows, browser automation, testing, and agent-assisted execution with clear workspace boundaries.",
-        media: { type: "video", src: productAssets.sandboxVideo, alt: "Kronterm sandbox demonstration" } satisfies Media
+        media: { type: "video", src: productAssets.sandboxVideo, alt: "KronOS sandbox demonstration" } satisfies Media
     }
 ];
 
 export const pages: PageConfig[] = [
     {
         path: "/",
-        title: "Kronterm — The AI-native workspace for builders",
-        description: "Kronterm combines terminal, browser, editor, sandboxes, files, and AI agents into one programmable desktop environment powered by KronosCode.",
+        title: "KronOS — The AI-native workspace for builders",
+        description: "KronOS combines terminal, browser, editor, sandboxes, files, and AI agents into one programmable desktop environment powered by KronosCode.",
         eyebrow: "Commercial AI-native developer workspace",
         headline: "The AI-native workspace for builders.",
-        subheadline: "Kronterm combines your terminal, browser, editor, sandboxes, files, and AI agents into one programmable workspace — powered by KronosCode, the AI engine that understands and operates across your development environment.",
-        primaryCta: "Request private beta",
+        subheadline: "KronOS combines your terminal, browser, editor, sandboxes, files, and AI agents into one programmable workspace — powered by KronosCode, the AI engine that understands and operates across your development environment.",
+        primaryCta: "Download KronOS",
         secondaryCta: "Explore KronosCode",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm full workspace with terminal, browser, sandbox, memory panel, files, and side controls" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS full workspace with terminal, browser, sandbox, memory panel, files, and side controls" },
         sections: [
             {
-                eyebrow: "Why Kronterm",
+                eyebrow: "Why KronOS",
                 title: "Not just an AI terminal — an AI workspace.",
-                text: "Most AI terminals stop at the command line. Kronterm gives AI the entire workspace: terminal, browser, editor, files, sandboxes, layouts, and agent context.",
-                media: { type: "video", src: productAssets.canvasVideo, alt: "Kronterm canvas display demonstration" },
+                text: "Most AI terminals stop at the command line. KronOS gives AI the entire workspace: terminal, browser, editor, files, sandboxes, layouts, and agent context.",
+                media: { type: "video", src: productAssets.canvasVideo, alt: "KronOS canvas display demonstration" },
                 features: pillars
             },
             {
                 eyebrow: "KronosCode",
                 title: "The AI engine that understands your workspace.",
-                text: "KronosCode sees terminal output, browser context, files, and project state. It helps edit code, run commands with user approval, explain failures, and coordinate agents from inside Kronterm.",
-                media: { type: "image", src: productAssets.agent, alt: "KronosCode agent interface inside Kronterm" }
+                text: "KronosCode sees terminal output, browser context, files, and project state. It helps edit code, run commands with user approval, explain failures, and coordinate agents from inside KronOS.",
+                media: { type: "image", src: productAssets.agent, alt: "KronosCode agent interface inside KronOS" }
             },
             {
                 eyebrow: "Built for serious builders",
                 title: "A private-beta product for coding, browsing, testing, automation, and agent-assisted execution.",
-                text: "Kronterm is built for developers, founders, technical teams, and AI-agent builders who want one focused commercial environment for high-leverage work.",
-                media: { type: "image", src: productAssets.sidepanel, alt: "Kronterm side panel with files, git tree, web, sandbox, apps, and settings" }
+                text: "KronOS is built for developers, founders, technical teams, and AI-agent builders who want one focused commercial environment for high-leverage work.",
+                media: { type: "image", src: productAssets.sidepanel, alt: "KronOS side panel with files, git tree, web, sandbox, apps, and settings" }
             }
         ]
     },
     {
         path: "/product",
-        title: "Product | Kronterm",
-        description: "See how Kronterm combines terminal, browser, editor, files, sandboxes, and agent control into one desktop command center.",
+        title: "Product | KronOS",
+        description: "See how KronOS combines terminal, browser, editor, files, sandboxes, and agent control into one desktop command center.",
         eyebrow: "Product",
         headline: "One programmable workspace for the full builder loop.",
-        subheadline: "Kronterm brings development surfaces together so AI assistance can work with the same context you use: shells, browsers, files, app previews, sandboxes, and layout state.",
-        primaryCta: "Request access",
+        subheadline: "KronOS brings development surfaces together so AI assistance can work with the same context you use: shells, browsers, files, app previews, sandboxes, and layout state.",
+        primaryCta: "Download KronOS",
         secondaryCta: "View workflows",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm product overview screenshot" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS product overview screenshot" },
         sections: [
             {
                 eyebrow: "Workspace surface",
                 title: "Terminal, browser, editor, files, and sandboxes in one focused desktop.",
-                text: "Stop scattering context across tabs and apps. Kronterm creates a unified surface where each block can be inspected, resized, routed, and used by KronosCode.",
-                media: { type: "image", src: productAssets.hero, alt: "Kronterm workspace layout with multiple panels" },
+                text: "Stop scattering context across tabs and apps. KronOS creates a unified surface where each block can be inspected, resized, routed, and used by KronosCode.",
+                media: { type: "image", src: productAssets.hero, alt: "KronOS workspace layout with multiple panels" },
                 features: [
                     { title: "Terminal sessions", text: "Run commands and preserve context for AI-assisted debugging.", icon: Terminal },
                     { title: "Browser previews", text: "Inspect web apps, docs, and automation flows next to source and shell output.", icon: PanelTop },
@@ -217,21 +217,21 @@ export const pages: PageConfig[] = [
             {
                 eyebrow: "Command center",
                 title: "Designed for agent-assisted execution, not just chat.",
-                text: "Kronterm lets builders supervise AI actions through visible panels, approval points, terminal output, and file diffs.",
+                text: "KronOS lets builders supervise AI actions through visible panels, approval points, terminal output, and file diffs.",
                 media: { type: "image", src: productAssets.diff, alt: "KronosCode file diff display" }
             }
         ]
     },
     {
         path: "/kronoscode",
-        title: "KronosCode | Kronterm",
-        description: "KronosCode is the AI engine inside Kronterm that understands workspace context and helps operate across it.",
+        title: "KronosCode | KronOS",
+        description: "KronosCode is the AI engine inside KronOS that understands workspace context and helps operate across it.",
         eyebrow: "KronosCode",
         headline: "AI coding inside your actual development workspace.",
         subheadline: "KronosCode reads terminal output, sees browser context, inspects files, reasons across project state, helps edit code, and coordinates AI agents with human-approved execution.",
         primaryCta: "Request KronosCode beta",
         secondaryCta: "See AI workflows",
-        heroMedia: { type: "image", src: productAssets.agent, alt: "KronosCode agent running inside Kronterm" },
+        heroMedia: { type: "image", src: productAssets.agent, alt: "KronosCode agent running inside KronOS" },
         sections: [
             {
                 eyebrow: "Capabilities",
@@ -255,20 +255,20 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/terminal",
-        title: "Terminal | Kronterm",
+        title: "Terminal | KronOS",
         description: "A serious terminal experience built for AI-native development and human-approved execution.",
         eyebrow: "Terminal",
         headline: "The terminal becomes the command layer for the whole workspace.",
-        subheadline: "Kronterm keeps shell sessions close to browser previews, files, sandbox state, and KronosCode reasoning so failures can be understood and fixed in context.",
+        subheadline: "KronOS keeps shell sessions close to browser previews, files, sandbox state, and KronosCode reasoning so failures can be understood and fixed in context.",
         primaryCta: "Request beta",
         secondaryCta: "See product",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm terminal integrated with workspace panels" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS terminal integrated with workspace panels" },
         sections: [
             {
                 eyebrow: "Command output as context",
                 title: "Explain failures, inspect logs, and approve the next command.",
                 text: "KronosCode can read terminal output and propose the next step while keeping execution under builder control.",
-                media: { type: "video", src: productAssets.devServerVideo, alt: "Kronterm dev server demonstration" },
+                media: { type: "video", src: productAssets.devServerVideo, alt: "KronOS dev server demonstration" },
                 features: [
                     { title: "Session context", text: "Keep shell output tied to the task and workspace layout.", icon: Terminal },
                     { title: "Process awareness", text: "Track local app state, dev servers, and testing loops.", icon: MonitorPlay },
@@ -280,14 +280,14 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/workflows",
-        title: "AI Workflows | Kronterm",
+        title: "AI Workflows | KronOS",
         description: "High-value AI-native workflows for debugging, refactoring, review, browser validation, and agent-assisted builds.",
         eyebrow: "AI workflows",
         headline: "Move from task to tested result in one workspace.",
-        subheadline: "Kronterm gives KronosCode the evidence needed to plan, edit, execute, inspect, and summarize serious development workflows.",
+        subheadline: "KronOS gives KronosCode the evidence needed to plan, edit, execute, inspect, and summarize serious development workflows.",
         primaryCta: "Run a private-beta workflow",
         secondaryCta: "Explore use cases",
-        heroMedia: { type: "image", src: productAssets.apps, alt: "Kronterm streamable apps display" },
+        heroMedia: { type: "image", src: productAssets.apps, alt: "KronOS streamable apps display" },
         sections: [
             {
                 eyebrow: "Workflow loop",
@@ -305,20 +305,20 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/teams",
-        title: "Teams | Kronterm",
+        title: "Teams | KronOS",
         description: "A commercial AI-native workspace for technical teams that need controlled agent-assisted execution.",
         eyebrow: "Teams",
         headline: "A desktop command center for serious technical teams.",
-        subheadline: "Kronterm helps developers, founders, and AI-agent builders standardize how work moves from context to execution without losing control.",
+        subheadline: "KronOS helps developers, founders, and AI-agent builders standardize how work moves from context to execution without losing control.",
         primaryCta: "Contact sales",
         secondaryCta: "Review security",
-        heroMedia: { type: "image", src: productAssets.sidepanel, alt: "Kronterm team-ready workspace side panel" },
+        heroMedia: { type: "image", src: productAssets.sidepanel, alt: "KronOS team-ready workspace side panel" },
         sections: [
             {
                 eyebrow: "Commercial workflows",
                 title: "Reduce context switching across coding, browsing, testing, and agent supervision.",
-                text: "Teams can use Kronterm for onboarding, debugging, code review, incident investigation, automation, and shared workspace practices.",
-                media: { type: "image", src: productAssets.hero, alt: "Kronterm desktop command center for teams" },
+                text: "Teams can use KronOS for onboarding, debugging, code review, incident investigation, automation, and shared workspace practices.",
+                media: { type: "image", src: productAssets.hero, alt: "KronOS desktop command center for teams" },
                 features: [
                     { title: "Developer workflows", text: "A focused environment for feature work and validation.", icon: Code2 },
                     { title: "Founder velocity", text: "Move from browser research to implementation and testing.", icon: BriefcaseBusiness },
@@ -330,11 +330,11 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/security",
-        title: "Security | Kronterm",
-        description: "Security and control model for Kronterm, KronosCode, workspace context, and human-approved execution.",
+        title: "Security | KronOS",
+        description: "Security and control model for KronOS, KronosCode, workspace context, and human-approved execution.",
         eyebrow: "Security",
         headline: "AI execution needs visible boundaries.",
-        subheadline: "Kronterm is designed for commercial users who need workspace intelligence, local and cloud model support, and approval-driven actions.",
+        subheadline: "KronOS is designed for commercial users who need workspace intelligence, local and cloud model support, and approval-driven actions.",
         primaryCta: "Talk to us",
         secondaryCta: "View FAQ",
         heroMedia: { type: "image", src: productAssets.settings, alt: "KronosCode settings display for configuration and controls" },
@@ -343,7 +343,7 @@ export const pages: PageConfig[] = [
                 eyebrow: "Control model",
                 title: "KronosCode helps operate across the workspace without hiding execution.",
                 text: "Commands, edits, browser work, and agent coordination are designed around inspectable context and user approval.",
-                media: { type: "image", src: productAssets.settings, alt: "Kronterm settings and security controls" },
+                media: { type: "image", src: productAssets.settings, alt: "KronOS settings and security controls" },
                 features: [
                     { title: "Human-approved commands", text: "Builders decide when proposed commands should run.", icon: CheckCircle2 },
                     { title: "Diff visibility", text: "Review code changes before accepting them.", icon: FileCode2 },
@@ -355,14 +355,14 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/pricing",
-        title: "Pricing | Kronterm",
-        description: "Commercial pricing structure for Kronterm private beta, individual builders, teams, and enterprise access.",
+        title: "Pricing | KronOS",
+        description: "Commercial pricing structure for KronOS private beta, individual builders, teams, and enterprise access.",
         eyebrow: "Pricing",
         headline: "Commercial plans for serious builders.",
-        subheadline: "Kronterm is a closed-source commercial product. Private beta access is available for individual builders, teams, and organizations evaluating AI-native development workflows.",
-        primaryCta: "Request access",
+        subheadline: "KronOS is a closed-source commercial product. Private beta access is available for individual builders, teams, and organizations evaluating AI-native development workflows.",
+        primaryCta: "Download KronOS",
         secondaryCta: "Contact sales",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm product screenshot for pricing page" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS product screenshot for pricing page" },
         sections: [
             {
                 eyebrow: "Plans",
@@ -379,14 +379,14 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/customers",
-        title: "Customers | Kronterm",
-        description: "How builders and teams use Kronterm to reduce context switching and supervise AI-assisted execution.",
+        title: "Customers | KronOS",
+        description: "How builders and teams use KronOS to reduce context switching and supervise AI-assisted execution.",
         eyebrow: "Customers",
         headline: "Built for developers who need the whole workspace in play.",
-        subheadline: "Kronterm is for serious builders evaluating a focused desktop command center for AI-native development.",
+        subheadline: "KronOS is for serious builders evaluating a focused desktop command center for AI-native development.",
         primaryCta: "Share your workflow",
         secondaryCta: "Contact sales",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm customer workflow product image" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS customer workflow product image" },
         sections: [
             {
                 eyebrow: "Use patterns",
@@ -403,14 +403,14 @@ export const pages: PageConfig[] = [
     },
     {
         path: "/download",
-        title: "Download | Kronterm",
-        description: "Request private beta access and prepare to install Kronterm on your development machine.",
+        title: "Download | KronOS",
+        description: "Download KronOS access and prepare to install KronOS on your development machine.",
         eyebrow: "Download",
-        headline: "Private beta access for Kronterm.",
-        subheadline: "Kronterm is a commercial product currently routed through private beta access. Request access for macOS, Windows, or Linux evaluation when available.",
-        primaryCta: "Request private beta",
+        headline: "Private beta access for KronOS.",
+        subheadline: "KronOS is a commercial product currently routed through private beta access. Download KronOS for macOS, Windows, or Linux evaluation when available.",
+        primaryCta: "Download KronOS",
         secondaryCta: "Read setup notes",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm download page product preview" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS download page product preview" },
         sections: [
             {
                 eyebrow: "Platforms",
@@ -435,7 +435,7 @@ const useCaseBase = {
 export const extraPages: PageConfig[] = [
     {
         path: "/use-cases/code-review",
-        title: "Kronterm for Code Review",
+        title: "KronOS for Code Review",
         description: "Use KronosCode to review code changes with files, diffs, terminal output, and browser context in view.",
         eyebrow: "Use case",
         headline: "Review code with the full workspace in context.",
@@ -445,7 +445,7 @@ export const extraPages: PageConfig[] = [
         sections: [
             {
                 title: "From change to human-ready review.",
-                text: "Code review in Kronterm starts from the working environment instead of a detached diff. KronosCode can inspect changed files, terminal output, branch context, and browser-visible behavior before it prepares a review summary. The goal is not to replace the reviewer; it is to give the reviewer a better first pass grounded in the actual workspace state.",
+                text: "Code review in KronOS starts from the working environment instead of a detached diff. KronosCode can inspect changed files, terminal output, branch context, and browser-visible behavior before it prepares a review summary. The goal is not to replace the reviewer; it is to give the reviewer a better first pass grounded in the actual workspace state.",
                 features: [
                     { title: "Diff analysis", text: "Understand what changed across files.", icon: GitPullRequest },
                     { title: "Terminal evidence", text: "Connect tests and command output to review findings.", icon: Terminal },
@@ -462,24 +462,24 @@ export const extraPages: PageConfig[] = [
             {
                 eyebrow: "Workspace evidence",
                 title: "Side panels keep files, git, browser, and sandbox context close to the review.",
-                text: "Kronterm’s side rail gives the review workflow access to files, git tree, web previews, sandbox state, and app surfaces. For teams, that turns review from a static patch into an inspectable workspace record: what changed, what was checked, and what action is waiting for approval.",
-                media: { type: "image", src: productAssets.sidepanel, alt: "Kronterm side panel for files, git, browser, sandbox, apps, and settings" }
+                text: "KronOS’s side rail gives the review workflow access to files, git tree, web previews, sandbox state, and app surfaces. For teams, that turns review from a static patch into an inspectable workspace record: what changed, what was checked, and what action is waiting for approval.",
+                media: { type: "image", src: productAssets.sidepanel, alt: "KronOS side panel for files, git, browser, sandbox, apps, and settings" }
             }
         ]
     },
     {
         path: "/use-cases/bug-investigation",
-        title: "Kronterm for Bug Investigation",
+        title: "KronOS for Bug Investigation",
         description: "Reproduce and narrow bugs with terminal output, browser context, files, and sandboxes in one workspace.",
         eyebrow: "Use case",
         headline: "Reproduce, narrow, and fix bugs without losing context.",
-        subheadline: "Kronterm keeps browser, terminal, files, and sandbox state together so KronosCode can reason across the evidence.",
-        heroMedia: { type: "video", src: productAssets.browserVideo, alt: "Browser-based bug investigation in Kronterm" },
+        subheadline: "KronOS keeps browser, terminal, files, and sandbox state together so KronosCode can reason across the evidence.",
+        heroMedia: { type: "video", src: productAssets.browserVideo, alt: "Browser-based bug investigation in KronOS" },
         ...useCaseBase,
         sections: [
             {
                 title: "From vague report to inspected workspace state.",
-                text: "Bug investigation needs browser behavior, logs, command output, and source files in the same room. Kronterm lets a developer keep a live browser widget beside terminal sessions and file context while KronosCode reasons over the evidence. Instead of pasting fragments into a chat box, the workflow stays attached to the workspace where the failure happens.",
+                text: "Bug investigation needs browser behavior, logs, command output, and source files in the same room. KronOS lets a developer keep a live browser widget beside terminal sessions and file context while KronosCode reasons over the evidence. Instead of pasting fragments into a chat box, the workflow stays attached to the workspace where the failure happens.",
                 features: [
                     { title: "Browser repro", text: "Keep live app behavior visible.", icon: PanelTop },
                     { title: "Log analysis", text: "Read terminal output and system signals.", icon: Terminal },
@@ -490,30 +490,30 @@ export const extraPages: PageConfig[] = [
             {
                 eyebrow: "Live repro",
                 title: "Use the browser widget as evidence, not just a preview.",
-                text: "Kronterm browser widgets can stay pinned beside terminal output while the app is being reproduced. KronosCode can use that context to connect visible behavior with logs, local dev server state, and suspected source files, making the next command or edit more targeted.",
-                media: { type: "video", src: productAssets.browserVideo, alt: "Kronterm browser widget used to reproduce a product issue" }
+                text: "KronOS browser widgets can stay pinned beside terminal output while the app is being reproduced. KronosCode can use that context to connect visible behavior with logs, local dev server state, and suspected source files, making the next command or edit more targeted.",
+                media: { type: "video", src: productAssets.browserVideo, alt: "KronOS browser widget used to reproduce a product issue" }
             },
             {
                 eyebrow: "Controlled validation",
                 title: "Move risky checks into sandboxes when the bug needs isolation.",
-                text: "When a bug needs a contained environment, Kronterm sandboxes and desktop tools provide a separate place to run browser automation, application checks, or agent-assisted experiments. The sandbox state stays visible, so a human can still inspect what happened before accepting the fix.",
-                media: { type: "video", src: productAssets.sandboxVideo, alt: "Kronterm sandbox validation workflow" }
+                text: "When a bug needs a contained environment, KronOS sandboxes and desktop tools provide a separate place to run browser automation, application checks, or agent-assisted experiments. The sandbox state stays visible, so a human can still inspect what happened before accepting the fix.",
+                media: { type: "video", src: productAssets.sandboxVideo, alt: "KronOS sandbox validation workflow" }
             }
         ]
     },
     {
         path: "/use-cases/refactors",
-        title: "Kronterm for Refactors",
+        title: "KronOS for Refactors",
         description: "Plan and execute refactors with KronosCode, file diffs, terminal tests, and approval-driven commands.",
         eyebrow: "Use case",
         headline: "Large refactors need more than a prompt window.",
-        subheadline: "KronosCode can reason across project structure, propose edits, run validation with approval, and show the resulting diffs inside Kronterm.",
+        subheadline: "KronosCode can reason across project structure, propose edits, run validation with approval, and show the resulting diffs inside KronOS.",
         heroMedia: { type: "image", src: productAssets.diff, alt: "KronosCode file diff display for refactoring" },
         ...useCaseBase,
         sections: [
             {
                 title: "Plan, edit, test, and keep the builder in control.",
-                text: "Large refactors need a plan, a file map, visible diffs, validation commands, and a clear rollback path. Kronterm gives KronosCode access to project context while keeping every command and edit inspectable. The builder can use AI to accelerate the work without losing track of what changed or why.",
+                text: "Large refactors need a plan, a file map, visible diffs, validation commands, and a clear rollback path. KronOS gives KronosCode access to project context while keeping every command and edit inspectable. The builder can use AI to accelerate the work without losing track of what changed or why.",
                 features: [
                     { title: "Scope mapping", text: "Understand affected files and dependencies.", icon: Network },
                     { title: "Multi-file edits", text: "Review changes before accepting them.", icon: FileCode2 },
@@ -530,24 +530,24 @@ export const extraPages: PageConfig[] = [
             {
                 eyebrow: "Validation loop",
                 title: "Every major edit can become a reviewed diff and an approved command.",
-                text: "Kronterm keeps multi-file edits and command output visible so a refactor can move through checkpoints: planned changes, applied edits, diff review, test execution, and a final summary. KronosCode can help with repetition, but the builder decides what runs and what lands.",
+                text: "KronOS keeps multi-file edits and command output visible so a refactor can move through checkpoints: planned changes, applied edits, diff review, test execution, and a final summary. KronosCode can help with repetition, but the builder decides what runs and what lands.",
                 media: { type: "image", src: productAssets.diff, alt: "KronosCode diff review for refactoring" }
             }
         ]
     },
     {
         path: "/use-cases/agent-builders",
-        title: "Kronterm for Agent Builders",
+        title: "KronOS for Agent Builders",
         description: "Build, test, and supervise AI agents from a programmable desktop workspace.",
         eyebrow: "Use case",
         headline: "An agent-ready workspace for builders creating agents.",
-        subheadline: "Kronterm gives agent builders a place to control model workflows, browser tasks, terminals, sandboxes, and local project state.",
+        subheadline: "KronOS gives agent builders a place to control model workflows, browser tasks, terminals, sandboxes, and local project state.",
         heroMedia: { type: "image", src: productAssets.agent, alt: "KronosCode agent interface for agent builders" },
         ...useCaseBase,
         sections: [
             {
                 title: "Coordinate agents where the work actually happens.",
-                text: "Agent builders need more than chat transcripts. They need a place to test tools, observe browser or desktop actions, inspect files, run terminal commands, and configure model workflows. Kronterm is designed as that command center: a commercial AI-native workspace where agent behavior stays visible and human-approved.",
+                text: "Agent builders need more than chat transcripts. They need a place to test tools, observe browser or desktop actions, inspect files, run terminal commands, and configure model workflows. KronOS is designed as that command center: a commercial AI-native workspace where agent behavior stays visible and human-approved.",
                 features: [
                     { title: "Model flexibility", text: "Support local and cloud model workflows.", icon: Cpu },
                     { title: "Agent supervision", text: "Keep actions visible and approval-driven.", icon: Bot },
@@ -558,33 +558,33 @@ export const extraPages: PageConfig[] = [
             {
                 eyebrow: "Live workspace",
                 title: "The dev Electron app shows the real surfaces agents can work around.",
-                text: "The current Kronterm development app exposes terminal blocks, vertical workspace tabs, and a side rail for terminal, browser, sandbox, files, git tree, sysinfo, apps, and settings. Those are the surfaces KronosCode can reason around when a builder is designing agent workflows.",
-                media: { type: "image", src: productAssets.devElectron, alt: "Kronterm development Electron app with terminal and side tool rail" }
+                text: "The current KronOS development app exposes terminal blocks, vertical workspace tabs, and a side rail for terminal, browser, sandbox, files, git tree, sysinfo, apps, and settings. Those are the surfaces KronosCode can reason around when a builder is designing agent workflows.",
+                media: { type: "image", src: productAssets.devElectron, alt: "KronOS development Electron app with terminal and side tool rail" }
             },
             {
                 eyebrow: "Sandbox and desktop tools",
                 title: "Agent builders can test automation without making the main workspace opaque.",
-                text: "Kronterm includes sandbox desktop tools for scrolling, clicking, dragging, reading and writing files, opening applications, and waiting on desktop state. That gives agent builders a controlled place to test automation while keeping the actions observable to the human supervising the run.",
-                media: { type: "image", src: productAssets.sandbox, alt: "Kronterm sandbox desktop preview" }
+                text: "KronOS includes sandbox desktop tools for scrolling, clicking, dragging, reading and writing files, opening applications, and waiting on desktop state. That gives agent builders a controlled place to test automation while keeping the actions observable to the human supervising the run.",
+                media: { type: "image", src: productAssets.sandbox, alt: "KronOS sandbox desktop preview" }
             }
         ]
     },
     {
         path: "/contact-sales",
-        title: "Contact Sales | Kronterm",
-        description: "Request Kronterm private beta access, team evaluation, or commercial deployment guidance.",
+        title: "Contact Sales | KronOS",
+        description: "Request KronOS private beta access, team evaluation, or commercial deployment guidance.",
         eyebrow: "Contact",
         headline: "Tell us what kind of builder workflow you want to run.",
-        subheadline: "Request private beta access, ask about team evaluation, or discuss KronosCode deployment and model strategy.",
-        primaryCta: "Request private beta",
+        subheadline: "Download KronOS access, ask about team evaluation, or discuss KronosCode deployment and model strategy.",
+        primaryCta: "Download KronOS",
         secondaryCta: "Email sales",
-        heroMedia: { type: "image", src: productAssets.sidepanel, alt: "Kronterm commercial contact product preview" },
+        heroMedia: { type: "image", src: productAssets.sidepanel, alt: "KronOS commercial contact product preview" },
         sections: [
             {
                 title: "We route access by workflow.",
-                text: "Kronterm is currently positioned for developers, founders, technical teams, and AI-agent builders evaluating a commercial AI-native workspace.",
+                text: "KronOS is currently positioned for developers, founders, technical teams, and AI-agent builders evaluating a commercial AI-native workspace.",
                 features: [
-                    { title: "Request a demo", text: "See Kronterm in action for your development workflow.", icon: MonitorPlay },
+                    { title: "Request a demo", text: "See KronOS in action for your development workflow.", icon: MonitorPlay },
                     { title: "Private beta", text: "Join access review for early commercial usage.", icon: Sparkles },
                     { title: "Team evaluation", text: "Discuss seats, controls, and onboarding.", icon: BriefcaseBusiness },
                     { title: "Security questions", text: "Review data handling, approvals, and model configuration.", icon: ShieldCheck }
@@ -594,14 +594,14 @@ export const extraPages: PageConfig[] = [
     },
     {
         path: "/docs",
-        title: "Docs | Kronterm",
-        description: "Documentation hub for Kronterm concepts, setup, KronosCode, and AI-native workflows.",
+        title: "Docs | KronOS",
+        description: "Documentation hub for KronOS concepts, setup, KronosCode, and AI-native workflows.",
         eyebrow: "Docs",
-        headline: "Learn the Kronterm workspace model.",
+        headline: "Learn the KronOS workspace model.",
         subheadline: "Documentation for setup, core concepts, KronosCode, model configuration, workflows, and security controls.",
         primaryCta: "Read quickstart",
-        secondaryCta: "Request access",
-        heroMedia: { type: "image", src: productAssets.explorer, alt: "Kronterm documentation product context" },
+        secondaryCta: "Download KronOS",
+        heroMedia: { type: "image", src: productAssets.explorer, alt: "KronOS documentation product context" },
         sections: [
             {
                 title: "Docs built around activation.",
@@ -617,18 +617,18 @@ export const extraPages: PageConfig[] = [
     },
     {
         path: "/blog",
-        title: "Blog | Kronterm",
+        title: "Blog | KronOS",
         description: "Essays and product updates on AI-native workspaces, developer tools, and agent-assisted execution.",
         eyebrow: "Resources",
         headline: "Field notes from the AI-native workspace.",
         subheadline: "Product updates, workflow essays, security notes, and technical writing for builders working with AI agents.",
         primaryCta: "Read latest notes",
         secondaryCta: "See research",
-        heroMedia: { type: "image", src: productAssets.apps, alt: "Kronterm product UI for blog resources" },
+        heroMedia: { type: "image", src: productAssets.apps, alt: "KronOS product UI for blog resources" },
         sections: [
             {
                 title: "Topics for serious builders.",
-                text: "Kronterm content focuses on workspace-native AI, agent control, terminal workflows, and commercial developer productivity.",
+                text: "KronOS content focuses on workspace-native AI, agent control, terminal workflows, and commercial developer productivity.",
                 features: [
                     { title: "AI workflows", text: "How to use AI across terminal, browser, and files.", icon: Sparkles },
                     { title: "Product updates", text: "Private beta progress and feature notes.", icon: MonitorPlay },
@@ -640,54 +640,54 @@ export const extraPages: PageConfig[] = [
     },
     {
         path: "/research",
-        title: "Research | Kronterm",
+        title: "Research | KronOS",
         description: "Research and analysis on AI-native workspaces and agent-ready development environments.",
         eyebrow: "Research",
         headline: "Research for the next development environment.",
-        subheadline: "Kronterm research explores how builders work when AI can use terminal, browser, editor, files, sandboxes, and agents together.",
+        subheadline: "KronOS research explores how builders work when AI can use terminal, browser, editor, files, sandboxes, and agents together.",
         primaryCta: "Read research notes",
         secondaryCta: "Request beta",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm research product screenshot" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS research product screenshot" },
         sections: [
             {
                 title: "The workspace is the context window.",
-                text: "The core research bet behind Kronterm is that AI coding gets more useful when the model can reason over the entire builder environment.",
+                text: "The core research bet behind KronOS is that AI coding gets more useful when the model can reason over the entire builder environment.",
                 features: pillars
             }
         ]
     },
     {
         path: "/about",
-        title: "About | Kronterm",
-        description: "Kronterm is building a commercial AI-native workspace for builders.",
+        title: "About | KronOS",
+        description: "KronOS is building a commercial AI-native workspace for builders.",
         eyebrow: "About",
         headline: "We are building the desktop command center for AI-native work.",
-        subheadline: "Kronterm exists because serious builders need more than an AI terminal or an IDE assistant. They need one workspace where context, execution, and control stay together.",
+        subheadline: "KronOS exists because serious builders need more than an AI terminal or an IDE assistant. They need one workspace where context, execution, and control stay together.",
         primaryCta: "Request beta",
         secondaryCta: "Contact us",
-        heroMedia: { type: "image", src: productAssets.pet, alt: "Kronterm product mark" },
+        heroMedia: { type: "image", src: productAssets.pet, alt: "KronOS product mark" },
         sections: [
             {
                 title: "Commercial, focused, and product-heavy.",
-                text: "Kronterm is a closed-source commercial AI-native developer workspace built for developers, founders, technical teams, and agent builders.",
+                text: "KronOS is a closed-source commercial AI-native developer workspace built for developers, founders, technical teams, and agent builders.",
                 features: pillars
             }
         ]
     },
     {
         path: "/careers",
-        title: "Careers | Kronterm",
-        description: "Join the team building Kronterm, the AI-native workspace for builders.",
+        title: "Careers | KronOS",
+        description: "Join the team building KronOS, the AI-native workspace for builders.",
         eyebrow: "Careers",
         headline: "Build the workspace where AI agents get real work done.",
         subheadline: "We are interested in people who care about developer tools, AI execution, desktop systems, product craft, and serious builder workflows.",
         primaryCta: "Introduce yourself",
         secondaryCta: "See product",
-        heroMedia: { type: "image", src: productAssets.hero, alt: "Kronterm product screenshot for careers" },
+        heroMedia: { type: "image", src: productAssets.hero, alt: "KronOS product screenshot for careers" },
         sections: [
             {
                 title: "The work is technical and product-heavy.",
-                text: "Kronterm spans terminal systems, browser automation, editor workflows, desktop UI, model orchestration, and agent control.",
+                text: "KronOS spans terminal systems, browser automation, editor workflows, desktop UI, model orchestration, and agent control.",
                 features: [
                     { title: "Desktop product", text: "Build a polished commercial workspace.", icon: LayoutDashboard },
                     { title: "AI systems", text: "Shape KronosCode and agent control loops.", icon: Bot },
@@ -699,32 +699,32 @@ export const extraPages: PageConfig[] = [
     },
     {
         path: "/press",
-        title: "Press | Kronterm",
-        description: "Kronterm press resources, product description, and media contact.",
+        title: "Press | KronOS",
+        description: "KronOS press resources, product description, and media contact.",
         eyebrow: "Press",
-        headline: "Kronterm is the AI-native workspace for builders.",
+        headline: "KronOS is the AI-native workspace for builders.",
         subheadline: "A commercial desktop command center combining terminal, browser, editor, sandboxes, files, AI chat, and agent control, powered by KronosCode.",
         primaryCta: "Contact press",
         secondaryCta: "Download media kit",
-        heroMedia: { type: "image", src: productAssets.pet, alt: "Kronterm media asset" },
+        heroMedia: { type: "image", src: productAssets.pet, alt: "KronOS media asset" },
         sections: [
             {
                 title: "Public description.",
-                text: "Kronterm is a closed-source commercial AI-native developer workspace for coding, browsing, testing, automation, and agent-assisted execution.",
+                text: "KronOS is a closed-source commercial AI-native developer workspace for coding, browsing, testing, automation, and agent-assisted execution.",
                 features: pillars
             }
         ]
     },
     {
         path: "/newsroom",
-        title: "Newsroom | Kronterm",
-        description: "Kronterm announcements and product news.",
+        title: "Newsroom | KronOS",
+        description: "KronOS announcements and product news.",
         eyebrow: "Newsroom",
-        headline: "Product news from Kronterm.",
+        headline: "Product news from KronOS.",
         subheadline: "Announcements about private beta access, KronosCode, model support, product workflows, and commercial availability.",
         primaryCta: "Subscribe for updates",
         secondaryCta: "Request beta",
-        heroMedia: { type: "image", src: productAssets.sidepanel, alt: "Kronterm newsroom product image" },
+        heroMedia: { type: "image", src: productAssets.sidepanel, alt: "KronOS newsroom product image" },
         sections: [
             {
                 title: "Latest updates.",
@@ -740,22 +740,22 @@ export const extraPages: PageConfig[] = [
     },
     {
         path: "/faq",
-        title: "FAQ | Kronterm",
-        description: "Common questions about Kronterm, KronosCode, private beta, AI models, security, and product scope.",
+        title: "FAQ | KronOS",
+        description: "Common questions about KronOS, KronosCode, private beta, AI models, security, and product scope.",
         eyebrow: "FAQ",
         headline: "Frequently asked questions.",
         subheadline: "Answers about private beta access, commercial product scope, KronosCode, local and cloud models, and human-approved execution.",
-        primaryCta: "Request access",
+        primaryCta: "Download KronOS",
         secondaryCta: "Contact us",
-        heroMedia: { type: "image", src: productAssets.settings, alt: "Kronterm settings screen" },
+        heroMedia: { type: "image", src: productAssets.settings, alt: "KronOS settings screen" },
         sections: [
             {
                 title: "What should evaluators know?",
-                text: "Kronterm is a closed-source commercial product in private beta. It is an AI-native workspace, not just an AI terminal.",
+                text: "KronOS is a closed-source commercial product in private beta. It is an AI-native workspace, not just an AI terminal.",
                 features: [
-                    { title: "Is Kronterm commercial?", text: "Yes. It is a closed-source commercial AI-native workspace.", icon: BriefcaseBusiness },
-                    { title: "What is KronosCode?", text: "The AI engine inside Kronterm that understands workspace context.", icon: Bot },
-                    { title: "Does it support local models?", text: "Kronterm is designed for local and cloud model support.", icon: Cpu },
+                    { title: "Is KronOS commercial?", text: "Yes. It is a closed-source commercial AI-native workspace.", icon: BriefcaseBusiness },
+                    { title: "What is KronosCode?", text: "The AI engine inside KronOS that understands workspace context.", icon: Bot },
+                    { title: "Does it support local models?", text: "KronOS is designed for local and cloud model support.", icon: Cpu },
                     { title: "Who approves actions?", text: "Execution is designed around human approval and visibility.", icon: ShieldCheck }
                 ]
             }

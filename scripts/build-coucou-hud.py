@@ -110,6 +110,10 @@ with tempfile.TemporaryDirectory(prefix="kronterm-coucou-") as directory:
         return min(300, base + CGFloat(state.chatHistory.count) * perMsg)'''
     assert height_formula in text, "Upstream prompt geometry changed"
     text = text.replace("struct IslandContainer: View {", "struct IslandContainer: View {\n    @ObservedObject private var kronterm = KronTermBridge.shared")
+    assert ".fill(Color.black)" in text, "Upstream shell material changed"
+    text = text.replace(".fill(Color.black)", ".fill(state.mode == .expanded ? kronterm.contentColor : Color.black)", 1)
+    text = text.replace(".frame(width: islandWidth, height: islandHeight, alignment: .topLeading)",
+                        ".frame(width: islandWidth, height: islandHeight, alignment: .topLeading)\n        .preferredColorScheme(kronterm.colorScheme)", 1)
     text = text.replace(height_formula, "        return kronterm.voice.active && !kronterm.voiceExpanded ? 160 : kronterm.chatSize.1")
     text = text.replace(".onChange(of: state.chatHistory.count)", ".onChange(of: kronterm.voice.active && !kronterm.voiceExpanded)")
     text = text.replace(

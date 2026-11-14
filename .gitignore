@@ -83,3 +83,7 @@ website/.next/
 
 # Local Electron verification bundle
 /.tmp/KronTermWorkflowDev.app/
+/.tmp/
+
+/integrations/comfyui/upstream/
+/public/comfy-native/

@@ -135,7 +135,7 @@ it("reports a stale preload instead of silently sending input through the CLI re
     instance.frameSize = { width: 230, height: 408 };
     const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ status: "ok" }) }));
     vi.stubGlobal("fetch", fetch);
-    await expect(instance.sendClick(10, 20)).rejects.toThrow("Restart KronTerm");
+    await expect(instance.sendClick(10, 20)).rejects.toThrow("Restart KronOS");
     expect(fetch).not.toHaveBeenCalled();
-    expect(globalStore.get(instance.inputErrorAtom)).toContain("Restart KronTerm");
+    expect(globalStore.get(instance.inputErrorAtom)).toContain("Restart KronOS");
 });

@@ -25,7 +25,7 @@ export function registerMacVmIpc(): void {
             ) {
                 return {
                     success: false,
-                    error: { code: "untrusted-caller", message: "Only a KronTerm workspace can manage macOS VMs." },
+                    error: { code: "untrusted-caller", message: "Only a KronOS workspace can manage macOS VMs." },
                 };
             }
             if (!owners.has(sender.id)) {

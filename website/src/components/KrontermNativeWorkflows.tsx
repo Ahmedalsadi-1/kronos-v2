@@ -5,7 +5,7 @@ const workflowItems = [
     {
         label: "Vertical tabs",
         text: "Display terminal sessions, browser work, sandboxes, and agent tasks as vertical tabs with branch, worktree, and review metadata.",
-        media: { type: "image", src: productAssets.hero, alt: "Kronterm vertical tabs with terminal, browser, and workspace panels" }
+        media: { type: "image", src: productAssets.hero, alt: "KronOS vertical tabs with terminal, browser, and workspace panels" }
     },
     {
         label: "Notifications",
@@ -14,13 +14,13 @@ const workflowItems = [
     },
     {
         label: "Interactive code review",
-        text: "Review changes, leave comments, inspect diffs, and send work back to agents without leaving the Kronterm workspace.",
+        text: "Review changes, leave comments, inspect diffs, and send work back to agents without leaving the KronOS workspace.",
         media: { type: "image", src: productAssets.diff, alt: "KronosCode diff panel for interactive code review" }
     },
     {
         label: "Sandbox handoff",
         text: "Move from terminal work to isolated execution environments when browser automation, tests, or agent experiments need containment.",
-        media: { type: "video", src: productAssets.sandboxVideo, alt: "Kronterm sandbox handoff workflow video" }
+        media: { type: "video", src: productAssets.sandboxVideo, alt: "KronOS sandbox handoff workflow video" }
     }
 ];
 
@@ -31,12 +31,12 @@ export function KrontermNativeWorkflows() {
     return (
         <section className="native-workflows" aria-labelledby="native-workflows-title">
             <div className="native-workflows-heading">
-                <p className="eyebrow">Kronterm</p>
+                <p className="eyebrow">KronOS</p>
                 <h2 id="native-workflows-title">Agent workflows that feel native.</h2>
-                <p>Switch between assisted and manual workflows without leaving the Kronterm workspace.</p>
+                <p>Switch between assisted and manual workflows without leaving the KronOS workspace.</p>
             </div>
             <div className="native-workflows-panel">
-                <div className="native-tabs" role="tablist" aria-label="Kronterm native workflow previews">
+                <div className="native-tabs" role="tablist" aria-label="KronOS native workflow previews">
                     {workflowItems.map((item, index) => (
                         <button
                             className={index === activeIndex ? "active" : ""}

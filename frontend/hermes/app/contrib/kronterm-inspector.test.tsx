@@ -101,12 +101,11 @@ it("opens Files by default and adds Changes and Side chat from the panel menu wi
         expect($krontermInspectorSection.get()).toBe("changes");
         await menuSelect("Changes");
         expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
+        const showPicker = vi.fn();
+        window.addEventListener("kronterm:workflow-inspector", showPicker, { once: true });
         await menuSelect("Nodes");
-        expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Nodes");
-        expect(host.querySelector('[aria-label="Workflow nodes"]')).not.toBeNull();
-        await menuSelect("Nodes");
-        expect(host.querySelectorAll("#inspector-tab-workflow-nodes")).toHaveLength(1);
-        await click("Close Nodes");
+        expect(showPicker.mock.calls[0][0].detail.section).toBe("workflow-nodes");
+        expect(host.querySelector("#inspector-tab-workflow-nodes")).toBeNull();
         expect(host.querySelector('[aria-label="Workflow nodes"]')).toBeNull();
         await act(async () => window.dispatchEvent(new Event("kronterm:workflow-chat")));
         expect($krontermInspectorSection.get()).toBe("chat");
@@ -208,134 +207,19 @@ it("resizes the side panel from the tab strip grip and folds it into a compact r
     }
 });
 
-it("scopes original node and execution mounts to the active workflow and keeps them mutually visible", async () => {
-    const { $workflowContext } = await import("@hermes/app/workflows/workflow-context");
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    const picker = vi.fn();
-    const execution = vi.fn();
-    const opened = vi.fn();
-    window.addEventListener("kronterm:workflow-open", opened);
-    window.addEventListener("kronterm:original-node-picker", picker);
-    window.addEventListener("kronterm:workflow-surface", execution);
-    const context = (hasExecutions: boolean) =>
-        window.dispatchEvent(
-            new CustomEvent("kronterm:workflow-context", {
-                detail: { tabId: "tab-a", workflowId: "flow-a", hasExecutions },
-            })
-        );
-    const show = (section: string, tabId = "tab-a") =>
-        window.dispatchEvent(new CustomEvent("kronterm:workflow-inspector", { detail: { section, tabId } }));
-    try {
-        await act(async () => {
-            $krontermInspectorOpen.set(true);
-            $krontermInspectorSection.set("files");
-            root.render(<KrontermInspector />);
-        });
-        await act(async () => context(false));
-        await act(async () => show("workflow-nodes", "other-tab"));
-        expect($krontermInspectorSection.get()).toBe("files");
-        expect(opened).not.toHaveBeenCalled();
-        await act(async () => show("workflow-nodes"));
-        expect(opened.mock.calls.at(-1)[0].detail).toEqual({ tabId: "tab-a", surface: "canvas" });
-        expect(picker.mock.calls.at(-1)[0].detail).toMatchObject({ tabId: "tab-a", target: expect.any(HTMLElement) });
-        await act(async () => show("workflow-executions"));
-        expect($krontermInspectorSection.get()).toBe("workflow-nodes");
-        await act(async () => context(true));
-        await act(async () => show("workflow-executions"));
-        expect(execution.mock.calls.at(-1)[0].detail).toMatchObject({
-            surface: "executions",
-            tabId: "tab-a",
-            workflowId: "flow-a",
-            target: expect.any(HTMLElement),
-        });
-        expect(host.querySelectorAll('[role="tabpanel"]:not([hidden])')).toHaveLength(1);
-        expect(host.querySelector('[role="tabpanel"]:not([hidden])').id).toBe("inspector-pane-workflow-executions");
-        await act(async () => show("workflow-nodes"));
-        expect(execution.mock.calls.at(-1)[0].detail).toMatchObject({ tabId: "tab-a", target: null });
-        await act(async () => context(false));
-        expect(host.querySelector("#inspector-tab-workflow-executions")).toBeNull();
-    } finally {
-        await act(async () => root.unmount());
-        host.remove();
-        $workflowContext.set({});
-        $krontermInspectorSection.set("files");
-        $krontermInspectorOpen.set(false);
-        window.removeEventListener("kronterm:original-node-picker", picker);
-        window.removeEventListener("kronterm:workflow-surface", execution);
-        window.removeEventListener("kronterm:workflow-open", opened);
-    }
-});
-
-it("temporarily compacts only the matching Nodes rail while original node details are open", async () => {
-    const { $workflowContext } = await import("@hermes/app/workflows/workflow-context");
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    const visibility = (open: boolean, tabId = "tab-a") =>
-        act(async () => {
-            window.dispatchEvent(new CustomEvent("kronterm:workflow-details-visibility", { detail: { tabId, open } }));
-        });
-    try {
-        await act(async () => {
-            $workflowContext.set({ tabId: "tab-a", hasExecutions: true });
-            $krontermInspectorOpen.set(true);
-            $krontermInspectorSection.set("workflow-nodes");
-            $krontermInspectorCompact.set(false);
-            $krontermInspectorWidth.set(480);
-            root.render(<KrontermInspector />);
-        });
-        await visibility(true, "tab-b");
-        expect($krontermInspectorCompact.get()).toBe(false);
-        await visibility(true);
-        expect(host.querySelector(".kronterm-inspector")?.classList.contains("is-compact")).toBe(true);
-        expect($krontermInspectorWidth.get()).toBe(480);
-        await visibility(false);
-        expect($krontermInspectorCompact.get()).toBe(false);
-        expect($krontermInspectorWidth.get()).toBe(480);
-        await visibility(true);
-        await act(async () => $krontermInspectorCompact.set(false));
-        await visibility(true);
-        expect($krontermInspectorCompact.get()).toBe(false);
-        await visibility(false);
-        expect($krontermInspectorCompact.get()).toBe(false);
-        for (const section of ["files", "chat", "workflow-executions"] as const) {
-            await act(async () => $krontermInspectorSection.set(section));
-            await visibility(true);
-            expect($krontermInspectorCompact.get()).toBe(false);
-            await visibility(false);
-        }
-        await act(async () => $krontermInspectorSection.set("workflow-nodes"));
-        await visibility(true);
-        await act(async () => $krontermInspectorSection.set("chat"));
-        await visibility(false);
-        expect($krontermInspectorSection.get()).toBe("chat");
-        expect($krontermInspectorCompact.get()).toBe(true);
-    } finally {
-        await act(async () => root.unmount());
-        host.remove();
-        $krontermInspectorCompact.set(false);
-        $krontermInspectorOpen.set(false);
-        $workflowContext.set({});
-    }
-});
-
-it("keeps the Nodes picker selected when OS handles opening execution history below the canvas", async () => {
+it("opens execution history in the inspector and closes the canvas dock", async () => {
     const { $workflowContext } = await import("@hermes/app/workflows/workflow-context");
     const element = document.createElement("div");
     document.body.append(element);
     const root = createRoot(element);
-    const openDock = vi.fn((event: Event) => {
-        (event as CustomEvent).detail.handled = true;
-    });
-    window.addEventListener("kronterm:workflow-executions-dock-open", openDock);
+    const closeDock = vi.fn();
+    window.addEventListener("kronterm:workflow-executions-dock-close", closeDock);
     try {
         await act(async () => {
             $workflowContext.set({ tabId: "tab-a", workflowId: "flow-a", hasExecutions: true });
             $krontermInspectorOpen.set(true);
             $krontermInspectorCompact.set(false);
-            $krontermInspectorSection.set("workflow-nodes");
+            $krontermInspectorSection.set("files");
             root.render(<KrontermInspector />);
         });
         await act(async () =>
@@ -345,15 +229,15 @@ it("keeps the Nodes picker selected when OS handles opening execution history be
                 })
             )
         );
-        expect(openDock).toHaveBeenCalledTimes(1);
-        expect((openDock.mock.calls[0][0] as CustomEvent).detail.tabId).toBe("tab-a");
-        expect($krontermInspectorSection.get()).toBe("workflow-nodes");
+        expect(closeDock).toHaveBeenCalledTimes(1);
+        expect((closeDock.mock.calls[0][0] as CustomEvent).detail.tabId).toBe("tab-a");
+        expect($krontermInspectorSection.get()).toBe("workflow-executions");
         expect($krontermInspectorOpen.get()).toBe(true);
         expect($krontermInspectorCompact.get()).toBe(false);
-        expect(element.textContent).not.toContain("Execution history is open below the canvas");
+        expect(element.querySelector('[aria-label="Workflow execution history"]')).toBeTruthy();
     } finally {
         await act(async () => root.unmount());
-        window.removeEventListener("kronterm:workflow-executions-dock-open", openDock);
+        window.removeEventListener("kronterm:workflow-executions-dock-close", closeDock);
         $krontermInspectorOpen.set(false);
         $workflowContext.set({});
         element.remove();

@@ -27,6 +27,7 @@ export const LinuxGuestPackages = [
 ];
 
 export const LinuxGuestFiles = [
+    { path: "/usr/local/bin/kronterm-open-app", content: LinuxGuestSources["open-app.sh"] },
     { path: "/usr/local/bin/kronterm-appearance", content: LinuxGuestSources["appearance.sh"] },
     { path: "/usr/local/bin/kronterm-cua-session", content: LinuxGuestSources["session.sh"] },
     { path: "/usr/local/bin/kronterm-focus-one", content: LinuxGuestSources["focus-one.sh"] },

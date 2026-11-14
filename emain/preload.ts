@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { contextBridge, ipcRenderer, Rectangle, WebviewTag } from "electron";
+import { contextBridge, ipcRenderer, Rectangle, WebviewTag, webUtils } from "electron";
 import type { HermesSelection } from "../frontend/types/hermes-selection";
 
 let nativeNotchAvailable = false;
@@ -11,9 +11,14 @@ ipcRenderer.on("native-notch-availability", (_event, available: unknown) => {
 
 // update type in custom.d.ts (ElectronApi type)
 contextBridge.exposeInMainWorld("api", {
+    getDiagnosticReport: () => ipcRenderer.invoke("get-diagnostic-report"),
+    clearDiagnosticReport: () => ipcRenderer.invoke("clear-diagnostic-report"),
+    recordRendererFailure: (failure) => ipcRenderer.send("record-renderer-failure", failure),
     agentBotCommand: (command) => ipcRenderer.invoke("agent-bot-command", command),
+    projectRoomCommand: (command) => ipcRenderer.invoke("project-room-command", command),
     openBotDesktop: (botId: string) => ipcRenderer.invoke("open-bot-desktop", botId),
     openAgentWorkspace: () => ipcRenderer.invoke("open-agent-workspace"),
+    openKronosSignIn: () => ipcRenderer.send("open-kronos-sign-in"),
     onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => {
         const listener = (_event, direction: unknown) => {
             if (direction === "up" || direction === "down") callback(direction);
@@ -86,11 +91,17 @@ contextBridge.exposeInMainWorld("api", {
         ipcRenderer.on("productivity-state", handler);
         return () => ipcRenderer.removeListener("productivity-state", handler);
     },
+    browserAccount: (input) => ipcRenderer.invoke("browser-account", input),
     browserNavigationHistory: (guestId, snapshot) =>
         ipcRenderer.invoke("browser-navigation-history", guestId, snapshot),
     browserGrab: (input) => ipcRenderer.invoke("browser-grab", input),
-    desktopGrab: () => ipcRenderer.invoke("desktop-grab"),
-    cancelDesktopGrab: () => ipcRenderer.invoke("cancel-desktop-grab"),
+    onBrowserElementSelection: (callback) => {
+        const handler = (_event, guestId, intent, selection, comment) => callback(guestId, intent, selection, comment);
+        ipcRenderer.on("browser-element-selection", handler);
+        return () => ipcRenderer.removeListener("browser-element-selection", handler);
+    },
+    desktopGrab: (operationId: string) => ipcRenderer.invoke("desktop-grab", operationId),
+    cancelDesktopGrab: (operationId: string) => ipcRenderer.invoke("cancel-desktop-grab", operationId),
     browserCancelGrab: (guestId) => ipcRenderer.invoke("browser-cancel-grab", guestId),
     browserAccessibilitySnapshot: (guestId) => ipcRenderer.invoke("browser-accessibility-snapshot", guestId),
     captureBrowserPage: (input) => ipcRenderer.invoke("capture-browser-page", input),
@@ -222,6 +233,7 @@ contextBridge.exposeInMainWorld("api", {
     saveTextFile: (fileName: string, content: string) => ipcRenderer.invoke("save-text-file", fileName, content),
     selectDirectory: () => ipcRenderer.invoke("select-directory"),
     selectFiles: () => ipcRenderer.invoke("select-files"),
+    getPathForFile: (file: File) => webUtils.getPathForFile(file),
     selectWallpaper: () => ipcRenderer.invoke("select-wallpaper"),
     searchSystemItems: (query: string) => ipcRenderer.invoke("search-system-items", query),
     getNativeAppIcons: (appPaths: string[]) => ipcRenderer.invoke("get-native-app-icons", appPaths),
@@ -263,6 +275,7 @@ contextBridge.exposeInMainWorld("api", {
     manageNativeTaskGroups: (input) => ipcRenderer.invoke("native-task-groups:manage", input),
     manageComputerPlugins: (command) => ipcRenderer.invoke("computer-plugins:manage", command),
     sandboxComputerAccess: (input) => ipcRenderer.invoke("computer-access", input),
+    sandboxLogin: (input) => ipcRenderer.invoke("sandbox-login", input),
     listLinuxDesktops: () => ipcRenderer.invoke("linux-desktops:list"),
     listMacVms: () => ipcRenderer.invoke("macos-vms:list"),
     startMacVm: (name: string) => ipcRenderer.invoke("macos-vms:start", { name }),
@@ -279,6 +292,7 @@ contextBridge.exposeInMainWorld("api", {
     readComputerTargetFrame: (sessionId: string) => ipcRenderer.invoke("computer-targets:frame", sessionId),
     stopComputerTargetSession: (sessionId: string) => ipcRenderer.invoke("computer-targets:disconnect", sessionId),
     performComputerTargetAction: (action) => ipcRenderer.invoke("computer-targets:action", action),
+    pickComputerTargetElement: (input) => ipcRenderer.invoke("computer-targets:pick", input),
     takeOverComputerTarget: (targetId: string) => ipcRenderer.invoke("computer-targets:takeover", targetId),
     resumeComputerTarget: (targetId: string, expectedGeneration: number) =>
         ipcRenderer.invoke("computer-targets:resume", { targetId, expectedGeneration }),
@@ -330,6 +344,7 @@ contextBridge.exposeInMainWorld("api", {
     hermesGetConnection: (context?: { tabId?: string; blockId?: string }) =>
         ipcRenderer.invoke("hermes-get-connection", context),
     hermesApi: (input) => ipcRenderer.invoke("hermes-api", input),
+    swarmRecovery: (command) => ipcRenderer.invoke("swarm-recovery", command),
     getKronTermAccountStatus: () => ipcRenderer.invoke("kronterm-account-status"),
     onHermesConnection: (callback) => {
         const handler = (_event: Electron.IpcRendererEvent, payload: HermesConnectionDescriptor) => callback(payload);

@@ -13,8 +13,8 @@
     --kt-radius-row: 8px;
     --kt-radius-popover: 10px;
     --kt-radius-window: 14px;
-    --kt-font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-    --kt-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    --kt-font-ui: var(--kron-interface-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif);
+    --kt-font-display: var(--kron-interface-font, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif);
     --kt-label: #1d1d1f;
     --kt-label-secondary: #55555c;
     --kt-label-tertiary: #606067;
@@ -166,6 +166,11 @@ html.minimal-ui .kt-system-ui {
 .kt-system-button.is-tinted {
     color: var(--kt-label);
     background: var(--kt-fill-hover);
+}
+
+[data-kron-button-style="outlined"] .kt-system-button:is(.is-tinted, .is-selected):not(.is-filled, :focus-visible) {
+    outline: 1px solid var(--kt-separator);
+    outline-offset: -1px;
 }
 
 .kt-system-button.is-destructive {

@@ -57,7 +57,7 @@ export function Footer() {
             <section className="downloads-footer" id="global-downloads-footer" aria-labelledby="downloads-footer-title">
                 <div className="downloads-inner">
                     <p className="downloads-eyebrow">All downloads</p>
-                    <h2 id="downloads-footer-title">Get Kronterm today</h2>
+                    <h2 id="downloads-footer-title">Get KronOS today</h2>
                     <p className="downloads-subtitle">
                         Request private beta access for the commercial AI-native workspace powered by{" "}
                         <Link to="/kronoscode">KronosCode</Link>.
@@ -147,7 +147,7 @@ export function Footer() {
                 <div className="footer-grid">
                     <div className="footer-brand">
                         <img src="/assets/product/kronterm-icon.svg" alt="" />
-                        <strong>Kronterm</strong>
+                        <strong>KronOS</strong>
                         <p>Commercial AI-native workspace for builders, powered by KronosCode.</p>
                     </div>
                     {groups.map((group) => (
@@ -162,7 +162,7 @@ export function Footer() {
                     ))}
                 </div>
                 <div className="footer-bottom">
-                    <span>All Rights Reserved © 2026 Kronterm</span>
+                    <span>All Rights Reserved © 2026 KronOS</span>
                     <span>Closed-source commercial product</span>
                     <span className="status-pill"><Laptop size={13} aria-hidden="true" /> Private beta routing</span>
                 </div>

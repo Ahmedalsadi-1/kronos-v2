@@ -56,6 +56,8 @@ describe("ComfyUI local bridge", () => {
         const fetcher = vi.fn(async (url) => {
             if (String(url).endsWith("/prompt")) return json({ prompt_id: "owned" });
             if (String(url).endsWith("/queue")) return json({ queue_running: [], queue_pending: [] });
+            if (String(url).includes("/view?"))
+                return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "Content-Type": "image/png" } });
             return json({
                 owned: {
                     status: { completed: true, status_str: "success" },
@@ -64,11 +66,15 @@ describe("ComfyUI local bridge", () => {
             });
         });
         const client = new ComfyUiClient(journal(), fetcher as typeof fetch);
-        await client.execute({ action: "submit", origin: Origin, workflow: Workflow });
-        expect((await client.execute({ action: "refresh", origin: Origin })).jobs[0]).toMatchObject({
+        await client.execute({ action: "submit", origin: Origin, workflow: Workflow }, "workspace-a");
+        const job = (await client.execute({ action: "refresh", origin: Origin, id: "owned" }, "workspace-a")).jobs[0];
+        expect(job).toMatchObject({
             status: "completed",
             images: [{ filename: "render.png" }],
         });
+        await expect(
+            client.execute({ action: "image", origin: Origin, id: job.id, image: job.images[0] }, "workspace-a")
+        ).resolves.toEqual({ imageData: "data:image/png;base64,iVBORw==" });
     });
     it("rejects other users' job cancellation and image access", async () => {
         const fetcher = vi.fn();
@@ -97,6 +103,24 @@ describe("ComfyUI local bridge", () => {
         );
         expect(fetcher.mock.calls[1][0]).toBe(`${Origin}/api/jobs/owned/cancel`);
         expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/interrupt"))).toBe(false);
+    });
+    it("keeps agent render ownership in the shared journal across restarts", async () => {
+        const file = journal();
+        const fetcher = vi.fn(async (url) => {
+            if (String(url).endsWith("/prompt")) return json({ prompt_id: "workspace-render" });
+            if (String(url).endsWith("/queue")) return json({ queue_pending: [[0, "workspace-render"]] });
+            if (String(url).endsWith("/system_stats")) return json({ system: { comfyui_version: "test" } });
+            return json({ SaveImage: {} });
+        });
+        const client = new ComfyUiClient(file, fetcher as typeof fetch);
+        await client.execute({ action: "submit", origin: Origin, workflow: Workflow }, "workspace-a");
+        const restored = new ComfyUiClient(file, fetcher as typeof fetch);
+        const refresh = { action: "refresh", origin: Origin, id: "workspace-render" } as const;
+        await expect(restored.execute(refresh, "workspace-b")).rejects.toThrow("not submitted");
+        await expect(restored.execute({ ...refresh, action: "cancel" }, "workspace-b")).rejects.toThrow("not submitted");
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        expect((await restored.execute(refresh, "workspace-a")).jobs[0]).toMatchObject({ status: "queued" });
+        expect((await restored.execute({ action: "health", origin: Origin })).jobs[0].id).toBe("workspace-render");
     });
     it("surfaces rejected prompts and service failures", async () => {
         const client = new ComfyUiClient(

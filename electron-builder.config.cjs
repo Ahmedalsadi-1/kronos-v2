@@ -2,7 +2,6 @@ const { Arch } = require("electron-builder");
 const pkg = require("./package.json");
 const fs = require("fs");
 const path = require("path");
-
 const windowsShouldSign = !!process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
 
 /**
@@ -22,20 +21,23 @@ const config = {
         if (context.electronPlatformName !== "darwin") return;
         const { execFile } = require("node:child_process");
         const { promisify } = require("node:util");
+        await promisify(execFile)(process.execPath, ["scripts/build-vm-process.mjs", Arch[context.arch]], {
+            cwd: __dirname,
+        });
         await promisify(execFile)(process.execPath, ["scripts/build-desktop-picker.mjs", Arch[context.arch]], {
-            cwd: context.packager.projectDir,
+            cwd: __dirname,
         });
         await promisify(execFile)(
             process.execPath,
             ["scripts/build-desktop-picker.mjs", Arch[context.arch], "background-computer"],
             {
-                cwd: context.packager.projectDir,
+                cwd: __dirname,
             }
         );
         await promisify(execFile)(
             process.execPath,
             ["scripts/build-desktop-picker.mjs", Arch[context.arch], "background-display"],
-            { cwd: context.packager.projectDir }
+            { cwd: __dirname }
         );
     },
     files: [
@@ -44,11 +46,11 @@ const config = {
             to: "./dist",
             filter: [
                 "**/*",
-                "!bin/*",
-                "bin/wavesrv.${arch}*",
-                "bin/wsh*",
+                "!bin/**/*",
                 "!tsunamiscaffold/**/*",
                 "!mcp-kron-term/**/*",
+                "!native/vm-process.node",
+                "!**/*.map",
             ],
         },
         {
@@ -59,6 +61,19 @@ const config = {
         "!node_modules", // We don't need electron-builder to package in Node modules as Vite has already bundled any code that our program is using.
     ],
     extraResources: [
+        {
+            from: "dist/bin",
+            to: "app.asar.unpacked/dist/bin",
+            filter: ["wavesrv.${arch}*", "wsh*"],
+        },
+        { from: "dist/schema", to: "app.asar.unpacked/dist/schema" },
+        { from: "LICENSE", to: "licenses/kronos/LICENSE" },
+        { from: "ACKNOWLEDGEMENTS.md", to: "licenses/kronos/ACKNOWLEDGEMENTS.md" },
+        {
+            from: "integrations/n8n",
+            to: "n8n",
+            filter: ["session-hook.cjs", "managed-session.cjs"],
+        },
         {
             from: "integrations/openmausbot/upstream",
             to: "openmausbot",
@@ -134,6 +149,11 @@ const config = {
             filter: ["bin/kronoscode", "LICENSE", "README.md"],
         },
         {
+            from: "agents/macu",
+            to: "agents/macu",
+            filter: ["LICENSE", "SOURCE.md"],
+        },
+        {
             from: "agents/kronterm-agent",
             to: "agents/kronterm-agent",
             filter: ["bin/kronterm-agent", "README.md"],
@@ -149,9 +169,12 @@ const config = {
     },
     asarUnpack: [
         "dist/bin/**/*", // wavesrv and wsh binaries
+        "**/wavesrv.*",
+        "**/wsh-*",
         "dist/schema/**/*", // schema files for Monaco editor
     ],
     mac: {
+        icon: "build/kronos.icns",
         target: [
             {
                 target: "zip",
@@ -163,23 +186,23 @@ const config = {
             },
         ],
         category: "public.app-category.developer-tools",
-        minimumSystemVersion: "10.15.0",
+        minimumSystemVersion: "26.0",
         mergeASARs: true,
         singleArchFiles: "**/dist/bin/wavesrv.*",
         entitlements: "build/entitlements.mac.plist",
         entitlementsInherit: "build/entitlements.mac.plist",
         extendInfo: {
-            NSContactsUsageDescription: "A CLI application running in Wave wants to use your contacts.",
-            NSRemindersUsageDescription: "A CLI application running in Wave wants to use your reminders.",
+            NSContactsUsageDescription: "A CLI application running in KronOS wants to use your contacts.",
+            NSRemindersUsageDescription: "A CLI application running in KronOS wants to use your reminders.",
             NSLocationWhenInUseUsageDescription:
-                "A CLI application running in Wave wants to use your location information while active.",
+                "A CLI application running in KronOS wants to use your location information while active.",
             NSLocationAlwaysUsageDescription:
-                "A CLI application running in Wave wants to use your location information, even in the background.",
-            NSCameraUsageDescription: "A CLI application running in Wave wants to use the camera.",
-            NSMicrophoneUsageDescription: "A CLI application running in Wave wants to use your microphone.",
-            NSCalendarsUsageDescription: "A CLI application running in Wave wants to use Calendar data.",
-            NSLocationUsageDescription: "A CLI application running in Wave wants to use your location information.",
-            NSAppleEventsUsageDescription: "A CLI application running in Wave wants to use AppleScript.",
+                "A CLI application running in KronOS wants to use your location information, even in the background.",
+            NSCameraUsageDescription: "A CLI application running in KronOS wants to use the camera.",
+            NSMicrophoneUsageDescription: "A CLI application running in KronOS wants to use your microphone.",
+            NSCalendarsUsageDescription: "A CLI application running in KronOS wants to use Calendar data.",
+            NSLocationUsageDescription: "A CLI application running in KronOS wants to use your location information.",
+            NSAppleEventsUsageDescription: "A CLI application running in KronOS wants to use AppleScript.",
         },
     },
     linux: {
@@ -225,10 +248,46 @@ const config = {
         fpm: ["--rpm-rpmbuild-define", "_build_id_links none"],
     },
     publish: {
-        provider: "generic",
-        url: "https://dl.waveterm.dev/releases-w2",
+        provider: "github",
+        owner: "Ahmedalsadi-1",
+        repo: "kronos-releases",
+        releaseType: "release",
     },
     afterPack: (context) => {
+        const resourcesDir = context.electronPlatformName === "darwin"
+            ? path.join(context.appOutDir, `${pkg.productName}.app/Contents/Resources`)
+            : path.join(context.appOutDir, "resources");
+        const agentHarness = {
+            darwin: "libkronos_agent_harness.dylib",
+            linux: "libkronos_agent_harness.so",
+            win32: "kronos_agent_harness.dll",
+        }[context.electronPlatformName];
+        const requiredResources = [
+            "mcp-kron-term/dist/native-proxy.js",
+            "mcp-kron-term/dist/native-bridge.js",
+            "hermes-plugins/kronterm-tools/plugin.yaml",
+            `hermes-plugins/kronterm-tools/${agentHarness}`,
+            "licenses/kronos/LICENSE",
+        ];
+        const packagedVmProcess = context.electronPlatformName === "darwin" &&
+            (context.arch === Arch.universal ||
+                (context.arch === Arch.arm64 && !context.appOutDir.endsWith("-arm64-temp")));
+        if (packagedVmProcess) {
+            // Add the arm64-only addon after merging universal packages and before signing.
+            const destination = path.join(resourcesDir, "native/vm-process.node");
+            fs.mkdirSync(path.dirname(destination), { recursive: true });
+            fs.copyFileSync(path.join(__dirname, "dist/native/vm-process.node"), destination);
+            requiredResources.push("native/vm-process.node");
+        }
+        if (context.arch !== Arch.universal) {
+            const extension = context.electronPlatformName === "win32" ? ".exe" : "";
+            requiredResources.push(`app.asar.unpacked/dist/bin/wavesrv.${Arch[context.arch]}${extension}`);
+        }
+        for (const resource of requiredResources) {
+            if (!fs.existsSync(path.join(resourcesDir, resource))) {
+                throw new Error(`KronOS package is missing required runtime resource: ${resource}`);
+            }
+        }
         // This is a workaround to restore file permissions to the wavesrv binaries on macOS after packaging the universal binary.
         if (context.electronPlatformName === "darwin" && context.arch === Arch.universal) {
             const packageBinDir = path.resolve(

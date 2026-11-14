@@ -1,4 +1,5 @@
 import { resolveBlockView } from "@/app/block/retired-chat-view";
+import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -151,14 +152,14 @@ function isAgentChatWidget(widget: WidgetConfigType): boolean {
 
 function getWidgetLabel(widget: WidgetConfigType): string {
     if (isAgentChatWidget(widget)) {
-        return "KronTerm Agent";
+        return "KronOS Agent";
     }
     return widget.label;
 }
 
 function getWidgetDescription(widget: WidgetConfigType): string {
     if (isAgentChatWidget(widget)) {
-        return "Open the canonical KronTerm Agent workspace";
+        return "Open KronOS Agent in the side panel";
     }
     return widget.description || widget.label;
 }
@@ -166,7 +167,7 @@ function getWidgetDescription(widget: WidgetConfigType): string {
 async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv) {
     // Saved chat launcher definitions open the supported Hermes surface.
     if (isAgentChatWidget(widget)) {
-        env.createBlock({ meta: { view: "hermes" } }, widget.magnified);
+        hermesSurfaceController.requestOpenPanel();
         return;
     }
     const blockDef = widget.blockdef;
@@ -321,7 +322,7 @@ const AppsFloatingWindow = memo(
                     setApps(localApps);
                     setDesktopApps(installedApps.sort((a, b) => a.name.localeCompare(b.name)));
                     if (waveAppsResult.status === "rejected" && desktopAppsResult.status === "rejected") {
-                        setLoadError("KronTerm could not load apps.");
+                        setLoadError("KronOS could not load apps.");
                     } else if (waveAppsResult.status === "rejected" || desktopAppsResult.status === "rejected") {
                         setLoadError("Some apps could not be loaded.");
                     }
@@ -335,7 +336,7 @@ const AppsFloatingWindow = memo(
                     console.error("Failed to fetch apps:", error);
                     setApps([]);
                     setDesktopApps([]);
-                    setLoadError("KronTerm could not load apps.");
+                    setLoadError("KronOS could not load apps.");
                 } finally {
                     setLoading(false);
                 }
@@ -468,7 +469,7 @@ const AppsFloatingWindow = memo(
                             <div className="widget-app-launcher-state">
                                 <i className="fa-solid fa-puzzle-piece" aria-hidden="true" />
                                 <strong>No apps installed</strong>
-                                <span>Create a KronTerm app or install a desktop app to see it here.</span>
+                                <span>Create a KronOS app or install a desktop app to see it here.</span>
                                 <button type="button" onClick={handleOpenBuilder}>
                                     Open app builder
                                 </button>
@@ -548,7 +549,7 @@ const AppsFloatingWindow = memo(
                                                     type="button"
                                                     key={app.appid}
                                                     className="widget-app-launcher-item"
-                                                    title={`Stream ${app.name} in KronTerm`}
+                                                    title={`Stream ${app.name} in KronOS`}
                                                     onClick={() => launchDesktopApp(app)}
                                                 >
                                                     <div className="widget-app-launcher-icon">
@@ -1223,7 +1224,7 @@ const Widgets = memo((props: WidgetsProps) => {
                     <div className="widget-rail-compact-grid">
                         {primaryWidgets.map((widget, idx) => {
                             const agent = isAgentChatWidget(widget);
-                            const label = agent ? "KronTerm Agent" : getWidgetLabel(widget);
+                            const label = agent ? "KronOS Agent" : getWidgetLabel(widget);
                             return (
                                 <Tooltip
                                     key={`compact-widget-${idx}`}
@@ -1244,7 +1245,7 @@ const Widgets = memo((props: WidgetsProps) => {
                                                 })}
                                             ></i>
                                         </div>
-                                        {agent && <span>KronTerm Agent</span>}
+                                        {agent && <span>KronOS Agent</span>}
                                     </button>
                                 </Tooltip>
                             );

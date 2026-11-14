@@ -2,7 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it, vi } from "vitest";
-import { makeCanvasFrameScheduler } from "./workspace-canvas-frame";
+import { finishCanvasPan, makeCanvasFrameScheduler } from "./workspace-canvas-frame";
+
+describe("canvas pan completion", () => {
+    it("persists a pan released after the pointer pauses", () => {
+        const momentum = vi.fn();
+        const persist = vi.fn();
+        finishCanvasPan("pointerup", 120, momentum, persist);
+        expect(persist).toHaveBeenCalledOnce();
+        expect(momentum).not.toHaveBeenCalled();
+    });
+
+    it("persists cancellation without launching inertia", () => {
+        const momentum = vi.fn();
+        const persist = vi.fn();
+        finishCanvasPan("pointercancel", 10, momentum, persist);
+        expect(persist).toHaveBeenCalledOnce();
+        expect(momentum).not.toHaveBeenCalled();
+    });
+
+    it("lets a moving release persist after inertia settles", () => {
+        const momentum = vi.fn();
+        const persist = vi.fn();
+        finishCanvasPan("pointerup", 10, momentum, persist);
+        expect(momentum).toHaveBeenCalledOnce();
+        expect(persist).not.toHaveBeenCalled();
+    });
+});
 
 function harness() {
     let nextId = 0;

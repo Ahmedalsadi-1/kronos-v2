@@ -18,7 +18,8 @@ export async function spawnAcpAgent(
     cliPath: string,
     workingDir: string,
     customArgs?: string[],
-    customEnv?: Record<string, string>
+    customEnv?: Record<string, string>,
+    signal?: AbortSignal
 ): Promise<AcpSpawnResult> {
     const config = ACP_BACKENDS_ALL[backend];
     const acpArgs = customArgs ?? config?.acpArgs;
@@ -56,6 +57,7 @@ export async function spawnAcpAgent(
             );
         }
     }
+    signal?.throwIfAborted();
     const spawnConfig = createSpawnConfig(executable, workingDir, acpArgs, cleanEnv as Record<string, string>);
 
     const detached = process.platform !== "win32";
@@ -147,7 +149,7 @@ async function detectKronTermAgentCli(defaultCliPath?: string): Promise<string |
     );
 }
 
-export async function detectInstalledAgents(): Promise<
+export async function detectInstalledAgents(backend?: string): Promise<
     Array<{
         backend: string;
         name: string;
@@ -176,7 +178,7 @@ export async function detectInstalledAgents(): Promise<
 
     const discovered = await Promise.all(
         Object.entries(ACP_BACKENDS_ALL).map(async ([id, config]) => {
-            if (id === "custom" || !config.enabled) return;
+            if ((backend != null && id !== backend) || id === "custom" || !config.enabled) return;
 
             const cliCommand = config.cliCommand;
             if (!cliCommand) {

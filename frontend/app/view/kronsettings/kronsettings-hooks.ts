@@ -32,19 +32,3 @@ export function useToggleField(key: Parameters<typeof getSettingsKeyAtom>[0]): [
     };
     return [val, save];
 }
-
-export function useNumberField(
-    key: Parameters<typeof getSettingsKeyAtom>[0],
-    defaultValue: number = 0
-): [number, (v: number) => void] {
-    const stored = useAtomValue(getSettingsKeyAtom(key));
-    const [val, setVal] = useState(stored != null ? Number(stored) : defaultValue);
-    useEffect(() => {
-        setVal(stored != null ? Number(stored) : defaultValue);
-    }, [stored, defaultValue]);
-    const save = (v: number) => {
-        setVal(v);
-        RpcApi.SetConfigCommand(TabRpcClient, { [key]: v });
-    };
-    return [val, save];
-}

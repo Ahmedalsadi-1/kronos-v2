@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { classify, liveSurfaceEntries, nativeAppEntries } from "./use-at-completions";
 
-describe("KronTerm @ completions", () => {
+describe("KronOS @ completions", () => {
     it("shows the live app name instead of a block ID in the picker", () => {
         expect(classify({ text: "@widget:block-7", display: "Calculator", meta: "appstream" })).toMatchObject({
             type: "widget",

@@ -1,4 +1,4 @@
-// Copyright 2025, Command Line Inc.
+// Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -13,6 +13,7 @@ import { stopAllAgentManagers } from "./acp";
 import { AuthKey, configureAuthKeyRequestInjection } from "./authkey";
 import { installBackgroundLaunchPolicy } from "./background-launch";
 import { installBrowserElementTool } from "./browser-element-tool";
+import { ensureKronRender, stopKronRender } from "./comfyui-runtime";
 import {
     getActivityState,
     getAndClearTermCommandsDurable,
@@ -45,7 +46,7 @@ import {
     unamePlatform,
 } from "./emain-platform";
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
-import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady, runWaveSrv } from "./emain-wavesrv";
+import { getIsWaveSrvDead, getWaveSrvProc, runWaveSrv } from "./emain-wavesrv";
 import { applyWebviewAttachPolicy } from "./emain-webview-policy";
 import {
     createBrowserWindow,
@@ -62,8 +63,13 @@ import {
 import { ElectronWshClient, initElectronWshClient } from "./emain-wsh";
 import { HermesRuntime } from "./hermes-runtime";
 import { KronosCodeRuntime } from "./kronoscode-runtime";
+import { openKronosTestSignIn } from "./kronos-signin";
 import { getLaunchSettings } from "./launchsettings";
+import { ensureKronosSkillDirectory } from "./shared-skill-roots";
 import { configureAutoUpdater, updater } from "./updater";
+import { activateExistingWorkspace } from "./workspace-activation";
+import { initializeComputerAccessPersistence } from "./computer-access-policy";
+import { recordDiagnostic } from "./diagnostics";
 
 const electronApp = electron.app;
 installBackgroundLaunchPolicy();
@@ -72,6 +78,7 @@ let confirmQuit = true;
 
 const waveDataDir = getWaveDataDir();
 const waveConfigDir = getWaveConfigDir();
+initializeComputerAccessPersistence(path.join(waveDataDir, "computer-access.json"));
 
 // requestSingleInstanceLock keys off the default userData path, which is
 // shared by every same-named instance — this makes the lock per-profile.
@@ -290,7 +297,7 @@ electronApp.on("before-quit", (e) => {
             type: "question",
             buttons: ["Cancel", "Quit"],
             title: "Confirm Quit",
-            message: "Are you sure you want to quit KronTerm?",
+            message: "Are you sure you want to quit KronOS?",
             defaultId: 0,
             cancelId: 0,
         });
@@ -307,6 +314,7 @@ electronApp.on("before-quit", (e) => {
     KronosCodeRuntime.stop();
     stopAllLanguageServers();
     stopAudioEngine();
+    stopKronRender();
     updater?.stop();
     if (unamePlatform == "win32") {
         // win32 doesn't have a SIGINT, so we just let electron die, which
@@ -351,6 +359,7 @@ process.on("SIGTERM", () => {
 });
 let caughtException = false;
 process.on("uncaughtException", (error) => {
+    recordDiagnostic("main", error);
     if (caughtException) {
         return;
     }
@@ -371,6 +380,13 @@ process.on("uncaughtException", (error) => {
 });
 
 let lastWaveWindowCount = 0;
+process.on("unhandledRejection", (error) => recordDiagnostic("main", error));
+electronApp.on("render-process-gone", (_event, _contents, details) => {
+    if (details.reason !== "clean-exit") recordDiagnostic("renderer");
+});
+electronApp.on("child-process-gone", (_event, details) => {
+    if (details.reason !== "clean-exit") recordDiagnostic("child-process");
+});
 globalEvents.on("windows-updated", () => {
     const wwCount = getAllWaveWindows().length;
     if (wwCount == lastWaveWindowCount) {
@@ -432,7 +448,7 @@ async function appMain() {
     }
     const allowedWebviewPreloads = [path.join(getElectronAppBasePath(), "preload", "preload-webview.cjs")];
     electronApp.on("web-contents-created", (_event, contents) => {
-        if (isDev && process.env.VITE_ENABLE_REACT_GRAB !== "false" && contents.getType() === "webview") {
+        if (process.env.VITE_ENABLE_REACT_GRAB !== "false" && contents.getType() === "webview") {
             contents.on("dom-ready", () => {
                 void installBrowserElementTool(contents).catch((error) =>
                     console.warn("Browser element tool could not initialize", error.message)
@@ -452,16 +468,32 @@ async function appMain() {
     });
     electronApp.on("second-instance", (_event, argv, workingDirectory) => {
         console.log("second-instance event, argv:", argv, "workingDirectory:", workingDirectory);
-        fireAndForget(createNewWaveWindow);
+        fireAndForget(async () => {
+            if (!activateExistingWorkspace(getAllWaveWindows(), focusedWaveWindow)) await createNewWaveWindow();
+        });
     });
     try {
         await runWaveSrv(handleWSEvent);
-    } catch (e) {
-        console.log(e.toString());
+    } catch (error) {
+        console.error("Local workspace startup failed", error);
+        recordDiagnostic("main", error);
+        await electronApp.whenReady();
+        electron.dialog.showErrorBox(
+            "KronOS could not start",
+            "The local workspace failed to start. Restart KronOS and reinstall it if the problem persists."
+        );
+        setForceQuit(true);
+        electronApp.quit();
+        return;
     }
-    const ready = await getWaveSrvReady();
-    console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
+    console.log("wavesrv ready signal received", Date.now() - startTs, "ms");
     await electronApp.whenReady();
+
+    try {
+        ensureKronosSkillDirectory();
+    } catch (error) {
+        console.warn("Could not initialize the KronOS skills directory", error);
+    }
 
     if (process.platform === "darwin") {
         const micStatus = electron.systemPreferences.getMediaAccessStatus("microphone");
@@ -471,6 +503,7 @@ async function appMain() {
     }
     configureAuthKeyRequestInjection(electron.session.defaultSession);
     initIpcHandlers();
+    void ensureKronRender().catch((error) => console.log("KronRender startup:", error.message));
 
     await sleep(10); // wait a bit for wavesrv to be ready
     try {
@@ -494,6 +527,10 @@ async function appMain() {
     }
     ensureHotSpareTab(fullConfig);
     await relaunchBrowserWindows();
+    if (process.env.KRONOS_TEST_SIGN_IN === "1") {
+        const parent = getAllWaveWindows().find((window) => window.isVisible());
+        if (parent) openKronosTestSignIn(parent);
+    }
     setTimeout(runActiveTimer, 5000); // start active timer, wait 5s just to be safe
     setTimeout(sendDisplaysTDataEvent, 5000);
 
@@ -506,8 +543,7 @@ async function appMain() {
     }
 
     electronApp.on("activate", () => {
-        const allWindows = getAllWaveWindows();
-        if (allWindows.length === 0) {
+        if (!activateExistingWorkspace(getAllWaveWindows(), focusedWaveWindow)) {
             fireAndForget(createNewWaveWindow);
         }
     });

@@ -12,7 +12,7 @@ export function MediaFrame({ media, compact }: MediaFrameProps) {
                 <span />
                 <span />
                 <span />
-                <strong>Kronterm</strong>
+                <strong>KronOS</strong>
             </div>
             {media.type === "video" ? (
                 <video

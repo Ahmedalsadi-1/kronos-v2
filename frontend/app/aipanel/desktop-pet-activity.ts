@@ -204,18 +204,21 @@ export function reportAgentSurfaceActivity(activity: AgentSurfaceActivity) {
     const action = widgetActionForActivity(normalized);
     const target = targetForBlock(normalized.blockid) ?? targetForPanel();
     const typingText = action === "typing" ? normalized.detail : undefined;
-    getApi().setDesktopPetActivity({
-        kind: petNotificationKindForPhase(normalized.phase),
-        detail: normalized.detail ?? normalized.action,
-        thought: normalized.thought,
-        reasoningLog: normalized.reasoningSteps ?? (normalized.thought ? [normalized.thought] : undefined),
-        target,
-        cursorAction: cursorActionForAgentActivity(normalized),
-        cursorPoint: normalized.point,
-        previewImageUrl: normalized.previewimageurl,
-        petActivityUrl: normalized.petactivityurl ?? DefaultTuiPetActivityUrl,
-        surfaceActivity: normalized,
-    });
+    // Main already published these scoped events. The pet relay targets a separate local backend.
+    if (!normalized.swarm && !normalized.ownertabid) {
+        getApi().setDesktopPetActivity({
+            kind: petNotificationKindForPhase(normalized.phase),
+            detail: normalized.detail ?? normalized.action,
+            thought: normalized.thought,
+            reasoningLog: normalized.reasoningSteps ?? (normalized.thought ? [normalized.thought] : undefined),
+            target,
+            cursorAction: cursorActionForAgentActivity(normalized),
+            cursorPoint: normalized.point,
+            previewImageUrl: normalized.previewimageurl,
+            petActivityUrl: normalized.petactivityurl ?? DefaultTuiPetActivityUrl,
+            surfaceActivity: normalized,
+        });
+    }
     dispatchSurfaceUiActivity(normalized);
     if (!normalized.blockid) {
         return;

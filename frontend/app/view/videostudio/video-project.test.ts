@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { captionsAtTime, exportTrimmedSubtitles, normalizeVideoProject } from "./video-project";
+import { captionsAtTime, exportTrimmedSubtitles, isVideoStudioSource, normalizeVideoProject } from "./video-project";
 
 describe("video project", () => {
+    it("recognizes supported absolute local video paths without interpreting URLs or relative paths", () => {
+        for (const source of ["/assets/first #take.MOV", "C:\\Assets\\clip.mp4", "\\\\media\\clips\\loop.webm"]) {
+            expect(isVideoStudioSource(source)).toBe(true);
+            expect(normalizeVideoProject({ source }).source).toBe(source);
+        }
+        for (const source of [
+            "clip.mp4",
+            "wsh://host/clip.mp4",
+            "https://host/clip.mp4",
+            "/assets/clip\0.mp4",
+            "/still.png",
+        ])
+            expect(isVideoStudioSource(source)).toBe(false);
+    });
     it("recovers invalid stored data and clamps trim to the source duration", () => {
         expect(normalizeVideoProject(null).source).toBe("");
         expect(

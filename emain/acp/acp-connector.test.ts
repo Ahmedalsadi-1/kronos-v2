@@ -94,7 +94,7 @@ describe("KronosCode ACP executable resolution", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.spyOn(fs, "accessSync").mockImplementation((value) => {
-            if (String(value) !== "/Applications/KronTerm Test/kronoscode") throw new Error("missing");
+            if (String(value) !== "/Applications/KronOS Test/kronoscode") throw new Error("missing");
         });
         mocks.spawn.mockReturnValue({ unref: vi.fn() });
         mocks.execFile.mockImplementation((_command, _args, _options, callback) => callback(new Error("missing"), ""));
@@ -105,10 +105,10 @@ describe("KronosCode ACP executable resolution", () => {
     });
 
     it("resolves a bare backend name without relying on the desktop PATH and preserves spaces", async () => {
-        vi.stubEnv("KRONTERM_KRONOSCODE_BIN", "/Applications/KronTerm Test/kronoscode");
+        vi.stubEnv("KRONTERM_KRONOSCODE_BIN", "/Applications/KronOS Test/kronoscode");
         await spawnAcpAgent("kronoscode", "kronoscode", "/tmp", ["acp", "--attach", "http://127.0.0.1:1234"]);
         expect(mocks.spawn).toHaveBeenCalledWith(
-            "/Applications/KronTerm Test/kronoscode",
+            "/Applications/KronOS Test/kronoscode",
             ["acp", "--attach", "http://127.0.0.1:1234"],
             expect.objectContaining({ cwd: "/tmp" })
         );

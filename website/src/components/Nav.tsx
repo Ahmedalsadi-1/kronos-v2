@@ -10,13 +10,13 @@ export function Nav() {
     return (
         <header className="site-header">
             <a className="announcement" href="/contact-sales">
-                <span>Private beta now routing commercial teams and serious builders</span>
-                <strong>Request access</strong>
+                <span>KronOS brings your apps, agents, and models together</span>
+                <strong>Download KronOS</strong>
             </a>
             <nav className="nav-shell" aria-label="Main navigation">
                 <Link className="brand" to="/" onClick={() => setOpen(false)}>
                     <img src="/assets/product/kronterm-icon.svg" alt="" />
-                    <span>Kronterm</span>
+                    <span>KronOS</span>
                 </Link>
 
                 <div className="desktop-nav" onMouseLeave={() => setActiveGroup(null)}>

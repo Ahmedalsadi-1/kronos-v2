@@ -15,6 +15,7 @@ env:
     NODE_OPTIONS: --max-old-space-size=4096
 jobs:
     build-app:
+        if: github.repository == 'wavetermdev/waveterm'
         outputs:
             version: ${{ steps.set-version.outputs.WAVETERM_VERSION }}
         strategy:

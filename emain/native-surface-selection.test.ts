@@ -7,7 +7,7 @@ import { selectNativeSurfaceSource } from "./native-surface-selection";
 const Sources = [
     { id: "chrome-1", name: "Google Chrome" },
     { id: "notes-1", name: "Notes — Work" },
-    { id: "kronterm-1", name: "KronTerm" },
+    { id: "kronterm-1", name: "KronOS" },
 ];
 
 describe("native surface source selection", () => {
@@ -36,7 +36,7 @@ describe("native surface source selection", () => {
             selectNativeSurfaceSource(
                 [
                     { id: "finder-1", name: "Finder" },
-                    { id: "kronterm-1", name: "KronTerm" },
+                    { id: "kronterm-1", name: "KronOS" },
                 ],
                 "Unknown App"
             )?.id

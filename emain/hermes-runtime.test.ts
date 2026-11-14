@@ -9,6 +9,7 @@ import { describe, expect, test, vi } from "vitest";
 // hermes-runtime imports the tool server, whose module chain pulls in Electron main modules
 vi.mock("./kronterm-tool-server", () => ({
     kronTermToolManifest: () => [],
+    revokeKronTermToolCaller: vi.fn(),
     startKronTermToolServer: vi.fn(),
 }));
 vi.mock("./authkey", () => ({ revokeManagedRuntimeRequests: vi.fn(), refreshManagedRuntimeSocketHeaders: vi.fn() }));
@@ -34,44 +35,20 @@ import {
 } from "./hermes-runtime";
 import { KronosCodeRuntime } from "./kronoscode-runtime";
 
-describe("Hermes shared backend recovery", () => {
-    test("restarts delegation and invalidates pending startup on backend replacement", () => {
+describe("KronOS Agent runtime independence", () => {
+    test("keeps the main chat alive when the coding specialist reconnects", () => {
         const runtime = HermesRuntime as any;
-        const previous = {
-            descriptor: { baseUrl: "http://127.0.0.1:9999", serverInstanceId: "old" },
-            username: "kronoscode",
-            password: "old-secret",
-        };
-        const kill = vi.fn();
-        const restart = vi.spyOn(runtime, "scheduleRestart").mockImplementation(() => {});
-        const internal = vi.spyOn(KronosCodeRuntime, "getInternalConnection").mockReturnValue({
-            ...previous,
-            descriptor: { ...previous.descriptor, serverInstanceId: "new" },
-            password: "new-secret",
-        } as any);
-        const original = {
-            stopping: runtime.stopping,
-            delegationConnection: runtime.delegationConnection,
-            child: runtime.child,
-            connection: runtime.connection,
-            startupGeneration: runtime.startupGeneration,
-            startPromise: runtime.startPromise,
-        };
+        const connection = { baseUrl: "http://127.0.0.1:1111" };
+        const child = { kill: vi.fn() };
+        const original = { child: runtime.child, connection: runtime.connection };
         try {
-            runtime.stopping = false;
-            runtime.delegationConnection = previous;
-            runtime.child = { kill };
-            runtime.connection = { baseUrl: "http://127.0.0.1:1111" };
+            runtime.child = child;
+            runtime.connection = connection;
             KronosCodeRuntime.emit("connection");
-            expect(kill).toHaveBeenCalledWith("SIGTERM");
-            expect(restart).toHaveBeenCalledOnce();
-            expect(runtime.child).toBeNull();
-            expect(runtime.connection).toBeNull();
-            expect(runtime.startupGeneration).toBe(original.startupGeneration + 1);
+            expect(child.kill).not.toHaveBeenCalled();
+            expect(runtime.connection).toBe(connection);
         } finally {
             Object.assign(runtime, original);
-            internal.mockRestore();
-            restart.mockRestore();
         }
     });
 });
@@ -126,6 +103,30 @@ describe("Hermes API routing", () => {
         }
     });
 
+    test("inherits the Hermes session for workflow commands while keeping cancellation available during recovery", async () => {
+        const runtime = HermesRuntime as any;
+        const original = runtime.workflowWidgets;
+        const command = vi.fn(async () => ({ cancelled: true }));
+        runtime.workflowWidgets = { command };
+        const ensure = vi.spyOn(runtime, "ensure").mockRejectedValue(new Error("Hermes session unavailable"));
+        const context = { workspaceId: "workspace", tabId: "tab" };
+        try {
+            await expect(runtime.n8nCommand({ operation: "open" }, context)).rejects.toThrow(
+                "Hermes session unavailable"
+            );
+            expect(command).not.toHaveBeenCalled();
+            ensure.mockClear();
+            await expect(
+                runtime.n8nCommand({ operation: "editor-cancel", input: { requestId: "cancel-me" } }, context)
+            ).resolves.toEqual({ cancelled: true });
+            expect(ensure).not.toHaveBeenCalled();
+            expect(command).toHaveBeenCalledOnce();
+        } finally {
+            runtime.workflowWidgets = original;
+            ensure.mockRestore();
+        }
+    });
+
     test("keeps renderer requests on the managed backend and adds profile scope", () => {
         expect(makeHermesApiUrl("http://127.0.0.1:62554", "/api/config?explicit=1", "research").toString()).toBe(
             "http://127.0.0.1:62554/api/config?explicit=1&profile=research"
@@ -158,11 +159,10 @@ describe("parseHermesReadyPort", () => {
     );
 });
 
-describe("Hermes KronTerm runtime environment", () => {
+describe("Hermes KronOS runtime environment", () => {
     test("injects presentation-aware tool guidance without persisting it to the user profile", () => {
         const env = makeHermesRuntimeEnvironment("/opt/hermes/bin/hermes", "session-token", {
             managedDir: "/tmp/kronterm-hermes-managed",
-            kronosCodeBinary: "/opt/kronterm/bin/kronoscode",
             enableKronTermTools: true,
             toolServer: {
                 url: "http://127.0.0.1:9119/mcp",
@@ -178,7 +178,7 @@ describe("Hermes KronTerm runtime environment", () => {
         });
 
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("workspace_snapshot");
-        expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("You are the KronTerm Agent");
+        expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("You are the KronOS Agent");
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("widget_snapshot");
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("hud_set_mode");
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("hud_show_widget");
@@ -198,27 +198,34 @@ describe("Hermes KronTerm runtime environment", () => {
         expect(env.HERMES_MANAGED_DIR).toBe("/tmp/kronterm-hermes-managed");
         expect(env.HERMES_BUNDLED_PLUGINS).toBe("/tmp/kronterm-hermes-managed/plugins");
         expect(env.PATH.split(path.delimiter)).toContain("/opt/kronterm/bin");
-        expect(env.HERMES_COPILOT_ACP_COMMAND).toBe("/opt/kronterm/bin/kronoscode");
         expect(env.HERMES_DISABLE_LAZY_INSTALLS).toBe("1");
-        expect(env.HERMES_COPILOT_ACP_ARGS).toBe("acp");
         expect(env.HERMES_KRONTERM_NATIVE_TOOL_URL).toBe("http://127.0.0.1:9119/native");
         expect(env.KRONTERM_NATIVE_TOOL_TOKEN).toBe("tool-server-token");
         expect(env).not.toHaveProperty("HERMES_KRONTERM_TOOL_BRIDGE_COMMAND");
-        expect(env.HERMES_TUI_TOOLSETS).toBe("kronterm,delegation");
+        expect(env.HERMES_TUI_TOOLSETS).toBe("kronterm,delegation,terminal,file");
         expect(env.KRONTERM_SURFACE_CAPABILITY_FILE).toBe("/tmp/kronos-capability.json");
     });
 
     test("uses scoped delegation while leaving the persistent tool server optional", () => {
         const config = makeHermesManagedConfig() as any;
 
-        expect(config.delegation).toEqual({ backend: "kronterm_smart", max_concurrent_children: 2 });
+        expect(config.delegation).toEqual({
+            backend: "kronterm_smart",
+            max_concurrent_children: 2,
+            max_spawn_depth: 1,
+            max_iterations: 20,
+            child_timeout_seconds: 180,
+            kronos_wall_timeout_seconds: 300,
+        });
         expect(config.tools).toEqual({
             tool_search: { enabled: "off" },
         });
-        expect(config.agent.reasoning_effort).toBe("minimal");
+        expect(config.agent.reasoning_effort).toBe("medium");
         expect(config.agent.environment_probe).toBe(false);
-        expect(config.agent.task_completion_guidance).toBe(false);
-        expect(config.agent.max_turns).toBe(30);
+        expect(config.agent.stall_guards).toBe(true);
+        expect(config.agent.task_completion_guidance).toBe(true);
+        expect(config.agent.parallel_tool_call_guidance).toBe(true);
+        expect(config.agent.max_turns).toBe(45);
         expect(config.agent.system_prompt).toContain("persistent Electron TypeScript runtime");
         expect(config.display).toEqual({ personality: "" });
         expect(config).not.toHaveProperty("mcp_servers");
@@ -278,36 +285,6 @@ describe("Hermes KronTerm runtime environment", () => {
 });
 
 describe("Hermes bundled tool discovery", () => {
-    test("attaches delegation to the shared backend without exposing credentials in arguments", () => {
-        const env = makeHermesRuntimeEnvironment("/opt/hermes", "token", {
-            kronosCodeBinary: "/opt/kronoscode",
-            kronosCodeConnection: {
-                baseUrl: "https://backend.example",
-                username: "desktop-user",
-                password: "private-backend-secret",
-            },
-        });
-        expect(env.HERMES_COPILOT_ACP_ARGS).toBe("'acp' '--attach' 'https://backend.example'");
-        expect(env.HERMES_COPILOT_ACP_ARGS).not.toContain("private-backend-secret");
-        expect(env.KRONOSCODE_SERVER_USERNAME).toBe("desktop-user");
-        expect(env.KRONOSCODE_SERVER_PASSWORD).toBe("private-backend-secret");
-    });
-
-    test("clears inherited passwords for an unauthenticated attached backend", () => {
-        vi.stubEnv("KRONOSCODE_SERVER_PASSWORD", "old-secret");
-        vi.stubEnv("OPENCODE_SERVER_PASSWORD", "old-fallback");
-        try {
-            const env = makeHermesRuntimeEnvironment("/opt/hermes", "token", {
-                kronosCodeBinary: "/opt/kronoscode",
-                kronosCodeConnection: { baseUrl: "http://127.0.0.1:9000", username: "kronoscode" },
-            });
-            expect(env.KRONOSCODE_SERVER_PASSWORD).toBe("");
-            expect(env.OPENCODE_SERVER_PASSWORD).toBe("");
-        } finally {
-            vi.unstubAllEnvs();
-        }
-    });
-
     test("publishes the adapter in a scanned root while preserving bundled plugins", async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-overlay-"));
         const base = path.join(root, "base");
@@ -332,6 +309,25 @@ describe("Hermes bundled tool discovery", () => {
                 "name: orgo-computer"
             );
             await prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+        } finally {
+            vi.unstubAllEnvs();
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("replaces a previously symlinked adapter without copying into its source", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-plugin-symlink-"));
+        const adapter = path.join(root, "adapter");
+        const target = path.join(root, "plugins");
+        fs.mkdirSync(adapter);
+        fs.mkdirSync(target);
+        fs.writeFileSync(path.join(adapter, "plugin.yaml"), "name: kronterm-tools");
+        fs.symlinkSync(adapter, path.join(target, "kronterm-tools"), "junction");
+        vi.stubEnv("HERMES_BUNDLED_PLUGINS", "");
+        try {
+            await prepareHermesBundledPlugins("/missing/hermes", target, adapter);
+            expect(fs.lstatSync(path.join(target, "kronterm-tools")).isSymbolicLink()).toBe(false);
+            expect(fs.readFileSync(path.join(adapter, "plugin.yaml"), "utf8")).toBe("name: kronterm-tools");
         } finally {
             vi.unstubAllEnvs();
             fs.rmSync(root, { recursive: true, force: true });
@@ -557,6 +553,30 @@ describe("Hermes bounded recovery", () => {
 });
 
 describe("Hermes surface capability connection deadline", () => {
+    test("refreshes capability context when a tab acquires or changes workspace ownership", async () => {
+        const runtime = HermesRuntime as any;
+        const previous = {
+            surfaceContext: runtime.surfaceContext,
+            surfaceGeneration: runtime.surfaceGeneration,
+            surfaceCapabilityReady: runtime.surfaceCapabilityReady,
+        };
+        const ensure = vi.spyOn(runtime, "ensure").mockResolvedValue({ baseUrl: "http://127.0.0.1:1" });
+        const refresh = vi.spyOn(runtime, "refreshSurfaceCapability").mockResolvedValue(undefined);
+        runtime.surfaceContext = { tabId: "tab" };
+        runtime.surfaceCapabilityReady = true;
+        try {
+            await runtime.ensureSurface({ tabId: "tab", workspaceId: "owner" });
+            expect(refresh).toHaveBeenCalledOnce();
+            await runtime.ensureSurface({ tabId: "tab", workspaceId: "owner" });
+            expect(refresh).toHaveBeenCalledOnce();
+            await runtime.ensureSurface({ tabId: "tab", workspaceId: "new-owner" });
+            expect(refresh).toHaveBeenCalledTimes(2);
+        } finally {
+            Object.assign(runtime, previous);
+            ensure.mockRestore();
+            refresh.mockRestore();
+        }
+    });
     test("uses a bounded token RPC and retries one interrupted transport without bypassing issuance", async () => {
         vi.useFakeTimers();
         const runtime = HermesRuntime as any;

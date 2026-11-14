@@ -1,9 +1,69 @@
-import { describe, expect, test } from "vitest";
+import { globalStore } from "@/app/store/jotaiStore";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+    WorkspaceLayoutModel,
     computeWorkspacePanelLayout,
     getWorkspaceTabPresentation,
     isEmptyPanelGroupLayoutError,
 } from "./workspace-layout-model";
+
+vi.mock("@/store/global", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/store/global")>()),
+    atoms: { prefersReducedMotionAtom: {} },
+}));
+
+describe("workspace panel transitions", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    function makeModel() {
+        const model = Object.create(WorkspaceLayoutModel.prototype) as WorkspaceLayoutModel;
+        const panel = { style: { transition: "none" } };
+        model.panelContainerRef = { querySelectorAll: () => [panel] } as unknown as HTMLDivElement;
+        return { model, panel };
+    }
+
+    test("uses the requested duration and clears the transition when it finishes", () => {
+        vi.useFakeTimers();
+        vi.spyOn(globalStore, "get").mockReturnValue(false);
+        const { model, panel } = makeModel();
+        model.enableTransitions(250);
+        expect(panel.style.transition).toBe("flex 250ms cubic-bezier(0.2, 0.82, 0.2, 1)");
+        vi.advanceTimersByTime(249);
+        expect(panel.style.transition).not.toBe("none");
+        vi.advanceTimersByTime(1);
+        expect(panel.style.transition).toBe("none");
+    });
+
+    test("applies reduced motion immediately and cancels any pending animation timer", () => {
+        vi.useFakeTimers();
+        const get = vi.spyOn(globalStore, "get").mockReturnValue(false);
+        const { model, panel } = makeModel();
+        model.enableTransitions(250);
+        get.mockReturnValue(true);
+        model.enableTransitions(250);
+        expect(panel.style.transition).toBe("none");
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    test("unregistering the active layout cancels pending focus and animation work", () => {
+        vi.useFakeTimers();
+        vi.spyOn(globalStore, "get").mockReturnValue(false);
+        const { model, panel } = makeModel();
+        const focus = vi.fn();
+        const handle = {} as WorkspaceLayoutModel["outerPanelGroupRef"];
+        model.outerPanelGroupRef = handle;
+        model.enableTransitions(250);
+        (model as any).focusTimeoutRef = setTimeout(focus, 350);
+        model.unregisterRefs(handle);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(panel.style.transition).toBe("none");
+        vi.runAllTimers();
+        expect(focus).not.toHaveBeenCalled();
+    });
+});
 
 describe("getWorkspaceTabPresentation", () => {
     test("hides the left workspace tabs only in hidden mode", () => {

@@ -7,7 +7,9 @@ KronTerm build adds small cat ears to the body path; they retract during the
 upload morph. Workspace setup uses the existing COUCOU canvas port with the
 same small ear treatment, plus per-bot color and expression choices.
 KronTerm expands the overview for live previews and docked widgets.
-The header adds KronTerm launchers; the overview uses the live agent plugin
+The header keeps Browser, Files, Terminal, and Command Center visible, with
+secondary apps and Return to workspace in an overflow menu. Controls use at
+least 32-point targets. The overview uses the live agent plugin
 workspace pages, with four categories per dot-pager page.
 The header gear opens the combined KronTerm and Hermes settings, including plugins;
 settings shortcuts are kept out of the home cards.
@@ -23,8 +25,10 @@ npm run dev
 ```
 
 Enter HUD mode with Cmd+Shift+H, or the configurable global hotkey `app:notchhotkey`
-(default `Ctrl:Alt:Space`), which summons and dismisses the notch from any app since
-the exclusive-HUD workspace window is hidden while the notch owns the session. A
+(default `Ctrl:Alt:Space`), which summons and dismisses the notch from any app.
+The normal toggle keeps the main workspace visible. Exclusive placement remains
+an explicit choice; reopening the main window exits it instead of hiding the
+workspace again. Dock activation and the app hotkey restore the existing window. A
 pending agent permission question publishes its request ID and options to the notch,
 whose approve/deny buttons answer that exact pending request. Clicking an active agent
 row docks its workspace block in the notch even when the block was not open as a
@@ -72,13 +76,18 @@ bundle in product releases. See
 [upstream asset license](https://github.com/Louis-CFM/coucou/blob/8a5c26328bd6409ff873e6f66bdc2e6ba004c856/LICENSE-ASSETS.md).
 
 This uses a native companion plus the existing Electron chat. The transcript
-and compact composer share the island's black content area, beneath its native
+and compact composer share the island's system content area, beneath its native
 header. Upstream Claude CLI hooks remain optional and must be
 installed explicitly in Coucou Settings; this integration does not change CLI
 configuration or credentials. Live HUD turns and workspace activity are relayed
 to Coucou's original third-party agent hooks.
 
-The live workspace expands to 1000×680 points for browser, terminal, and file widgets, bounded by the display. The top enlarge control switches the notch itself to 1240×800; the adjacent detach control enlarges only the widget. Navigation launchers reopen existing widgets; the browser rail's plus creates a new browser widget.
+The live workspace is 480 points high for browser, terminal, and file widgets,
+bounded by the display. Smaller utility panels use 400 points. Enlarge gives the
+workspace up to 680 points of height; chat uses 480 normally and 640 when enlarged.
+The adjacent detach control enlarges only the widget. Navigation launchers reopen
+existing widgets; the browser rail's plus creates a new browser widget. The resting
+strip continues to respect the display's physical notch and menu-bar geometry.
 
 The native rail receives bounded explorer rows from the selected file renderer. It forwards clicks only for published paths to that docked renderer. File tabs reuse the existing preview editor and save APIs, retain drafts across tab switches, and show file saves and agent completion in Output, with file and agent events in Logs. The browser element toolbar reuses the existing capture/annotation controller; Style exposes captured computed styles and a request to Hermes.
 
@@ -108,11 +117,14 @@ contents and switch workspace context.
 
 Phone previews reserve roughly 390 points for the simulator and give the
 remaining width to Hermes. Linux desktops retain the wider preview layout.
-The embedded notch chat uses native system typography, quiet outline controls,
-neutral cards and palette-matched focus feedback. The native paint-palette menu
+The embedded notch chat, file workbench, and native panel share KronTerm OS
+materials, system typography, light/dark appearance, increased contrast, reduced
+motion, and reduced transparency. Native appearance updates even while the chat
+runtime is connecting. The native paint-palette menu
 and Hermes appearance settings expose all ten upstream Coucou colors, plus the
-original violet. Selection updates chat, native controls, and the main character;
-it is replayed after companion recovery. Coucou is the default skin for fresh
+original violet. Selection changes the character palette; system materials and
+control colors continue to follow OS appearance. The character palette is
+replayed after companion recovery. Coucou is the default skin for fresh
 Hermes profiles; previously chosen skins remain selectable.
 See the [upstream review](upstream-review-2026-10-08.md) for the v0.2.3 feature
 assessment and the remaining companion upgrade work.
@@ -132,7 +144,7 @@ within a four-point radius. Leaving resets the gate; clicks and drops retain
 immediate activation. Island geometry and character placement use critically
 damped springs, including interrupted open/close changes, and Reduce Motion
 still disables these animations. The browser address field expands on focus
-with a 520ms ease-out curve. A compact task count, focus toggle, and notes button
+with a 180ms system curve. A compact task count, focus toggle, and notes button
 appear when Electron publishes productivity state; they use the same local
 productivity workspace as the main app. Measured native preview/chat rectangles
 continue to drive Electron presentation rather than estimated geometry.
@@ -143,3 +155,22 @@ The pointer gate can be checked independently with:
 swiftc native/coucou/kronterm-pointer-rest.swift native/coucou/tests/pointer-rest.swift -o /tmp/kronterm-pointer-rest-test
 /tmp/kronterm-pointer-rest-test
 ```
+
+The shared appearance wire format can be checked with:
+
+```sh
+swiftc native/coucou/kronterm-json.swift native/coucou/kronterm-system-appearance.swift native/coucou/tests/appearance.swift -o /tmp/kronterm-notch-appearance-test
+/tmp/kronterm-notch-appearance-test
+```
+
+Chat layout measurements use a revisioned controller that cancels pending
+fallbacks on close or recovery. A companion failure reveals recovery controls
+even when chat was collapsed, preserving its session and selection. Replacement
+companions cannot receive frames from the previous companion's pending capture.
+Preview publications update the native inventory immediately; a two-second poll
+remains for recovery and media refresh. Expanded geometry uses the panel's actual
+display; collapsed geometry remains anchored to the physical notch display.
+
+The component preview `?preview=notch-system` exercises shared chat materials,
+draft preservation, keyboard focus, and recovery controls without starting a
+live agent session. Its native actions are explicitly simulated.

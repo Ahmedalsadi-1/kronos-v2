@@ -1,0 +1,146 @@
+/* Copyright 2026, Command Line Inc.
+   SPDX-License-Identifier: Apache-2.0 */
+
+html[data-kron-interface-font="system"] {
+    --kron-interface-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+html[data-kron-interface-font="inter"] {
+    --kron-interface-font: "Inter", system-ui, sans-serif;
+}
+
+html[data-kron-interface-font="mono"] {
+    --kron-interface-font: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html[data-kron-interface-font]:not([data-kron-interface-font="default"]) {
+    --hermes-font-sans: var(--kron-interface-font);
+}
+
+@layer base {
+    :where(button, [role="button"]):where(:not(:disabled, [aria-disabled="true"])) {
+        cursor: pointer;
+    }
+
+    :where(button, [role="button"], .kron-button):focus-visible {
+        outline: 2px solid var(--dt-ring, var(--focus-ring-color, Highlight));
+        outline-offset: 2px;
+    }
+}
+
+@layer components {
+    .kron-button {
+        --button-label: var(--dt-foreground, var(--text-primary-color, currentColor));
+        --button-muted-label: var(--dt-muted-foreground, var(--text-secondary-color, currentColor));
+        --button-accent: var(--dt-primary, var(--hermes-primary, var(--accent-color)));
+        --button-hover: var(--chrome-action-hover, var(--surface-hover-color));
+        --button-active: var(--chrome-action-active, var(--surface-active-color, var(--button-hover)));
+
+        --action-fill: transparent;
+        --action-hover-fill: var(--action-fill);
+        --action-active-fill: var(--action-hover-fill);
+
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        background-color: var(--action-fill);
+        border-radius: var(--action-button-radius, 6px);
+        font-weight: 500;
+        white-space: nowrap;
+        user-select: none;
+        transition:
+            background-color 150ms ease,
+            border-color 150ms ease,
+            color 150ms ease,
+            opacity 150ms ease;
+    }
+
+    .kron-button svg {
+        flex-shrink: 0;
+        pointer-events: none;
+    }
+
+    .kron-button:where(:disabled, [aria-disabled="true"]) {
+        cursor: default;
+        opacity: 0.5;
+    }
+
+    .kron-button-primary {
+        --action-fill: var(--button-accent);
+        --action-hover-fill: color-mix(in srgb, var(--action-fill) 90%, var(--button-label));
+        --action-active-fill: color-mix(in srgb, var(--action-fill) 82%, var(--button-label));
+        color: var(--dt-primary-foreground, var(--hermes-primary-foreground, var(--button-text-color, #fff)));
+    }
+
+    .kron-button-secondary {
+        --action-fill: var(--ui-bg-quaternary, var(--button-hover));
+        --action-hover-fill: var(--button-active);
+        color: var(--button-label);
+    }
+
+    .kron-button-outline {
+        --action-hover-fill: var(--button-hover);
+        border-color: var(--ui-stroke-secondary, var(--interactive-border, var(--border-color)));
+        color: var(--button-label);
+    }
+
+    .kron-button-ghost {
+        --action-hover-fill: var(--button-hover);
+        color: var(--button-muted-label);
+    }
+
+    [data-kron-button-style="flat"] :is(.kron-button-secondary, .kron-button-outline):not([aria-invalid="true"]) {
+        --action-fill: transparent;
+        --action-hover-fill: var(--button-hover);
+        border-color: transparent;
+    }
+
+    [data-kron-button-style="outlined"] :is(.kron-button-secondary, .kron-button-ghost[aria-pressed="true"]) {
+        --action-fill: transparent;
+        border-color: var(--ui-stroke-secondary, var(--interactive-border, var(--border-color)));
+    }
+
+    .kron-button-ghost:where(:hover, :active):where(:not(:disabled, [aria-disabled="true"])) {
+        color: var(--button-label);
+    }
+
+    .kron-button-destructive {
+        --action-fill: var(--dt-destructive, color-mix(in srgb, var(--hermes-destructive, #cf2d56) 82%, #000));
+        --action-hover-fill: color-mix(in srgb, var(--action-fill) 88%, #000);
+        --action-active-fill: color-mix(in srgb, var(--action-fill) 78%, #000);
+        color: var(--dt-destructive-foreground, var(--hermes-destructive-foreground, #fff));
+    }
+
+    .kron-button-link {
+        color: var(--button-accent);
+        text-underline-offset: 0.25em;
+    }
+
+    .kron-button-link:where(:hover, :focus-visible):where(:not(:disabled, [aria-disabled="true"])) {
+        text-decoration-line: underline;
+    }
+
+    .kron-button:disabled {
+        pointer-events: none;
+    }
+
+    .kron-button[aria-invalid="true"] {
+        border-color: var(--dt-destructive, var(--hermes-destructive, #cf2d56));
+    }
+
+    .kron-button:where(:hover):where(:not(:disabled, [aria-disabled="true"])) {
+        background-color: var(--action-hover-fill);
+    }
+
+    .kron-button:where(:active):where(:not(:disabled, [aria-disabled="true"])) {
+        background-color: var(--action-active-fill);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .kron-button {
+            transition: none;
+        }
+    }
+}

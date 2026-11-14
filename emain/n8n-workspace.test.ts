@@ -13,6 +13,7 @@ import { N8nWorkspaceStore } from "./n8n-workspace-store";
 
 const mocks = vi.hoisted(() => ({
     account: true,
+    computers: vi.fn(async () => [] as any[]),
     contents: [] as any[],
     blocks: [] as any[],
     set: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("./kronterm-native-tool-bridge", () => ({
         createBlock = mocks.create;
     },
 }));
+vi.mock("./linux-desktops-runtime", () => ({ getLinuxDesktopsRuntime: () => ({ list: mocks.computers }) }));
 const roots: string[] = [];
 const context = { workspaceId: "workspace", tabId: "tab" };
 const AddedNode = {
@@ -52,9 +54,15 @@ function fixture() {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-controller-"));
     roots.push(root);
     const runtime = {
-        status: () => ({ running: true, url: "http://127.0.0.1:5678" }),
+        status: (_context?: typeof context): { running: boolean; url?: string; occupiedGeneration?: number } => ({
+            running: true,
+            url: "http://127.0.0.1:5678",
+        }),
         assertScope: vi.fn(),
+        handoffOwner: vi.fn(),
         start: vi.fn(async () => ({ running: true, url: "http://127.0.0.1:5678" })),
+        stop: vi.fn(),
+        validateDraft: vi.fn(async () => ({ valid: true, errors: [] })),
     };
     const store = new N8nWorkspaceStore(root);
     const worker = vi.fn(async () => ({ text: "done" }));
@@ -63,10 +71,26 @@ function fixture() {
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
     mocks.account = true;
+    mocks.computers.mockResolvedValue([]);
     mocks.blocks = [];
     mocks.contents = [];
     vi.restoreAllMocks();
     vi.clearAllMocks();
+});
+
+it("checks n8n runtime ownership without starting n8n or opening a widget", async () => {
+    const { runtime, workspace } = fixture();
+    vi.spyOn(runtime, "status").mockImplementation((owner) =>
+        owner?.tabId === context.tabId ? { running: true } : { running: false, occupiedGeneration: 3 }
+    );
+    const request = { operation: "runtime-status" } as const;
+    await expect(workspace.command(request, context)).resolves.toEqual({ running: true, occupied: false });
+    await expect(workspace.command(request, { ...context, tabId: "other-tab" })).resolves.toEqual({
+        running: false,
+        occupied: true,
+    });
+    expect(runtime.start).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
 });
 
 it("opens the real editor on the OS desktop without creating or focusing a widget", async () => {
@@ -95,6 +119,47 @@ it("binds the session browser identity only to the managed editor origin", async
     expect(executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('"test-browser"'));
     mocks.contents[0].getURL = () => "https://example.com";
     await expect(workspace.command({ operation: "attach", webContentsId: 55 }, context)).rejects.toThrow("Unknown");
+});
+
+it("hands the runtime to the confirmed tab only when the current owner is unchanged and its editor is clean", async () => {
+    const { workspace, runtime } = fixture();
+    const other = { workspaceId: "other", tabId: "other", n8nEditorId: 56 };
+    const handoff = { operation: "switch-workspace", expectedGeneration: 1 } as const;
+    let switched = false;
+    let dirty = true;
+    vi.spyOn(runtime, "status").mockImplementation((scope) =>
+        !switched && scope?.tabId === other.tabId
+            ? { running: false, occupiedGeneration: 1 }
+            : { running: true, url: `http://127.0.0.1:${switched ? 5679 : 5678}` }
+    );
+    runtime.handoffOwner.mockImplementation((_next, generation) => {
+        if (generation !== 1 || switched) throw new Error("The workflow attachment changed.");
+        return context;
+    });
+    runtime.stop.mockImplementation(() => {
+        switched = true;
+    });
+    const executeJavaScript = vi.fn(async (source: string) => {
+        if (source.includes("beginDocumentMutation") && dirty) throw new Error("Save local workflow edits.");
+        return { dirty, workflowId: "flow1" };
+    });
+    mocks.contents = [{ id: 55, isDestroyed: () => false, getType: () => "window", executeJavaScript, once: vi.fn() }];
+    await workspace.command({ operation: "open", workflowId: "flow1" }, context);
+    await workspace.command({ operation: "editor-session" }, { ...context, n8nEditorId: 55 });
+    expect(await workspace.command({ operation: "state" }, other)).toMatchObject({
+        running: false,
+        occupiedGeneration: 1,
+        desktop: undefined,
+    });
+    await expect(workspace.command(handoff, { ...other, n8nEditorId: undefined })).rejects.toThrow(/desktop/);
+    await expect(workspace.command({ ...handoff, expectedGeneration: 2 }, other)).rejects.toThrow(/attachment changed/);
+    await expect(workspace.command(handoff, other)).rejects.toThrow(/Save local/);
+    expect(runtime.stop).not.toHaveBeenCalled();
+    dirty = false;
+    await expect(workspace.command(handoff, other)).resolves.toMatchObject({ desktop: true, running: true });
+    expect(runtime.stop).toHaveBeenCalledOnce();
+    expect(runtime.start).toHaveBeenCalledWith(other, expect.any(Object));
+    expect((await workspace.command({ operation: "state" }, context)).desktop).toBeUndefined();
 });
 
 it("preserves unsaved canvas edits and rejects stale agent versions before writing", async () => {
@@ -145,8 +210,41 @@ it("creates workflows with the Hermes agent and retains authentication errors", 
         .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }))
         .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }));
     await expect(workspace.command({ operation: "workflows" }, context)).rejects.toThrow(
-        "Reconnect your KronTerm account"
+        "Hermes workflow session expired"
     );
+});
+
+it("validates and saves a connected agent-authored graph in a single request", async () => {
+    const { workspace, runtime } = fixture();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: { id: "created" } }));
+    const command = {
+        operation: "create-workflow" as const,
+        name: "Widget snapshot",
+        edits: [
+            {
+                action: "add-node" as const,
+                node: {
+                    id: "widget",
+                    name: "Snapshot",
+                    type: "CUSTOM.kronTermWidget",
+                    typeVersion: 1,
+                    position: [260, 0],
+                    parameters: { operation: "widget_snapshot", blockId: "browser", arguments: "{}" },
+                },
+            },
+            { action: "connect" as const, source: "Start", target: "Snapshot" },
+        ],
+    };
+    runtime.validateDraft.mockResolvedValueOnce({ valid: false, errors: ["Invalid node parameters"] });
+    await expect(workspace.command(command, context)).rejects.toThrow("Invalid node parameters");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await expect(workspace.command(command, context)).resolves.toMatchObject({ id: "created" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+        nodes: [{ type: "n8n-nodes-base.manualTrigger" }, { type: "CUSTOM.kronTermWidget" }],
+        connections: { Start: { main: [[{ node: "Snapshot", type: "main", index: 0 }]] } },
+    });
 });
 
 it("keeps original editor requests authenticated and renews an expired session", async () => {
@@ -226,6 +324,63 @@ it("acknowledges ordered editor state and ignores snapshots from a previous moun
             context
         )
     ).toMatchObject({ updated: false });
+});
+
+it("keeps the mounted editor session when opening another workflow surface", async () => {
+    const { workspace } = fixture();
+    await workspace.command({ operation: "open", workflowId: "flow1" }, context);
+    const session = await workspace.command({ operation: "editor-session" }, context);
+    await workspace.command(
+        { operation: "editor-state", input: { stateId: session.stateId, sequence: 1, dirty: true } },
+        context
+    );
+    await workspace.command({ operation: "open", surface: "credentials" }, context);
+    expect(
+        await workspace.command(
+            { operation: "editor-state", input: { stateId: session.stateId, sequence: 2, dirty: false } },
+            context
+        )
+    ).toMatchObject({ updated: true, sequence: 2 });
+    expect(await workspace.command({ operation: "state" }, context)).toMatchObject({
+        desktop: { surface: "credentials", dirty: false },
+        selectedWorkflowId: "flow1",
+    });
+});
+
+it("clears a deleted workflow from the selection without asking the canvas to reload it", async () => {
+    const { workspace, store } = fixture();
+    const folder = store.command(context, { action: "create-folder", name: "Work" }).folders[0];
+    store.command(context, { action: "move-workflow", folderId: folder.id, workflowId: "flow1" });
+    await workspace.command({ operation: "open", workflowId: "flow1" }, context);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await workspace.command(
+        { operation: "editor-request", input: { route: "/rest/workflows/flow1", method: "DELETE" } },
+        context
+    );
+    const state = await workspace.command({ operation: "state" }, context);
+    expect(state.selectedWorkflowId).toBeUndefined();
+    expect(state.documentWorkflowId).toBeUndefined();
+    expect(state.folders[0].workflowIds).toEqual([]);
+    expect(new URL(state.desktop.url).pathname).toBe("/workflow/new");
+});
+
+it("recovers an editor opening a previously deleted workflow", async () => {
+    const { workspace } = fixture();
+    await workspace.command({ operation: "open", workflowId: "missing" }, context);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ message: "Not found" }, { status: 404 }));
+    await workspace.command(
+        { operation: "editor-request", input: { route: "/rest/workflows/other", method: "GET" } },
+        context
+    );
+    expect((await workspace.command({ operation: "state" }, context)).selectedWorkflowId).toBe("missing");
+
+    await workspace.command(
+        { operation: "editor-request", input: { route: "/rest/workflows/missing", method: "GET" } },
+        context
+    );
+    const state = await workspace.command({ operation: "state" }, context);
+    expect(state.selectedWorkflowId).toBeUndefined();
+    expect(new URL(state.desktop.url).pathname).toBe("/workflow/new");
 });
 
 it("checks live native editor state before Hermes edits and releases its mutation lease", async () => {
@@ -414,16 +569,15 @@ it("opens management pages from a stopped runtime without opening a canvas first
     }
 });
 
-it("does not start a runtime for status polling or an unconfigured shared account", async () => {
+it("keeps status polling passive and opens the canvas without a separate account", async () => {
     const { workspace, runtime } = fixture();
     runtime.status = () => ({ running: false }) as any;
     await workspace.command({ operation: "state" }, context);
     expect(runtime.start).not.toHaveBeenCalled();
     mocks.account = false;
-    await expect(workspace.command({ operation: "create-workflow", name: "First flow" }, context)).rejects.toThrow(
-        "Connect your KronTerm account"
-    );
-    expect(runtime.start).not.toHaveBeenCalled();
+    expect(await workspace.command({ operation: "state" }, context)).toMatchObject({ accountRequired: false });
+    await expect(workspace.command({ operation: "open", surface: "canvas" }, context)).resolves.toBeDefined();
+    expect(runtime.start).toHaveBeenCalledOnce();
 });
 
 it("lists only current-tab live widget bindings without starting the workflow runtime", async () => {
@@ -496,4 +650,32 @@ it("keeps management and new-draft opens from replacing the selected saved workf
     expect(store.read(context).selectedWorkflowId).toBe("flow1");
     await workspace.command({ operation: "open", surface: "canvas", workflowId: "new" }, context);
     expect(store.read(context).selectedWorkflowId).toBe("flow1");
+});
+
+it("scopes VM workflow agents to the exact running computer assigned to this tab", async () => {
+    const { workspace, worker } = fixture();
+    mocks.computers.mockResolvedValue([
+        { id: "vm-1", name: "Test VM", ready: true, controlOwner: "agent", assignedAgentId: "sandbox:other" },
+    ]);
+    await expect(
+        workspace.command({ operation: "run-agent", computerId: "vm-1", task: "Inspect files" }, context)
+    ).rejects.toThrow("not assigned");
+    expect(worker).not.toHaveBeenCalled();
+    expect(await workspace.command({ operation: "workspace-computers" }, context)).toEqual([
+        { id: "vm-1", label: "Test VM", ready: false },
+    ]);
+    mocks.computers.mockResolvedValue([
+        { id: "vm-1", ready: true, controlOwner: "agent", assignedAgentId: "sandbox:tab", controlGeneration: 4 },
+    ]);
+    await workspace.command({ operation: "run-agent", computerId: "vm-1", task: "Inspect files" }, context);
+    expect(worker).toHaveBeenCalledWith(
+        expect.objectContaining({ computerId: "vm-1" }),
+        expect.objectContaining({
+            sandboxComputerId: "vm-1",
+            sandboxComputerMode: "sandbox",
+            delegationScope: "sandbox",
+            tabId: "tab",
+        }),
+        undefined
+    );
 });

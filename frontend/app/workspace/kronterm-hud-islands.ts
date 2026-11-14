@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { focusOrCreateDecision, makeViewAppDescriptor } from "@/app/store/app-registry";
 import { getAllBlockComponentModels } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
 import { ObjectService } from "@/app/store/services";
@@ -85,6 +86,8 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
         ...(app === "diff" ? { "aifilediff:chatid": options.chatId, "aifilediff:toolcallid": options.toolCallId } : {}),
     };
 
+    const descriptor = makeViewAppDescriptor(definition.view, []);
+    const newWindow = options.forceNew === true && descriptor.launchPolicy === "multi-window";
     const existing = getAllBlockComponentModels()
         .map((model) => model.viewModel as ViewModel & { blockId?: string })
         .find(
@@ -101,7 +104,11 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
                         "appstream:appid"
                     ] === options.appId)
         );
-    if (existing && !options.forceNew) {
+    const decision = focusOrCreateDecision(
+        { ...descriptor, runningBlockIds: existing ? [existing.blockId] : [] },
+        { newWindow }
+    );
+    if (existing && decision.action === "focus") {
         if (options.file && definition.view === "preview") {
             const preview = existing as typeof existing & {
                 goHistory: (file: string) => Promise<void>;
@@ -124,7 +131,7 @@ export async function launchKronTermHudIsland(app: KronTermHudApp, options: HudL
         if (!(await getApi().selectNativeHudWidget(existing.blockId, true))) throw new Error("HUD widget is not ready");
         return existing.blockId;
     }
-    for (const candidate of options.forceNew ? [] : kronTermHudController.getSnapshot().islandBlockIds) {
+    for (const candidate of newWindow ? [] : kronTermHudController.getSnapshot().islandBlockIds) {
         const block = (await ObjectService.GetObject(`block:${candidate}`)) as Block;
         if (block?.meta?.view !== definition.view) continue;
         if (

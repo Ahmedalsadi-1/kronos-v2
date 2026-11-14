@@ -35,11 +35,13 @@ import { hudTargetSessionId } from "@hermes/app/hud/handoff";
 import { $sessionsLoading } from "@hermes/store/session";
 
 import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
-import { atoms, createBlock, getApi, refocusNode } from "@/store/global";
+import { atoms, createBlock, getApi } from "@/store/global";
+import { ObjectService } from "@/app/store/services";
+import { resolveBlockView } from "@/app/block/retired-chat-view";
 import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
-import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { atom, useAtomValue } from "jotai";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import "./kronarchy-shell.scss";
 
@@ -231,21 +233,42 @@ const WorkspaceElem = memo(() => {
         return () => window.removeEventListener("kronterm:open-plugin-widget", openPluginWidget);
     }, []);
 
-    const expandHermes = useCallback(async () => {
-        if (!tabId) {
-            throw new Error("A workspace tab is required to expand KronTerm Agent.");
+    useEffect(() => {
+        const openWidget = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            const meta = detail?.meta ?? { view: detail?.view };
+            if (typeof meta.view !== "string" || !meta.view) return;
+            if (resolveBlockView(meta.view) === "hermes") {
+                hermesSurfaceController.requestOpenPanel();
+                return;
+            }
+            void createBlock({ meta }).catch((error) => console.error("Could not open widget", error));
+        };
+        window.addEventListener("kronterm:create-widget", openWidget);
+        return () => window.removeEventListener("kronterm:create-widget", openWidget);
+    }, []);
+
+    const legacyAgentBlocks = useAtomValue(
+        useMemo(() => atom((get) => {
+            const tab = get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
+            return (tab?.blockids ?? []).filter((blockId) => {
+                const block = get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
+                return resolveBlockView(block?.meta?.view) === "hermes";
+            });
+        }), [tabId])
+    );
+    const retiringAgentBlocks = useRef(new Set<string>());
+    useEffect(() => {
+        for (const blockId of legacyAgentBlocks) {
+            if (retiringAgentBlocks.current.has(blockId)) continue;
+            retiringAgentBlocks.current.add(blockId);
+            hermesSurfaceController.requestOpenPanel();
+            void ObjectService.DeleteBlock(blockId).catch((error) => {
+                retiringAgentBlocks.current.delete(blockId);
+                console.error("Could not retire the KronOS Agent widget", error);
+            });
         }
-        const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
-        const existingBlockId = tab?.blockids?.find((blockId) => {
-            const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
-            return block?.meta?.view === "hermes";
-        });
-        if (existingBlockId) {
-            refocusNode(existingBlockId);
-            return;
-        }
-        await createBlock({ meta: { view: "hermes" } }, false);
-    }, [tabId]);
+    }, [legacyAgentBlocks]);
 
     useEffect(() => {
         if (!widgetsPanelVisible) {
@@ -291,16 +314,16 @@ const WorkspaceElem = memo(() => {
                         <ModalsRenderer />
                     </ErrorBoundary>
                 </main>
-                {renderHermesAuxiliarySurfaces && presentation !== "os" && surface.presentation === "panel" && (
+                {renderHermesAuxiliarySurfaces && presentation === "tabs" && surface.presentation === "panel" && (
                     <aside
                         className="workspace-hermes-dock order-last flex min-w-0 overflow-hidden border-l border-border"
                         style={{ width: panelWidth }}
-                        aria-label="KronTerm Agent inspector"
+                        aria-label="KronOS Agent inspector"
                     >
                         <div
                             className="workspace-hermes-dock-resizer w-1 shrink-0 cursor-col-resize"
                             role="separator"
-                            aria-label="Resize KronTerm Agent inspector"
+                            aria-label="Resize KronOS Agent inspector"
                             aria-orientation="vertical"
                             aria-valuemin={panelBounds.min}
                             aria-valuemax={panelBounds.max}
@@ -359,13 +382,12 @@ const WorkspaceElem = memo(() => {
             </div>
             {renderHermesAuxiliarySurfaces &&
                 (surface.presentation === "panel" ||
-                    presentation === "os" ||
+                    presentation === "os" || presentation === "widgets" ||
                     !(hudMode.active && hudMode.keepWorkspaceVisible)) && (
                     <HermesHudHost
                         autoOpen={autoOpenHud || canvasComposerContext.active || presentation === "os"}
                         placement={presentation === "os" ? "shell" : "floating"}
                         canvasContext={canvasComposerContext}
-                        onExpand={expandHermes}
                         tabId={tabId}
                     />
                 )}

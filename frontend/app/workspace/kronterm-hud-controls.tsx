@@ -1,25 +1,23 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SystemButton, SystemPopover } from "@/app/components/system-ui";
+import { ScreenSelectorToolbar } from "@/app/lib/screen-selector-toolbar";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { desktopSelectionPrompt } from "@/app/view/hermes/selection-context";
 import { getApi } from "@/store/global";
 import { Crosshair, LogOut } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import type { DesktopGrabPayload } from "../../types/desktop-grab";
 import { kronTermHudController } from "./kronterm-hud-controller";
 import { launchKronTermHudIsland } from "./kronterm-hud-islands";
 
 export function DesktopGrabControl({ compact = false }: { compact?: boolean } = {}) {
-    const [active, setActive] = useState(false);
+    const trigger = useRef<HTMLButtonElement>(null);
+    const [operationId, setOperationId] = useState<string>();
     const [message, setMessage] = useState("");
     const [selection, setSelection] = useState<DesktopGrabPayload>(null);
-    const [comment, setComment] = useState("");
     const [sending, setSending] = useState(false);
-    const [includeScreenshot, setIncludeScreenshot] = useState(false);
-    const [depth, setDepth] = useState<"compact" | "full">("compact");
-    const [destination, setDestination] = useState<"current" | "new">("current");
     useEffect(() => {
         if (!selection) return;
         const cancel = (event: KeyboardEvent) => {
@@ -31,15 +29,15 @@ export function DesktopGrabControl({ compact = false }: { compact?: boolean } = 
         window.addEventListener("keydown", cancel);
         return () => window.removeEventListener("keydown", cancel);
     }, [selection, sending]);
-    const send = async () => {
+    const send = async (comment: string) => {
         if (!selection || !comment.trim() || sending) return;
         setSending(true);
         setMessage("");
         try {
             await getApi().sendHermesSelection({
-                text: desktopSelectionPrompt(selection, comment, depth),
-                target: destination,
-                ...(includeScreenshot && selection.screenshot
+                text: desktopSelectionPrompt(selection, comment, "compact"),
+                target: "current",
+                ...(selection.screenshot
                     ? { images: [{ filename: "desktop-selection.png", dataUrl: selection.screenshot }] }
                     : {}),
             });
@@ -52,164 +50,97 @@ export function DesktopGrabControl({ compact = false }: { compact?: boolean } = 
         }
     };
     useEffect(() => {
-        if (!active) return;
+        if (!operationId) return;
         const cancel = (event: KeyboardEvent) => {
-            if (event.key === "Escape") void getApi().cancelDesktopGrab();
+            if (event.key === "Escape") void getApi().cancelDesktopGrab(operationId);
         };
         window.addEventListener("keydown", cancel);
         return () => {
             window.removeEventListener("keydown", cancel);
-            void getApi().cancelDesktopGrab();
+            void getApi().cancelDesktopGrab(operationId);
         };
-    }, [active]);
+    }, [operationId]);
     const grab = async () => {
-        if (active) {
-            await getApi().cancelDesktopGrab();
+        if (operationId) {
+            await getApi().cancelDesktopGrab(operationId);
             return;
         }
-        setActive(true);
-        setMessage("Click a desktop element to review its context. Escape cancels.");
+        window.dispatchEvent(new Event("kronterm:workspace-picker-deactivate"));
+        const id = crypto.randomUUID();
+        setOperationId(id);
+        setMessage("Click a desktop element to comment. Right-click to include an image. Escape cancels.");
         try {
-            const result = await getApi().desktopGrab();
+            const result = await getApi().desktopGrab(id);
             if (result.status === "selected") {
                 setSelection(result.payload);
-                setComment("");
-                setIncludeScreenshot(false);
             }
-            setMessage(
-                result.status === "selected"
-                    ? "Review the selection and add a comment before sending."
-                    : "Selection cancelled."
-            );
+            setMessage(result.status === "selected" ? "" : "Selection cancelled.");
         } catch (error) {
             setMessage(error instanceof Error ? error.message : "Desktop selection failed.");
         } finally {
-            setActive(false);
+            setOperationId(undefined);
         }
     };
+    const bounds = selection || (compact && message) ? trigger.current?.getBoundingClientRect() : null;
+    const popoverPosition = bounds
+        ? {
+              position: "fixed" as const,
+              zIndex: 2147483647,
+              left: Math.max(12, Math.min(bounds.left, window.innerWidth - 332)),
+              ...(bounds.top > window.innerHeight / 2
+                  ? { top: "auto", bottom: window.innerHeight - bounds.top + 8 }
+                  : { top: bounds.bottom + 8 }),
+          }
+        : undefined;
+    const review =
+        selection &&
+        trigger.current &&
+        createPortal(
+            <div className="pointer-events-none fixed inset-0 z-[2147483647] [&>iframe]:pointer-events-auto">
+                <ScreenSelectorToolbar
+                    title="Desktop element comment"
+                    prompt={{
+                        x: (bounds.left + bounds.width / 2) / window.innerWidth,
+                        y: (bounds.top + bounds.height / 2) / window.innerHeight,
+                        label: selection.name || selection.role || selection.application,
+                    }}
+                    onComment={(text) => void send(text)}
+                    onCancel={() => {
+                        if (!sending) setSelection(null);
+                    }}
+                />
+            </div>,
+            document.body
+        );
+    const status = message && (
+        <span
+            role="status"
+            style={popoverPosition}
+            className="kt-system-popover pointer-events-none absolute top-full left-0 mt-2 w-64 px-3 py-2 text-xs"
+        >
+            {message}
+        </span>
+    );
     return (
-        <span className="relative inline-flex">
+        <span className="relative inline-flex" data-react-grab-ignore-events="">
             <button
+                ref={trigger}
                 type="button"
                 className={
                     compact
                         ? "os-system-entry cursor-pointer flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/10"
                         : "cursor-pointer"
                 }
-                aria-label={active ? "Cancel desktop selection" : "Select desktop element"}
-                aria-pressed={active}
+                aria-label={operationId ? "Cancel desktop selection" : "Select desktop element"}
+                aria-pressed={Boolean(operationId)}
                 title={message || "Select desktop element"}
                 onClick={() => void grab()}
             >
                 <Crosshair size={16} aria-hidden="true" />
                 {!compact && <span>Desktop</span>}
             </button>
-            {selection && (
-                <SystemPopover
-                    role="dialog"
-                    aria-label="Review desktop selection"
-                    className="absolute top-full left-0 z-50 mt-2 w-80 max-w-[calc(100vw-24px)] max-h-[70vh] overflow-auto p-3 text-[13px]"
-                >
-                    <p className="font-semibold">
-                        {selection.application} · {selection.window}
-                    </p>
-                    <p className="my-2">
-                        {selection.role} · {selection.name}
-                    </p>
-                    {selection.screenshot && (
-                        <img
-                            src={selection.screenshot}
-                            alt="Captured desktop element"
-                            className="max-h-40 w-full object-contain"
-                        />
-                    )}
-                    <details className="my-2">
-                        <summary className="cursor-pointer">Context to send</summary>
-                        <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">
-                            {desktopSelectionPrompt(selection, "", depth)}
-                        </pre>
-                    </details>
-                    <fieldset className="grid gap-2">
-                        <legend className="mb-2 font-medium">Selection settings</legend>
-                        <label className="flex cursor-pointer items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={includeScreenshot}
-                                disabled={!selection.screenshot}
-                                onChange={(event) => setIncludeScreenshot(event.target.checked)}
-                            />{" "}
-                            Include screenshot
-                        </label>
-                        {!selection.screenshot && (
-                            <p className="text-xs text-[var(--kt-label-secondary)]">
-                                {selection.screenshotOmitted === "sensitive-content"
-                                    ? "Screenshot withheld for sensitive content."
-                                    : "No screenshot is available for this selection."}
-                            </p>
-                        )}
-                        <label className="flex items-center justify-between gap-2">
-                            Context depth
-                            <select
-                                className="cursor-pointer rounded bg-[var(--kt-content)] p-1"
-                                value={depth}
-                                onChange={(event) => setDepth(event.target.value as typeof depth)}
-                            >
-                                <option value="compact">Compact</option>
-                                <option value="full">Full control context</option>
-                            </select>
-                        </label>
-                        <label className="flex items-center justify-between gap-2">
-                            Destination
-                            <select
-                                className="cursor-pointer rounded bg-[var(--kt-content)] p-1"
-                                value={destination}
-                                onChange={(event) => setDestination(event.target.value as typeof destination)}
-                            >
-                                <option value="current">Current chat</option>
-                                <option value="new">New chat</option>
-                            </select>
-                        </label>
-                    </fieldset>
-                    <textarea
-                        aria-label="Selection comment"
-                        autoFocus
-                        maxLength={2000}
-                        value={comment}
-                        onChange={(event) => setComment(event.target.value)}
-                        className="my-2 w-full rounded border border-[var(--kt-separator)] bg-[var(--kt-content)] p-2 focus-visible:outline-[var(--kt-focus-ring)]"
-                    />
-                    {message && (
-                        <p role="status" className="mb-2 text-xs text-[var(--kt-label-secondary)]">
-                            {message}
-                        </p>
-                    )}
-                    <div className="flex gap-2">
-                        <SystemButton
-                            type="button"
-                            disabled={sending || !comment.trim()}
-                            onClick={() => void send()}
-                            variant="filled"
-                        >
-                            {sending ? "Sending…" : "Send to Hermes"}
-                        </SystemButton>
-                        <SystemButton
-                            type="button"
-                            disabled={sending}
-                            onClick={() => {
-                                setSelection(null);
-                                setMessage("");
-                            }}
-                        >
-                            Cancel
-                        </SystemButton>
-                    </div>
-                </SystemPopover>
-            )}
-            {message && !selection && (
-                <span role="status" className="kt-system-popover absolute top-full left-0 mt-2 w-64 px-3 py-2 text-xs">
-                    {message}
-                </span>
-            )}
+            {review}
+            {compact && status ? createPortal(status, document.body) : status}
         </span>
     );
 }

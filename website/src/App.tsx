@@ -63,28 +63,32 @@ type Chapter = {
     gallery: Media[];
 };
 
+const asset = (relativePath: string) => `${import.meta.env.BASE_URL}assets/${relativePath}`;
+const releases = "https://github.com/Ahmedalsadi-1/kronos-releases";
+const previewRelease = `${releases}/releases/tag/v0.14.3`;
+
 const assets = {
-    catMark: "/assets/product/kronterm-cat-mark.png",
-    catGuide: "/assets/product/kronterm-cat-guide.png",
-    catWalk: "/assets/product/kronterm-cat-walk.png",
-    workflowOrbit: "/assets/generated/workflow-orbit-v4.webp",
-    blueprintPet: "/assets/generated/blueprint-pet.webp",
-    finalePet: "/assets/generated/finale-pet.webp",
-    workspace: "/assets/product/kronterm-homepage.webp",
-    sidepanel: "/assets/product/kronterm-sidepanel.webp",
-    sandbox: "/assets/product/kronterm-sandbox.webp",
-    agent: "/assets/kronoscode/kronoscode-agent.webp",
-    diff: "/assets/kronoscode/file-diff.webp",
-    apps: "/assets/kronoscode/streamable-apps.webp",
-    explorer: "/assets/kronoscode/file-explorer.webp",
-    settings: "/assets/kronoscode/tui-settings.webp",
-    canvasVideo: "/assets/video/canvas-display.mp4",
-    browserVideo: "/assets/video/browser-widget.mp4",
-    sandboxVideo: "/assets/video/sandbox-demo.mp4",
-    devServerVideo: "/assets/video/dev-server.mp4",
-    acpVideo: "/assets/video/acp-management.mp4",
-    fieldGuideVideo: "/assets/video/kronterm-field-guide.mp4",
-    fieldGuidePoster: "/assets/generated/visual-stories/kronterm-field-guide-poster.png",
+    brandMark: asset("product/kronterm-icon.svg"),
+    catGuide: asset("product/kronterm-cat-guide.png"),
+    catWalk: asset("product/kronterm-cat-walk.png"),
+    workflowOrbit: asset("generated/workflow-orbit-v4.webp"),
+    blueprintPet: asset("generated/blueprint-pet.webp"),
+    finalePet: asset("generated/finale-pet.webp"),
+    workspace: asset("product/kronterm-homepage.webp"),
+    sidepanel: asset("product/kronterm-sidepanel.webp"),
+    sandbox: asset("product/kronterm-sandbox.webp"),
+    agent: asset("kronoscode/kronoscode-agent.webp"),
+    diff: asset("kronoscode/file-diff.webp"),
+    apps: asset("kronoscode/streamable-apps.webp"),
+    explorer: asset("kronoscode/file-explorer.webp"),
+    settings: asset("kronoscode/tui-settings.webp"),
+    canvasVideo: asset("video/canvas-display.mp4"),
+    browserVideo: asset("video/browser-widget.mp4"),
+    sandboxVideo: asset("video/sandbox-demo.mp4"),
+    devServerVideo: asset("video/dev-server.mp4"),
+    acpVideo: asset("video/acp-management.mp4"),
+    fieldGuideVideo: asset("video/kronterm-field-guide.mp4"),
+    fieldGuidePoster: asset("generated/visual-stories/kronterm-field-guide-poster.png"),
 };
 
 type VisualStory = {
@@ -103,7 +107,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Living canvas / 01",
         description: "Every technical surface stays visible while people and agents coordinate the work.",
         format: "wide",
-        src: "/assets/generated/visual-stories/01-human-agent-orchestra.webp",
+        src: asset("generated/visual-stories/01-human-agent-orchestra.webp"),
     },
     {
         id: "terminal-night-shift",
@@ -111,7 +115,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Command layer / 02",
         description: "Commands, logs, tests, and product state share one focused operating picture.",
         format: "wide",
-        src: "/assets/generated/visual-stories/02-terminal-night-shift.webp",
+        src: asset("generated/visual-stories/02-terminal-night-shift.webp"),
     },
     {
         id: "browser-evidence-trail",
@@ -119,7 +123,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Product validation / 03",
         description: "Browser evidence remains attached to the terminal output and diff that produced it.",
         format: "wide",
-        src: "/assets/generated/visual-stories/03-browser-evidence-trail.webp",
+        src: asset("generated/visual-stories/03-browser-evidence-trail.webp"),
     },
     {
         id: "sandbox-launch",
@@ -127,15 +131,15 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Isolated runtime / 04",
         description: "A complete disposable desktop gives uncertain work room to run inside a clear boundary.",
         format: "wide",
-        src: "/assets/generated/visual-stories/04-sandbox-launch.webp",
+        src: asset("generated/visual-stories/04-sandbox-launch.webp"),
     },
     {
         id: "living-workspace",
         title: "The Living Workspace",
-        eyebrow: "KronTerm / 05",
+        eyebrow: "KronOS / 05",
         description: "Terminal, browser, files, code review, sandboxes, and agents become one persistent map.",
         format: "wide",
-        src: "/assets/generated/visual-stories/05-living-workspace.webp",
+        src: asset("generated/visual-stories/05-living-workspace.webp"),
     },
     {
         id: "code-review-detective",
@@ -143,7 +147,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Diff-first / 06",
         description: "The pet follows the exact line from a suspicious change to a verified fix.",
         format: "square",
-        src: "/assets/generated/visual-stories/06-code-review-detective.webp",
+        src: asset("generated/visual-stories/06-code-review-detective.webp"),
     },
     {
         id: "remote-session-bridge",
@@ -151,7 +155,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Durable sessions / 07",
         description: "Local and remote context stay connected through reconnects, sleep, and app restarts.",
         format: "square",
-        src: "/assets/generated/visual-stories/07-remote-session-bridge.webp",
+        src: asset("generated/visual-stories/07-remote-session-bridge.webp"),
     },
     {
         id: "desktop-app-pilot",
@@ -159,7 +163,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Native control / 08",
         description: "Visible cursor paths keep desktop automation understandable and inspectable.",
         format: "square",
-        src: "/assets/generated/visual-stories/08-desktop-app-pilot.webp",
+        src: asset("generated/visual-stories/08-desktop-app-pilot.webp"),
     },
     {
         id: "agent-command-center",
@@ -167,7 +171,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Agent operations / 09",
         description: "Specialist agents coordinate through one workspace instead of isolated transcripts.",
         format: "square",
-        src: "/assets/generated/visual-stories/09-agent-command-center.webp",
+        src: asset("generated/visual-stories/09-agent-command-center.webp"),
     },
     {
         id: "test-lab",
@@ -175,7 +179,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Verification / 10",
         description: "Failures become evidence, fixes become reruns, and results stay beside the code.",
         format: "square",
-        src: "/assets/generated/visual-stories/10-test-lab.webp",
+        src: asset("generated/visual-stories/10-test-lab.webp"),
     },
     {
         id: "field-guide-cartographer",
@@ -183,7 +187,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Product map / 11",
         description: "Nine dedicated product chapters make the full operating model easier to understand.",
         format: "portrait",
-        src: "/assets/generated/visual-stories/11-field-guide-cartographer.webp",
+        src: asset("generated/visual-stories/11-field-guide-cartographer.webp"),
     },
     {
         id: "widget-builder",
@@ -191,7 +195,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Composable blocks / 12",
         description: "Build the workspace around the problem instead of forcing the problem into a fixed shell.",
         format: "portrait",
-        src: "/assets/generated/visual-stories/12-widget-builder.webp",
+        src: asset("generated/visual-stories/12-widget-builder.webp"),
     },
     {
         id: "security-sentinel",
@@ -199,7 +203,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Visible boundaries / 13",
         description: "Host, browser, terminal, remote, and sandbox actions remain intentionally distinct.",
         format: "portrait",
-        src: "/assets/generated/visual-stories/13-security-sentinel.webp",
+        src: asset("generated/visual-stories/13-security-sentinel.webp"),
     },
     {
         id: "deploy-celebration",
@@ -207,7 +211,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Ship with evidence / 14",
         description: "The entire build loop resolves into a product result the team can inspect.",
         format: "portrait",
-        src: "/assets/generated/visual-stories/14-deploy-celebration.webp",
+        src: asset("generated/visual-stories/14-deploy-celebration.webp"),
     },
     {
         id: "welcome-living-canvas",
@@ -215,7 +219,7 @@ const VisualStories: VisualStory[] = [
         eyebrow: "Field guide / 15",
         description: "Open one technical notebook and keep every useful surface inside the same story.",
         format: "portrait",
-        src: "/assets/generated/visual-stories/15-welcome-living-canvas.webp",
+        src: asset("generated/visual-stories/15-welcome-living-canvas.webp"),
     },
 ];
 
@@ -227,30 +231,30 @@ const capabilities: Capability[] = [
         title: "One workspace, presented as tiles, tabs, or a living canvas.",
         summary: "Keep the same terminal, browser, files, sandboxes, and AI while changing how the work is arranged.",
         description:
-            "KronTerm can present a project as resizable splits, focused browser-style tabs, or a freeform spatial canvas. The canvas adds notes, diagram tools, live agent task cards, and direct selection-to-KronosCode context without losing the underlying widgets.",
+            "KronOS can present a project as resizable splits, focused browser-style tabs, or a freeform spatial canvas. The canvas adds notes, diagram tools, live agent task cards, and a way to share selections with KronOS Agent without losing the underlying widgets.",
         icon: LayoutDashboard,
         media: {
             type: "video",
             src: assets.canvasVideo,
             poster: assets.workspace,
-            alt: "KronTerm workspace canvas in motion",
+            alt: "KronOS workspace canvas in motion",
         },
         points: [
             "Tiled, tabbed, and spatial presentations",
             "Live request, action, approval, evidence, and output cards",
-            "Follow or quote canvas selections in KronosCode",
+            "Follow or quote canvas selections in KronOS Agent",
         ],
     },
     {
         slug: "kronoscode",
-        label: "KronosCode",
+        label: "KronOS Agent",
         eyebrow: "02 / AI engine",
         title: "An agent that can see the work, not just the prompt.",
-        summary: "KronosCode reasons across the live workspace, then acts through visible, inspectable steps.",
+        summary: "KronOS Agent reasons across the live workspace, then acts through visible, inspectable steps.",
         description:
-            "Give AI the context it normally misses: terminal output, files, diffs, browser state, sandbox activity, and session history. KronosCode plans across those surfaces while keeping meaningful commands and edits reviewable.",
+            "Give AI the context it normally misses: terminal output, files, diffs, browser state, sandbox activity, and session history. KronOS Agent plans across those surfaces while keeping meaningful commands and edits reviewable.",
         icon: BrainCircuit,
-        media: { type: "image", src: assets.agent, alt: "KronosCode agent working inside KronTerm" },
+        media: { type: "image", src: assets.agent, alt: "KronOS Agent working inside KronOS" },
         points: ["Workspace-aware planning", "Diff-first code changes", "Human approval at the right moments"],
     },
     {
@@ -260,13 +264,13 @@ const capabilities: Capability[] = [
         title: "A real terminal at the center of the system.",
         summary: "Local shells, durable sessions, logs, and dev servers stay connected to the rest of the workspace.",
         description:
-            "KronTerm treats command output as product context. Failures, exit codes, logs, and test results can inform the agent, the browser preview, and the next edit without copying anything into another tool.",
+            "KronOS treats command output as product context. Failures, exit codes, logs, and test results can inform the agent, the browser preview, and the next edit without copying anything into another tool.",
         icon: Terminal,
         media: {
             type: "video",
             src: assets.devServerVideo,
             poster: assets.explorer,
-            alt: "A dev server running inside KronTerm",
+            alt: "A dev server running inside KronOS",
         },
         points: ["Full PTY terminal sessions", "AI-readable output and history", "Local and remote workflows"],
     },
@@ -284,7 +288,7 @@ const capabilities: Capability[] = [
             type: "video",
             src: assets.browserVideo,
             poster: assets.workspace,
-            alt: "Browser automation inside a KronTerm block",
+            alt: "Browser automation inside a KronOS block",
         },
         points: ["Embedded live previews", "Structured element references", "Screenshots and browser evidence"],
     },
@@ -301,7 +305,7 @@ const capabilities: Capability[] = [
             type: "video",
             src: assets.sandboxVideo,
             poster: assets.sandbox,
-            alt: "An isolated Linux sandbox controlled from KronTerm",
+            alt: "An isolated Linux sandbox controlled from KronOS",
         },
         points: ["Disposable Linux environments", "Visible desktop automation", "Host and sandbox boundaries"],
     },
@@ -312,12 +316,12 @@ const capabilities: Capability[] = [
         title: "Connect agent work to the apps already on your Mac.",
         summary: "Observe and operate native applications through accessibility and screenshot-based controls.",
         description:
-            "Some workflows cross beyond code and browser tabs. KronTerm gives agents a permission-aware path to inspect native app structure and perform targeted clicks, typing, keyboard actions, scrolling, and dragging.",
+            "Some workflows cross beyond code and browser tabs. KronOS gives agents a permission-aware path to inspect native app structure and perform targeted clicks, typing, keyboard actions, scrolling, and dragging.",
         icon: MousePointer2,
         media: {
             type: "image",
             src: assets.sidepanel,
-            alt: "KronTerm side panel coordinating desktop and workspace control",
+            alt: "KronOS side panel coordinating desktop and workspace control",
         },
         points: ["Accessibility-tree inspection", "Targeted native app actions", "Visible host permissions"],
     },
@@ -328,9 +332,9 @@ const capabilities: Capability[] = [
         title: "Remote work that survives real life.",
         summary: "Durable SSH, remote files, and reconnecting sessions stay attached to the workspace.",
         description:
-            "Keep remote terminal state, files, and previews available through network drops, sleep cycles, and app restarts. KronosCode can reason from the same remote output and project context you see.",
+            "Keep remote terminal state, files, and previews available through network drops, sleep cycles, and app restarts. KronOS Agent can reason from the same remote output and project context you see.",
         icon: Network,
-        media: { type: "image", src: assets.explorer, alt: "Remote files and terminal context inside KronTerm" },
+        media: { type: "image", src: assets.explorer, alt: "Remote files and terminal context inside KronOS" },
         points: ["Durable SSH sessions", "Remote file previews", "Automatic reconnection"],
     },
     {
@@ -340,13 +344,13 @@ const capabilities: Capability[] = [
         title: "Bring every specialist agent into one control plane.",
         summary: "Configure background and interactive agents for repeatable technical workflows.",
         description:
-            "KronTerm supports Agent Control Protocol workflows for agents that can watch, report, and assist within clear scopes. Switch between specialists without losing the workspace or the evidence behind their work.",
+            "KronOS supports Agent Control Protocol workflows for agents that can watch, report, and assist within clear scopes. Switch between specialists without losing the workspace or the evidence behind their work.",
         icon: Bot,
         media: {
             type: "video",
             src: assets.acpVideo,
             poster: assets.apps,
-            alt: "ACP agent management inside KronTerm",
+            alt: "ACP agent management inside KronOS",
         },
         points: ["Multiple specialist agents", "Scoped background work", "Inspectable session history"],
     },
@@ -355,14 +359,14 @@ const capabilities: Capability[] = [
         label: "Voice",
         eyebrow: "09 / Experimental",
         title: "Speak into the same agent context already on the canvas.",
-        summary: "Optional speech capture and local transcription connect directly to the active KronosCode composer.",
+        summary: "Optional speech capture and local transcription connect directly to the active KronOS Agent composer.",
         description:
-            "KronTerm can start an optional local Python audio process, capture microphone input, transcribe speech with faster-whisper, and submit the final text through the active composer. Speech output is also available when an online or offline TTS engine is configured.",
+            "KronOS can start an optional local Python audio process, capture microphone input, transcribe speech with faster-whisper, and submit the final text through the active composer. Speech output is also available when an online or offline TTS engine is configured.",
         icon: Mic,
         media: {
             type: "image",
             src: assets.sidepanel,
-            alt: "The KronTerm side panel where voice transcripts enter the active agent session",
+            alt: "The KronOS side panel where voice transcripts enter the active agent session",
         },
         points: ["Local speech-to-text", "Visible listening and transcription state", "Opt-in process lifecycle"],
     },
@@ -373,7 +377,7 @@ const chapters: Record<string, Chapter> = {
         thesis: "The workspace should preserve the shape of the problem and still let the operator choose the right level of focus.",
         narrative: [
             "Most technical work changes shape during the day. A broad investigation benefits from several visible surfaces; a focused edit needs one active pane; planning and agent review become easier when evidence can be arranged spatially. A fixed layout forces the operator to rebuild context whenever the work changes.",
-            "KronTerm keeps the same live widgets underneath three presentations: resizable tiles, browser-style tabs with pane splitting, and a persistent pan-and-zoom canvas. On the canvas, notes and diagrams can sit beside a live agent graph, and any selected widget or task card can become the next prompt's focus or quoted evidence.",
+            "KronOS keeps the same live widgets underneath three presentations: resizable tiles, browser-style tabs with pane splitting, and a persistent pan-and-zoom canvas. On the canvas, notes and diagrams can sit beside a live agent graph, and any selected widget or task card can become the next prompt's focus or quoted evidence.",
         ],
         details: [
             {
@@ -393,15 +397,15 @@ const chapters: Record<string, Chapter> = {
             "Choose tiles, tabs, or canvas",
             "Arrange the surfaces and notes",
             "Follow live agent and evidence cards",
-            "Send the right selection back to KronosCode",
+            "Send the right selection back to KronOS Agent",
         ],
         gallery: [
-            { type: "image", src: assets.workspace, alt: "A complete KronTerm workspace composition" },
+            { type: "image", src: assets.workspace, alt: "A complete KronOS workspace composition" },
             {
                 type: "video",
                 src: assets.canvasVideo,
                 poster: assets.sidepanel,
-                alt: "The KronTerm canvas being arranged in real time",
+                alt: "The KronOS canvas being arranged in real time",
             },
             { type: "image", src: assets.sandbox, alt: "A sandbox surface composed inside the workspace" },
         ],
@@ -410,7 +414,7 @@ const chapters: Record<string, Chapter> = {
         thesis: "An agent becomes more useful when it can inspect the same evidence as the person directing it.",
         narrative: [
             "A chat transcript is a narrow representation of software work. It omits the failing command, the open diff, the browser state, the remote connection, and the decisions that produced the current workspace. That missing context is where most agent mistakes begin.",
-            "KronosCode operates inside KronTerm, where it can reason from visible workspace evidence. It plans across files, terminal output, browser state, sandboxes, and session history, then presents commands and edits at the moment a person needs to review them.",
+            "KronOS Agent operates inside KronOS, where it can reason from visible workspace evidence. It plans across files, terminal output, browser state, sandboxes, and session history, then presents commands and edits at the moment a person needs to review them.",
         ],
         details: [
             {
@@ -433,16 +437,16 @@ const chapters: Record<string, Chapter> = {
             "Review evidence and continue",
         ],
         gallery: [
-            { type: "image", src: assets.agent, alt: "KronosCode agent conversation inside KronTerm" },
-            { type: "image", src: assets.diff, alt: "A reviewable code diff produced by KronosCode" },
-            { type: "image", src: assets.settings, alt: "KronosCode model and tool settings" },
+            { type: "image", src: assets.agent, alt: "A KronOS Agent conversation inside KronOS" },
+            { type: "image", src: assets.diff, alt: "A reviewable code diff produced by KronOS Agent" },
+            { type: "image", src: assets.settings, alt: "KronOS Agent model and tool settings" },
         ],
     },
     terminal: {
         thesis: "The command line is not a utility at the edge of the product. It is the system of record for what actually ran.",
         narrative: [
             "Builds, tests, servers, migrations, and remote operations all leave their clearest evidence in the terminal. When that output lives in a detached window, the rest of the workspace loses the most precise account of what happened.",
-            "KronTerm keeps full PTY sessions beside the files and products they affect. Scrollback, exit status, logs, and running processes become usable context for both the operator and KronosCode, without flattening the terminal into a decorative console.",
+            "KronOS keeps full PTY sessions beside the files and products they affect. Scrollback, exit status, logs, and running processes become usable context for both the operator and KronOS Agent, without flattening the terminal into a decorative console.",
         ],
         details: [
             {
@@ -469,7 +473,7 @@ const chapters: Record<string, Chapter> = {
                 type: "video",
                 src: assets.devServerVideo,
                 poster: assets.explorer,
-                alt: "A development server running in KronTerm",
+                alt: "A development server running in KronOS",
             },
             { type: "image", src: assets.explorer, alt: "Terminal output with an integrated file explorer" },
             { type: "image", src: assets.workspace, alt: "Terminal blocks arranged with product surfaces" },
@@ -506,17 +510,17 @@ const chapters: Record<string, Chapter> = {
                 type: "video",
                 src: assets.browserVideo,
                 poster: assets.workspace,
-                alt: "KronTerm operating an embedded browser",
+                alt: "KronOS operating an embedded browser",
             },
             { type: "image", src: assets.workspace, alt: "Browser and terminal blocks sharing a workspace" },
-            { type: "image", src: assets.sidepanel, alt: "Browser session controls within the KronTerm side panel" },
+            { type: "image", src: assets.sidepanel, alt: "Browser session controls within the KronOS side panel" },
         ],
     },
     "sandbox-vms": {
         thesis: "Uncertain work should have room to run without inheriting access to the host machine.",
         narrative: [
             "Package installation, unfamiliar repositories, browser automation, and reproduction work often need a complete environment—not just a restricted shell. Running that work directly on the host turns every experiment into a trust decision.",
-            "KronTerm sandboxes provide disposable Linux desktops with their own terminal, browser, editor, and filesystem. The agent can work visibly inside the isolated environment while the operator decides which results are worth carrying back into the primary workspace.",
+            "KronOS sandboxes provide disposable Linux desktops with their own terminal, browser, editor, and filesystem. The agent can work visibly inside the isolated environment while the operator decides which results are worth carrying back into the primary workspace.",
         ],
         details: [
             {
@@ -539,12 +543,12 @@ const chapters: Record<string, Chapter> = {
             "Promote only trusted results",
         ],
         gallery: [
-            { type: "image", src: assets.sandbox, alt: "A complete Linux desktop inside a KronTerm sandbox" },
+            { type: "image", src: assets.sandbox, alt: "A complete Linux desktop inside a KronOS sandbox" },
             {
                 type: "video",
                 src: assets.sandboxVideo,
                 poster: assets.sandbox,
-                alt: "A sandbox workflow running inside KronTerm",
+                alt: "A sandbox workflow running inside KronOS",
             },
             {
                 type: "image",
@@ -557,7 +561,7 @@ const chapters: Record<string, Chapter> = {
         thesis: "Some of the most valuable technical workflows cross the boundary between code and native applications.",
         narrative: [
             "Release tools, design software, system dialogs, simulators, and internal applications do not always expose a clean API. A code-only agent reaches the edge of its world precisely where many real workflows continue.",
-            "Desktop control gives KronosCode a permission-aware path into native macOS applications. Accessibility structure and screenshots provide observable state; targeted clicks, typing, key presses, scrolling, and dragging provide action without pretending the desktop is just another shell.",
+            "Desktop control gives KronOS Agent a permission-aware path into native macOS applications. Accessibility structure and screenshots provide observable state; targeted clicks, typing, key presses, scrolling, and dragging provide action without pretending the desktop is just another shell.",
         ],
         details: [
             {
@@ -580,16 +584,16 @@ const chapters: Record<string, Chapter> = {
             "Return the result to the workspace",
         ],
         gallery: [
-            { type: "image", src: assets.sidepanel, alt: "KronTerm coordinating native desktop control" },
-            { type: "image", src: assets.workspace, alt: "Native app state visible alongside the KronTerm workspace" },
-            { type: "image", src: assets.settings, alt: "KronTerm controls and permissions for agent tools" },
+            { type: "image", src: assets.sidepanel, alt: "KronOS coordinating native desktop control" },
+            { type: "image", src: assets.workspace, alt: "Native app state visible alongside the KronOS workspace" },
+            { type: "image", src: assets.settings, alt: "KronOS controls and permissions for agent tools" },
         ],
     },
     "remote-sessions": {
         thesis: "Remote infrastructure should feel like a durable room in the workspace, not a fragile terminal tab.",
         narrative: [
             "Network drops, sleep cycles, and application restarts are ordinary parts of remote development. Traditional SSH workflows make those interruptions the operator’s problem and detach remote files from the rest of the debugging context.",
-            "KronTerm keeps remote sessions, files, and previews attached to a persistent workspace. Reconnection restores the operating picture, while KronosCode can reason from the same remote output and artifacts the engineer is using.",
+            "KronOS keeps remote sessions, files, and previews attached to a persistent workspace. Reconnection restores the operating picture, while KronOS Agent can reason from the same remote output and artifacts the engineer is using.",
         ],
         details: [
             {
@@ -612,8 +616,8 @@ const chapters: Record<string, Chapter> = {
             "Resume with context intact",
         ],
         gallery: [
-            { type: "image", src: assets.explorer, alt: "Remote project files inside KronTerm" },
-            { type: "image", src: assets.workspace, alt: "A remote development workspace in KronTerm" },
+            { type: "image", src: assets.explorer, alt: "Remote project files inside KronOS" },
+            { type: "image", src: assets.workspace, alt: "A remote development workspace in KronOS" },
             {
                 type: "video",
                 src: assets.devServerVideo,
@@ -626,7 +630,7 @@ const chapters: Record<string, Chapter> = {
         thesis: "A multi-agent system needs a place where responsibilities, activity, and results remain legible.",
         narrative: [
             "Specialist agents are useful because they can work with different tools, models, and operating boundaries. Without a shared control plane, that specialization creates another collection of disconnected chats and background processes.",
-            "KronTerm brings Agent Control Protocol sessions into the workspace. Teams can choose specialists, define scopes, observe activity, and move between interactive and background work while preserving the evidence and decisions around each agent session.",
+            "KronOS brings Agent Control Protocol sessions into the workspace. Teams can choose specialists, define scopes, observe activity, and move between interactive and background work while preserving the evidence and decisions around each agent session.",
         ],
         details: [
             {
@@ -653,9 +657,9 @@ const chapters: Record<string, Chapter> = {
                 type: "video",
                 src: assets.acpVideo,
                 poster: assets.apps,
-                alt: "Agent Control Protocol management in KronTerm",
+                alt: "Agent Control Protocol management in KronOS",
             },
-            { type: "image", src: assets.apps, alt: "Multiple agent applications available through KronTerm" },
+            { type: "image", src: assets.apps, alt: "Multiple agent applications available through KronOS" },
             { type: "image", src: assets.agent, alt: "An active specialist agent session" },
         ],
     },
@@ -663,12 +667,12 @@ const chapters: Record<string, Chapter> = {
         thesis: "Voice is useful when it enters the same visible, reviewable context as every other instruction.",
         narrative: [
             "A microphone should not create a second assistant with a second session. Spoken input is most useful when it arrives in the composer that already knows the selected model, workspace, files, canvas nodes, and approval state.",
-            "KronTerm's experimental voice path starts an optional local Python process, captures microphone input, transcribes speech with faster-whisper, and submits the final transcript through the active KronosCode composer. Listening, transcribing, speaking, idle, and error states remain visible, and turning voice off terminates the process.",
+            "KronOS's experimental voice path starts an optional local Python process, captures microphone input, transcribes speech with faster-whisper, and submits the final transcript through the active KronOS Agent composer. Listening, transcribing, speaking, idle, and error states remain visible, and turning voice off terminates the process.",
         ],
         details: [
             {
                 title: "One composer",
-                text: "Voice transcripts enter the active KronosCode session instead of opening a parallel AI experience.",
+                text: "Voice transcripts enter the active KronOS Agent session instead of opening a parallel AI experience.",
             },
             {
                 title: "Local transcription",
@@ -686,8 +690,8 @@ const chapters: Record<string, Chapter> = {
             "Disable the engine when voice is no longer needed",
         ],
         gallery: [
-            { type: "image", src: assets.sidepanel, alt: "KronTerm's active agent composer" },
-            { type: "image", src: assets.settings, alt: "KronTerm settings for models and optional capabilities" },
+            { type: "image", src: assets.sidepanel, alt: "KronOS's active agent composer" },
+            { type: "image", src: assets.settings, alt: "KronOS settings for models and optional capabilities" },
             {
                 type: "image",
                 src: assets.workspace,
@@ -749,7 +753,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
             },
             {
                 label: "Canvas context",
-                value: "Send a selected widget or agent card to KronosCode as active focus or quoted evidence.",
+                value: "Send a selected widget or agent card to KronOS Agent as active focus or quoted evidence.",
             },
             {
                 label: "Terminal",
@@ -760,7 +764,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
                 label: "Preview",
                 value: "Markdown, images, CSVs, PDFs, and HTML that refresh when source files change.",
             },
-            { label: "AI chat", value: "KronosCode with the context of every open block, file, and command." },
+            { label: "AI chat", value: "KronOS Agent with the context of every open block, file, and command." },
             {
                 label: "Sandbox VM",
                 value: "An isolated Linux desktop with Firefox, VS Code, terminal, and its own filesystem.",
@@ -773,7 +777,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
     kronoscode: {
         eyebrow: "Execution anatomy",
         title: "Routing before action. Evidence after every step.",
-        intro: "KronosCode is a structured execution engine, not a chat sidebar. Its pipeline stays deterministic and inspectable.",
+        intro: "KronOS Agent uses the managed Hermes runtime to keep tool calls, approvals, and results visible alongside the workspace.",
         items: [
             { label: "Pipeline", value: "User request → Router → Planner → Executor → Critic → Summarizer." },
             { label: "Screen", value: "Capture any block or the macOS desktop, read pixels, and track the cursor." },
@@ -798,7 +802,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
     terminal: {
         eyebrow: "Command reference",
         title: "The terminal remains a real terminal.",
-        intro: "KronTerm keeps terminal fidelity intact while making command evidence available to the rest of the workspace.",
+        intro: "KronOS keeps terminal fidelity intact while making command evidence available to the rest of the workspace.",
         items: [
             {
                 label: "Local PTY",
@@ -811,7 +815,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
             },
             {
                 label: "File explorer",
-                value: "Browse, open, and edit files from the terminal with a KronosCode overlay.",
+                value: "Browse, open, and edit files from the terminal with a KronOS Agent overlay.",
             },
             {
                 label: "Settings TUI",
@@ -869,7 +873,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
             },
             {
                 label: "Control",
-                value: "KronosCode can click, type, scroll, drag, open apps, and work with files visibly.",
+                value: "KronOS Agent can click, type, scroll, drag, open apps, and work with files visibly.",
             },
             {
                 label: "Isolation",
@@ -888,7 +892,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
     "desktop-control": {
         eyebrow: "Native action index",
         title: "The bridge from code to the applications around it.",
-        intro: "KronosCode uses macOS Accessibility and visual evidence to work with native apps through explicit host permissions.",
+        intro: "KronOS Agent uses macOS Accessibility and visual evidence to work with native apps through explicit host permissions.",
         items: [
             { label: "See", value: "Read the full accessibility tree for buttons, fields, menus, and scroll areas." },
             { label: "Click", value: "Target an element name, DOM id, or screenshot coordinate." },
@@ -905,7 +909,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
         items: [
             {
                 label: "Durability",
-                value: "Sessions survive routine network drops, sleep cycles, and KronTerm restarts.",
+                value: "Sessions survive routine network drops, sleep cycles, and KronOS restarts.",
             },
             { label: "Recovery", value: "Automatic reconnection restores the remote operating picture." },
             { label: "Remote files", value: "Browse and edit server-side files with a built-in graphical editor." },
@@ -915,7 +919,7 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
             },
             {
                 label: "Shared context",
-                value: "KronosCode reads the same remote output, files, and evidence as the operator.",
+                value: "KronOS Agent reads the same remote output, files, and evidence as the operator.",
             },
             {
                 label: "One model",
@@ -926,11 +930,11 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
     "acp-agents": {
         eyebrow: "Agent roster",
         title: "Kronos works where your workspace lives.",
-        intro: "Kronos is built into KronTerm for persistent, scoped work across terminals, browsers, files, sandboxes, and canvas. Additional ACP specialists can join the same observable workspace.",
+        intro: "Kronos is built into KronOS for persistent, scoped work across terminals, browsers, files, sandboxes, and canvas. Additional ACP specialists can join the same observable workspace.",
         items: [
             {
                 label: "Kronos",
-                value: "KronTerm's built-in persistent agent for automation, research, coding, and workspace control.",
+                value: "KronOS's built-in persistent agent for automation, research, coding, and workspace control.",
             },
             {
                 label: "OpenClaw",
@@ -948,17 +952,17 @@ const chapterReference: Record<string, { eyebrow: string; title: string; intro: 
                 label: "Configuration",
                 value: "Choose agents, tools, models, runtime boundaries, and scopes from one control plane.",
             },
-            { label: "Availability", value: "ACP agents are planned as part of KronTerm’s commercial premium tier." },
+            { label: "Availability", value: "ACP agents are planned as part of KronOS’s commercial premium tier." },
         ],
     },
     voice: {
         eyebrow: "Experimental audio path",
-        title: "Speech enters the active KronosCode session.",
+        title: "Speech enters the active KronOS Agent session.",
         intro: "Voice is an optional local process with visible state and an explicit shutdown path.",
         items: [
             { label: "Capture", value: "Opt-in microphone capture through the Electron-to-Python audio bridge." },
             { label: "Transcription", value: "Local speech-to-text through faster-whisper." },
-            { label: "Submission", value: "Final transcripts are routed through the active KronosCode composer." },
+            { label: "Submission", value: "Final transcripts are routed through the active KronOS Agent composer." },
             { label: "Speech", value: "Online TTS with an offline system fallback when available." },
             { label: "State", value: "Idle, listening, transcribing, speaking, and error remain visible in the UI." },
             { label: "Availability", value: "Experimental and dependent on optional local runtime packages." },
@@ -997,13 +1001,13 @@ const architectureLayers = [
     },
     {
         index: "III",
-        title: "KronosCode engine",
+        title: "KronOS Agent",
         text: "A Bun and TypeScript core using the Vercel AI SDK, Hono, Drizzle + SQLite, Zod, LSP intelligence, 69+ tools, MCP servers, and loadable skills.",
     },
     {
         index: "IV",
         title: "Provider layer",
-        text: "OpenAI (GPT-4o, o3), Anthropic (Claude 4 Sonnet and Opus), Google (Gemini 2.0 Pro and Flash), Ollama, and LM Studio through a pluggable bring-your-own-key architecture with local execution and no required KronTerm cloud account.",
+        text: "OpenAI (GPT-4o, o3), Anthropic (Claude 4 Sonnet and Opus), Google (Gemini 2.0 Pro and Flash), Ollama, and LM Studio through a pluggable bring-your-own-key architecture with local execution and no required KronOS cloud account.",
     },
 ];
 
@@ -1022,11 +1026,11 @@ const runtimeStack = [
 ] as const;
 
 const roadmap = [
-    ["KronTerm API", "Programmatic workspace control for CI, automation scripts, and custom tooling."],
+    ["KronOS API", "Programmatic workspace control for CI, automation scripts, and custom tooling."],
     ["Expanded ACP roster", "Add more continuously available specialists beside the built-in Kronos agent."],
     ["Shared workspaces", "Multi-user layouts, remote pair debugging, and team workflows."],
     ["Extended desktop control", "Bring native application automation to Windows and Linux."],
-    ["Plugin system", "Open KronTerm to third-party widgets, tools, and agent integrations."],
+    ["Plugin system", "Open KronOS to third-party widgets, tools, and agent integrations."],
 ] as const;
 
 type DocumentationSection = {
@@ -1045,7 +1049,7 @@ const documentationSections: DocumentationSection[] = [
         eyebrow: "01 / Begin here",
         title: "Getting started",
         summary:
-            "Install the private beta, create your first workspace, choose an AI provider, and arrange the surfaces your project needs.",
+            "Install KronOS, create your first workspace, choose an AI provider, and arrange the surfaces your project needs.",
         points: [
             "Request a macOS private-beta build and complete the guided onboarding.",
             "Create a workspace, then add terminal, browser, preview, files, and AI chat blocks.",
@@ -1063,7 +1067,7 @@ const documentationSections: DocumentationSection[] = [
         points: [
             "Choose resizable tiles, browser-style widget tabs, or a pan-and-zoom canvas.",
             "Place live task, approval, evidence, and output cards beside the widgets that produced them.",
-            "Send selected widgets or agent cards to KronosCode as focus or quoted evidence.",
+            "Send selected widgets or agent cards to KronOS Agent as focus or quoted evidence.",
         ],
         link: "/capabilities/workspace-canvas",
         linkLabel: "Read the workspace chapter",
@@ -1085,7 +1089,7 @@ const documentationSections: DocumentationSection[] = [
     {
         id: "kronoscode",
         eyebrow: "04 / Agent engine",
-        title: "KronosCode",
+        title: "KronOS Agent",
         summary:
             "Follow the routed execution pipeline from request through planning, specialist execution, critique, and final evidence.",
         points: [
@@ -1094,7 +1098,7 @@ const documentationSections: DocumentationSection[] = [
             "Use 69+ built-in tools, MCP integrations, and loadable domain skills.",
         ],
         link: "/capabilities/kronoscode",
-        linkLabel: "Read the KronosCode chapter",
+        linkLabel: "Read the KronOS Agent chapter",
     },
     {
         id: "terminal-remote",
@@ -1197,7 +1201,7 @@ const blogPosts: BlogPost[] = [
             {
                 title: "Keep the evidence where the action happened",
                 paragraphs: [
-                    "KronTerm treats the workspace as the durable unit of context. Blocks preserve the spatial relationship between commands, source, previews, sandboxes, and agent sessions.",
+                    "KronOS treats the workspace as the durable unit of context. Blocks preserve the spatial relationship between commands, source, previews, sandboxes, and agent sessions.",
                     "The goal is not maximal automation. It is a legible loop where a person and an agent can inspect the same evidence, act on the same surface, and understand what changed.",
                 ],
             },
@@ -1215,7 +1219,7 @@ const blogPosts: BlogPost[] = [
                 title: "Coordinates are not an explanation",
                 paragraphs: [
                     "A click at x and y can reproduce an action, but it does not explain the target or survive a small layout change. Structured element references give browser work a vocabulary that people and agents can share.",
-                    "KronTerm’s Widget Protocol exposes visible controls as stable references, while screenshots preserve the visual result that a selector alone cannot describe.",
+                    "KronOS’s Widget Protocol exposes visible controls as stable references, while screenshots preserve the visual result that a selector alone cannot describe.",
                 ],
             },
             {
@@ -1245,7 +1249,7 @@ const blogPosts: BlogPost[] = [
             {
                 title: "Isolation should still be visible",
                 paragraphs: [
-                    "Background infrastructure can be safe and still feel opaque. KronTerm keeps the sandbox desktop on the canvas so people can watch the agent navigate, install, test, and gather evidence.",
+                    "Background infrastructure can be safe and still feel opaque. KronOS keeps the sandbox desktop on the canvas so people can watch the agent navigate, install, test, and gather evidence.",
                     "The sandbox is not a second hidden world. It is another explicit workspace surface with a boundary the operator can see.",
                 ],
             },
@@ -1388,10 +1392,10 @@ function PetNote({
     className?: string;
 }) {
     return (
-        <aside className={`pet-note pet-note-${pose} ${className}`} aria-label="A note from the KronTerm pixel cat">
+        <aside className={`pet-note pet-note-${pose} ${className}`} aria-label="A note from the KronOS pixel cat">
             <img
                 src={pose === "walk" ? assets.catWalk : assets.catGuide}
-                alt="KronTerm’s pixel cat mascot"
+                alt="KronOS’s pixel cat mascot"
                 loading="lazy"
             />
             <p>{message}</p>
@@ -1401,11 +1405,11 @@ function PetNote({
 
 function Brand() {
     return (
-        <Link className="brand" to="/" aria-label="KronTerm home">
+        <Link className="brand" to="/" aria-label="KronOS home">
             <span className="brand-mark">
-                <img src={assets.catMark} alt="" />
+                <img src={assets.brandMark} alt="" />
             </span>
-            <span>KronTerm</span>
+            <span>KronOS</span>
         </Link>
     );
 }
@@ -1423,7 +1427,7 @@ function Nav() {
                 <div className="nav-links">
                     <Link to="/capabilities">Field guide</Link>
                     <Link to="/capabilities/workspace-canvas">Workspace</Link>
-                    <Link to="/capabilities/kronoscode">KronosCode</Link>
+                    <Link to="/capabilities/kronoscode">KronOS Agent</Link>
                     <Link to="/docs">Docs</Link>
                     <Link to="/blog">Blog</Link>
                     <Link to="/security">Security</Link>
@@ -1434,7 +1438,7 @@ function Nav() {
                         Talk to us
                     </Link>
                     <Link className="button button-primary button-small" to="/download">
-                        Request access <ArrowRight size={15} aria-hidden="true" />
+                        Download KronOS <ArrowRight size={15} aria-hidden="true" />
                     </Link>
                     <button
                         className="menu-button"
@@ -1451,13 +1455,13 @@ function Nav() {
                 <div className="mobile-nav">
                     <Link to="/capabilities">Field guide</Link>
                     <Link to="/capabilities/workspace-canvas">Workspace canvas</Link>
-                    <Link to="/capabilities/kronoscode">KronosCode</Link>
+                    <Link to="/capabilities/kronoscode">KronOS Agent</Link>
                     <Link to="/docs">Documentation</Link>
                     <Link to="/blog">Blog</Link>
                     <Link to="/security">Security</Link>
                     <Link to="/pricing">Pricing</Link>
                     <Link className="button button-primary" to="/download">
-                        Request access <ArrowRight size={16} />
+                        Download KronOS <ArrowRight size={16} />
                     </Link>
                 </div>
             ) : null}
@@ -1471,7 +1475,7 @@ function Hero() {
             <div className="hero-aura" aria-hidden="true" />
             <div className="hero-topline reveal">
                 <span className="status-dot" />
-                Private beta · open canvas notebook
+                KronOS · open canvas notebook
             </div>
             <div className="hero-heading">
                 <h1 className="reveal reveal-1">
@@ -1484,7 +1488,7 @@ function Hero() {
                     </p>
                     <div className="hero-actions">
                         <Link className="button button-primary" to="/download">
-                            Request private beta <ArrowRight size={17} />
+                            Download KronOS <ArrowRight size={17} />
                         </Link>
                         <Link className="button button-quiet" to="/capabilities">
                             Open the field guide <BookOpen size={15} />
@@ -1495,8 +1499,8 @@ function Hero() {
             <div className="hero-stage reveal reveal-3">
                 <img
                     className="hero-canvas-art"
-                    src="/assets/generated/visual-stories/05-living-workspace.webp"
-                    alt="The KronTerm pet overlooking a connected terminal, browser, files, sandbox, and agent canvas"
+                    src={asset("generated/visual-stories/05-living-workspace.webp")}
+                    alt="The KronOS pet overlooking a connected terminal, browser, files, sandbox, and agent canvas"
                     fetchPriority="high"
                 />
                 <div className="hero-canvas-shade" aria-hidden="true" />
@@ -1512,7 +1516,7 @@ function Hero() {
                         media={{
                             type: "image",
                             src: assets.workspace,
-                            alt: "The real KronTerm command center with terminal, browser, files, and AI",
+                            alt: "The real KronOS command center with terminal, browser, files, and AI",
                             priority: true,
                         }}
                         className="hero-product"
@@ -1522,7 +1526,7 @@ function Hero() {
                             <BrainCircuit size={17} />
                         </span>
                         <div>
-                            <strong>KronosCode is working</strong>
+                            <strong>KronOS Agent is working</strong>
                             <small>Reading terminal output + 4 files</small>
                         </div>
                         <span className="live-pill">LIVE</span>
@@ -1542,10 +1546,10 @@ function Hero() {
 }
 
 function SurfaceTicker() {
-    const items = ["Terminal", "Browser", "Files", "KronosCode", "Sandbox", "Desktop", "Remote", "ACP agents"];
+    const items = ["Terminal", "Browser", "Files", "KronOS Agent", "Sandbox", "Desktop", "Remote", "ACP agents"];
 
     return (
-        <div className="surface-ticker" aria-label="KronTerm workspace surfaces">
+        <div className="surface-ticker" aria-label="KronOS workspace surfaces">
             <div>
                 {[...items, ...items].map((item, index) => (
                     <span aria-hidden={index >= items.length} key={`${item}-${index}`}>
@@ -1577,7 +1581,7 @@ function ProductFilm() {
     return (
         <section className="field-film section" id="field-film">
             <div className="field-film-copy">
-                <p className="kicker">KronTerm field film / 00:15</p>
+                <p className="kicker">KronOS field film / 00:15</p>
                 <h2>See the whole operating model move as one.</h2>
                 <p>
                     A short visual tour through the living canvas, browser evidence, isolated execution, native app
@@ -1600,7 +1604,7 @@ function ProductFilm() {
                     ref={videoRef}
                     src={assets.fieldGuideVideo}
                     poster={assets.fieldGuidePoster}
-                    aria-label="A fifteen-second animated introduction to KronTerm"
+                    aria-label="A fifteen-second animated introduction to KronOS"
                     autoPlay={!reducedMotion}
                     muted
                     loop
@@ -1633,13 +1637,13 @@ function VisualStoryAtlas() {
                     <h2>The pet now has a whole world to guide.</h2>
                 </div>
                 <p>
-                    Select any plate to explore a different part of the KronTerm operating model. Every scene was built
+                    Select any plate to explore a different part of the KronOS operating model. Every scene was built
                     as both a product story and a reusable website asset.
                 </p>
             </header>
             <div className="story-atlas-stage">
                 <figure className={`story-atlas-feature story-format-${activeStory.format}`} key={activeStory.id}>
-                    <img src={activeStory.src} alt={`${activeStory.title}, illustrated with the KronTerm pixel pet`} />
+                    <img src={activeStory.src} alt={`${activeStory.title}, illustrated with the KronOS pixel pet`} />
                     <figcaption>
                         <span>{activeStory.eyebrow}</span>
                         <strong>{activeStory.title}</strong>
@@ -1654,7 +1658,7 @@ function VisualStoryAtlas() {
                     </Link>
                 </div>
             </div>
-            <div className="story-atlas-rail" role="tablist" aria-label="KronTerm visual field notes">
+            <div className="story-atlas-rail" role="tablist" aria-label="KronOS visual field notes">
                 {VisualStories.map((story, index) => (
                     <button
                         className={story.id === activeStory.id ? "story-atlas-thumb active" : "story-atlas-thumb"}
@@ -1681,15 +1685,15 @@ function _PlatformSection() {
     return (
         <section className="platform-section section" id="platform">
             <div className="section-intro platform-intro">
-                <p className="kicker">The KronTerm model</p>
+                <p className="kicker">The KronOS model</p>
                 <h2>Stop feeding AI a transcript. Give it the workspace.</h2>
                 <p>
-                    Context should not disappear between a terminal, a browser, a diff, and a chat. KronTerm turns them
+                    Context should not disappear between a terminal, a browser, a diff, and a chat. KronOS turns them
                     into connected surfaces that people and agents can understand together.
                 </p>
             </div>
             <div className="platform-switcher">
-                <div className="platform-rail" role="tablist" aria-label="KronTerm platform surfaces">
+                <div className="platform-rail" role="tablist" aria-label="KronOS platform surfaces">
                     {capabilities.slice(0, 5).map((capability) => {
                         const Icon = capability.icon;
                         const isActive = capability.slug === active.slug;
@@ -1773,7 +1777,7 @@ function _ProductCinema() {
                         media={{
                             type: "image",
                             src: assets.sandbox,
-                            alt: "A Linux sandbox desktop running inside KronTerm",
+                            alt: "A Linux sandbox desktop running inside KronOS",
                         }}
                         className="cinema-media cinema-media-portrait"
                     />
@@ -1795,7 +1799,7 @@ function _ProductCinema() {
                     <img
                         className="bare-product-image"
                         src={assets.diff}
-                        alt="A file diff review in KronosCode"
+                        alt="A file diff review in KronOS Agent"
                         loading="lazy"
                     />
                 </article>
@@ -1890,17 +1894,17 @@ function ControlSection() {
                     <p className="kicker">Canvas map / control is a feature</p>
                     <h2>Powerful agents. Legible boundaries.</h2>
                     <p>
-                        KronTerm keeps host, sandbox, browser, terminal, and remote actions distinct. Teams can bring
+                        KronOS keeps host, sandbox, browser, terminal, and remote actions distinct. Teams can bring
                         their own models, review consequential steps, and retain the evidence behind each session.
                     </p>
                     <Link className="button button-light" to="/security">
                         Explore security <ArrowRight size={16} />
                     </Link>
                 </div>
-                <div className="control-map" aria-label="KronTerm control boundary diagram">
+                <div className="control-map" aria-label="KronOS control boundary diagram">
                     <div className="control-node control-node-center">
-                        <img src={assets.catMark} alt="" />
-                        <strong>KronTerm</strong>
+                        <img src={assets.brandMark} alt="" />
+                        <strong>KronOS</strong>
                         <span>policy + context</span>
                     </div>
                     <div className="control-node control-node-one">
@@ -1930,7 +1934,7 @@ function FinalCta() {
     return (
         <section className="final-cta section">
             <figure className="final-pet-illustration">
-                <img src={assets.finalePet} alt="KronTerm’s pixel pet planting a flag on a connected workspace" />
+                <img src={assets.finalePet} alt="KronOS’s pixel pet planting a flag on a connected workspace" />
                 <figcaption>I keep the next chapter—and your workspace context—close by.</figcaption>
             </figure>
             <div className="final-cta-mark" aria-hidden="true">
@@ -1938,10 +1942,10 @@ function FinalCta() {
             </div>
             <p className="kicker">Open a fresh page for technical work</p>
             <h2>Put the whole canvas behind the next prompt.</h2>
-            <p>Join the KronTerm private beta and help shape the command center for human + agent teams.</p>
+            <p>Bring your own models to a persistent desktop for your apps and agents.</p>
             <div className="final-actions">
                 <Link className="button button-primary" to="/download">
-                    Request private beta <ArrowRight size={17} />
+                    Download KronOS <ArrowRight size={17} />
                 </Link>
                 <Link className="button button-quiet" to="/contact-sales">
                     Talk to the team
@@ -1991,12 +1995,12 @@ function ChapterPortalSection({ showHeading = true }: { showHeading?: boolean })
             {showHeading ? (
                 <div className="chapter-library-heading">
                     <div>
-                        <p className="kicker">The KronTerm field guide</p>
+                        <p className="kicker">The KronOS field guide</p>
                         <h2>Nine chapters. Nine complete product stories.</h2>
                     </div>
                     <p>
                         Each chapter is a dedicated destination with its own thesis, detailed explanation, workflow, and
-                        product gallery. Choose a cover to enter that part of KronTerm.
+                        product gallery. Choose a cover to enter that part of KronOS.
                     </p>
                 </div>
             ) : null}
@@ -2021,8 +2025,8 @@ function FieldGuidePrelude() {
                 <h2>The homepage is the cover. Every canvas becomes a chapter.</h2>
             </div>
             <p>
-                KronTerm is not one feature repeated nine times. The canvas, terminal, browser, sandboxes, desktop,
-                remote sessions, KronosCode, ACP agents, and experimental voice each solve a distinct part of the
+                KronOS is not one feature repeated nine times. The canvas, terminal, browser, sandboxes, desktop,
+                remote sessions, KronOS Agent, ACP agents, and experimental voice each solve a distinct part of the
                 builder’s operating model.
             </p>
         </section>
@@ -2075,7 +2079,7 @@ function ReferenceManual() {
                 <div>
                     <h2>The system, sketched without shorthand.</h2>
                     <p>
-                        A plain-spoken record of what KronTerm contains, how the layers connect, and what is available
+                        A plain-spoken record of what KronOS contains, how the layers connect, and what is available
                         today. Built from the project README so the product story and technical story stay aligned.
                     </p>
                 </div>
@@ -2120,14 +2124,14 @@ function ReferenceManual() {
                 </div>
                 <div className="spread-content">
                     <div className="spread-heading spread-heading-light">
-                        <p className="kicker">Canvas diagram / KronosCode architecture</p>
+                        <p className="kicker">Canvas diagram / KronOS Agent architecture</p>
                         <h2 id="agent-architecture-title">One request. A routed team.</h2>
                         <p>
                             Every request follows a visible execution sequence. The router chooses a specialist based on
                             the surface and job instead of pretending one agent is equally suited to every layer.
                         </p>
                     </div>
-                    <ol className="agent-flow-graph" aria-label="KronosCode execution pipeline">
+                    <ol className="agent-flow-graph" aria-label="KronOS Agent execution pipeline">
                         {agentFlowSteps.map(([step, description], index) => (
                             <li key={step}>
                                 <div className="agent-flow-node">
@@ -2156,8 +2160,7 @@ function ReferenceManual() {
                             simulated or narrated as completed work.
                         </p>
                         <p>
-                            <strong>Included:</strong> core KronosCode ships with KronTerm. ACP background agents are a
-                            separate planned premium capability.
+                            <strong>Included:</strong> KronOS Agent ships with KronOS and runs on the managed Hermes runtime.
                         </p>
                     </div>
                 </div>
@@ -2194,7 +2197,7 @@ function ReferenceManual() {
                     <p className="kicker">Runtime ledger / 11 components</p>
                     <h2 id="runtime-title">What the system runs on.</h2>
                 </div>
-                <div className="ledger-table" role="table" aria-label="KronTerm runtime stack">
+                <div className="ledger-table" role="table" aria-label="KronOS runtime stack">
                     {runtimeStack.map(([component, technology, role], index) => (
                         <div className="ledger-row" role="row" key={component}>
                             <span role="cell">{String(index + 1).padStart(2, "0")}</span>
@@ -2209,13 +2212,13 @@ function ReferenceManual() {
             <section className="status-spread" aria-labelledby="status-title">
                 <div className="status-heading">
                     <p className="kicker">Appendix D / product status</p>
-                    <h2 id="status-title">Where KronTerm is now—and where it goes next.</h2>
+                    <h2 id="status-title">Where KronOS is now—and where it goes next.</h2>
                 </div>
                 <div className="platform-ledger">
                     <article>
-                        <span>Available now</span>
+                        <span>Public preview</span>
                         <h3>macOS</h3>
-                        <p>Apple silicon and Intel builds are onboarding through the private beta.</p>
+                        <p>The public preview requires an Apple silicon Mac running macOS 26 or later.</p>
                     </article>
                     <article>
                         <span>Under evaluation</span>
@@ -2243,17 +2246,14 @@ function ReferenceManual() {
                         <h3>Follow the work, read the docs, or help shape the roadmap.</h3>
                     </div>
                     <div className="community-links">
-                        <a href="https://docs.kronterm.dev">
+                        <Link to="/docs">
                             Documentation <ArrowRight size={14} />
-                        </a>
-                        <a href="https://discord.gg/XfvZ334gwU">
-                            Discord <ArrowRight size={14} />
-                        </a>
-                        <a href="https://x.com/krontermdev">
-                            X / @krontermdev <ArrowRight size={14} />
+                        </Link>
+                        <a href={`${releases}/issues`}>
+                            GitHub support <ArrowRight size={14} />
                         </a>
                         <Link to="/download">
-                            Private beta <ArrowRight size={14} />
+                            Download KronOS <ArrowRight size={14} />
                         </Link>
                     </div>
                 </div>
@@ -2287,8 +2287,8 @@ function ChapterReference({ capability }: { capability: Capability }) {
 
 function HomePage() {
     usePageMeta(
-        "KronTerm — The command center for human + agent work",
-        "Enter the KronTerm field guide: dedicated product chapters for the workspace canvas, KronosCode, terminal, browser, sandboxes, desktop control, remote sessions, ACP agents, and experimental voice."
+        "KronOS — The command center for human + agent work",
+        "Enter the KronOS field guide: dedicated product chapters for the workspace canvas, KronOS Agent, terminal, browser, sandboxes, desktop control, remote sessions, ACP agents, and experimental voice."
     );
 
     return (
@@ -2306,7 +2306,7 @@ function HomePage() {
 }
 
 function CapabilityIndexPage() {
-    usePageMeta("KronTerm Field Guide", "Explore nine dedicated chapters covering every major KronTerm capability.");
+    usePageMeta("KronOS Field Guide", "Explore nine dedicated chapters covering every major KronOS capability.");
 
     return (
         <>
@@ -2317,7 +2317,7 @@ function CapabilityIndexPage() {
                 </div>
                 <p className="kicker">The complete product</p>
                 <h1>
-                    KronTerm
+                    KronOS
                     <br />
                     Field Guide.
                 </h1>
@@ -2335,7 +2335,7 @@ function CapabilityIndexPage() {
 
 function ChapterNavigation({ currentSlug }: { currentSlug: string }) {
     return (
-        <nav className="chapter-navigation" aria-label="KronTerm field guide chapters">
+        <nav className="chapter-navigation" aria-label="KronOS field guide chapters">
             <Link className="chapter-navigation-home" to="/capabilities">
                 <BookOpen size={15} /> Field guide
             </Link>
@@ -2362,8 +2362,8 @@ function CapabilityPage() {
     const chapter = capability ? chapters[capability.slug] : null;
 
     usePageMeta(
-        capability ? `${capability.label} | KronTerm Field Guide` : "Capability | KronTerm",
-        capability?.summary ?? "Explore the KronTerm workspace."
+        capability ? `${capability.label} | KronOS Field Guide` : "Capability | KronOS",
+        capability?.summary ?? "Explore the KronOS workspace."
     );
 
     if (!capability || !chapter) {
@@ -2496,7 +2496,7 @@ function CapabilityPage() {
 }
 
 function SecurityPage() {
-    usePageMeta("Security | KronTerm", "Visible boundaries and approval-aware agent execution in KronTerm.");
+    usePageMeta("Security | KronOS", "Visible boundaries and approval-aware agent execution in KronOS.");
     const items = [
         [
             ShieldCheck,
@@ -2558,7 +2558,7 @@ function SecurityPage() {
             <section className="data-flow section" aria-labelledby="data-flow-title">
                 <div className="data-flow-heading">
                     <p className="kicker">Canvas diagram / local-first data flow</p>
-                    <h2 id="data-flow-title">Your workspace is not routed through a KronTerm cloud.</h2>
+                    <h2 id="data-flow-title">Your workspace is not routed through a KronOS cloud.</h2>
                     <p>
                         Source code, terminal output, and local files stay on your machine. Only the context you
                         authorize moves from the local engine to the model provider you selected.
@@ -2577,7 +2577,7 @@ function SecurityPage() {
                     </li>
                     <li>
                         <span>03</span>
-                        <strong>Local KronosCode</strong>
+                        <strong>Local KronOS Agent</strong>
                         <p>Plans and tool orchestration run on your machine.</p>
                     </li>
                     <li>
@@ -2587,7 +2587,7 @@ function SecurityPage() {
                     </li>
                 </ol>
                 <p className="data-flow-note">
-                    KronTerm has no required cloud service in this path. Local providers can keep model inference local
+                    KronOS has no required cloud service in this path. Local providers can keep model inference local
                     as well.
                 </p>
             </section>
@@ -2598,81 +2598,27 @@ function SecurityPage() {
 }
 
 function PricingPage() {
-    usePageMeta("Pricing | KronTerm", "Private beta plans for individual builders, technical teams, and enterprises.");
-    const plans = [
-        {
-            name: "Builder",
-            eyebrow: "For independent operators",
-            text: "A complete KronTerm workspace with core KronosCode and private beta access.",
-            cta: "Request builder access",
-            featured: false,
-        },
-        {
-            name: "Team",
-            eyebrow: "For teams shipping together",
-            text: "Shared workflow design, expanded agent operations, and guided onboarding.",
-            cta: "Talk to the team",
-            featured: true,
-        },
-        {
-            name: "Enterprise",
-            eyebrow: "For controlled deployment",
-            text: "Security review, custom orchestration, model policy, and deployment planning.",
-            cta: "Contact sales",
-            featured: false,
-        },
-    ];
+    usePageMeta("Pricing | KronOS", "Use KronOS with your own API keys or a compatible local model.");
     return (
         <>
             <section className="simple-hero notebook-hero section">
-                <p className="kicker">Private beta plans</p>
-                <h1>Start with the workspace your team needs.</h1>
+                <p className="kicker">Bring your own models</p>
+                <h1>The workspace is yours to use.</h1>
                 <p>
-                    KronTerm is currently onboarding design partners. We will tailor access around team size, workflows,
-                    and control requirements.
+                    Download KronOS without a KronOS account or subscription. Connect your own API key or a compatible
+                    local model. Your model provider handles its own usage charges and subscriptions.
                 </p>
-                <PetNote pose="walk" message="Choose the workspace first. The plan should follow the work." />
-            </section>
-            <section className="pricing-grid section">
-                {plans.map((plan) => (
-                    <article className={plan.featured ? "pricing-card featured" : "pricing-card"} key={plan.name}>
-                        {plan.featured ? <span className="plan-badge">Recommended</span> : null}
-                        <p className="kicker">{plan.eyebrow}</p>
-                        <h2>{plan.name}</h2>
-                        <p>{plan.text}</p>
-                        <ul>
-                            <li>
-                                <Check size={16} /> Workspace canvas
-                            </li>
-                            <li>
-                                <Check size={16} /> KronosCode agents
-                            </li>
-                            <li>
-                                <Check size={16} /> Approval-aware workflows
-                            </li>
-                        </ul>
-                        <Link
-                            className={plan.featured ? "button button-primary" : "button button-quiet"}
-                            to="/contact-sales"
-                        >
-                            {plan.cta}
-                        </Link>
-                    </article>
-                ))}
+                <Link className="button button-primary" to="/download">Download KronOS <ArrowRight size={17} /></Link>
             </section>
             <section className="pricing-disclosure section">
                 <div>
                     <p className="kicker">What ships with the product</p>
-                    <h2>KronosCode is core. It is not an agent add-on.</h2>
+                    <h2>KronOS Agent is included.</h2>
                 </div>
                 <div>
                     <p>
-                        The on-demand KronosCode engine is included with KronTerm without a separate premium tier for
-                        its core agent system. Bring your own model keys and choose local or cloud providers.
-                    </p>
-                    <p>
-                        Kronos is included as the built-in persistent KronTerm agent. Additional externally hosted ACP
-                        specialists and team-scale background automation are candidates for a future commercial tier.
+                        KronOS Agent uses the managed Hermes runtime. Connect a supported cloud provider with your
+                        own key, or use a compatible local model.
                     </p>
                 </div>
             </section>
@@ -2682,35 +2628,35 @@ function PricingPage() {
 }
 
 function AccessPage({ contact = false }: { contact?: boolean }) {
-    usePageMeta(contact ? "Contact | KronTerm" : "Request access | KronTerm", "Join the KronTerm private beta.");
+    usePageMeta(contact ? "Contact | KronOS" : "Download | KronOS", "Download KronOS and connect your own model provider.");
     return (
         <section className="access-page notebook-access section">
             <div className="access-copy">
-                <p className="kicker">{contact ? "Talk to the team" : "Private beta"}</p>
+                <p className="kicker">{contact ? "KronOS support" : "KronOS for macOS"}</p>
                 <h1>
-                    {contact ? "Design your team’s agent workspace." : "Build with the whole workspace in context."}
+                    {contact ? "Get help with KronOS" : "Download KronOS"}
                 </h1>
                 <p>
                     {contact
-                        ? "Tell us where your current developer and agent workflows lose context. We’ll map what KronTerm could bring together."
-                        : "KronTerm is onboarding ambitious individual builders and technical teams in focused cohorts."}
+                        ? "Use GitHub to report a problem or suggest an improvement. Include what you expected and the steps to reproduce it."
+                        : "KronOS brings your terminal, browser, files, and agent into one persistent desktop. Connect your own provider or local model. No KronOS account or subscription is required."}
                 </p>
                 <div className="access-points">
                     <span>
-                        <Check size={16} /> Guided onboarding
+                        <Check size={16} /> Bring your own API key
                     </span>
                     <span>
-                        <Check size={16} /> Direct product feedback loop
+                        <Check size={16} /> Local support diagnostics
                     </span>
                     <span>
-                        <Check size={16} /> Early workflow design
+                        <Check size={16} /> Public downloads, private source
                     </span>
                 </div>
                 <PetNote
                     message={
                         contact
                             ? "Tell us where context gets lost. That is usually the best place to begin."
-                            : "Private beta notes go directly to the people building KronTerm."
+                            : "Provider usage is billed by your provider. Review support reports before sharing them."
                     }
                 />
             </div>
@@ -2718,18 +2664,23 @@ function AccessPage({ contact = false }: { contact?: boolean }) {
                 <span className="card-icon">
                     <Command size={20} />
                 </span>
-                <h2>{contact ? "Start the conversation" : "Request an invitation"}</h2>
+                <h2>{contact ? "Report a problem" : "KronOS 0.14.3 public preview"}</h2>
                 <p>
-                    Email the KronTerm team with your role, team size, and the workflow you most want to bring into one
-                    surface.
+                    {contact
+                        ? "In Settings > About, you can preview and copy a local support report. Review it before posting to a public issue."
+                        : "For Apple silicon Macs running macOS 26 or later. This build is ad-hoc signed, so macOS may require approval to open it."}
                 </p>
                 <a
                     className="button button-primary"
-                    href={`mailto:hello@kronterm.dev?subject=${encodeURIComponent(contact ? "KronTerm team inquiry" : "KronTerm private beta request")}`}
+                    href={contact ? `${releases}/issues` : `${releases}/releases/download/v0.14.3/KronOS-darwin-arm64-0.14.3.dmg`}
                 >
-                    Email hello@kronterm.dev <ArrowRight size={16} />
+                    {contact ? "Open GitHub support" : "Download for Apple silicon"} <ArrowRight size={16} />
                 </a>
-                <small>We respond personally. No automated sales sequence.</small>
+                {contact ? (
+                    <small>GitHub requires an account to submit issues.</small>
+                ) : (
+                    <small><a href={previewRelease}>Release notes, ZIP, and checksums</a></small>
+                )}
             </div>
         </section>
     );
@@ -2748,8 +2699,8 @@ function DocumentationPage() {
     });
 
     usePageMeta(
-        "Documentation | KronTerm",
-        "Learn how KronTerm workspaces, blocks, KronosCode, browser automation, sandboxes, desktop control, SSH, and security fit together."
+        "Documentation | KronOS",
+        "Learn how KronOS workspaces, blocks, KronOS Agent, browser automation, sandboxes, desktop control, SSH, and security fit together."
     );
 
     return (
@@ -2771,8 +2722,8 @@ function DocumentationPage() {
                     concepts, operating boundaries, and detailed field-guide chapters in one readable index.
                 </p>
                 <div className="docs-actions">
-                    <a className="button button-light" href="https://docs.kronterm.dev">
-                        Open technical docs <ArrowRight size={15} />
+                    <a className="button button-light" href={previewRelease}>
+                        Read installation notes <ArrowRight size={15} />
                     </a>
                     <Link className="button notebook-button" to="/capabilities">
                         Browse the field guide <BookOpen size={15} />
@@ -2851,8 +2802,8 @@ function DocumentationPage() {
 
 function BlogPage() {
     usePageMeta(
-        "Field Notes | KronTerm Blog",
-        "Read product thinking from KronTerm about workspace context, inspectable browser automation, and isolated agent execution."
+        "Field Notes | KronOS Blog",
+        "Read product thinking from KronOS about workspace context, inspectable browser automation, and isolated agent execution."
     );
     const [featured, ...remainingPosts] = blogPosts;
 
@@ -2868,7 +2819,7 @@ function BlogPage() {
                     <span>KT / Field notes</span>
                     <span>Vol. 01 · 2026</span>
                 </div>
-                <p className="kicker">KronTerm blog</p>
+                <p className="kicker">KronOS blog</p>
                 <h1>Notes from building the command center.</h1>
                 <p>
                     Product decisions, operating principles, and practical lessons from designing one workspace for
@@ -2926,11 +2877,11 @@ function BlogPage() {
                         <h2>What should we document in public?</h2>
                     </div>
                     <p>
-                        Share the workflow, technical boundary, or agent-design question you want the KronTerm team to
+                        Share the workflow, technical boundary, or agent-design question you want the KronOS team to
                         unpack next.
                     </p>
-                    <a className="notebook-link" href="https://discord.gg/XfvZ334gwU">
-                        Join the Discord discussion <ArrowRight size={14} />
+                    <a className="notebook-link" href={`${releases}/issues`}>
+                        Share feedback on GitHub <ArrowRight size={14} />
                     </a>
                 </div>
             </section>
@@ -2945,8 +2896,8 @@ function BlogPostPage() {
     const nextPost = post ? blogPosts[(postIndex + 1) % blogPosts.length] : null;
 
     usePageMeta(
-        post ? `${post.title} | KronTerm Field Notes` : "Field note | KronTerm",
-        post?.dek ?? "Read product and engineering notes from KronTerm."
+        post ? `${post.title} | KronOS Field Notes` : "Field note | KronOS",
+        post?.dek ?? "Read product and engineering notes from KronOS."
     );
 
     if (!post || !nextPost) {
@@ -2980,7 +2931,7 @@ function BlogPostPage() {
                     <span>Filed under</span>
                     <strong>Product principles</strong>
                     <span>Author</span>
-                    <strong>KronTerm team + resident cat</strong>
+                    <strong>KronOS team + resident cat</strong>
                 </aside>
                 <div className="blog-prose-copy">
                     {post.sections.map((section, index) => (
@@ -3009,7 +2960,7 @@ function Footer() {
         <footer className="footer">
             <div className="footer-folio" aria-hidden="true">
                 <span>End notes</span>
-                <span>KronTerm field guide / 2026</span>
+                <span>KronOS field guide / 2026</span>
             </div>
             <div className="footer-main">
                 <div className="footer-brand">
@@ -3029,20 +2980,17 @@ function Footer() {
                         <strong>Company</strong>
                         <Link to="/contact-sales">Contact</Link>
                         <Link to="/security">Security</Link>
-                        <Link to="/download">Private beta</Link>
+                        <Link to="/download">Downloads</Link>
                     </div>
                     <div>
                         <strong>Community</strong>
-                        <a href="https://docs.kronterm.dev">Technical docs</a>
-                        <a href="https://discord.gg/XfvZ334gwU">Discord</a>
-                        <a href="https://x.com/krontermdev">X / @krontermdev</a>
-                        <a href="https://github.com/Ahmedalsadi-1/kronterm">GitHub</a>
-                        <a href="https://www.kronterm.dev">kronterm.dev</a>
+                        <a href={`${releases}/issues`}>Support</a>
+                        <a href={`${releases}/releases`}>GitHub releases</a>
                     </div>
                 </div>
             </div>
             <div className="footer-bottom">
-                <span>© 2026 KronTerm</span>
+                <span>© 2026 KronOS</span>
                 <span>Built for serious technical work.</span>
             </div>
         </footer>

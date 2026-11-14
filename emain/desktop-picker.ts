@@ -3,7 +3,7 @@
 
 import { app, clipboard, nativeImage, type WebContents } from "electron";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -50,11 +50,17 @@ export function sanitizeDesktopGrabPayload(value: unknown): DesktopGrabPayload {
 }
 
 async function pickerExecutable(): Promise<string> {
+    const runtimeRoot = path.resolve(import.meta.dirname, "..");
+    const bundled = app.isPackaged
+        ? path.join(process.resourcesPath, "native/desktop-picker")
+        : path.join(runtimeRoot, "native/desktop-picker");
+    if (existsSync(bundled)) return bundled;
     const source = app.isPackaged
         ? path.join(process.resourcesPath, "native/desktop-picker.swift")
-        : path.resolve(app.getAppPath(), "native/desktop-picker.swift");
-    const bundled = path.join(process.resourcesPath, "native/desktop-picker");
-    if (app.isPackaged && existsSync(bundled)) return bundled;
+        : [app.getAppPath(), path.dirname(runtimeRoot), process.cwd()]
+              .map((root) => path.join(root, "native/desktop-picker.swift"))
+              .find(existsSync);
+    if (!source) throw new Error("The macOS desktop picker source is missing from this development build.");
     const contents = await readFile(source);
     const digest = createHash("sha256").update(contents).digest("hex").slice(0, 16);
     const executable = path.join(tmpdir(), `kronterm-desktop-picker-${digest}`);
@@ -92,18 +98,19 @@ async function pickerExecutable(): Promise<string> {
     return executable;
 }
 
-export function cancelDesktopGrab(senderId: number): void {
+export function cancelDesktopGrab(senderId: number, operationId?: string): void {
     const operation = operations.get(senderId);
+    if (operationId != null && operation?.id !== operationId) return;
     operations.delete(senderId);
     operation?.child?.kill();
 }
 
-export async function beginDesktopGrab(sender: WebContents): Promise<DesktopGrabResult> {
+export async function beginDesktopGrab(sender: WebContents, operationId: string): Promise<DesktopGrabResult> {
     if (process.platform !== "darwin") throw new Error("Native desktop element selection currently requires macOS");
     cancelDesktopGrab(sender.id);
-    const operation = { id: randomUUID(), child: undefined as ChildProcess };
+    const operation = { id: operationId, child: undefined as ChildProcess };
     operations.set(sender.id, operation);
-    const cancel = () => cancelDesktopGrab(sender.id);
+    const cancel = () => cancelDesktopGrab(sender.id, operationId);
     sender.once("destroyed", cancel);
     let directory: string;
     try {
@@ -115,9 +122,13 @@ export async function beginDesktopGrab(sender: WebContents): Promise<DesktopGrab
         if (operations.get(sender.id) !== operation) return { status: "cancelled" };
         const raw = await new Promise<string>((resolve, reject) => {
             let output = "";
-            const child = spawn(executable, [], { stdio: ["ignore", "pipe", "ignore"] });
+            const child = spawn(executable, ["--request-access"], { stdio: ["ignore", "pipe", "ignore"] });
             operation.child = child;
-            const timer = setTimeout(() => child.kill(), 65_000);
+            let timedOut = false;
+            const timer = setTimeout(() => {
+                timedOut = true;
+                child.kill();
+            }, 65_000);
             child.stdout.on("data", (chunk: Buffer) => {
                 output += chunk.toString("utf8");
                 if (output.length > 32_768) child.kill();
@@ -126,8 +137,14 @@ export async function beginDesktopGrab(sender: WebContents): Promise<DesktopGrab
                 clearTimeout(timer);
                 reject(error);
             });
-            child.once("exit", () => {
+            child.once("close", (code, signal) => {
                 clearTimeout(timer);
+                if (!output.trim() && !timedOut && operations.get(sender.id) === operation) {
+                    reject(
+                        new Error(`The macOS desktop picker stopped before returning a result (${signal ?? code}).`)
+                    );
+                    return;
+                }
                 resolve(output);
             });
         });

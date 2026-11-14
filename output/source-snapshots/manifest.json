@@ -1,0 +1,33 @@
+{
+  "IOS-emulator": {
+    "head": "7a6ffc3d6a3394a43927234968e475bb6b675be1",
+    "untracked_files": [
+      "linux-emulator-server/.kilo/kilo.jsonc"
+    ]
+  },
+  "doop": {
+    "head": "dffc2d7e68a9918f9ca46ffc8069b6fb41140500",
+    "untracked_files": []
+  },
+  "integrations/n8n/upstream": {
+    "head": "dd5f870ecc38344951fb3956f1a7ba7852612c70",
+    "untracked_files": [
+      "packages/frontend/editor-ui/src/NativeWorkspaceWidgetSlot.vue",
+      "packages/frontend/editor-ui/src/app/layouts/KronTermExecutions.vue",
+      "packages/frontend/editor-ui/src/app/layouts/KronTermHostFrame.vue",
+      "packages/frontend/editor-ui/src/app/layouts/KronTermHostLayout.vue",
+      "packages/frontend/editor-ui/src/app/layouts/KronTermRouteScope.vue",
+      "packages/frontend/editor-ui/src/kronterm-native-axios.ts",
+      "packages/frontend/editor-ui/src/kronterm-native-bootstrap.ts",
+      "packages/frontend/editor-ui/src/kronterm-native-node-focus.mjs",
+      "packages/frontend/editor-ui/src/kronterm-native-world.ts",
+      "packages/frontend/editor-ui/src/kronterm-native.css",
+      "packages/frontend/editor-ui/src/kronterm-native.ts",
+      "packages/frontend/editor-ui/src/kronterm-vue-flow-core.mjs",
+      "packages/frontend/editor-ui/src/native-panel-layout.mjs",
+      "packages/frontend/editor-ui/src/native-session.mjs",
+      "packages/frontend/editor-ui/src/native-world-geometry.mjs",
+      "packages/frontend/editor-ui/vite.kronterm.config.mts"
+    ]
+  }
+}

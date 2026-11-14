@@ -59,6 +59,11 @@ export async function mount(element: HTMLElement, host: any) {
     host.disposing = false;
     host.worldCamera = shallowRef(Object.freeze({ ...host.camera }));
     host.objectOrderRef = shallowRef({ ...host.objectOrder });
+    const panelTargets = shallowRef({ tools: host.toolsTarget, focus: host.focusTarget });
+    Object.defineProperties(host, {
+        toolsTarget: { configurable: true, get: () => panelTargets.value.tools },
+        focusTarget: { configurable: true, get: () => panelTargets.value.focus },
+    });
     host.setViewport = (camera: any) => {
         if (![camera.x, camera.y, camera.zoom].every(Number.isFinite) || camera.zoom <= 0)
             throw new Error("Invalid OS camera");
@@ -129,6 +134,10 @@ export async function mount(element: HTMLElement, host: any) {
     const syncSurfaceStyles = () => {
         applySurfaceTheme();
         for (const [name, value] of cssVars) host.setCssVar(name, value);
+    };
+    host.setPanelTargets = (targets: { tools: HTMLElement | null; focus: HTMLElement | null }) => {
+        panelTargets.value = targets;
+        syncSurfaceStyles();
     };
     const themeObserver = new MutationObserver(applySurfaceTheme);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
@@ -211,7 +220,11 @@ export async function mount(element: HTMLElement, host: any) {
         host.pickerParked.value = !target;
         host.pickerTarget.value = target || pickerPark;
         syncSurfaceStyles();
-        if (target) void nextTick(() => target.querySelector("input")?.focus());
+        if (target) {
+            void nextTick(() => target.querySelector("input")?.focus());
+        } else {
+            useNodeCreatorStore(pinia).isCreateNodeActive = false;
+        }
     };
     host.openPicker = async () => {
         if (host.managementOpen.value) {
@@ -225,6 +238,7 @@ export async function mount(element: HTMLElement, host: any) {
         () => useNodeCreatorStore(pinia).isCreateNodeActive,
         (open) => {
             if (open) host.onInspector?.("nodes");
+            else if (!host.pickerParked.value) host.onPickerClosed?.();
         },
         { flush: "sync" }
     );
@@ -235,7 +249,8 @@ export async function mount(element: HTMLElement, host: any) {
         },
         { flush: "sync" }
     );
-    const stopRoute = router.afterEach((route) => {
+    const stopRoute = router.afterEach((route, _from, failure) => {
+        if (failure) return;
         if (route.meta.layout === "workflow" && route.meta.nodeView) host.editorPath = route.fullPath;
         const id = String(route.params.workflowId || "");
         if (id && id !== "new") host.workflowId = id;

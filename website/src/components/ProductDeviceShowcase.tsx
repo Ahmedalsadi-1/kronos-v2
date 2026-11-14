@@ -9,7 +9,7 @@ export function ProductDeviceShowcase() {
         <section className="device-showcase" aria-labelledby="device-showcase-title">
             <div className="device-showcase-heading">
                 <p className="eyebrow">Interface kit</p>
-                <h2 id="device-showcase-title">Kronterm gives KronosCode more than a prompt box.</h2>
+                <h2 id="device-showcase-title">KronOS gives KronosCode more than a prompt box.</h2>
                 <p>
                     The workspace includes browser previews, terminal sessions, files, sandboxes, and model routing surfaces. These are the contexts KronosCode can understand before it asks to edit code or run commands.
                 </p>
@@ -26,7 +26,7 @@ export function ProductDeviceShowcase() {
                     </div>
                     <Backlight className="device-backlight">
                         <SafariFrame url="localhost:5173/workflows">
-                            <video src={productAssets.browserVideo} aria-label="Kronterm browser widget running inside a Safari-style product frame" autoPlay muted loop playsInline preload="metadata" />
+                            <video src={productAssets.browserVideo} aria-label="KronOS browser widget running inside a Safari-style product frame" autoPlay muted loop playsInline preload="metadata" />
                         </SafariFrame>
                     </Backlight>
                 </article>
@@ -61,11 +61,11 @@ export function ProductDeviceShowcase() {
                         <Globe2 size={18} aria-hidden="true" />
                         <div>
                             <h3>Local and cloud model support, routed through one workspace.</h3>
-                            <p>Kronterm is designed for serious builders who want KronosCode to coordinate private local work, cloud models, sandboxed agents, and human-approved execution from the same command center.</p>
+                            <p>KronOS is designed for serious builders who want KronosCode to coordinate private local work, cloud models, sandboxed agents, and human-approved execution from the same command center.</p>
                         </div>
                     </div>
                     <MagicGlobe />
-                    <div className="globe-stat-row" aria-label="Kronterm model support highlights">
+                    <div className="globe-stat-row" aria-label="KronOS model support highlights">
                         <span>Local models</span>
                         <span>Cloud models</span>
                         <span>Agent sandboxes</span>

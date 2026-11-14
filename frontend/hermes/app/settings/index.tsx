@@ -55,7 +55,13 @@ import { SessionsSettings } from "./sessions-settings";
 import type { SettingsPageProps, SettingsView as SettingsViewId } from "./types";
 import { BASE_SETTINGS_VIEWS } from "./views";
 
-export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: SettingsPageProps) {
+export function SettingsView({
+    connectionStatus,
+    embedded,
+    onClose,
+    onConfigSaved,
+    onMainModelChanged,
+}: SettingsPageProps) {
     const { t } = useI18n();
     const navigate = useNavigate();
     const { hash, pathname, search } = useLocation();
@@ -345,56 +351,62 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         </>
     );
 
-    return (
-        <OverlayView compact closeLabel={t.settings.closeSettings} onClose={onClose}>
-            <OverlaySplitLayout>
-                <OverlayNav footer={navFooter} groups={navGroups} />
+    const content = (
+        <OverlaySplitLayout>
+            <OverlayNav footer={connectionStatus ? undefined : navFooter} groups={navGroups} />
 
-                <OverlayMain className="px-0 pb-0">
-                    {getKronTermSettingsSectionId(activeView) != null && kronTermSettingsHost ? (
-                        kronTermSettingsHost.renderSection(getKronTermSettingsSectionId(activeView)!)
-                    ) : activeView === "config:appearance" ? (
-                        <AppearanceSettings />
-                    ) : activeView === "about" ? (
-                        <AboutSettings />
-                    ) : activeView === "gateway" ? (
-                        <GatewaySettings />
-                    ) : activeView === "connections" ? (
-                        <ConnectionsSettings />
-                    ) : activeView === "keybinds" ? (
-                        <KeybindSettings />
-                    ) : activeView.startsWith("config:") ? (
-                        <ConfigSettings
-                            activeSectionId={activeView.slice("config:".length)}
-                            importInputRef={importInputRef}
-                            onConfigSaved={onConfigSaved}
-                            onMainModelChanged={onMainModelChanged}
-                        />
-                    ) : activeView === "providers" ? (
-                        <ProvidersSettings
-                            onClose={onClose}
-                            onConfigSaved={onConfigSaved}
-                            onMainModelChanged={onMainModelChanged}
-                            onViewChange={setProviderView}
-                            view={providerView}
-                        />
-                    ) : activeView === "keys" ? (
-                        <KeysSettings view={keysView} />
-                    ) : activeView === "notifications" ? (
-                        <NotificationsSettings />
-                    ) : activeView === "billing" ? (
-                        <BillingSettings />
-                    ) : activeView === "delegation" ? (
-                        <DelegationSettings />
-                    ) : activeView === "computers" ? (
-                        <ComputersSettings />
-                    ) : activeView === "plugins" ? (
-                        <PluginsSettings />
-                    ) : (
-                        <SessionsSettings />
-                    )}
-                </OverlayMain>
-            </OverlaySplitLayout>
+            <OverlayMain className="px-0 pb-0">
+                {getKronTermSettingsSectionId(activeView) != null && kronTermSettingsHost ? (
+                    kronTermSettingsHost.renderSection(getKronTermSettingsSectionId(activeView)!)
+                ) : connectionStatus ? (
+                    connectionStatus
+                ) : activeView === "config:appearance" ? (
+                    <AppearanceSettings />
+                ) : activeView === "about" ? (
+                    <AboutSettings />
+                ) : activeView === "gateway" ? (
+                    <GatewaySettings />
+                ) : activeView === "connections" ? (
+                    <ConnectionsSettings />
+                ) : activeView === "keybinds" ? (
+                    <KeybindSettings />
+                ) : activeView.startsWith("config:") ? (
+                    <ConfigSettings
+                        activeSectionId={activeView.slice("config:".length)}
+                        importInputRef={importInputRef}
+                        onConfigSaved={onConfigSaved}
+                        onMainModelChanged={onMainModelChanged}
+                    />
+                ) : activeView === "providers" ? (
+                    <ProvidersSettings
+                        onClose={onClose}
+                        onConfigSaved={onConfigSaved}
+                        onMainModelChanged={onMainModelChanged}
+                        onViewChange={setProviderView}
+                        view={providerView}
+                    />
+                ) : activeView === "keys" ? (
+                    <KeysSettings view={keysView} />
+                ) : activeView === "notifications" ? (
+                    <NotificationsSettings />
+                ) : activeView === "billing" ? (
+                    <BillingSettings />
+                ) : activeView === "delegation" ? (
+                    <DelegationSettings />
+                ) : activeView === "computers" ? (
+                    <ComputersSettings />
+                ) : activeView === "plugins" ? (
+                    <PluginsSettings />
+                ) : (
+                    <SessionsSettings />
+                )}
+            </OverlayMain>
+        </OverlaySplitLayout>
+    );
+
+    return embedded ? content : (
+        <OverlayView compact closeLabel={t.settings.closeSettings} onClose={onClose}>
+            {content}
         </OverlayView>
     );
 }

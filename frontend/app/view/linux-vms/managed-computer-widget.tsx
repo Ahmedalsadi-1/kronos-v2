@@ -16,6 +16,7 @@ export function ManagedComputerWidget({
 }) {
     const [desktop, setDesktop] = useState<LinuxDesktop>();
     const [error, setError] = useState("");
+    const [pollError, setPollError] = useState("");
     const [busy, setBusy] = useState(false);
     useEffect(() => {
         let stopped = false;
@@ -33,10 +34,10 @@ export function ManagedComputerWidget({
                                 (desktopId === "linux-desktop:primary" && item.id === "linux-vm:ubuntu")
                         )
                     );
-                    setError("");
+                    setPollError("");
                 }
             } catch (failure) {
-                if (!stopped) setError(failure instanceof Error ? failure.message : "VM inventory unavailable.");
+                if (!stopped) setPollError(failure instanceof Error ? failure.message : "VM inventory unavailable.");
             } finally {
                 if (!stopped) timer = setTimeout(poll, 3000);
             }
@@ -73,6 +74,21 @@ export function ManagedComputerWidget({
         }
         setDesktop(result.data);
     };
+    const returnControl = async () => {
+        const api = getApi();
+        if (desktop.assignedAgentId) {
+            const resumed = await api.resumeLinuxDesktop(desktop.id, desktop.controlGeneration);
+            if (resumed.success === false) throw new Error(resumed.error.message);
+            setDesktop(resumed.data);
+            return;
+        }
+        const access = await api.sandboxComputerAccess();
+        await api.sandboxComputerAccess({ enabled: true, desktopId: desktop.id, mode: access.mode || "sandbox" });
+        const result = await api.listLinuxDesktops();
+        if (result.success === false) throw new Error(result.error.message);
+        setDesktop(result.data.find((item) => item.id === desktop.id));
+        window.dispatchEvent(new Event("kronterm:computer-wake"));
+    };
     if (desktopId === "external") return <ComputerWidget settings={settings} />;
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -85,10 +101,19 @@ export function ManagedComputerWidget({
                 <ManagedVncScreen
                     desktop={desktop}
                     onTakeControl={takeControl}
+                    onReturnControl={returnControl}
                     busy={busy}
-                    error={error}
+                    error={error || pollError}
                     onLifecycle={() =>
-                        void act(desktop.status === "running" ? "stop" : desktop.imagePrepared ? "start" : "prepare")
+                        void act(
+                            desktop.status === "running"
+                                ? "stop"
+                                : desktop.imagePrepared
+                                  ? "start"
+                                  : desktop.provider === "cua-qemu"
+                                    ? "create"
+                                    : "prepare"
+                        )
                     }
                     onUpdate={() => void act("prepare")}
                 />

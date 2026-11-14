@@ -24,7 +24,7 @@ describe("HUD section catalog", () => {
             { id: "visual", label: "Visual" },
         ]);
         expect(sections.find((section) => section.id === "kronterm:voice")).toMatchObject({
-            name: "KronTerm Voice",
+            name: "KronOS Voice",
             route: "/settings?tab=kronterm:voice",
         });
         expect(sections.find((section) => section.id === "setting:config:voice")?.route).toBe(

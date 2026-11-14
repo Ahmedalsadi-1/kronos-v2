@@ -9,8 +9,8 @@ Use the current scoped KronTerm tool bridge supplied by the host. The skill name
 
 ## Discover and target
 
-1. Use `tool_search` for current tool schemas and `shared_skill_list`/`shared_skill_read` for relevant workflow guidance.
-2. Call `workspace_inventory` to resolve the intended workspace, tab and block IDs. Distinguish the agent's task workspace from the user's visible workspace.
+1. Use `tool_search` (exposed as `kronterm_tool_search` in Hermes) for current schemas, and `shared_skill_list`/`shared_skill_read` for operational guidance. Filter by family and request schemas only for candidate tools.
+2. Inspect an explicit block directly. Use `workspace_snapshot` for the current workspace and `workspace_inventory` when ownership is ambiguous. Distinguish the task owner from the user's visible workspace.
 3. Inspect the exact target with `workspace_snapshot`. Use rendered bounds and screenshots for visual decisions; persisted bounds alone are insufficient.
 4. Preserve user focus and unrelated blocks. Do not change layout presentation merely to make a tool convenient.
 
@@ -18,6 +18,7 @@ Use the current scoped KronTerm tool bridge supplied by the host. The skill name
 
 - `workspace_set_presentation` changes widgets, tabs, canvas or OS presentation without replacing canonical blocks.
 - Discover `workspace_os_action` for typed OS actions and `workspace_set_os_view` for OS views. Inspect schemas instead of constructing undocumented action payloads.
+- OS view and overview actions require OS presentation. A canvas view inside OS differs from the standalone canvas presentation. Switch presentation only when requested work needs it, then refresh the snapshot; do not infer that an unsupported action is a disconnected transport.
 - Use `workspace_open_app`, `workspace_open_file`, `workspace_focus_widget`, `workspace_move_widget`, `workspace_resize_widget`, `workspace_dock_widget`, `workspace_detach_widget` and overview/workspace operations only when advertised and appropriate to the task.
 - Use `workspace_canvas_*` for spatial workspace objects and connectors. The separate `canvas_*` family operates a canvas document's graph; do not mix object IDs across these surfaces.
 - HUD chat remains the default. Opening the Hermes side panel is an explicit user action; preserve the conversation when changing its presentation.

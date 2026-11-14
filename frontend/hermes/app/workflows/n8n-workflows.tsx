@@ -12,10 +12,9 @@ import {
 } from "@hermes/components/ui/dropdown-menu";
 import { useEffect, useRef, useState } from "react";
 import { N8nSurfaces, type N8nSurface, type N8nWorkspaceState } from "../../../types/n8n-workspace";
-import { WorkflowAccount } from "./account";
 import { useWorkflowContext } from "./workflow-context";
 
-type WorkspaceState = N8nWorkspaceState & { running?: boolean; accountRequired?: boolean };
+type WorkspaceState = N8nWorkspaceState & { running?: boolean; occupiedGeneration?: number };
 type Workflow = NonNullable<N8nWorkspaceState["workflows"]>[number];
 const RowClass =
     "flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 text-left text-xs text-foreground/80 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-[-2px] aria-pressed:bg-white/10 aria-pressed:text-foreground";
@@ -54,12 +53,14 @@ export function N8nWorkflows({ active = true }: { active?: boolean } = {}) {
         if (pendingRead.current) return pendingRead.current;
         const pending = (async () => {
             let next = await command<WorkspaceState>("state");
-            if (reconnect && !next.running && next.accountRequired === false) {
+            if (reconnect && !next.running && next.occupiedGeneration == null) {
                 await command("open", { surface: "canvas", workflowId: next.selectedWorkflowId });
+                window.dispatchEvent(
+                    new CustomEvent("kronterm:workflow-context-request", { detail: { tabId: context.tabId } })
+                );
                 next = await command<WorkspaceState>("state");
             }
-            if (includeWorkflows && next.running && !next.accountRequired)
-                next.workflows = await command<Workflow[]>("workflows");
+            if (includeWorkflows && next.running) next.workflows = await command<Workflow[]>("workflows");
             return next;
         })();
         pendingRead.current = pending;
@@ -72,17 +73,18 @@ export function N8nWorkflows({ active = true }: { active?: boolean } = {}) {
     };
     const refresh = async (includeWorkflows = false) => {
         const next = await loadWorkspace(true, includeWorkflows);
-        setState((previous) => ({ ...previous, ...next }));
+        setState((previous) => ({ ...previous, ...next, occupiedGeneration: next.occupiedGeneration }));
         setStatusError("");
     };
     useEffect(() => {
         if (!active) return;
+        window.dispatchEvent(new CustomEvent("kronterm:workflow-prepare", { detail: { tabId: context.tabId } }));
         let mounted = true;
         const read = async (reconnect = false) => {
             try {
                 const next = await loadWorkspace(reconnect);
                 if (mounted) {
-                    setState((previous) => ({ ...previous, ...next }));
+                    setState((previous) => ({ ...previous, ...next, occupiedGeneration: next.occupiedGeneration }));
                     setStatusError("");
                 }
             } catch (failure) {
@@ -90,23 +92,17 @@ export function N8nWorkflows({ active = true }: { active?: boolean } = {}) {
                     setStatusError(
                         String(failure)
                             .replace(/^Error:\s*/, "")
-                            .replace(/\bn8n\b/gi, "workflow")
+                            .replace(/\bn8n\b/gi, "KronFlow")
                     );
             } finally {
                 if (mounted) setLoading(false);
             }
         };
-        const accountConnected = () => {
-            if (mounted) setState((previous) => ({ ...previous, accountRequired: false }));
-            void read(true);
-        };
-        window.addEventListener("kronterm:account-connected", accountConnected);
         void read(true);
         const timer = setInterval(() => void read(), 5000);
         return () => {
             mounted = false;
             clearInterval(timer);
-            window.removeEventListener("kronterm:account-connected", accountConnected);
         };
     }, [active, context.tabId, context.workflowId]);
     const perform = async (action: () => Promise<void>) => {
@@ -119,8 +115,8 @@ export function N8nWorkflows({ active = true }: { active?: boolean } = {}) {
             const message = String(failure).replace(/^Error:\s*/, "");
             setError(
                 /405|Method Not Allowed/.test(message)
-                    ? "Restart KronTerm to connect the workflow runtime."
-                    : message.replace(/\bn8n\b/gi, "workflow")
+                    ? "Restart KronOS to connect the workflow runtime."
+                    : message.replace(/\bn8n\b/gi, "KronFlow")
             );
         } finally {
             setBusy(false);
@@ -202,19 +198,34 @@ export function N8nWorkflows({ active = true }: { active?: boolean } = {}) {
             </DropdownMenu>
         </li>
     );
-    if (state.accountRequired)
-        return (
-            <WorkflowAccount
-                onConnected={() => {
-                    window.dispatchEvent(new Event("kronterm:account-connected"));
-                    void perform(() => refresh(true));
-                }}
-            />
-        );
     const workflows = state.workflows ?? [];
     const unfiled = workflows.filter(
         (workflow) => !state.folders.some((folder) => folder.workflowIds.includes(workflow.id))
     );
+    if (state.occupiedGeneration != null) {
+        return (
+            <section aria-label="Workflow navigation" aria-busy={busy} className="space-y-2 p-3 text-xs">
+                <h2 className="font-medium">Workflows</h2>
+                <p>Workflows are connected to another tab.</p>
+                {displayedError && <p role="alert" className="text-red-400">{displayedError}</p>}
+                <button
+                    type="button"
+                    disabled={busy}
+                    className="cursor-pointer underline underline-offset-4"
+                    onClick={() => void perform(async () => {
+                        const result = await command<{ cancelled?: boolean }>("switch-workspace", {
+                            expectedGeneration: state.occupiedGeneration,
+                        });
+                        if (result.cancelled) return;
+                        await pendingRead.current?.catch(() => {});
+                        await refresh(true);
+                    })}
+                >
+                    {busy ? "Switching connection…" : "Switch connection to this tab"}
+                </button>
+            </section>
+        );
+    }
     return (
         <section
             aria-label="Workflow navigation"

@@ -286,7 +286,7 @@ export const host = {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             return bridge.list();
@@ -295,46 +295,46 @@ export const host = {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             const result = await bridge.focus(blockId);
 
             if (!result.ok) {
-                throw new Error(result.error || "KronTerm could not focus that surface.");
+                throw new Error(result.error || "KronOS could not focus that surface.");
             }
         },
         openSplit: async (blockId: string): Promise<void> => {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             const result = await bridge.openSplit(blockId);
 
             if (!result.ok) {
-                throw new Error(result.error || "KronTerm could not open that surface beside Hermes.");
+                throw new Error(result.error || "KronOS could not open that surface beside Hermes.");
             }
         },
         promote: async (blockId: string): Promise<void> => {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             const result = await bridge.promote(blockId);
 
             if (!result.ok) {
-                throw new Error(result.error || "KronTerm could not expand that surface.");
+                throw new Error(result.error || "KronOS could not expand that surface.");
             }
         },
         preview: async (blockId: string): Promise<string> => {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             return bridge.preview(blockId);
@@ -343,7 +343,7 @@ export const host = {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             return bridge.snapshot(blockId);
@@ -352,12 +352,12 @@ export const host = {
             const bridge = window.hermesDesktop?.krontermSurfaces;
 
             if (!bridge) {
-                throw new Error("KronTerm surface controls are unavailable in this host.");
+                throw new Error("KronOS surface controls are unavailable in this host.");
             }
 
             const result = await bridge.inspect(blockId, enabled);
             if (!result.ok) {
-                throw new Error(result.error || "KronTerm could not change browser inspection mode.");
+                throw new Error(result.error || "KronOS could not change browser inspection mode.");
             }
         },
         onSelection: (listener: (selection: KronTermDesignSelection) => void): (() => void) => {
@@ -442,7 +442,7 @@ export const host = {
         const gateway = $gateway.get();
 
         if (!gateway) {
-            throw new Error("KronTerm Agent gateway unavailable");
+            throw new Error("KronOS Agent gateway unavailable");
         }
 
         return gateway.request<T>(method, params);

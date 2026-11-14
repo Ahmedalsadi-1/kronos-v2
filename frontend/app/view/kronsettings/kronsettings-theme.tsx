@@ -170,7 +170,7 @@ const KronSettingsThemeContent = memo(({ model: _model }: KronSettingsThemeConte
                 <SectionHeader
                     title="Omarchy Themes"
                     icon="swatchbook"
-                    description="Apply one of Omarchy's 22 complete palettes across KronTerm chrome, widgets, canvas, and terminals."
+                    description="Apply one of Omarchy's 22 complete palettes across KronOS chrome, widgets, canvas, and terminals."
                 />
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 4 }}>

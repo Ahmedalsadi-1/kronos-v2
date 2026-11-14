@@ -127,7 +127,7 @@ const PluginCapabilityRiskByKind: Record<PluginCapabilityKind, PluginCapabilityR
 const PluginCapabilityDescriptions: Record<PluginCapabilityKind, string> = {
     "workspace:read": "See the focused workspace, its widgets, and their titles",
     "workspace:widget": "Open its own widgets in your workspace",
-    "workspace:focus": "Ask KronTerm to focus one of its widgets",
+    "workspace:focus": "Ask KronOS to focus one of its widgets",
     "notifications:attention": "Add items to the attention shelf, labeled with the plugin name",
     "settings:own": "Read and change the plugin's own settings",
     storage: "Store data in the plugin's own data folder",

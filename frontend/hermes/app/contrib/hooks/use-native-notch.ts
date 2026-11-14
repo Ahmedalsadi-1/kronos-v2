@@ -2,11 +2,11 @@ import { PRIMARY_SESSION_VIEW } from "@hermes/app/chat/session-view";
 import { hudSections } from "@hermes/app/hud/sections";
 import { useKronTermSettingsHost } from "@hermes/app/settings/kronterm-settings-host";
 import { $pluginRecords } from "@hermes/contrib/plugins-store";
+import { $speechMotion } from "@hermes/lib/speech-motion";
 import { $agentPlugins, $agentPluginsStatus, loadAgentPlugins, type GatewayRequest } from "@hermes/store/agent-plugins";
 import { $selectedStoredSessionId } from "@hermes/store/session";
 import { $voiceHud } from "@hermes/store/voice-hud";
 import { $voicePlayback } from "@hermes/store/voice-playback";
-import { $speechMotion } from "@hermes/lib/speech-motion";
 import { useTheme } from "@hermes/themes/context";
 import { coucouAppearance, coucouPalette } from "@hermes/themes/coucou-palettes";
 import { useEffect } from "react";
@@ -43,7 +43,8 @@ export function useNativeNotch(request: GatewayRequest, gatewayState: string, na
             api.syncNativeNotch({
                 appearance: coucouAppearance(
                     themeName,
-                    host?.appearance?.reducedMotion === true || appearance.reducedMotion
+                    host?.appearance?.reducedMotion === true || appearance.reducedMotion,
+                    appearance
                 ),
             });
         publishAppearance();
@@ -132,7 +133,15 @@ export function useNativeNotch(request: GatewayRequest, gatewayState: string, na
             const playback = $voicePlayback.get();
             const speaking = playback.status === "speaking" || (voice.active && voice.status === "speaking");
             const motion = $speechMotion.get();
-            api.syncNativeNotch({ voice: { ...voice, active: voice.active || speaking, status: speaking ? "speaking" : voice.status, speechLevel: motion.available ? motion.level : 0, speechAvailable: motion.available } });
+            api.syncNativeNotch({
+                voice: {
+                    ...voice,
+                    active: voice.active || speaking,
+                    status: speaking ? "speaking" : voice.status,
+                    speechLevel: motion.available ? motion.level : 0,
+                    speechAvailable: motion.available,
+                },
+            });
         };
         const disposeVoice = $voiceHud.subscribe(publishVoice);
         const disposePlayback = $voicePlayback.subscribe(publishVoice);

@@ -53,6 +53,7 @@ export function parseCoucouHudEvent(line: string): CoucouHudEvent | undefined {
         if (value.compactChat != null && typeof value.compactChat !== "boolean") return;
         if (value.splitChat != null && typeof value.splitChat !== "boolean") return;
         if (value.width <= 0 || value.height <= 0 || value.inset < 0) return;
+        if (value.route != null && typeof value.route !== "string") return;
         if (value.event === "preview-layout" && !coucouPreviewBounds(value)) return;
         if (
             value.event === "action" &&
@@ -62,6 +63,9 @@ export function parseCoucouHudEvent(line: string): CoucouHudEvent | undefined {
                 "workflow-takeover",
                 "workflow-review",
                 "theme-select",
+                "media-toggle",
+                "media-previous",
+                "media-next",
                 "workspace-create",
                 "web",
                 "web-new",
@@ -97,6 +101,7 @@ export function parseCoucouHudEvent(line: string): CoucouHudEvent | undefined {
                 "preview-dock",
                 "follow-agent",
                 "preview-detach",
+                "preview-hide",
                 "pet-attach",
                 "control-pause",
                 "control-release",
@@ -145,8 +150,10 @@ export function coucouChatBounds(event: CoucouHudEvent): Electron.Rectangle {
         [event.contentX, event.contentY, event.contentWidth, event.contentHeight].every(Number.isFinite) &&
         event.contentWidth > 0 &&
         event.contentHeight > 0 &&
-        event.contentWidth <= event.width &&
-        event.contentHeight <= event.height
+        event.contentX >= event.x &&
+        event.contentY >= event.y &&
+        event.contentX + event.contentWidth <= event.x + event.width &&
+        event.contentY + event.contentHeight <= event.y + event.height
     ) {
         return {
             x: Math.round(event.contentX),

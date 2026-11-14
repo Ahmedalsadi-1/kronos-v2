@@ -7,7 +7,12 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ComputerTarget, ComputerTargetAction, ComputerTargetSnapshot } from "../frontend/types/computer-targets";
+import type {
+    ComputerTarget,
+    ComputerTargetAction,
+    ComputerTargetSnapshot,
+    DeviceSelectedElement,
+} from "../frontend/types/computer-targets";
 
 import { ComputerTargetsAppium } from "./computer-targets-appium";
 import { AndroidSimulatorService } from "./device-simulator/android/android-simulator-service";
@@ -76,25 +81,7 @@ export class ComputerTargetsRuntime {
     private generations = new Map<string, number>();
     private pausedTargets = new Set<string>();
     private busy = new Set<string>();
-    private idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-    private touchEmulator(target: ComputerTarget, delay = 300_000) {
-        if (target.kind !== "ios-simulator" && target.kind !== "android-emulator") return;
-        clearTimeout(this.idleTimers.get(target.id));
-        const timer = setTimeout(() => {
-            if (this.busy.has(target.id)) {
-                this.touchEmulator(target, 1000);
-                return;
-            }
-            void this.perform({
-                targetId: target.id,
-                action: "shutdown",
-                expectedGeneration: this.generations.get(target.id) ?? 0,
-            }).catch(() => this.touchEmulator(target));
-        }, delay);
-        timer.unref?.();
-        this.idleTimers.set(target.id, timer);
-    }
+    private inventory?: Promise<ComputerTarget[]>;
 
     constructor(
         private execute: ComputerTargetExecutor = executeComputerTargetCommand,
@@ -107,6 +94,17 @@ export class ComputerTargetsRuntime {
     ) {}
 
     async list(): Promise<ComputerTarget[]> {
+        const pending = (this.inventory ??= this.readInventory().finally(() => {
+            this.inventory = undefined;
+        }));
+        return (await pending).map((target) => ({
+            ...target,
+            controlGeneration: this.generations.get(target.id) ?? 0,
+            automationPaused: this.pausedTargets.has(target.id),
+        }));
+    }
+
+    private async readInventory(): Promise<ComputerTarget[]> {
         let targets: ComputerTarget[] = [];
         let simulatorError: Error;
         if (this.platform === "darwin") {
@@ -186,21 +184,10 @@ export class ComputerTargetsRuntime {
         }
         if (this.appium) targets.push(...(await this.appium.list()));
         if (targets.length === 0 && simulatorError && !this.appium) throw simulatorError;
-        for (const target of targets) {
-            if (target.status === "booted" && !this.idleTimers.has(target.id)) this.touchEmulator(target);
-            if (target.status === "shutdown" || target.status === "unavailable") {
-                clearTimeout(this.idleTimers.get(target.id));
-                this.idleTimers.delete(target.id);
-            }
-        }
-        return targets.map((target) => ({
-            ...target,
-            controlGeneration: this.generations.get(target.id) ?? 0,
-            automationPaused: this.pausedTargets.has(target.id),
-        }));
+        return targets;
     }
 
-    private async resolve(id: unknown): Promise<ComputerTarget> {
+    private async resolve(id: unknown, afterLifecycleChange = false): Promise<ComputerTarget> {
         if (
             typeof id !== "string" ||
             !(
@@ -210,6 +197,7 @@ export class ComputerTargetsRuntime {
             )
         )
             throw new Error("Invalid simulator identifier.");
+        if (afterLifecycleChange) await this.inventory?.catch(() => undefined);
         const target = (await this.list()).find((item) => item.id === id);
         if (!target) throw new Error("Simulator no longer exists. Refresh the device list.");
         return target;
@@ -269,14 +257,13 @@ export class ComputerTargetsRuntime {
             throw new Error("This action is unavailable for the simulator's current state.");
         if (this.busy.has(target.id)) throw new Error("A simulator action is already running.");
         this.busy.add(target.id);
-        if (action.action !== "screenshot") this.touchEmulator(target);
         try {
             if (target.id.startsWith("android-")) {
                 if (!this.android) throw new Error("Android emulator control is unavailable.");
                 let imageDataUrl: string;
                 if (action.action === "boot") await this.android.boot(target.id);
                 else if (action.action === "shutdown") await this.android.shutdown(target.id);
-                else if (action.action === "screenshot") imageDataUrl = await this.android.screenshot(target.id);
+                else if (action.action === "screenshot") imageDataUrl = await this.android.screenshot(target.id, target.controlGeneration);
                 else if (action.action === "tap") await this.android.tap(target.id, action.x, action.y);
                 else if (action.action === "type") await this.android.type(target.id, action.text);
                 else if (action.action === "key") await this.android.key(target.id, action.key);
@@ -291,7 +278,7 @@ export class ComputerTargetsRuntime {
                     await this.android.button(target.id, action.action);
                 else throw new Error("Unsupported Android control.");
                 const updated = ["boot", "shutdown"].includes(action.action)
-                    ? await this.resolve(target.id)
+                    ? await this.resolve(target.id, true)
                     : {
                           ...target,
                           controlGeneration: this.generations.get(target.id) ?? 0,
@@ -358,7 +345,7 @@ export class ComputerTargetsRuntime {
                 await this.execute("/usr/bin/xcrun", ["simctl", action.action, target.id]);
             }
             const updated = ["boot", "shutdown"].includes(action.action)
-                ? await this.resolve(target.id)
+                ? await this.resolve(target.id, true)
                 : {
                       ...target,
                       controlGeneration: this.generations.get(target.id) ?? 0,
@@ -384,10 +371,51 @@ export class ComputerTargetsRuntime {
         return target;
     }
 
+    async pickElement(input: unknown): Promise<DeviceSelectedElement> {
+        if (!input || typeof input !== "object") throw new Error("Invalid element selection.");
+        const { targetId, expectedGeneration, x, y, width, height } = input as {
+            targetId: string;
+            expectedGeneration: number;
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        };
+        if (
+            ![x, y].every((value) => Number.isFinite(value) && value >= 0 && value < 1) ||
+            ![width, height].every((value) => Number.isSafeInteger(value) && value > 0 && value <= 16384)
+        )
+            throw new Error("Invalid selection coordinates.");
+        const target = await this.resolve(targetId);
+        if (target.controlGeneration !== expectedGeneration)
+            throw new Error("Control changed. Capture the screen again.");
+        if (target.status !== "booted" && target.status !== "connected") throw new Error("Start the device first.");
+        if (this.busy.has(targetId)) throw new Error("A device operation is already running.");
+        this.busy.add(targetId);
+        try {
+            let element: DeviceSelectedElement;
+            if (target.kind === "ios-simulator") element = await this.ios?.pickElement(targetId, x, y);
+            if (targetId.startsWith("android-"))
+                element = await this.android?.pickElement(targetId, x, y, width, height);
+            const current = await this.resolve(targetId);
+            if (current.controlGeneration !== expectedGeneration || current.status !== target.status) {
+                throw new Error("Device changed. Capture the screen again.");
+            }
+            return element ?? null;
+        } finally {
+            this.busy.delete(targetId);
+        }
+    }
+
     async liveFrame(targetId: string): Promise<{ imageDataUrl: string; capturedAt: number }> {
         if (UdidPattern.test(targetId) && this.ios) return this.ios.frame(targetId);
-        if (targetId.startsWith("android-") && this.android)
-            return { imageDataUrl: await this.android.screenshot(targetId), capturedAt: Date.now() };
+        if (targetId.startsWith("android-") && this.android) {
+            const generation = this.generations.get(targetId) ?? 0;
+            const imageDataUrl = await this.android.screenshot(targetId, generation);
+            if (generation !== (this.generations.get(targetId) ?? 0))
+                throw new Error("Control changed while capturing the screen.");
+            return { imageDataUrl, capturedAt: Date.now() };
+        }
         const result = await this.perform({ targetId, action: "screenshot" });
         return { imageDataUrl: result.imageDataUrl, capturedAt: result.capturedAt };
     }

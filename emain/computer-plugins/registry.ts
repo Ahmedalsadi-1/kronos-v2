@@ -11,6 +11,7 @@ import type {
     ComputerProviderId,
     LinuxDesktopAction,
 } from "../../frontend/types/linux-desktops";
+import type { PrivateBrowserInput } from "../guest-login";
 import { runLinuxDesktopCommand } from "../linux-desktop/command-runner";
 import { containerRuntimeStatus } from "../linux-desktop/upstream/openmaus/container-computer";
 import { DATA_DIR } from "../linux-desktop/upstream/openmaus/kronterm-adapter";
@@ -21,8 +22,8 @@ import type { ComputerProviderRuntime } from "./types";
 const Providers = [
     {
         id: "cua-qemu" as const,
-        name: "Ubuntu VM",
-        description: "Apple Silicon virtual machines · 2 CPU · 2 GB · authenticated SSH and live VNC",
+        name: "KronOS Linux",
+        description: "Ubuntu 24.04 LTS with XFCE · Apple Silicon virtual machines · 2 CPU · 2 GB",
     },
     {
         id: "openmaus-container" as const,
@@ -33,7 +34,7 @@ const Providers = [
 
 export class ComputerPluginRegistry {
     private configs: ComputerInstanceConfig[] = [
-        { id: "linux-vm:ubuntu", name: "Ubuntu", provider: "cua-qemu", slot: 0 },
+        { id: "linux-vm:ubuntu", name: "KronOS Linux", provider: "cua-qemu", slot: 0 },
         { id: "linux-container:primary", name: "Local computer", provider: "openmaus-container", slot: 1 },
     ];
     private enabled: ComputerProviderId[] = ["cua-qemu", "openmaus-container"];
@@ -65,7 +66,9 @@ export class ComputerPluginRegistry {
             ids.add(config.id);
             slots.add(config.slot);
         }
-        this.configs = saved.computers;
+        this.configs = saved.computers.map((config: ComputerInstanceConfig) =>
+            config.id === "linux-vm:ubuntu" && config.name === "Ubuntu" ? { ...config, name: "KronOS Linux" } : config
+        );
         this.enabled = saved.enabled.filter((id) => Providers.some((provider) => provider.id === id));
     }
     state(): ComputerManagerState {
@@ -164,16 +167,25 @@ export class ComputerPluginRegistry {
     perform(action: LinuxDesktopAction) {
         return this.runtime(action.desktopId).perform(action);
     }
+    async desktop(id: string) {
+        return (await this.runtime(id).list()).find((desktop) => desktop.id === id);
+    }
     performAgent(action: LinuxDesktopAction) {
         return this.runtime(action.desktopId).performAgent(action);
     }
     assign(id: string, agentId: string, generation: number) {
         return this.runtime(id).assign(id, agentId, generation);
     }
-    takeover(id: string) {
-        return this.runtime(id).takeover(id);
+    takeover(id: string, expected?: { agentId: string; generation: number }) {
+        return this.runtime(id).takeover(id, expected);
     }
     resume(id: string, generation: number) {
         return this.runtime(id).resume(id, generation);
+    }
+    privateBrowser(id: string, generation: number, input: PrivateBrowserInput) {
+        const runtime = this.runtime(id);
+        if (!runtime.privateBrowser)
+            throw new Error("Secure autofill is not available for this provider. Sign in directly in its browser.");
+        return runtime.privateBrowser(id, generation, input);
     }
 }

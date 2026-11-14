@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/jotaiStore";
-import { attachOSResourceToKronos } from "@/app/store/os-resource-service";
+import { attachOSResourceToKronos, writeOSResourceDragPayload } from "@/app/store/os-resource-service";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import type { PreviewModel } from "@/app/view/preview/preview-model";
@@ -567,7 +567,7 @@ function NativeFileTabs({
         <div
             ref={searchAnchorRef}
             className="ade-workbench ade-tree-code flex min-h-0 flex-1 flex-col"
-            aria-label="KronTerm development environment"
+            aria-label="KronOS development environment"
         >
             <button
                 type="button"
@@ -909,6 +909,16 @@ function NativeFileTabs({
                                                 type="button"
                                                 className="ade-tree-row flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs"
                                                 title={entry.path}
+                                                draggable={!connection}
+                                                onDragStart={(event) => {
+                                                    if (connection) return;
+                                                    writeOSResourceDragPayload(event, {
+                                                        id: `local:${entry.path}`,
+                                                        kind: entry.directory ? "folder" : "file",
+                                                        name: entry.name,
+                                                        resource: entry.path,
+                                                    });
+                                                }}
                                                 onClick={() => void open(entry.path)}
                                             >
                                                 {entry.directory ? <Folder size={14} /> : <FileCode2 size={14} />}

@@ -44,11 +44,11 @@ if xfconf-query -c xfce4-panel -l | grep -q "^/panels/panel-2/"; then
     set_property xfce4-panel /panels/panel-2/background-style uint 1
     xfconf-query -c xfce4-panel -p /panels/panel-2/background-rgba -r 2>/dev/null || true
     xfconf-query -c xfce4-panel -p /panels/panel-2/background-rgba -n -a -t double -s 0.08 -t double -s 0.08 -t double -s 0.09 -t double -s 1
-    for entry in '101 chromium-browser web-browser Browser' '102 xfce4-terminal utilities-terminal Terminal' '103 thunar system-file-manager Files'; do
+    for entry in '101 browser web-browser Browser' '102 terminal utilities-terminal Terminal' '103 files system-file-manager Files'; do
         set -- $entry
         id=$1 executable=$2 icon=$3 name=$4
         mkdir -p "$HOME/.config/xfce4/panel/launcher-$id"
-        printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\n' "$name" "$executable" "$icon" > "$HOME/.config/xfce4/panel/launcher-$id/kronterm.desktop"
+        printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\n' "$name" "kronterm-open-app $executable" "$icon" > "$HOME/.config/xfce4/panel/launcher-$id/kronterm.desktop"
         set_property xfce4-panel "/plugins/plugin-$id" string launcher
         xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/items" -r 2>/dev/null || true
         xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/items" -n -a -t string -s kronterm.desktop

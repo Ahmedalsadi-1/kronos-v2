@@ -13,7 +13,6 @@ import {
     coucouChatBounds,
     coucouPreviewBounds,
     coucouProgress,
-    coucouRecoveryChatBounds,
     sendCoucouActivity,
     startCoucouHud,
     writeCoucouState,
@@ -22,13 +21,15 @@ import {
 import { controlNowPlaying, getNowPlaying } from "./now-playing";
 import { managedAppBlocked, productivityStore, recordProductivityAgent } from "./productivity-runtime";
 
-import { app, BrowserWindow, screen, webContents } from "electron";
+import { app, BrowserWindow, nativeTheme, screen, webContents } from "electron";
 import path from "path";
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { getWaveWindowByWebContentsId } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
 import { validateHermesSelection } from "./hermes-selection";
+import { NativeHudChatLayout } from "./native-hud-chat-layout";
+import { readNativeSystemAppearance } from "./system-appearance-ipc";
 
 type NotchPreviewSource = {
     id: string;
@@ -43,7 +44,8 @@ type NotchPreviewSource = {
     active?: boolean;
 };
 
-type NativeHudApp = "files" | "terminal" | "web" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots";
+type NativeHudApp =
+    "files" | "terminal" | "web" | "widget" | "apps" | "machines" | "android" | "iphone" | "workflowcanvas" | "bots";
 
 type NativeHudSurface = {
     backgrounded?: boolean;
@@ -68,7 +70,9 @@ type NativeHudSurface = {
     cursorOwner?: string;
     companion?: ChildProcess;
     previewTimer?: NodeJS.Timeout;
+    previewRefreshQueued?: boolean;
     appearance?: ReturnType<typeof coucouAppearance>;
+    requestedReducedMotion?: boolean;
     workspaceRefreshAt?: number;
     workspaceIds?: Set<string>;
     previewBusy?: boolean;
@@ -81,8 +85,7 @@ type NativeHudSurface = {
     companionReady?: boolean;
     companionReadinessTimer?: ReturnType<typeof setTimeout>;
     companionChatOpen?: boolean;
-    chatLayoutRevision?: number;
-    chatLayoutTimer?: ReturnType<typeof setTimeout>;
+    chatLayout?: NativeHudChatLayout;
     voiceActive?: boolean;
     voiceExpanded?: boolean;
     voiceReturnChatOpen?: boolean;
@@ -119,8 +122,9 @@ const nativeIslandByBlock = new Map<string, NativeHudSurface>();
 let islandCascade = 0;
 
 /** Live HUD and island renderers; they are separate processes, so agent activity must be fanned out to them. */
-export function listNativeHudWebContents(): Electron.WebContents[] {
+export function listNativeHudWebContents(tabId?: string): Electron.WebContents[] {
     return [...nativeHudSurfaces.values()]
+        .filter((surface) => tabId == null || surface.initOpts?.tabId === tabId)
         .map((surface) => surface.window)
         .filter((window) => !window.isDestroyed() && !window.webContents.isDestroyed())
         .map((window) => window.webContents);
@@ -136,6 +140,7 @@ const RecoverableLoadErrors = new Set([
 const MaximumLoadRetries = 3;
 const HudRelativeLevel = 0;
 const IslandRelativeLevel = 1;
+const NotchRefreshInterval = 2_000;
 
 function applySurfaceLevel(surface: NativeHudSurface): void {
     if (surface.window.isDestroyed()) return;
@@ -183,6 +188,18 @@ function showSurface(surface: NativeHudSurface): void {
 function registerSurface(surface: NativeHudSurface): void {
     const webContentsId = surface.window.webContents.id;
     nativeHudSurfaces.set(webContentsId, surface);
+    if (surface.kind === "hud") {
+        const updateAppearance = () => {
+            surface.appearance = coucouAppearance(
+                surface.appearance?.theme,
+                surface.requestedReducedMotion,
+                readNativeSystemAppearance()
+            );
+            writeCoucouState(surface.companion, { appearance: surface.appearance });
+        };
+        nativeTheme.on("updated", updateAppearance);
+        surface.window.once("closed", () => nativeTheme.off("updated", updateAppearance));
+    }
     const placementKey = `${surface.initOpts?.tabId}:${surface.kind}:${surface.blockId ?? "chat"}`;
     let placementFile: string;
     try {
@@ -275,7 +292,7 @@ function registerSurface(surface: NativeHudSurface): void {
         clearTimeout(surface.loadRetryTimer);
         if (surface.showFallback) clearTimeout(surface.showFallback);
         if (surface.previewTimer) clearInterval(surface.previewTimer);
-        if (surface.chatLayoutTimer) clearTimeout(surface.chatLayoutTimer);
+        surface.chatLayout?.cancel();
         if (surface.companionReadinessTimer) clearTimeout(surface.companionReadinessTimer);
         surface.companion?.kill();
         surface.companion = undefined;
@@ -400,7 +417,7 @@ export function setNativeHudMode(
     surface.ownerShowHandler = () => {
         const activeHud = nativeHudByOwner.get(ownerWebContentsId);
         if (activeHud !== surface || surface.window.isDestroyed() || ownerWindow.isDestroyed()) return;
-        if (!surface.keepWorkspaceVisible) ownerWindow.hide();
+        if (!surface.keepWorkspaceVisible) setNativeHudMode(ownerWebContentsId, false);
     };
     ownerWindow.on("show", surface.ownerShowHandler);
     nativeHudByOwner.set(ownerWebContentsId, surface);
@@ -413,23 +430,50 @@ export function setNativeHudMode(
 function showNativeHudFallback(surface: NativeHudSurface): void {
     if (surface.companionReadinessTimer) clearTimeout(surface.companionReadinessTimer);
     surface.companionReadinessTimer = undefined;
+    surface.chatLayout?.cancel();
+    clearInterval(surface.previewTimer);
+    surface.previewTimer = undefined;
     surface.companion = undefined;
     surface.companionReady = false;
     surface.companionChatOpen ??= true;
     surface.window.webContents.send("native-notch-availability", false);
-    const docked = nativeIslandByBlock.get(surface.dockedBlockId);
-    if (docked) {
-        docked.window.hide();
-        docked.dockedBounds = undefined;
+    const dockedIds = surface.terminalSplits?.get(surface.dockedBlockId)?.blockIds ?? [surface.dockedBlockId];
+    for (const id of dockedIds) {
+        const docked = nativeIslandByBlock.get(id);
+        if (docked) {
+            docked.window.hide();
+            docked.dockedBounds = undefined;
+        }
     }
-    if (!surface.backgrounded && surface.companionChatOpen) surface.window.showInactive();
+    surface.previewBounds = undefined;
+    surface.previewVisible = false;
+    if (!surface.backgrounded) surface.window.showInactive();
     else surface.window.hide();
 }
 
 function startNativeHudCompanion(surface: NativeHudSurface): void {
     const { window, ownerWebContentsId } = surface;
-    surface.chatLayoutRevision = -1;
-    if (surface.chatLayoutTimer) clearTimeout(surface.chatLayoutTimer);
+    surface.appearance = coucouAppearance(
+        surface.appearance?.theme,
+        surface.requestedReducedMotion,
+        readNativeSystemAppearance()
+    );
+    surface.chatLayout?.cancel();
+    surface.chatLayout = new NativeHudChatLayout({
+        setIntent: (open) => {
+            surface.companionChatOpen = open;
+        },
+        hide: () => window.hide(),
+        previewBounds: () => (surface.previewVisible ? surface.previewBounds : undefined),
+        present: (bounds, measured) => {
+            if (window.isDestroyed()) return;
+            if (!measured && (surface.backgrounded || surface.voiceActive)) return;
+            window.webContents.send("native-notch-availability", measured);
+            surface.notchBounds = bounds;
+            window.setBounds(bounds);
+            if (!surface.backgrounded && (!surface.voiceActive || surface.voiceExpanded)) window.showInactive();
+        },
+    });
     if (surface.companionReadinessTimer) clearTimeout(surface.companionReadinessTimer);
     const companion = startCoucouHud(
         getElectronAppBasePath(),
@@ -588,21 +632,23 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
                 } else if (["machines", "android", "iphone"].includes(event.action)) {
                     surface.pendingDockView = "linux-vms";
                     requestNativeHudLaunch(window.webContents.id, event.action as NativeHudApp);
-                } else if (["web", "files", "terminal", "widget", "apps", "workflowcanvas", "bots"].includes(event.action)) {
+                } else if (
+                    ["web", "files", "terminal", "widget", "apps", "workflowcanvas", "bots"].includes(event.action)
+                ) {
                     surface.pendingDockView =
                         event.action === "workflowcanvas"
                             ? "plugin:kronterm.openhuman-workflow/canvas"
                             : event.action === "bots"
                               ? "bots"
                               : event.action === "files"
-                            ? "preview"
-                            : event.action === "terminal"
-                              ? "term"
-                              : event.action === "web"
-                                ? "web"
-                                : event.action === "apps"
-                                  ? "appstream"
-                                  : undefined;
+                                ? "preview"
+                                : event.action === "terminal"
+                                  ? "term"
+                                  : event.action === "web"
+                                    ? "web"
+                                    : event.action === "apps"
+                                      ? "appstream"
+                                      : undefined;
                     const existing = [...(surface.previewSources?.values() ?? [])]
                         .flat()
                         .find((row) =>
@@ -799,7 +845,8 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
             }
             surface.companionReady = true;
             if (surface.companionReadinessTimer) clearTimeout(surface.companionReadinessTimer);
-            if (!surface.previewTimer) surface.previewTimer = setInterval(() => void refreshNotchPreview(surface), 750);
+            if (!surface.previewTimer)
+                surface.previewTimer = setInterval(() => void refreshNotchPreview(surface), NotchRefreshInterval);
             window.webContents.send("native-notch-availability", true);
             if (event.event === "ready") {
                 writeCoucouState(surface.companion, {
@@ -808,45 +855,18 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
                     ...(surface.workflow ? { workflow: surface.workflow } : {}),
                     ...(surface.companionChatOpen != null ? { chatExpanded: surface.companionChatOpen } : {}),
                 });
+                if (surface.companionChatOpen === false) window.hide();
+                void refreshNotchPreview(surface);
                 return;
             }
             if (event.event === "chat-layout") {
-                if (event.layoutRevision <= (surface.chatLayoutRevision ?? -1)) return;
-                surface.chatLayoutRevision = event.layoutRevision;
-                surface.companionChatOpen = event.chatIntent;
-                if (surface.chatLayoutTimer) clearTimeout(surface.chatLayoutTimer);
-                surface.chatLayoutTimer = undefined;
-                if (!event.chatIntent) {
-                    window.hide();
-                    return;
-                }
-                if (!event.layoutReady) {
-                    surface.chatLayoutTimer = setTimeout(() => {
-                        surface.chatLayoutTimer = undefined;
-                        if (!surface.companionChatOpen || surface.backgrounded || surface.voiceActive) return;
-                        window.setBounds(
-                            event.compactChat
-                                ? coucouChatBounds(event)
-                                : coucouRecoveryChatBounds(
-                                      event,
-                                      surface.previewVisible ? surface.previewBounds : undefined
-                                  )
-                        );
-                        window.webContents.send("native-notch-availability", false);
-                        window.showInactive();
-                    }, 1_000);
-                    return;
-                }
-                window.webContents.send("native-notch-availability", true);
-                surface.notchBounds = coucouChatBounds(event);
-                window.setBounds(surface.notchBounds);
-                if (!surface.backgrounded && (!surface.voiceActive || surface.voiceExpanded)) window.showInactive();
+                surface.chatLayout.apply(event);
                 return;
             }
             if (surface.companionReadinessTimer) clearTimeout(surface.companionReadinessTimer);
             window.webContents.send("native-notch-availability", true);
             if (!surface.previewTimer) {
-                surface.previewTimer = setInterval(() => void refreshNotchPreview(surface), 750);
+                surface.previewTimer = setInterval(() => void refreshNotchPreview(surface), NotchRefreshInterval);
             }
             surface.notchBounds = coucouChatBounds(event);
             window.setBounds(surface.notchBounds);
@@ -869,8 +889,7 @@ function startNativeHudCompanion(surface: NativeHudSurface): void {
                 }
             } else if (event.event === "chat-close") {
                 surface.companionChatOpen = false;
-                if (surface.chatLayoutTimer) clearTimeout(surface.chatLayoutTimer);
-                surface.chatLayoutTimer = undefined;
+                surface.chatLayout.cancel();
                 window.hide();
             }
         },
@@ -925,14 +944,14 @@ export function openNativeHudIsland(
         },
         true
     );
-    window.setTitle(`${input.title?.trim() || "KronTerm Island"} — ${input.blockId}`);
+    window.setTitle(`${input.title?.trim() || "KronOS Island"} — ${input.blockId}`);
     const surface: NativeHudSurface = {
         blockId: input.blockId,
         selectOnReady: input.select !== false,
         initOpts: tabView.savedInitOpts,
         kind: "island",
         ownerWebContentsId,
-        title: input.title?.trim() || "KronTerm Island",
+        title: input.title?.trim() || "KronOS Island",
         view: input.view?.trim() || "term",
         window,
     };
@@ -989,13 +1008,10 @@ export function nativeHudTaskContext(senderId: number) {
     const hud = nativeHudByOwner.get(ownerId);
     const tab = getWaveTabViewByWebContentsId(ownerId);
     const ownerWindow = getWaveWindowByWebContentsId(ownerId);
-    const senderTabId = surface == null ? tab?.waveTabId ?? tab?.savedInitOpts?.tabId : undefined;
+    const senderTabId = surface == null ? (tab?.waveTabId ?? tab?.savedInitOpts?.tabId) : undefined;
     return {
         tabId:
-            senderTabId ??
-            ownerWindow?.activeTabView?.waveTabId ??
-            hud?.initOpts?.tabId ??
-            tab?.savedInitOpts?.tabId,
+            senderTabId ?? ownerWindow?.activeTabView?.waveTabId ?? hud?.initOpts?.tabId ?? tab?.savedInitOpts?.tabId,
         workspaceId: ownerWindow?.workspaceId,
         blockId: hud?.selectedBlockId ?? surface?.blockId,
     };
@@ -1072,7 +1088,7 @@ export function listNativeHudIslands(tabId: string): NativeHudIslandSnapshot[] {
         blockId: surface.blockId!,
         bounds: surface.window.getBounds(),
         focused: surface.window.isFocused(),
-        title: surface.title ?? "KronTerm Island",
+        title: surface.title ?? "KronOS Island",
         view: surface.view ?? "term",
         visible: surface.window.isVisible(),
     }));
@@ -1780,9 +1796,10 @@ export function syncNativeNotch(senderId: number, input: unknown): void {
     }
     if (senderSurface?.kind === "hud" && typeof state.caption === "string")
         writeCoucouState(hud.companion, { caption: state.caption.slice(-360) });
-    if (state.appearance && typeof state.appearance === "object") {
+    if (senderSurface?.kind === "hud" && state.appearance && typeof state.appearance === "object") {
         const appearance = state.appearance as Record<string, unknown>;
-        hud.appearance = coucouAppearance(appearance.theme, appearance.reducedMotion);
+        hud.requestedReducedMotion = appearance.reducedMotion === true;
+        hud.appearance = coucouAppearance(appearance.theme, hud.requestedReducedMotion, readNativeSystemAppearance());
         writeCoucouState(hud.companion, { appearance: hud.appearance });
     }
     if (senderSurface?.kind === "hud" && state.voice && typeof state.voice === "object") {
@@ -1869,13 +1886,26 @@ export function syncNativeNotch(senderId: number, input: unknown): void {
         )
             selectNativeHudWidget(senderId, senderSurface.blockId, true);
     }
+    if (
+        hud.companionReady &&
+        !hud.previewRefreshQueued &&
+        (Array.isArray(state.previews) || Array.isArray(state.agents))
+    ) {
+        hud.previewRefreshQueued = true;
+        queueMicrotask(() => {
+            hud.previewRefreshQueued = false;
+            void refreshNotchPreview(hud);
+        });
+    }
 }
 
 async function refreshNotchPreview(hud: NativeHudSurface): Promise<void> {
     if (!hud.companionReady || hud.window.isDestroyed()) return;
+    const companion = hud.companion;
     void getNowPlaying()
         .then((media) => {
-            if (!hud.window.isDestroyed()) writeCoucouState(hud.companion, { media: media ?? null });
+            if (!hud.window.isDestroyed() && hud.companion === companion)
+                writeCoucouState(companion, { media: media ?? null });
         })
         .catch(() => {});
     // Hidden guest capture can stall; inventory and selection must keep updating independently.
@@ -1887,7 +1917,7 @@ async function refreshNotchPreview(hud: NativeHudSurface): Promise<void> {
                 const ids = new Set(entries.map((entry) => entry.workspaceid));
                 if (owner?.workspaceId) ids.add(owner.workspaceId);
                 const workspaces = await Promise.all([...ids].map((id) => WorkspaceService.GetWorkspace(id)));
-                if (hud.window.isDestroyed()) return;
+                if (hud.window.isDestroyed() || hud.companion !== companion) return;
                 const rows = workspaces.filter(Boolean).map((workspace) => ({
                     id: workspace.oid,
                     name: workspace.name || "Untitled workspace",
@@ -2006,6 +2036,7 @@ async function refreshNotchPreview(hud: NativeHudSurface): Promise<void> {
         capturedBlockId = selected.id;
         const dataUrl = await captureNotchSource(selected);
         if (
+            hud.companion !== companion ||
             hud.currentPreview?.id !== selected.id ||
             hud.window.isDestroyed() ||
             !hud.previewVisible ||
@@ -2033,7 +2064,7 @@ async function refreshNotchPreview(hud: NativeHudSurface): Promise<void> {
             })),
         });
     } catch {
-        if (!ownsCapture || hud.currentPreview?.id === capturedBlockId)
+        if (hud.companion === companion && (!ownsCapture || hud.currentPreview?.id === capturedBlockId))
             writeCoucouState(hud.companion, { stale: true });
     } finally {
         if (ownsCapture) hud.previewBusy = false;

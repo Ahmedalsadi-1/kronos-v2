@@ -20,7 +20,10 @@ export function computerActivityTarget(activity: HermesToolActivity): { desktopI
     };
 }
 
-export function createComputerToolWake(open: (desktopId?: string) => Promise<unknown>, now = Date.now) {
+export function createComputerToolWake(
+    open: (desktopId?: string, sessionId?: string) => Promise<unknown>,
+    now = Date.now
+) {
     let opening: Promise<unknown>;
     let lastWake = -Infinity;
     let lastSession = "";
@@ -38,7 +41,7 @@ export function createComputerToolWake(open: (desktopId?: string) => Promise<unk
         lastSession = activity.sessionId;
         lastWake = now();
         opening = Promise.resolve()
-            .then(() => open(target.desktopId))
+            .then(() => open(target.desktopId, activity.sessionId))
             .catch((error) => {
                 lastWake = -Infinity;
                 console.warn("[hermes] could not open Computer widget", error);

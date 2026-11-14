@@ -110,3 +110,15 @@ test("widget insertion rejects read-only, wrong workflow and unsuccessful origin
   assert.equal(edits, 0);
   await assert.rejects(host.insertWidgetNode({ workflowId: "flow", blockId: "block" }), /could not be created/);
 });
+
+test("keeps the captured source port when a configured widget is finally inserted", async () => {
+  const { bindNativeWidgetInsertion } = await import("./native-node-focus.mjs");
+  const host = { workflowId: "flow" };
+  let source = { nodeId: "start", handleId: "outputs/main/1" };
+  let received;
+  bindNativeWidgetInsertion(host, () => true, async (_node, from) => { received = from; return { id: "added" }; }, () => ({ ...source }));
+  const captured = host.getWidgetConnectionSource();
+  source = { nodeId: "different", handleId: "outputs/main/0" };
+  await host.insertWidgetNode({ workflowId: "flow", blockId: "browser", source: captured, parameters: { operation: "browser_open_links", urls: "https://example.com" } });
+  assert.deepEqual(received, { nodeId: "start", handleId: "outputs/main/1" });
+});

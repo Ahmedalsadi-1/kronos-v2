@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import test from "node:test";
+import { server, setSharedSkillCatalog } from "../src/index.js";
 import { SharedSkillCatalog } from "../src/shared-skills.js";
 
 test("lists and reads allowlisted shared skills", () => {
@@ -12,7 +13,7 @@ test("lists and reads allowlisted shared skills", () => {
         mkdirSync(skillDirectory);
         writeFileSync(
             join(skillDirectory, "SKILL.md"),
-            "---\nname: surface-control\ndescription: Control KronTerm surfaces safely.\n---\n\n# Surface Control\n"
+            "---\nname: surface-control\ndescription: Control KronOS surfaces safely.\n---\n\n# Surface Control\n"
         );
 
         const catalog = new SharedSkillCatalog(root);
@@ -20,7 +21,7 @@ test("lists and reads allowlisted shared skills", () => {
             {
                 id: `${basename(root)}/surface-control`,
                 name: "surface-control",
-                description: "Control KronTerm surfaces safely.",
+                description: "Control KronOS surfaces safely.",
                 source: basename(root),
             },
         ]);
@@ -31,16 +32,59 @@ test("lists and reads allowlisted shared skills", () => {
     }
 });
 
+test("in-process MCP handlers use roots configured after module initialization", async () => {
+    const root = mkdtempSync(join(tmpdir(), "kronterm-late-skills-"));
+    try {
+        mkdirSync(join(root, "project-work"));
+        writeFileSync(
+            join(root, "project-work", "SKILL.md"),
+            "---\nname: project-work\ndescription: Shared project workflow\n---\nUse project evidence."
+        );
+        setSharedSkillCatalog(new SharedSkillCatalog(root));
+        const tools = (server as any)._registeredTools;
+        const listed = JSON.parse((await tools.shared_skill_list.handler({})).content[0].text);
+        assert.equal(listed.length, 1);
+        const read = JSON.parse((await tools.shared_skill_read.handler({ id: listed[0].id })).content[0].text);
+        assert.match(read.content, /Use project evidence/);
+    } finally {
+        setSharedSkillCatalog(new SharedSkillCatalog());
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test("does not follow skill symlinks outside an allowlisted root", () => {
     const root = mkdtempSync(join(tmpdir(), "kronterm-shared-skills-"));
     const outside = mkdtempSync(join(tmpdir(), "kronterm-outside-skill-"));
     try {
         writeFileSync(join(outside, "SKILL.md"), "---\nname: outside\n---\n");
         symlinkSync(outside, join(root, "outside"));
+        mkdirSync(join(root, "file-link"));
+        symlinkSync(join(outside, "SKILL.md"), join(root, "file-link", "SKILL.md"));
         assert.deepEqual(new SharedSkillCatalog(root).list(), []);
     } finally {
         rmSync(root, { recursive: true, force: true });
         rmSync(outside, { recursive: true, force: true });
+    }
+});
+
+test("searches folded descriptions and tolerates a removed configured root", () => {
+    const root = mkdtempSync(join(tmpdir(), "kronterm-skill-search-"));
+    try {
+        mkdirSync(join(root, "workflow"));
+        writeFileSync(
+            join(root, "workflow", "SKILL.md"),
+            "---\nname: workflow\ndescription: >-\n  Inspect shared files and\n  verify workspace outputs.\n---\nUse file_read."
+        );
+        const catalog = new SharedSkillCatalog(root);
+        const result = catalog.list("files outputs");
+        assert.equal(result.length, 1);
+        assert.equal(result[0].description, "Inspect shared files and verify workspace outputs.");
+        assert.ok(catalog.read(result[0].id).content.includes("file_read"));
+        rmSync(root, { recursive: true, force: true });
+        assert.deepEqual(catalog.list(), []);
+        assert.throws(() => catalog.read(result[0].id), /Unknown shared skill/);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
     }
 });
 

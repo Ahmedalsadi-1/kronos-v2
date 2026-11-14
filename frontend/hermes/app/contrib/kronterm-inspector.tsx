@@ -1,6 +1,6 @@
 import { RightSidebarPane } from "@hermes/app/right-sidebar";
 import { ReviewPane } from "@hermes/app/right-sidebar/review";
-import { OriginalExecutionsPanel, OriginalNodePicker } from "@hermes/app/workflows/original-node-picker";
+import { OriginalExecutionsPanel } from "@hermes/app/workflows/original-node-picker";
 import { $workflowSidebarMode, useWorkflowContext } from "@hermes/app/workflows/workflow-context";
 import { FileDiffPanel } from "@hermes/components/chat/diff-lines";
 import { Codicon } from "@hermes/components/ui/codicon";
@@ -14,6 +14,9 @@ import { attachPathToComposer } from "@hermes/lib/composer-file-context";
 import { desktopFsProfile } from "@hermes/lib/desktop-fs";
 import {
     $krontermInspectorCompact,
+    $comfyPropertiesAvailable,
+    $comfyPropertiesTarget,
+    $workspaceCanvasPanels,
     $krontermInspectorExpanded,
     $krontermInspectorHasFiles,
     $krontermInspectorOpen,
@@ -39,6 +42,7 @@ import {
     refreshShipInfo,
 } from "@hermes/store/review";
 import { $currentCwd } from "@hermes/store/session";
+import { openCommandPalette } from "@hermes/store/command-palette";
 import { useStore } from "@nanostores/react";
 import {
     useCallback,
@@ -56,8 +60,9 @@ const Sections = {
     changes: { label: "Changes", icon: "diff-added", shortcut: "⌃⇧G" },
     chat: { label: "Side chat", icon: "comment-discussion", shortcut: "⌥⌘S" },
     "workflow-nodes": { label: "Nodes", icon: "symbol-method", shortcut: "" },
-    workflows: { label: "Workflows", icon: "git-merge", shortcut: "" },
+    workflows: { label: "KronFlow", icon: "git-merge", shortcut: "" },
     "workflow-executions": { label: "Executions", icon: "history", shortcut: "" },
+    "comfy-properties": { label: "Node Properties", icon: "settings", shortcut: "" },
     diff: { label: "File diff", icon: "diff" },
 };
 
@@ -65,6 +70,8 @@ export function KrontermInspector() {
     const open = useStore($krontermInspectorOpen);
     const workflow = useWorkflowContext();
     const view = useStore($krontermInspectorSection);
+    const canvasPanels = useStore($workspaceCanvasPanels);
+    const comfyProperties = useStore($comfyPropertiesAvailable);
     const expanded = useStore($krontermInspectorExpanded);
     const compact = useStore($krontermInspectorCompact);
     const width = useStore($krontermInspectorWidth);
@@ -134,16 +141,15 @@ export function KrontermInspector() {
     useEffect(() => () => $krontermInspectorHasFiles.set(false), []);
 
     const selectSection = (section: KrontermInspectorSection) => {
-        if (section === "workflow-executions") {
-            const detail = { tabId: workflow.tabId, handled: false };
-            window.dispatchEvent(new CustomEvent("kronterm:workflow-executions-dock-open", { detail }));
-            if (detail.handled) return;
-        }
+        if (section === "workflow-executions")
+            window.dispatchEvent(new CustomEvent("kronterm:workflow-executions-dock-close", {
+                detail: { tabId: workflow.tabId },
+            }));
         $krontermInspectorCompact.set(false);
         setTabs((current) => (current.includes(section) ? current : [...current, section]));
         $krontermInspectorSection.set(section);
         $krontermInspectorOpen.set(true);
-        if (section === "workflow-nodes" || section === "workflow-executions") {
+        if (section === "workflow-executions") {
             window.dispatchEvent(
                 new CustomEvent("kronterm:workflow-open", {
                     detail: { tabId: workflow.tabId, surface: "canvas" },
@@ -185,9 +191,26 @@ export function KrontermInspector() {
 
     useEffect(() => {
         if (!open) return;
+        if (view === "workflow-nodes") {
+            $krontermInspectorSection.set("files");
+            return;
+        }
+        if (view === "comfy-properties" && !comfyProperties) return;
         setTabs((current) => (current.includes(view) ? current : [...current, view]));
         if (view === "chat") window.dispatchEvent(new Event(KrontermInspectorChatEvent));
-    }, [open, view]);
+    }, [open, view, comfyProperties]);
+
+    useEffect(() => {
+        if (comfyProperties) return;
+        setTabs((current) => current.includes("comfy-properties") ? current.filter((tab) => tab !== "comfy-properties") : current);
+        if (view === "comfy-properties") $krontermInspectorSection.set("files");
+    }, [comfyProperties, view]);
+
+    useEffect(() => {
+        if (!compact) {
+            document.getElementById(`inspector-tab-${view}`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+        }
+    }, [compact, tabs, view]);
 
     useEffect(() => {
         const shortcut = (event: KeyboardEvent) => {
@@ -257,59 +280,9 @@ export function KrontermInspector() {
     }, [view]);
 
     useEffect(() => {
-        let detailsOpen = false;
-        let autoCompacted = false;
-        const stillNodesRail = () =>
-            $krontermInspectorOpen.get() &&
-            $krontermInspectorSection.get() === "workflow-nodes" &&
-            $krontermInspectorCompact.get();
-        const respectUserChange = () => {
-            if (autoCompacted && !stillNodesRail()) autoCompacted = false;
-        };
-        const unsubscribers = [$krontermInspectorOpen, $krontermInspectorSection, $krontermInspectorCompact].map(
-            (store) => store.listen(respectUserChange)
-        );
-        const restore = () => {
-            const restoreWidth = autoCompacted && stillNodesRail();
-            autoCompacted = false;
-            if (restoreWidth) $krontermInspectorCompact.set(false);
-        };
-        const visibility = (event: Event) => {
-            const detail = (event as CustomEvent<{ tabId: string; open: boolean }>).detail;
-            if (
-                !workflow.tabId ||
-                detail?.tabId !== workflow.tabId ||
-                typeof detail.open !== "boolean" ||
-                detail.open === detailsOpen
-            )
-                return;
-            detailsOpen = detail.open;
-            if (!detailsOpen) {
-                restore();
-                return;
-            }
-            if (
-                !$krontermInspectorOpen.get() ||
-                $krontermInspectorSection.get() !== "workflow-nodes" ||
-                $krontermInspectorCompact.get()
-            )
-                return;
-            $krontermInspectorCompact.set(true);
-            autoCompacted = true;
-        };
-        window.addEventListener("kronterm:workflow-details-visibility", visibility);
-        return () => {
-            window.removeEventListener("kronterm:workflow-details-visibility", visibility);
-            unsubscribers.forEach((unsubscribe) => unsubscribe());
-            restore();
-        };
-    }, [workflow.tabId]);
-
-    useEffect(() => {
         const show = (event: Event) => {
             const request = (event as CustomEvent).detail;
             if (request?.tabId && request.tabId !== workflow.tabId) return;
-            if (request?.section === "workflow-nodes") selectSection("workflow-nodes");
             if (request?.section === "workflow-executions" && workflow.hasExecutions)
                 selectSection("workflow-executions");
         };
@@ -358,18 +331,23 @@ export function KrontermInspector() {
                 <div
                     role="tablist"
                     aria-label="Inspector sections"
+                    aria-orientation={compact ? "vertical" : "horizontal"}
                     className="kronterm-inspector-tabs"
                     onKeyDown={(event) => {
-                        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                        const previous = compact ? "ArrowUp" : "ArrowLeft";
+                        const nextKey = compact ? "ArrowDown" : "ArrowRight";
+                        if (![previous, nextKey, "Home", "End"].includes(event.key)) return;
+                        const focusedTab = (event.target as HTMLElement).closest('[role="tab"]');
+                        if (!focusedTab) return;
                         event.preventDefault();
-                        const index = tabs.indexOf(view);
+                        const index = tabs.findIndex((section) => focusedTab.id === `inspector-tab-${section}`);
                         const next =
                             event.key === "Home"
                                 ? tabs[0]
                                 : event.key === "End"
                                   ? tabs[tabs.length - 1]
-                                  : tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
-                        selectSection(next);
+                                  : tabs[(index + (event.key === nextKey ? 1 : -1) + tabs.length) % tabs.length];
+                        if (!compact) selectSection(next);
                         document.getElementById(`inspector-tab-${next}`)?.focus();
                     }}
                 >
@@ -390,6 +368,7 @@ export function KrontermInspector() {
                                     role="tab"
                                     id={`inspector-tab-${section}`}
                                     aria-selected={view === section}
+                                    aria-label={dirtyFiles[section] ? `${label}, unsaved changes` : label}
                                     tabIndex={view === section ? 0 : -1}
                                     aria-controls={`inspector-pane-${section}`}
                                     onClick={() => selectSection(section)}
@@ -398,7 +377,7 @@ export function KrontermInspector() {
                                     <Codicon
                                         name={section.startsWith("file:") ? "file-code" : Sections[section].icon}
                                     />
-                                    <span>
+                                    <span className="kronterm-inspector-tab-label">
                                         {label}
                                         {dirtyFiles[section] ? " •" : ""}
                                     </span>
@@ -422,7 +401,7 @@ export function KrontermInspector() {
                                 "changes",
                                 "files",
                                 "chat",
-                                "workflow-nodes",
+                                ...(comfyProperties ? ["comfy-properties" as const] : []),
                                 ...(workflow.hasExecutions ? ["workflow-executions" as const] : []),
                             ] as const
                         ).map((section) => (
@@ -436,6 +415,33 @@ export function KrontermInspector() {
                                 <span className="kronterm-inspector-shortcut">{Sections[section].shortcut}</span>
                             </DropdownMenuItem>
                         ))}
+                        <DropdownMenuItem
+                            className="kronterm-inspector-menu-item"
+                            onSelect={() => {
+                                window.dispatchEvent(new CustomEvent("kronterm:workflow-inspector", {
+                                    detail: { tabId: workflow.tabId, section: "workflow-nodes" },
+                                }));
+                            }}
+                        >
+                            <Codicon name="screen-full" />
+                            <span>Nodes</span>
+                        </DropdownMenuItem>
+                        {canvasPanels && (
+                            <>
+                                <DropdownMenuItem className="kronterm-inspector-menu-item" onSelect={openCommandPalette}>
+                                    <Codicon name="search" />
+                                    <span>Command Center</span>
+                                    <span className="kronterm-inspector-shortcut">⌘⇧Space</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    className="kronterm-inspector-menu-item"
+                                    onSelect={() => void window.hermesDesktop?.krontermSurfaces?.launchWorkspace("comfy-workflow")}
+                                >
+                                    <Codicon name="settings" />
+                                    <span>KronRender controls</span>
+                                </DropdownMenuItem>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
                 <button
@@ -493,16 +499,15 @@ export function KrontermInspector() {
                         />
                     </div>
                 ))}
-            {tabs.includes("workflow-nodes") && (
+            {canvasPanels && (
                 <div
-                    id="inspector-pane-workflow-nodes"
+                    ref={setComfyPropertiesTarget}
+                    id="inspector-pane-comfy-properties"
                     role="tabpanel"
-                    aria-labelledby="inspector-tab-workflow-nodes"
-                    hidden={view !== "workflow-nodes"}
-                    className="kronterm-inspector-pane"
-                >
-                    <OriginalNodePicker active={view === "workflow-nodes"} />
-                </div>
+                    aria-labelledby="inspector-tab-comfy-properties"
+                    hidden={view !== "comfy-properties" || !comfyProperties}
+                    className="kronterm-inspector-pane overflow-hidden"
+                />
             )}
             {tabs.includes("workflow-executions") && workflow.hasExecutions && (
                 <div
@@ -574,4 +579,8 @@ export function KrontermInspector() {
             </div>
         </section>
     );
+}
+
+function setComfyPropertiesTarget(target: HTMLDivElement) {
+    $comfyPropertiesTarget.set(target);
 }

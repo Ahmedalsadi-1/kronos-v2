@@ -40,8 +40,8 @@ export function DelegationSettings() {
                     routing?.blocked_reason
                         ? `Delegation unavailable: ${routing.blocked_reason}`
                         : routing
-                          ? "Advanced Delegation available. New sessions use KronTerm smart delegation."
-                          : "Restart KronTerm with the managed Hermes 0.22.5 runtime to enable Advanced Delegation."
+                          ? "Advanced Delegation available. New sessions use KronOS smart delegation."
+                          : "Restart KronOS with the managed Hermes 0.22.5 runtime to enable Advanced Delegation."
                 );
             })
             .catch((error) => live && setMessage(String(error)))

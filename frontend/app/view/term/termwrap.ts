@@ -404,25 +404,22 @@ export class TermWrap {
         if (this.disposed) return;
         const copyOnSelectAtom = getSettingsKeyAtom("term:copyonselect");
         this.toDispose.push(this.terminal.onData(this.handleTermData.bind(this)));
-        this.toDispose.push(
-            this.terminal.onSelectionChange(
-                debounce(50, () => {
-                    if (!globalStore.get(copyOnSelectAtom)) {
-                        return;
-                    }
-                    // Don't copy-on-select when the search bar has focus — navigating
-                    // search results changes the terminal selection programmatically.
-                    const active = document.activeElement;
-                    if (active != null && active.closest(".search-container") != null) {
-                        return;
-                    }
-                    const selectedText = this.terminal.getSelection();
-                    if (selectedText.length > 0) {
-                        navigator.clipboard.writeText(selectedText);
-                    }
-                })
-            )
-        );
+        const copySelection = debounce(50, () => {
+            if (this.disposed || !globalStore.get(copyOnSelectAtom)) {
+                return;
+            }
+            // Search navigation changes the selection without a user copy gesture.
+            const active = document.activeElement;
+            if (active != null && active.closest(".search-container") != null) {
+                return;
+            }
+            const selectedText = this.terminal.getSelection();
+            if (selectedText.length > 0) {
+                navigator.clipboard.writeText(selectedText);
+            }
+        });
+        this.toDispose.push({ dispose: () => copySelection.cancel() });
+        this.toDispose.push(this.terminal.onSelectionChange(copySelection));
         if (this.onSearchResultsDidChange != null) {
             this.toDispose.push(this.searchAddon.onDidChangeResults(this.onSearchResultsDidChange.bind(this)));
         }

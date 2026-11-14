@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComfyUI sections</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#131618;color:#f0f2f3;font:16px/1.45 system-ui,sans-serif}
+main{max-width:1440px;margin:auto}
+header,section{padding:24px}
+header{padding-bottom:4px}
+h1,h2{margin:0 0 8px}
+h1{font-size:34px}
+h2{font-size:26px}
+p{margin:0 0 12px;color:#b9c2c7}
+nav{display:flex;gap:18px;flex-wrap:wrap}
+a{color:#8cc9f5}
+a:focus-visible{outline:3px solid #8cc9f5;outline-offset:3px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+figure{margin:0;border:1px solid #424950;border-radius:10px;overflow:hidden;background:#202529}
+figcaption{display:flex;flex-direction:column;gap:3px;padding:10px 12px}
+figcaption strong{font-size:18px}
+figcaption span{color:#c6cdd1;font-size:14px}
+img{width:100%;height:auto;display:block}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style>
+<main>
+<header>
+<h1>ComfyUI sections</h1>
+<p>Screenshots from the standalone ComfyUI frontend pinned for KronOS. Open any screenshot at full size.</p>
+<nav><a href="#library">Left rail and libraries</a><a href="#editor">Graph, properties, and execution</a><a href="#utility">App mode and utilities</a></nav>
+</header>
+<section id="library"><h2>Left rail and libraries</h2><div class="grid"><figure><figcaption><strong>02 · Media Assets</strong><span>Browse generated and imported media.</span></figcaption><a href="02-assets.png"><img src="02-assets.png" alt="Media Assets screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>03 · Node Library</strong><span>Browse node categories and add nodes.</span></figcaption><a href="03-node-library.png"><img src="03-node-library.png" alt="Node Library screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>04 · Model Library</strong><span>Browse model types and local model files.</span></figcaption><a href="04-model-library.png"><img src="04-model-library.png" alt="Model Library screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>05 · Workflows</strong><span>Open, save, and organize workflow documents.</span></figcaption><a href="05-workflows.png"><img src="05-workflows.png" alt="Workflows screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>06 · Apps</strong><span>Browse workflows packaged as simplified apps.</span></figcaption><a href="06-apps.png"><img src="06-apps.png" alt="Apps screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>07 · Templates</strong><span>Browse starter workflows in a full-size dialog.</span></figcaption><a href="07-templates.png"><img src="07-templates.png" alt="Templates screenshot" width="1440" height="880"></a></figure></div></section>
+<section id="editor"><h2>Graph, properties, and execution</h2><div class="grid"><figure><figcaption><strong>01 · Graph canvas</strong><span>Edit nodes and connections, switch workflows, and run the graph.</span></figcaption><a href="01-graph-canvas.png"><img src="01-graph-canvas.png" alt="Graph canvas screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>16 · Quick node search</strong><span>Find and insert a node from the canvas.</span></figcaption><a href="16-node-search.png"><img src="16-node-search.png" alt="Quick node search screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>09 · Node Properties</strong><span>Inspect the selected node’s parameters, info, and settings.</span></figcaption><a href="09-node-properties.png"><img src="09-node-properties.png" alt="Node Properties screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>08 · Floating Job Queue</strong><span>See queued, running, and completed jobs.</span></figcaption><a href="08-job-queue.png"><img src="08-job-queue.png" alt="Floating Job Queue screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>13 · Docked Job History</strong><span>View the same job activity as a sidebar panel.</span></figcaption><a href="13-docked-job-history.png"><img src="13-docked-job-history.png" alt="Docked Job History screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>10 · Bottom drawer · Logs</strong><span>Read runtime messages in the bottom drawer.</span></figcaption><a href="10-bottom-panel.png"><img src="10-bottom-panel.png" alt="Bottom drawer · Logs screenshot" width="1440" height="880"></a></figure></div></section>
+<section id="utility"><h2>App mode and utilities</h2><div class="grid"><figure><figcaption><strong>17 · App Mode</strong><span>Open the simplified workflow interface.</span></figcaption><a href="17-app-mode.png"><img src="17-app-mode.png" alt="App Mode screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>12 · Settings</strong><span>Configure ComfyUI and the editor.</span></figcaption><a href="12-settings.png"><img src="12-settings.png" alt="Settings screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>11 · Keyboard Shortcuts</strong><span>Browse graph and view controls.</span></figcaption><a href="11-keyboard-shortcuts.png"><img src="11-keyboard-shortcuts.png" alt="Keyboard Shortcuts screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>14 · Help Center</strong><span>Find documentation and support from the editor.</span></figcaption><a href="14-help-center.png"><img src="14-help-center.png" alt="Help Center screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>15 · Main menu</strong><span>Access workflow, edit, and view commands.</span></figcaption><a href="15-main-menu.png"><img src="15-main-menu.png" alt="Main menu screenshot" width="1440" height="880"></a></figure><figure><figcaption><strong>18 · ComfyUI Manager</strong><span>Browse and manage optional custom nodes.</span></figcaption><a href="18-manager.png"><img src="18-manager.png" alt="ComfyUI Manager screenshot" width="1440" height="880"></a></figure></div></section>
+</main>
+</html>

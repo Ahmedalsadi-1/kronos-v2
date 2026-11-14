@@ -1,0 +1,177 @@
+/* Copyright 2026, KronOS. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.kt-system-ui .os-shell {
+    --os-navigation-gap: 6px;
+    column-gap: 16px;
+}
+
+.kt-system-ui .os-shell-left,
+.kt-system-ui .os-shell-right.kt-system-toolbar {
+    gap: var(--os-navigation-gap);
+}
+
+.os-shell .os-sidebar-toggle {
+    color-scheme: dark;
+    -webkit-app-region: no-drag;
+}
+
+.kt-system-ui .os-shell .os-workspaces {
+    flex: 0 1 auto;
+    max-width: min(23vw, 280px);
+    min-width: 76px;
+    gap: 4px;
+    padding: 3px;
+}
+
+.kt-system-ui .os-shell .os-workspaces button {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: #d4d4dc;
+    transition:
+        background-color 140ms ease,
+        color 140ms ease;
+}
+
+.kt-system-ui .os-shell .os-workspaces button.is-active {
+    color: #fff;
+    background: rgb(255 255 255 / 0.14);
+    box-shadow: none;
+}
+
+.kt-system-ui .os-shell button:focus-visible {
+    outline: 2px solid #c4b5fd;
+    outline-offset: 1px;
+}
+
+.kt-system-ui .os-shell .os-shell-right > .os-system-entry {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 8px;
+}
+
+.kt-system-ui .os-shell .kt-system-button svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.os-shell .os-shell-icon.kt-system-button {
+    display: inline-flex;
+    flex: 0 0 32px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+    border-radius: var(--kt-radius-control, 8px);
+    color: var(--kt-label-secondary, #fafaff);
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
+.os-shell .os-shell-icon.kt-system-button:is(:hover, .is-selected) {
+    color: var(--kt-label, #fafaff);
+    background: var(--kt-fill-hover, rgb(255 255 255 / 0.12));
+    box-shadow: none;
+    transform: none;
+}
+
+.os-shell .os-shell-icon.kt-system-button.is-selected {
+    background: var(--color-neutral-700, #404040);
+}
+
+.os-shell .os-shell-icon.os-all-apps-button {
+    color: #fff;
+    background: var(--color-neutral-600, #525252);
+}
+
+.os-shell .os-shell-icon.os-all-apps-button:is(:hover, .is-selected) {
+    background: color-mix(in srgb, var(--color-neutral-600, #525252) 88%, white);
+}
+
+.kt-system-ui .os-shell .os-view-selector > button {
+    min-height: 36px;
+    border-radius: 8px;
+}
+
+.kt-system-ui .os-shell-right > .os-system-entry:has(.os-command-label) {
+    display: flex;
+    width: auto;
+    gap: 8px;
+    padding-inline: 10px;
+    color: #fafaff;
+    background: rgb(255 255 255 / 0.08);
+}
+
+.os-command-label {
+    font-size: 12px;
+}
+
+.kt-system-ui .os-view-menu button {
+    min-height: 36px;
+    width: 100%;
+    color: var(--kt-label);
+}
+.kt-system-ui .os-view-menu button[data-highlighted] {
+    background: var(--kt-fill-hover);
+    outline: 2px solid var(--kt-accent, var(--accent-color, #9270ff));
+    outline-offset: -2px;
+}
+.os-command-shortcut {
+    padding: 3px 5px;
+    border: 1px solid rgb(255 255 255 / 0.2);
+    border-radius: 4px;
+    color: #d4d4dc;
+    font:
+        11px / 1.1 -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+}
+
+@media (max-width: 1560px) {
+    .os-command-shortcut,
+    .os-command-label {
+        display: none;
+    }
+    .kt-system-ui .os-shell-right > .os-system-entry:has(.os-command-label) {
+        width: 36px;
+        padding: 0;
+        justify-content: center;
+        background: transparent;
+    }
+    .os-shell-chat {
+        left: 46%;
+        width: clamp(280px, calc(100vw - 1000px), 460px);
+    }
+}
+
+@media (max-width: 1280px) {
+    .kt-system-ui .os-shell {
+        column-gap: 8px;
+        --os-navigation-gap: 4px;
+    }
+    .kt-system-ui .os-workspaces {
+        max-width: 160px;
+    }
+    .os-shell-chat {
+        left: 44%;
+        width: 280px;
+    }
+    .os-shell-status {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kt-system-ui .os-shell button {
+        transition: none;
+    }
+}
+[data-reduced-motion="true"] .os-shell button {
+    transition: none;
+}

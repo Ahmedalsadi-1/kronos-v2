@@ -52,7 +52,7 @@ export function ProductivityView({ api: overrideApi }: { api?: ProductivityApi }
     }, [loading]);
     useEffect(() => {
         if (!api?.getProductivityState) {
-            setError("Productivity tools require the KronTerm desktop runtime.");
+            setError("Productivity tools require the KronOS desktop runtime.");
             setLoading(false);
             return;
         }
@@ -582,7 +582,7 @@ export function ProductivityView({ api: overrideApi }: { api?: ProductivityApi }
                     <section className={PanelClass} aria-label="Focus boundaries and privacy">
                         <h2 className="font-medium">Focus boundaries & privacy</h2>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            Blocking applies during focus to KronTerm managed browser and app launches. Other apps and
+                            Blocking applies during focus to KronOS managed browser and app launches. Other apps and
                             browsers stay outside its scope.
                         </p>
                         <form

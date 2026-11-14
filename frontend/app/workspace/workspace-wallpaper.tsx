@@ -1,9 +1,12 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getSettingsKeyAtom } from "@/store/global";
+import { getApi, getSettingsKeyAtom } from "@/store/global";
+import { RpcApi } from "@/store/wshclientapi";
+import { TabRpcClient } from "@/store/wshrpcutil";
+import { ListRow } from "@hermes/app/settings/primitives";
 import { useAtomValue } from "jotai";
-import { memo, useEffect } from "react";
+import { memo, useEffect, useState } from "react";
 
 const MinSurfaceOpacity = 0;
 const MaxSurfaceOpacity = 100;
@@ -58,5 +61,63 @@ const WorkspaceWallpaper = memo(() => {
     );
 });
 WorkspaceWallpaper.displayName = "WorkspaceWallpaper";
+
+export function WorkspaceWallpaperSettings() {
+    const wallpaper = useAtomValue(getSettingsKeyAtom("window:wallpaper"));
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const change = async (clear: boolean) => {
+        setBusy(true);
+        setError("");
+        try {
+            const value = clear ? "" : (await getApi().selectFiles())[0];
+            if (value == null) return;
+            if (!clear && !/\.(avif|gif|jpe?g|png|webp|bmp|svg|heic)$/i.test(value)) {
+                setError("Choose an image file for your workspace background.");
+                return;
+            }
+            await RpcApi.SetConfigCommand(TabRpcClient, { "window:wallpaper": value });
+        } catch {
+            setError("Could not update the workspace background.");
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <ListRow
+            title="Workspace background"
+            description={wallpaper ? "Custom background" : "Default background"}
+            below={
+                error && (
+                    <p role="alert" className="mt-1 text-xs text-error">
+                        {error}
+                    </p>
+                )
+            }
+            action={
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        className="kron-button kron-button-secondary cursor-pointer rounded px-2 py-1 text-xs"
+                        disabled={busy}
+                        onClick={() => void change(false)}
+                    >
+                        Choose image…
+                    </button>
+                    {wallpaper && (
+                        <button
+                            type="button"
+                            className="kron-button kron-button-ghost cursor-pointer rounded px-2 py-1 text-xs"
+                            disabled={busy}
+                            onClick={() => void change(true)}
+                        >
+                            Reset background
+                        </button>
+                    )}
+                </div>
+            }
+        />
+    );
+}
 
 export { WorkspaceWallpaper };

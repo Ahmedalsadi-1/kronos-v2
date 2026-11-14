@@ -1,0 +1,28 @@
+{
+    "light": {
+        "content": "#f4f4f6",
+        "window": "#fafafc",
+        "bar": "#f8f8fa",
+        "sidebar": "#f2f2f5",
+        "popover": "#fafafc",
+        "label": "#1d1d1f",
+        "secondary": "#55555c",
+        "tertiary": "#606067",
+        "separator": "#86868b",
+        "focus": "#2463c6",
+        "danger": "#d70015"
+    },
+    "dark": {
+        "content": "#1c1c1e",
+        "window": "#27272a",
+        "bar": "#1c1c1e",
+        "sidebar": "#242427",
+        "popover": "#242428",
+        "label": "#f5f5f7",
+        "secondary": "#c0c0c8",
+        "tertiary": "#aaaab4",
+        "separator": "#7a7a80",
+        "focus": "#8ab4ff",
+        "danger": "#ff6b75"
+    }
+}

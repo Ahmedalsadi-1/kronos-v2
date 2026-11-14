@@ -38,7 +38,7 @@ export function IphoneFrame({ children, className = "" }: FrameProps) {
 
 export function MagicGlobe({ className = "" }: { className?: string }) {
     return (
-        <div className={`magic-globe ${className}`.trim()} aria-label="Animated Kronterm global workspace network">
+        <div className={`magic-globe ${className}`.trim()} aria-label="Animated KronOS global workspace network">
             <div className="globe-core">
                 <span className="globe-longitude globe-longitude-1" />
                 <span className="globe-longitude globe-longitude-2" />

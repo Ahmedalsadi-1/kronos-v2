@@ -113,7 +113,7 @@ describe("workspace canvas agent graph", () => {
         expect(buildCanvasContextPrompt("Summarize", "quote", nodes)).toContain(
             "Use the selected canvas nodes together as quoted working context."
         );
-        expect(buildCanvasContextPrompt("Continue", "follow", nodes)).toContain("KronTerm block: block-browser");
+        expect(buildCanvasContextPrompt("Continue", "follow", nodes)).toContain("KronOS block: block-browser");
         expect(buildCanvasContextPrompt("  Plain request  ", "follow", [])).toBe("Plain request");
     });
 

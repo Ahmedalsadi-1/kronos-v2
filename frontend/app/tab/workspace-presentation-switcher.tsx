@@ -17,7 +17,7 @@ const PresentationDetails: Record<WorkspacePresentation, { icon: string; label: 
     web: { icon: "fa-globe", label: "Web", description: "Full-screen web surface" },
 };
 
-const UserFacingPresentations = ["os", "canvas", "widgets", "tabs", "web"] as const satisfies readonly WorkspacePresentation[];
+const UserFacingPresentations = ["os", "widgets", "tabs"] as const satisfies readonly WorkspacePresentation[];
 
 const SidePanelDetails: Record<SidePanelMode, { icon: string; label: string; description: string }> = {
     full: { icon: "fa-table-columns", label: "Full sidebar", description: "Names, workspace tree, and controls" },

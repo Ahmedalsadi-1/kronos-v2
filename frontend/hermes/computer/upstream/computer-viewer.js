@@ -98,7 +98,7 @@ const ERRORS = {
   },
   'cdn-blocked': {
     title: "Couldn't load the viewer",
-    body: "The bundled noVNC viewer could not load. Reload KronTerm or use a hosted noVNC page."
+    body: "The bundled noVNC viewer could not load. Reload KronOS or use a hosted noVNC page."
   },
   'vendored-tampered': {
     title: 'Viewer file failed verification',

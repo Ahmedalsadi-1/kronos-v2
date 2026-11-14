@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "outputDir": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6",
+  "frames": [
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6/frame-00-at-18s.png",
+      "time": 18
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6/frame-01-at-25s.png",
+      "time": 25
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6/frame-02-at-32s.png",
+      "time": 32
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6/frame-03-at-73s.png",
+      "time": 73
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6/frame-04-at-79.75s.png",
+      "time": 79.75
+    }
+  ],
+  "contactSheets": [
+    "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/1860f591-2de4-4800-9a4d-dbe4c20975d6/contact-sheet.jpg"
+  ],
+  "_meta": {
+    "version": "0.9.22",
+    "latestVersion": "0.9.22",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-08T02:01:11.331Z",
+    "skillsOutdated": 4,
+    "skillsMissing": 0
+  }
+}

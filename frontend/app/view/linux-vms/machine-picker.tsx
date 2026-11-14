@@ -116,7 +116,7 @@ export function MachinePicker({ onChoose }: { onChoose: (section: MachineSection
                         {loading
                             ? "Finding devices…"
                             : section == "macos"
-                              ? "macOS VM setup is unavailable. Restart KronTerm and refresh."
+                              ? "macOS VM setup is unavailable. Restart KronOS and refresh."
                               : section == "iphone"
                               ? "No iPhone simulator found. Install full Xcode and an iOS simulator runtime."
                               : section == "android"

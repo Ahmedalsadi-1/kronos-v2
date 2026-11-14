@@ -9,7 +9,7 @@ import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { ProjectEnvironmentLauncher } from "@/app/workspace/project-environment-launcher";
-import type { WorkflowCommand, WorkflowRun, WorkflowSnapshot, WorkflowTarget } from "@/types/workflow";
+import type { SavedWorkflow, WorkflowCommand, WorkflowRun, WorkflowSnapshot, WorkflowTarget } from "@/types/workflow";
 import { type WorkflowNode, type WorkflowNodeKind } from "@/types/workflow-graph";
 import { useAtomValue } from "jotai";
 import { GitBranch, Plus, X } from "lucide-react";
@@ -74,7 +74,6 @@ export function CanvasWorkflows({
     const [transferOutput, setTransferOutput] = useState(false);
     const [snapshot, setSnapshot] = useState<WorkflowSnapshot>({ runs: [], workflows: [] });
     const [runId, setRunId] = useState<string>();
-    const [savedId, setSavedId] = useState<string>();
     const [intervalMinutes, setIntervalMinutes] = useState(60);
     const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
     const [missedRunPolicy, setMissedRunPolicy] = useState<"skip" | "run-once">("skip");
@@ -90,9 +89,13 @@ export function CanvasWorkflows({
     const mounted = useRef(true);
     const drag = useRef<{ id: string; x: number; y: number; original: CanvasWorkflowDraft }>(undefined);
     const api = getApi();
-    latestDraft.current = draft;
     const activeNode = draft.graph.nodes.find((node) => node.id === selected);
     const run = snapshot.runs.find((value) => value.id === runId);
+    const savedDraft = draft.savedWorkflow;
+    const savedWorkflow = snapshot.workflows.find((value) => value.id === savedDraft?.id);
+    const savedVersionChanged = savedWorkflow && (savedWorkflow.version ?? 1) !== savedDraft.version;
+    const canSchedule = savedWorkflow && !savedDraft.dirty && !savedVersionChanged;
+    const schedules = (snapshot.schedules ?? []).filter((value) => value.workflowId === savedDraft?.id);
     const target: WorkflowTarget = {
         workspaceId: workspace?.oid ?? tabId,
         tabId,
@@ -128,8 +131,10 @@ export function CanvasWorkflows({
             stored?.graph?.version === 1 &&
             Array.isArray(stored.graph.nodes) &&
             Array.isArray(stored.graph.edges)
-        )
+        ) {
+            latestDraft.current = stored;
             setDraft(stored);
+        }
     }, [stored]);
     useEffect(() => {
         if (!persistVersion.current) return;
@@ -150,15 +155,42 @@ export function CanvasWorkflows({
         [tabId]
     );
 
+    const commitDraft = (next: CanvasWorkflowDraft) => {
+        persistVersion.current++;
+        latestDraft.current = next;
+        if (mounted.current) {
+            setDraft(next);
+        } else {
+            void writeCanvasDraft(tabId, next).catch((reason) => console.warn("Could not save canvas draft", reason));
+        }
+    };
     const change = (next: CanvasWorkflowDraft, record = true) => {
         if (record) {
             setHistory((values) => [...values.slice(-49), draft]);
             setFuture([]);
         }
-        persistVersion.current++;
-        latestDraft.current = next;
-        setDraft(next);
-        setSavedId(undefined);
+        const saved = latestDraft.current.savedWorkflow;
+        commitDraft({ ...next, savedWorkflow: saved && { ...saved, dirty: true } });
+        setError("");
+        setNotice("");
+    };
+    const loadSavedWorkflow = (saved: SavedWorkflow) => {
+        if (!saved.graph) return;
+        commitDraft({
+            title: saved.title,
+            graph: structuredClone(saved.graph),
+            target: {
+                environment: saved.target.environment,
+                computerId: saved.target.computerId,
+                repository: saved.target.repository,
+            },
+            savedWorkflow: { id: saved.id, version: saved.version ?? 1 },
+        });
+        setHistory([]);
+        setFuture([]);
+        setSelected(undefined);
+        setRunId(undefined);
+        setConnectionSource(undefined);
         setError("");
         setNotice("");
     };
@@ -232,8 +264,14 @@ export function CanvasWorkflows({
         setNotice("");
         try {
             const value = await api.workflowCommand(command);
-            if (!mounted.current) return;
-            setSnapshot((await api.workflowCommand({ action: "list" })) as WorkflowSnapshot);
+            if (mounted.current) {
+                try {
+                    const next = (await api.workflowCommand({ action: "list" })) as WorkflowSnapshot;
+                    if (mounted.current) setSnapshot(next);
+                } catch (reason) {
+                    if (mounted.current) setError(`Could not refresh workflows: ${String(reason)}`);
+                }
+            }
             return value;
         } catch (reason) {
             if (mounted.current) setError(String(reason));
@@ -249,7 +287,7 @@ export function CanvasWorkflows({
                 action: "create",
                 conversationId: `canvas-${tabId}-${crypto.randomUUID()}`,
             })) as WorkflowRun;
-            if (value) {
+            if (value && mounted.current) {
                 setRunId(value.id);
                 setNotice("Run queued. Progress and evidence appear below.");
             }
@@ -257,24 +295,47 @@ export function CanvasWorkflows({
             setError(String(reason));
         }
     };
-    const save = async () => {
+    const save = async (asNew = false) => {
         const revision = persistVersion.current;
         try {
-            const value = (await perform({ action: "save-definition", definition: definition() })) as { id: string };
-            if (value && revision === persistVersion.current) {
-                setSavedId(value.id);
-                setNotice("Workflow saved. It is available in Hermes Workflows.");
+            const existing = asNew ? undefined : savedDraft;
+            if (existing && !savedWorkflow) {
+                throw new Error("The saved workflow is unavailable. Save as a new workflow to keep this draft.");
+            }
+            const nextDefinition = makeCanvasWorkflowDefinition(
+                draft,
+                target,
+                tabData.blockids ?? [],
+                existing ? savedWorkflow : undefined
+            );
+            const value = (await perform(
+                existing
+                    ? {
+                          action: "update-workflow",
+                          workflowId: existing.id,
+                          expectedVersion: existing.version,
+                          definition: nextDefinition,
+                      }
+                    : { action: "save-definition", definition: nextDefinition }
+            )) as SavedWorkflow;
+            if (value) {
+                const dirty = revision !== persistVersion.current;
+                commitDraft({
+                    ...latestDraft.current,
+                    savedWorkflow: { id: value.id, version: value.version ?? 1, dirty },
+                });
+                if (mounted.current && !dirty) setNotice("Workflow saved. It is available in Hermes Workflows.");
             }
         } catch (reason) {
-            setError(String(reason));
+            if (mounted.current) setError(String(reason));
         }
     };
     const schedule = async () => {
-        if (!savedId) return;
+        if (!canSchedule) return;
         await perform({
             action: "upsert-schedule",
             schedule: {
-                workflowId: savedId,
+                workflowId: savedDraft.id,
                 conversationId: `canvas-schedule-${tabId}`,
                 timezone,
                 intervalMinutes,
@@ -293,7 +354,7 @@ export function CanvasWorkflows({
             hermesSurfaceController.requestOpenChat();
             submitToHermes(
                 [
-                    "Create an editable KronTerm canvas workflow draft for this request. Do not execute or schedule it.",
+                    "Create an editable KronOS canvas workflow draft for this request. Do not execute or schedule it.",
                     workflowIntent.trim(),
                     `Bound target: ${JSON.stringify({ ...target, blockIds: tabData.blockids ?? [] })}`,
                     `Available widgets: ${JSON.stringify(context.blocks)}`,
@@ -487,25 +548,16 @@ export function CanvasWorkflows({
                         <label>
                             Saved workflows
                             <select
-                                value={savedId ?? ""}
+                                value={savedDraft?.id ?? ""}
+                                disabled={busy}
                                 onChange={(event) => {
                                     const saved = snapshot.workflows.find((value) => value.id === event.target.value);
-                                    if (!saved?.graph) return;
-                                    change({
-                                        title: saved.title,
-                                        graph: structuredClone(saved.graph),
-                                        target: {
-                                            environment: saved.target.environment,
-                                            computerId: saved.target.computerId,
-                                            repository: saved.target.repository,
-                                        },
-                                    });
-                                    setSavedId(saved.id);
-                                    setSelected(undefined);
-                                    setRunId(undefined);
+                                    if (saved) loadSavedWorkflow(saved);
                                 }}
                             >
-                                <option value="">Current draft</option>
+                                <option value="" disabled>
+                                    Current draft
+                                </option>
                                 {snapshot.workflows
                                     .filter((value) => value.graph && value.target.tabId === tabId)
                                     .map((value) => (
@@ -861,6 +913,15 @@ export function CanvasWorkflows({
                             >
                                 Save workflow
                             </button>
+                            {savedDraft && (
+                                <button
+                                    type="button"
+                                    disabled={busy || !draft.graph.nodes.length}
+                                    onClick={() => void save(true)}
+                                >
+                                    Save as new workflow
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className="is-primary"
@@ -870,8 +931,20 @@ export function CanvasWorkflows({
                                 Run workflow
                             </button>
                         </div>
-                        {savedId && <p className="canvas-workflow-hint">Saved workflow: {savedId}</p>}
-                        {savedId && (
+                        {savedVersionChanged && (
+                            <p role="status" className="canvas-workflow-hint">
+                                This workflow has changed since you opened it.{" "}
+                                <button type="button" disabled={busy} onClick={() => loadSavedWorkflow(savedWorkflow)}>
+                                    Reload saved workflow
+                                </button>
+                            </p>
+                        )}
+                        {savedDraft?.dirty && (
+                            <p className="canvas-workflow-hint">
+                                Save your edits to update the workflow used by its schedules.
+                            </p>
+                        )}
+                        {(canSchedule || schedules.length > 0) && (
                             <fieldset>
                                 <legend>Schedule</legend>
                                 <label>
@@ -901,59 +974,63 @@ export function CanvasWorkflows({
                                     </select>
                                 </label>
                                 <p className="canvas-workflow-hint">
-                                    Repeats use elapsed time. KronTerm must be running. Concurrent runs of this workflow
+                                    Repeats use elapsed time. KronOS must be running. Concurrent runs of this workflow
                                     are skipped.
                                 </p>
-                                <button
-                                    type="button"
-                                    disabled={busy || !Number.isFinite(intervalMinutes) || intervalMinutes < 1}
-                                    onClick={() => void schedule()}
-                                >
-                                    Add schedule
-                                </button>
-                                {(snapshot.schedules ?? [])
-                                    .filter((value) => value.workflowId === savedId)
-                                    .map((value) => (
-                                        <div key={value.id} className="canvas-workflow-schedule">
-                                            <span>
-                                                Every {value.intervalMinutes} min ·{" "}
-                                                {value.enabled ? "Active" : "Paused"}
-                                            </span>
-                                            <small>
-                                                Next:{" "}
-                                                {new Date(value.nextRunAt).toLocaleString(undefined, {
-                                                    timeZone: value.timezone,
-                                                })}{" "}
-                                                ({value.timezone})
-                                            </small>
-                                            <div className="canvas-workflow-actions">
-                                                <button
-                                                    type="button"
-                                                    disabled={busy}
-                                                    onClick={() =>
-                                                        void perform({
-                                                            action: "upsert-schedule",
-                                                            schedule: { ...value, enabled: !value.enabled },
-                                                        })
-                                                    }
-                                                >
-                                                    {value.enabled ? "Pause schedule" : "Resume schedule"}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    disabled={busy}
-                                                    onClick={() =>
-                                                        void perform({
-                                                            action: "delete-schedule",
-                                                            scheduleId: value.id,
-                                                        })
-                                                    }
-                                                >
-                                                    Delete schedule
-                                                </button>
-                                            </div>
+                                {canSchedule && (
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            busy ||
+                                            !Number.isInteger(intervalMinutes) ||
+                                            intervalMinutes < 1 ||
+                                            intervalMinutes > 525600
+                                        }
+                                        onClick={() => void schedule()}
+                                    >
+                                        Add schedule
+                                    </button>
+                                )}
+                                {schedules.map((value) => (
+                                    <div key={value.id} className="canvas-workflow-schedule">
+                                        <span>
+                                            Every {value.intervalMinutes} min · {value.enabled ? "Active" : "Paused"}
+                                        </span>
+                                        <small>
+                                            Next:{" "}
+                                            {new Date(value.nextRunAt).toLocaleString(undefined, {
+                                                timeZone: value.timezone,
+                                            })}{" "}
+                                            ({value.timezone})
+                                        </small>
+                                        <div className="canvas-workflow-actions">
+                                            <button
+                                                type="button"
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    void perform({
+                                                        action: "upsert-schedule",
+                                                        schedule: { ...value, enabled: !value.enabled },
+                                                    })
+                                                }
+                                            >
+                                                {value.enabled ? "Pause schedule" : "Resume schedule"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    void perform({
+                                                        action: "delete-schedule",
+                                                        scheduleId: value.id,
+                                                    })
+                                                }
+                                            >
+                                                Delete schedule
+                                            </button>
                                         </div>
-                                    ))}
+                                    </div>
+                                ))}
                             </fieldset>
                         )}
                         {run && (

@@ -40,8 +40,8 @@ describe("scoped LSP queries", () => {
         fs.writeFileSync(outsideSource, "package secret\n");
         fs.symlinkSync(outsideSource, path.join(workspace, "escape.go"));
 
-        expect(() => resolveLspQueryPaths(workspace, outsideSource)).toThrow(/contained by the KronTerm workspace/);
-        expect(() => resolveLspQueryPaths(workspace, "escape.go")).toThrow(/contained by the KronTerm workspace/);
+        expect(() => resolveLspQueryPaths(workspace, outsideSource)).toThrow(/contained by the KronOS workspace/);
+        expect(() => resolveLspQueryPaths(workspace, "escape.go")).toThrow(/contained by the KronOS workspace/);
     });
 
     it("bounds top-level results, nested depth, and long strings", () => {

@@ -5,11 +5,14 @@ import { Button } from "@/app/element/button";
 import { CenteredDiv } from "@/app/element/quickelems";
 import { globalStore } from "@/app/store/jotaiStore";
 import { getWebServerEndpoint } from "@/util/endpoints";
+import { getModelPreviewFormat } from "@/util/model-preview";
 import { formatRemoteUri } from "@/util/waveutil";
 import { useAtomValue } from "jotai";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { TransformComponent, TransformWrapper, useControls } from "react-zoom-pan-pinch";
 import type { SpecializedViewProps } from "./preview";
+
+const ModelPreview = lazy(() => import("./preview-3d").then((module) => ({ default: module.ModelPreview })));
 
 function ImageZoomControls() {
     const { zoomIn, zoomOut, resetTransform } = useControls();
@@ -57,11 +60,26 @@ function StreamingPreview({ model }: SpecializedViewProps) {
     }, []);
     const conn = useAtomValue(model.connection);
     const fileInfo = useAtomValue(model.statFile);
+    const refreshVersion = useAtomValue(model.refreshVersion);
     const filePath = fileInfo.path;
     const remotePath = formatRemoteUri(filePath, conn);
     const usp = new URLSearchParams();
     usp.set("path", remotePath);
     const streamingUrl = `${getWebServerEndpoint()}/wave/stream-file?${usp.toString()}`;
+    const modelFormat = getModelPreviewFormat(filePath);
+    if (modelFormat) {
+        return (
+            <Suspense fallback={<CenteredDiv>Loading 3D preview…</CenteredDiv>}>
+                <ModelPreview
+                    key={`${streamingUrl}:${refreshVersion}`}
+                    url={streamingUrl}
+                    format={modelFormat}
+                    size={fileInfo.size}
+                    name={fileInfo.name}
+                />
+            </Suspense>
+        );
+    }
     if (fileInfo.mimetype === "application/pdf") {
         return (
             <div className="flex flex-row h-full overflow-hidden items-center justify-center p-[5px]">

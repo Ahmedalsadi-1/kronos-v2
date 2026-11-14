@@ -54,7 +54,7 @@ export function ComputersSettingsPreview() {
                 getActive: () => "hermes",
                 onActiveChange: () => () => {},
                 list: async () => [
-                    { id: "hermes", label: "KronTerm Agent", available: true, description: "Workspace agent" },
+                    { id: "hermes", label: "KronOS Agent", available: true, description: "Workspace agent" },
                 ],
             },
             krontermSurfaces: {

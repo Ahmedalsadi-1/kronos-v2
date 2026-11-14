@@ -29,6 +29,7 @@ const RequiredFamilies = {
         "workspace_navigate",
         "workspace_canvas_view",
         "workspace_canvas_add_note",
+        "workspace_canvas_add_file",
         "workspace_canvas_update_object",
         "workspace_canvas_delete_object",
         "workspace_canvas_connect",
@@ -96,11 +97,27 @@ const RequiredFamilies = {
         "canvas_upload_asset",
     ],
     lsp: ["lsp_diagnostics", "lsp_symbols", "lsp_hover", "lsp_definition", "lsp_references"],
+    workflow: [
+        "n8n_status",
+        "n8n_search_nodes",
+        "n8n_get_node",
+        "n8n_list_workspace_widgets",
+        "n8n_create_workflow",
+        "n8n_edit_workflow",
+        "n8n_validate_workflow",
+        "n8n_run_workflow",
+        "n8n_get_execution",
+        "comfyui_status",
+        "comfyui_submit",
+        "comfyui_job",
+        "comfyui_image",
+        "comfyui_cancel",
+    ],
 } as const;
 
 type ListedTool = Awaited<ReturnType<Client["listTools"]>>["tools"][number];
 
-describe("Hermes KronTerm tool parity", () => {
+describe("Hermes KronOS tool parity", () => {
     let client: Client;
     let server: McpServer;
     let toolsByName: Map<string, ListedTool>;
@@ -134,7 +151,25 @@ describe("Hermes KronTerm tool parity", () => {
         });
     }
 
-    it("exposes every registered KronTerm MCP tool, not only the required family samples", () => {
+    it("routes API-format ComfyUI workflows through the native tool registry", async () => {
+        const { setComfyUiToolBridge } = await import("../src/index.ts");
+        const workflow = { "1": { class_type: "SaveImage", inputs: { filename_prefix: "test" } } };
+        setComfyUiToolBridge(async (operation, input, signal) => {
+            assert.equal(operation, "submit");
+            assert.deepEqual(input.workflow, workflow);
+            assert.equal(signal?.aborted, false);
+            return { content: [{ type: "text", text: '{"id":"render-test"}' }] };
+        });
+        try {
+            const result = await client.callTool({ name: "comfyui_submit", arguments: { workflow } });
+            assert.notEqual(result.isError, true);
+            assert.deepEqual(result.content, [{ type: "text", text: '{"id":"render-test"}' }]);
+        } finally {
+            setComfyUiToolBridge(undefined);
+        }
+    });
+
+    it("exposes every registered KronOS MCP tool, not only the required family samples", () => {
         const bridge = spawnSync(process.execPath, [new URL("../dist/native-bridge.js", import.meta.url).pathname], {
             input: JSON.stringify({ method: "list" }),
             encoding: "utf8",
@@ -147,7 +182,7 @@ describe("Hermes KronTerm tool parity", () => {
             .sort();
         const advertised = Array.from(toolsByName.keys()).sort();
 
-        assert.ok(registered.length > 100, "expected the complete KronTerm tool catalog");
+        assert.ok(registered.length > 100, "expected the complete KronOS tool catalog");
         assert.deepEqual(advertised, registered);
     });
 
@@ -259,6 +294,31 @@ describe("Hermes KronTerm tool parity", () => {
             await assertInvalidCall(client, { name: "hud_show_widget", arguments: { blockId: " " } });
             await assertInvalidCall(client, { name: "hud_set_widget_background", arguments: { blockId: "browser-1" } });
             assert.equal(actions.length, 4);
+        } finally {
+            setKronTermToolBridge(new WshBridge());
+        }
+    });
+
+    it("pins an absolute local file in the active canvas and rejects relative and remote paths", async () => {
+        const { setKronTermToolBridge } = await import("../src/index.ts");
+        const actions: WorkspaceSurfaceControl[] = [];
+        class RecordingBridge extends WshBridge {
+            async workspaceSurfaceControl(input: WorkspaceSurfaceControl): Promise<string> {
+                actions.push(input);
+                return JSON.stringify({ success: true, message: "Pinned canvas file file-1." });
+            }
+        }
+        setKronTermToolBridge(new RecordingBridge());
+        try {
+            const name = "workspace_canvas_add_file";
+            const path = "/workspace/shot #1.mp4";
+            const result = await client.callTool({ name, arguments: { path, label: "Opening shot", x: 0, y: -10 } });
+            assert.ok(!result.isError, resultText(result));
+            assert.match(resultText(result), /Pinned canvas file file-1/);
+            for (const invalid of ["shot.mp4", "https://example.test/shot.mp4", "wsh://local/path", "/invalid\0path"]) {
+                await assertInvalidCall(client, { name, arguments: { path: invalid } });
+            }
+            assert.deepEqual(actions, [{ action: "add_file", file: path, text: "Opening shot", x: 0, y: -10 }]);
         } finally {
             setKronTermToolBridge(new WshBridge());
         }

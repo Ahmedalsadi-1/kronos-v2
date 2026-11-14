@@ -24,7 +24,7 @@ describe("delegated computer leases", () => {
         await expect(policy.prepare(context, "sandbox", 1, ["terminal_execute"], tools)).rejects.toThrow("unavailable");
         await expect(policy.prepare(context, "sandbox", 2, tools, tools)).rejects.toThrow("one sandbox");
         const grant = await policy.prepare(context, "sandbox", 1, tools, tools);
-        expect((await policy.resolve(grant.token, "caller:1")).delegationScope).toBe("sandbox");
+        expect((await policy.resolve(grant.token, "caller:1")).context.delegationScope).toBe("sandbox");
         await expect(policy.resolve(grant.token, "caller:2")).rejects.toThrow("revoked");
     });
     test("serializes sandbox workers, fences takeover, and accepts a new control generation", async () => {
@@ -50,11 +50,60 @@ describe("delegated computer leases", () => {
             "broaden"
         );
         const grant = await policy.prepare({ ...context, delegationScope: "widgets" }, "inherit", 2);
+        const { signal } = await policy.resolve(grant.token, "caller:1");
         expect(grant.scope).toBe("widgets");
         policy.finish(grant.token, "child:1", "caller:1");
         policy.finish(grant.token, "child:1", "caller:1");
         expect(await policy.resolve(grant.token, "caller:1")).toBeDefined();
+        expect(signal.aborted).toBe(false);
         now += 16 * 60_000;
         await expect(policy.resolve(grant.token, "caller:1")).rejects.toThrow("expired");
+        expect(signal.aborted).toBe(true);
     });
+
+    test("revokes active tools for the stopped runtime without affecting another caller", async () => {
+        const policy = new DelegationPolicy(async () => desktop());
+        const first = await policy.prepare(context, "widgets", 1);
+        const second = await policy.prepare({ ...context, nativeCallerId: "caller:2" }, "widgets", 1);
+        const worker = await policy.resolve(first.token, "caller:1");
+        const otherWorker = await policy.resolve(second.token, "caller:2");
+        policy.revokeCaller("caller:1");
+        expect(worker.signal.aborted).toBe(true);
+        expect(otherWorker.signal.aborted).toBe(false);
+        await expect(policy.resolve(first.token, "caller:1")).rejects.toThrow("revoked");
+    });
+});
+
+test("Hybrid inherited workers keep one VM controller and invalidate on takeover", async () => {
+    const vm = desktop();
+    const policy = new DelegationPolicy(async () => vm);
+    const hybrid = { ...context, sandboxComputerMode: "hybrid" as const };
+    await expect(policy.prepare(hybrid, "inherit", 2)).rejects.toThrow("one sandbox");
+    const grant = await policy.prepare(hybrid, "inherit", 1);
+    await expect(policy.prepare(context, "sandbox", 1)).rejects.toThrow("already controls");
+    vm.controlGeneration++;
+    await expect(policy.resolve(grant.token, "caller:1")).rejects.toThrow("control changed");
+});
+
+
+test("cancels one worker immediately and keeps its unfinished calls visible to the drain", async () => {
+    const policy = new DelegationPolicy(async () => desktop());
+    const grant = await policy.prepare(context, "widgets", 2);
+    const first = await policy.resolve(grant.token, "caller:1", "child:1");
+    const second = await policy.resolve(grant.token, "caller:1", "child:2");
+    let settle: () => void;
+    const running = new Promise<void>((resolve) => { settle = resolve; });
+    first.track(running);
+
+    expect(policy.cancel(grant.token, "child:1", "caller:2")).toBe(0);
+    expect(first.signal.aborted).toBe(false);
+    expect(policy.cancel(grant.token, "child:1", "caller:1")).toBe(1);
+    expect(first.signal.aborted).toBe(true);
+    expect(second.signal.aborted).toBe(false);
+    await expect(policy.resolve(grant.token, "caller:1", "child:1")).rejects.toThrow(/abort/i);
+    policy.finish(grant.token, undefined, "caller:1");
+    expect(policy.cancel(grant.token, "child:1", "caller:1")).toBe(1);
+    settle();
+    await running;
+    expect(policy.cancel(grant.token, "child:1", "caller:1")).toBe(0);
 });

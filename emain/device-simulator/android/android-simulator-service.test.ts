@@ -102,6 +102,24 @@ describe("Android simulator service using Orca source", () => {
         await f.service.button("android-avd:Pixel_8", "back");
         expect(f.commands.at(-1)?.slice(-2)).toEqual(["keyevent", "4"]);
     });
+    it("picks the innermost Android element and leaves password text out of its context", async () => {
+        const f = fixture();
+        const service = new AndroidSimulatorService({
+            sdk,
+            run: async (binary, args) =>
+                args.includes("cat")
+                    ? Buffer.from(
+                          '<hierarchy><node package="com.example" bounds="[0,0][720,1600]"><node class="android.widget.EditText" resource-id="password" password="true" text="private-value" bounds="[100,100][400,200]"/></node></hierarchy>'
+                      )
+                    : f.run(binary, args),
+        });
+        const selection = await service.pickElement("android-avd:Pixel_8", 0.25, 0.1, 720, 1600);
+        expect(selection).toMatchObject({ role: "android.widget.EditText", id: "password" });
+        expect(JSON.stringify(selection)).not.toContain("private-value");
+        const dump = f.commands.find((args) => args.includes("uiautomator"));
+        expect(f.commands.at(-1)).toEqual(["-s", "emulator-5554", "shell", "rm", "-f", dump.at(-1)]);
+        expect(f.commands.some((args) => args.includes("input"))).toBe(false);
+    });
     it("quotes text for adb's remote shell instead of executing shell metacharacters", async () => {
         const f = fixture();
         await f.service.type("android-avd:Pixel_8", "it's $(evil); okay");
@@ -164,4 +182,22 @@ it("routes handset power and volume buttons through Android key events", async (
         await f.service.key("android-avd:Pixel_8", key);
         expect(f.commands.at(-1)).toEqual(["-s", "emulator-5554", "shell", "input", "keyevent", code]);
     }
+});
+
+it("shares overlapping ADB inventory and screenshot work without retaining frames", async () => {
+    const f = fixture();
+    const id = "android-avd:Pixel_8";
+    const frames = await Promise.all([f.service.screenshot(id), f.service.screenshot(id), f.service.screenshot(id)]);
+    expect(new Set(frames).size).toBe(1);
+    expect(f.commands.filter((args) => args[0] === "devices")).toHaveLength(1);
+    expect(f.commands.filter((args) => args.includes("screencap"))).toHaveLength(1);
+    await f.service.screenshot(id);
+    expect(f.commands.filter((args) => args.includes("screencap"))).toHaveLength(2);
+});
+
+it("starts a fresh screenshot across a control generation change", async () => {
+    const f = fixture();
+    const id = "android-avd:Pixel_8";
+    await Promise.all([f.service.screenshot(id, 1), f.service.screenshot(id, 2)]);
+    expect(f.commands.filter((args) => args.includes("screencap"))).toHaveLength(2);
 });

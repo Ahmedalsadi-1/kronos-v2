@@ -187,7 +187,7 @@ const AIBuilderWelcomeMessage = memo(() => {
             </div>
             <div className="mt-4 text-left max-w-md mx-auto">
                 <p className="text-sm mb-6">
-                    The WaveApp builder helps create wave widgets that integrate seamlessly into Kronterm.
+                    The WaveApp builder helps create wave widgets that integrate seamlessly into KronOS.
                 </p>
             </div>
         </div>

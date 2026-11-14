@@ -19,6 +19,7 @@ vi.mock("@novnc/novnc", () => ({
         resizeSession = false;
         sendKey = vi.fn();
         disconnect = vi.fn();
+        toDataURL = vi.fn(() => "data:image/png;base64,Y2FwdHVyZQ==");
         constructor() {
             super();
             mocks.clients.push(this);
@@ -70,6 +71,21 @@ it("connects the guest, routes text and shortcuts to VNC, changes scale, and sto
     expect(mocks.start).toHaveBeenCalledWith("mac");
     const client = mocks.clients[0];
     await act(async () => client.dispatchEvent(new Event("connect")));
+    const pick = host.querySelector<HTMLIFrameElement>('iframe[title="macOS VM element selector"]');
+    await act(async () =>
+        window.dispatchEvent(
+            new MessageEvent("message", {
+                source: pick.contentWindow,
+                data: { channel: "kronterm:screen-selector", action: "region" },
+            })
+        )
+    );
+    expect(client.toDataURL).toHaveBeenCalledExactlyOnceWith("image/png");
+    expect(host.querySelector('[aria-label="Drag a region on the frozen screen"]')).not.toBeNull();
+    expect(host.querySelector('iframe[title="macOS VM element selector"]')).toBe(pick);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Cancel selection"]').click());
+    expect(host.querySelector('[aria-label="Frozen VM selection"]')).toBeNull();
+    expect(mocks.clients).toHaveLength(1);
     await typeMacVmText("guest-2", "A");
     pressMacVmKeys("guest-2", ["Meta", "Space"]);
     expect(client.sendKey.mock.calls).toEqual([

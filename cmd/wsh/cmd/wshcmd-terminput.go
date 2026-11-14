@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc/wshclient"
-	"github.com/wavetermdev/waveterm/pkg/wshutil"
 )
 
 var termInputSubmit bool
@@ -48,7 +47,7 @@ func termInputRun(cmd *cobra.Command, args []string) (rtnErr error) {
 			BlockId:     fullORef.OID,
 			InputData64: base64.StdEncoding.EncodeToString([]byte(input)),
 		},
-		&wshrpc.RpcOpts{Route: wshutil.MakeFeBlockRouteId(fullORef.OID), Timeout: 5000},
+		&wshrpc.RpcOpts{Timeout: 5000},
 	)
 	if err != nil {
 		return fmt.Errorf("sending terminal input: %w", err)

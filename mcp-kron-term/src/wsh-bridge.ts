@@ -4,12 +4,13 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { reusableTerminal } from "./terminal-reuse.js";
 import { ToolFailure, ToolOperationContext, type ToolTarget } from "./tool-execution.js";
 
 const ExecFile = promisify(execFile);
 
 /**
- * Bridge to KronTerm's wsh CLI and daemon.
+ * Bridge to KronOS's wsh CLI and daemon.
  * Executes `wsh` commands to control blocks, layout, widgets, and more.
  */
 type ListedBlock = {
@@ -27,6 +28,7 @@ type RecentWebOpen = {
 
 export type SurfaceCapability = {
     sandboxComputerId?: string;
+    sandboxComputerMode?: "sandbox" | "hybrid";
     delegationScope?: "sandbox" | "widgets" | "inherit";
     nativeCallerId?: string;
     token: string;
@@ -89,6 +91,10 @@ export type WorkspaceSurfaceControl = {
     workspaceId?: string;
 };
 
+export function isAbsoluteLocalFilePath(path: string): boolean {
+    return !path.includes("\0") && /^(?:\/|[a-z]:[\\/]|\\\\[^\\])/i.test(path);
+}
+
 export function validateWorkspaceSurfaceControl(input: WorkspaceSurfaceControl): void {
     for (const field of ["x", "y", "width", "height", "size"] as const) {
         if (input[field] != null && !Number.isFinite(input[field])) {
@@ -105,6 +111,9 @@ export function validateWorkspaceSurfaceControl(input: WorkspaceSurfaceControl):
     }
     if (["hud.open", "hud.background", "hud.restore"].includes(input.action) && !input.blockId?.trim()) {
         throw new Error("A block ID is required for HUD widget control");
+    }
+    if (input.action === "add_file" && !isAbsoluteLocalFilePath(input.file ?? "")) {
+        throw new Error("An absolute local file path is required");
     }
 }
 
@@ -236,7 +245,7 @@ export class WshBridge {
         if (target.targetTabId || target.targetWorkspaceId) {
             throw new ToolFailure(
                 "TARGET_UNSUPPORTED",
-                "Explicit workspace targeting requires the KronTerm native tool server"
+                "Explicit workspace targeting requires the KronOS native tool server"
             );
         }
         return operation();
@@ -248,6 +257,7 @@ export class WshBridge {
 
     private wshPath: string;
     private recentWebOpens = new Map<string, RecentWebOpen>();
+    private terminalOpens = new Map<string, Promise<string>>();
     private pendingWebOpen: Promise<string> | null = null;
 
     constructor() {
@@ -495,7 +505,7 @@ export class WshBridge {
         workspaceId?: string;
         name: string;
     }): Promise<string> {
-        throw new ToolFailure("SURFACE_UNAVAILABLE", "Workspace organization requires the KronTerm native tool server");
+        throw new ToolFailure("SURFACE_UNAVAILABLE", "Workspace organization requires the KronOS native tool server");
     }
 
     async getWorkspaceInfo(): Promise<string> {
@@ -515,7 +525,7 @@ export class WshBridge {
     }
 
     async hudListIslands(): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async hudOpenIsland(
@@ -523,27 +533,27 @@ export class WshBridge {
         _url?: string,
         _options?: { file?: string; chatId?: string; toolCallId?: string }
     ): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async hudFocusIsland(_blockId: string): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async hudMoveIsland(_blockId: string, _x: number, _y: number): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async hudResizeIsland(_blockId: string, _width: number, _height: number): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async hudArrangeIslands(_layout: "cascade" | "grid" | "horizontal" | "vertical"): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async hudCloseIsland(_blockId: string): Promise<string> {
-        throw new Error("Native KronTerm HUD controls are available only inside the desktop app");
+        throw new Error("Native KronOS HUD controls are available only inside the desktop app");
     }
 
     async listBlocks(tabId?: string, json = false): Promise<string> {
@@ -596,11 +606,38 @@ export class WshBridge {
 
     // ── Terminal ───────────────────────────────────────────────────────
 
-    async openTerminal(cwd?: string, magnified?: boolean): Promise<string> {
-        const args = ["term"];
-        if (cwd) args.push(cwd);
-        if (magnified) args.push("--magnified");
-        return this.run(args);
+    protected async serializeTerminalOpen(key: string, operation: () => Promise<string>): Promise<string> {
+        const previous = this.terminalOpens.get(key);
+        const current = (async () => {
+            if (previous) await previous.catch(() => undefined);
+            return operation();
+        })();
+        this.terminalOpens.set(key, current);
+        try {
+            return await current;
+        } finally {
+            if (this.terminalOpens.get(key) === current) this.terminalOpens.delete(key);
+        }
+    }
+
+    async openTerminal(cwd?: string, magnified?: boolean, newSurface = false): Promise<string> {
+        const capability = await this.getSurfaceCapability();
+        const tabId = capability?.tabId || process.env.KRONTERM_TABID || process.env.WAVETERM_TABID;
+        return this.serializeTerminalOpen(tabId || "default", async () => {
+            if (!newSurface && tabId) {
+                const raw = await this.listBlocks(tabId, true);
+                const blocks = raw.trim() === "No blocks found" ? [] : JSON.parse(raw);
+                const existing = reusableTerminal(blocks, cwd);
+                if (existing) {
+                    await this.focusBlock(existing);
+                    return `reused block block:${existing}; inspect terminal_scrollback before sending input`;
+                }
+            }
+            const args = ["term"];
+            if (cwd) args.push(cwd);
+            if (magnified) args.push("--magnified");
+            return this.run(args);
+        });
     }
 
     async terminalScrollback(blockId: string, start?: number, end?: number, lastCommand?: boolean): Promise<string> {
@@ -716,7 +753,7 @@ export class WshBridge {
     ): Promise<string> {
         const workspacePath = process.env.KRONTERM_WORKSPACE;
         if (!workspacePath) {
-            throw new Error("KRONTERM_WORKSPACE is unavailable; start this tool through a KronTerm agent session");
+            throw new Error("KRONTERM_WORKSPACE is unavailable; start this tool through a KronOS agent session");
         }
         return this.run(makeLspArgs(workspacePath, filePath, language, query, line, character, maxResults));
     }
@@ -1037,14 +1074,14 @@ export class WshBridge {
     }
 
     async workflowCommand(_command: unknown): Promise<string> {
-        throw new Error("Workflow execution requires the native KronTerm runtime");
+        throw new Error("Workflow execution requires the native KronOS runtime");
     }
 
     async desktopWindowAction(_input: unknown): Promise<string> {
         throw new Error("Native tiling tools require the running Coucou desktop HUD.");
     }
     async desktopAnnotation(_input: unknown): Promise<string> {
-        throw new Error("Desktop annotations require the native KronTerm runtime.");
+        throw new Error("Desktop annotations require the native KronOS runtime.");
     }
 
     async withWorkflowRun<T>(_name: string, _args: Record<string, unknown>, operation: () => Promise<T>): Promise<T> {
@@ -1052,11 +1089,11 @@ export class WshBridge {
     }
 
     async acpListAgents(): Promise<string> {
-        throw new Error("ACP specialist discovery requires the native KronTerm desktop runtime");
+        throw new Error("ACP specialist discovery requires the native KronOS desktop runtime");
     }
 
     async acpRunAgent(_backend: string, _task: string, _timeoutSeconds?: number): Promise<string> {
-        throw new Error("ACP specialist execution requires the native KronTerm desktop runtime");
+        throw new Error("ACP specialist execution requires the native KronOS desktop runtime");
     }
 
     async sandboxStatus(sessionId = "default"): Promise<string> {

@@ -26,7 +26,7 @@ async function invoke(name: string, args: Record<string, unknown>): Promise<Call
         }
         const endpoint = process.env.KRONTERM_NATIVE_TOOL_URL;
         const token = process.env.KRONTERM_NATIVE_TOOL_TOKEN;
-        if (!endpoint || !token) throw new Error("Connect to KronTerm to use productivity tools.");
+        if (!endpoint || !token) throw new Error("Connect to KronOS to use productivity tools.");
         const url = new URL(endpoint);
         if (
             url.protocol !== "http:" ||
@@ -37,7 +37,7 @@ async function invoke(name: string, args: Record<string, unknown>): Promise<Call
             url.search ||
             url.hash
         )
-            throw new Error("Productivity tools require the local KronTerm native endpoint.");
+            throw new Error("Productivity tools require the local KronOS native endpoint.");
         const response = await fetch(url, {
             method: "POST",
             redirect: "error",
@@ -76,7 +76,7 @@ export function registerProductivityTools(server: McpServer): void {
     server.registerTool(
         "productivity_query",
         {
-            title: "Read KronTerm productivity",
+            title: "Read KronOS productivity",
             description:
                 "Read local tasks, reminders, searchable notes, habits, focus history or opt-in status-only activity. Use returned IDs for updates. No screen contents or terminal transcripts are recorded. Note bodies are returned only when explicitly querying notes.",
             inputSchema: {
@@ -91,9 +91,9 @@ export function registerProductivityTools(server: McpServer): void {
     server.registerTool(
         "productivity_update",
         {
-            title: "Update KronTerm productivity",
+            title: "Update KronOS productivity",
             description:
-                "Apply a requested local productivity change. Commands: task.save {id?,title,dueAt? epoch ms}, task.status {id,status:open|completed|deleted}, task.snooze {id,minutes}; note.save {id?,title,body}, note.delete {id,deleted}; habit.save {id?,title,target}, habit.progress {id,date:YYYY-MM-DD,delta}, habit.archive {id,archived}, habit.snooze {id,minutes}; focus.start {label,minutes}, focus.pause/resume/stop, focus.extend {minutes}; preferences.save {activityEnabled,blockedSites,blockedApps}, activity.clear. Do not change recording or blocking preferences unless requested. Blocking applies only to KronTerm-managed browser and app launches. Items can be restored. Durations 1–1440 minutes.",
+                "Apply a requested local productivity change. Commands: task.save {id?,title,dueAt? epoch ms}, task.status {id,status:open|completed|deleted}, task.snooze {id,minutes}; note.save {id?,title,body}, note.delete {id,deleted}; habit.save {id?,title,target}, habit.progress {id,date:YYYY-MM-DD,delta}, habit.archive {id,archived}, habit.snooze {id,minutes}; focus.start {label,minutes}, focus.pause/resume/stop, focus.extend {minutes}; preferences.save {activityEnabled,blockedSites,blockedApps}, activity.clear. Do not change recording or blocking preferences unless requested. Blocking applies only to KronOS-managed browser and app launches. Items can be restored. Durations 1–1440 minutes.",
             inputSchema: { command: z.record(z.unknown()) },
             annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
         },

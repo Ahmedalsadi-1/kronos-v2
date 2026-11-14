@@ -7,9 +7,9 @@ export function HudComposerSurfaceControls() {
     return (
         <div className="flex shrink-0 items-center gap-1" data-hud-surface-controls="">
             <span className="flex items-center" data-hud-island-controls-slot="" />
-            <Tip label="Dock KronTerm Agent in the workspace">
+            <Tip label="Dock KronOS Agent in the workspace">
                 <Button
-                    aria-label="Dock KronTerm Agent in the workspace"
+                    aria-label="Dock KronOS Agent in the workspace"
                     className="cursor-pointer"
                     onClick={() => void window.hermesDesktop?.hud?.dock?.()}
                     size="icon-titlebar"

@@ -99,11 +99,18 @@ All the methods below will install Node and Go dependencies when they run the fi
 
 ### Development server
 
-Run the following command to build the app and run it via Vite's development server (this enables Hot Module Reloading):
+Run the following command to build the app and open Electron with live UI updates:
 
 ```sh
 task dev
 ```
+
+CSS and most React component edits appear in the open window through Vite hot updates. Changes outside a hot update
+boundary, such as edits to the HTML entry point, can still reload the tab.
+
+Electron's main process and preload scripts build once at startup. After changing either one, stop and rerun
+`task dev` when you're ready to apply the change. This also keeps edits to code shared with the UI from automatically
+restarting Electron.
 
 ### Standalone
 

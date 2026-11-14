@@ -1,14 +1,17 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cn } from "@/util/util";
 import { FileText, FolderOpen, GitBranch, Link2, PackageOpen, X } from "@/app/components/system-ui/os-icons";
+import { cn } from "@/util/util";
 import React, { memo, useEffect, useRef, useState } from "react";
+import { OSCanvasFilePreview } from "./os-canvas-file-preview";
+import { OSPenLayerArtwork, penLayerStyle } from "./os-pen-layer";
 import type { OSCanvasObject } from "./os-workspace-model";
 
 export const OSCanvasEntity = memo(
     ({
         object,
+        localFile,
         selected,
         zIndex,
         zoom,
@@ -20,6 +23,7 @@ export const OSCanvasEntity = memo(
         onTextChange,
     }: {
         object: OSCanvasObject;
+        localFile?: File;
         selected: boolean;
         zIndex: number;
         onSelect: (id: string) => void;
@@ -48,7 +52,11 @@ export const OSCanvasEntity = memo(
                 event.currentTarget.releasePointerCapture(event.pointerId);
         };
         if (object.kind === "connector") return null;
+        const penText = object.pen?.type === "text" || object.pen?.type === "note";
+        const editableText = object.kind === "note" || penText;
         const isResource = ["file", "folder", "repository", "url", "generated-artifact"].includes(object.kind);
+        const previewPath =
+            object.kind === "file" || object.kind === "generated-artifact" ? object.resource : undefined;
         const ResourceIcon =
             object.kind === "repository"
                 ? GitBranch
@@ -61,24 +69,40 @@ export const OSCanvasEntity = memo(
                       : FileText;
         return (
             <article
-                tabIndex={-1}
+                tabIndex={editableText && onTextChange ? 0 : -1}
+                aria-label={object.name}
                 className={cn(
                     "os-canvas-object",
                     `is-${object.kind}`,
                     `color-${object.color ?? "amber"}`,
+                    previewPath && "has-file-preview",
                     selected && "is-selected"
                 )}
-                style={{ left: object.x, top: object.y, width: object.width, height: object.height, zIndex }}
+                style={{
+                    left: object.x,
+                    top: object.y,
+                    width: object.width,
+                    height: object.height,
+                    zIndex,
+                    ...penLayerStyle(object),
+                }}
+                onKeyDown={(event) => {
+                    if (event.target === event.currentTarget && event.key === "Enter" && editableText) {
+                        event.preventDefault();
+                        if (onTextChange) setEditing(true);
+                    }
+                }}
                 onPointerDown={(event) => {
                     event.stopPropagation();
                     if (event.button !== 0 || event.isPrimary === false) return;
-                    if (!(event.target as HTMLElement).closest("button, input, textarea, a"))
+                    if (!(event.target as HTMLElement).closest("button, input, textarea, a, audio, video"))
                         event.currentTarget.focus({ preventScroll: true });
                     onSelect(object.id);
                 }}
             >
                 <div
                     className="os-canvas-object-handle"
+                    onDoubleClick={() => penText && onTextChange && setEditing(true)}
                     onPointerDown={(event) => {
                         if (
                             event.button !== 0 ||
@@ -117,12 +141,23 @@ export const OSCanvasEntity = memo(
                     onPointerCancel={release}
                     onLostPointerCapture={release}
                 >
-                    <span>{object.kind === "note" ? "Note" : object.kind}</span>
-                    <button type="button" onClick={() => onDelete(object.id)} aria-label="Delete canvas object">
-                        <X />
-                    </button>
+                    {!object.pen && (
+                        <>
+                            <span>
+                                {object.kind === "note"
+                                    ? "Note"
+                                    : object.kind === "generated-artifact"
+                                      ? "Artifact"
+                                      : object.kind}
+                            </span>
+                            <button type="button" onClick={() => onDelete(object.id)} aria-label="Delete canvas object">
+                                <X />
+                            </button>
+                        </>
+                    )}
                 </div>
-                {object.kind === "note" &&
+                {object.pen && <OSPenLayerArtwork layer={object} />}
+                {editableText &&
                     (editing ? (
                         <textarea
                             aria-label="Note text"
@@ -144,30 +179,39 @@ export const OSCanvasEntity = memo(
                             }}
                         />
                     ) : (
-                        <p onDoubleClick={() => onTextChange && setEditing(true)}>{object.text || "New note"}</p>
+                        !object.pen && (
+                            <p onDoubleClick={() => onTextChange && setEditing(true)}>{object.text || "New note"}</p>
+                        )
                     ))}
+                {previewPath && (
+                    <OSCanvasFilePreview
+                        key={previewPath}
+                        path={previewPath}
+                        localFile={localFile}
+                        onOpen={() => onOpenResource(object)}
+                    />
+                )}
                 {isResource && (
                     <button
                         type="button"
                         className="os-canvas-reference"
                         onClick={(event) => {
                             event.stopPropagation();
+                            if (event.detail === 0) {
+                                onOpenResource(object);
+                                return;
+                            }
                             onSelect(object.id);
                         }}
                         onDoubleClick={(event) => {
                             event.stopPropagation();
                             onOpenResource(object);
                         }}
-                        onKeyDown={(event) => {
-                            if (event.key !== "Enter") return;
-                            event.preventDefault();
-                            onOpenResource(object);
-                        }}
                         title={object.resource ? `Open ${object.resource}` : undefined}
                     >
                         <ResourceIcon aria-hidden="true" />
                         <span>
-                            <strong>{object.text || object.kind}</strong>
+                            <strong>{object.text || previewPath?.split(/[\\/]/).pop() || object.kind}</strong>
                             <small>{object.resource}</small>
                         </span>
                     </button>
@@ -199,8 +243,14 @@ export const OSCanvasEntity = memo(
                             return;
                         onResize(
                             object.id,
-                            Math.max(96, resizeRef.current.width + (event.clientX - resizeRef.current.clientX) / zoom),
-                            Math.max(72, resizeRef.current.height + (event.clientY - resizeRef.current.clientY) / zoom)
+                            Math.max(
+                                object.pen ? 1 : 96,
+                                resizeRef.current.width + (event.clientX - resizeRef.current.clientX) / zoom
+                            ),
+                            Math.max(
+                                object.pen ? 1 : 72,
+                                resizeRef.current.height + (event.clientY - resizeRef.current.clientY) / zoom
+                            )
                         );
                     }}
                     onPointerUp={release}

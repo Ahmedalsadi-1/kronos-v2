@@ -10,16 +10,27 @@
  */
 
 import { useStore } from "@nanostores/react";
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+    createContext,
+    type ReactNode,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    useSyncExternalStore,
+} from "react";
 
 import { $registryVersion } from "@hermes/contrib/registry";
 import { matchesQuery, useMediaQuery } from "@hermes/hooks/use-media-query";
 import { persistString, persistStringRecord, storedString, storedStringRecord } from "@hermes/lib/storage";
+import "@hermes/store/interface-appearance";
 import { $activeGatewayProfile, normalizeProfileKey } from "@hermes/store/profile";
 
 import { $backendThemes, $pendingSkinApply } from "./backend-sync";
 import { hexToRgb, mix, readableOn } from "./color";
 import { BUILTIN_THEME_LIST, DEFAULT_SKIN_NAME, DEFAULT_THEME_MODE, DEFAULT_TYPOGRAPHY, nousTheme } from "./presets";
+import { isNativeHud, readHudSystemAppearance, systemHudTheme } from "./system-hud-theme";
 import type { DesktopTheme, DesktopThemeColors } from "./types";
 import { $userThemes, listAllThemes, resolveTheme } from "./user-themes";
 
@@ -55,22 +66,50 @@ const normalizeMode = (value: string | null): ThemeMode =>
 // it *is* the legacy global slot, so it reads/writes the global directly. Named
 // profiles get their own entry and fall back to that global until assigned, so
 // unassigned profiles and pre-per-profile installs stay on the global value.
-const profilePref = <T extends string>(record: string, legacy: string, normalize: (v: string | null) => T) => ({
-    resolve: (profile: string): T => normalize(storedStringRecord(record)[profile] ?? storedString(legacy)),
-    assign: (profile: string, value: T): void => {
-        if (profile === "default") {
-            persistString(legacy, value);
-        } else {
-            persistStringRecord(record, { ...storedStringRecord(record), [profile]: value });
-        }
-    },
-});
+const profilePref = <T extends string>(record: string, legacy: string, normalize: (v: string | null) => T) => {
+    const read = (profile: string) => storedStringRecord(record)[profile] ?? storedString(legacy);
+    return {
+        read,
+        resolve: (profile: string): T => normalize(read(profile)),
+        assign: (profile: string, value: T): void => {
+            if (profile === "default") {
+                persistString(legacy, value);
+            } else {
+                persistStringRecord(record, { ...storedStringRecord(record), [profile]: value });
+            }
+        },
+    };
+};
 
 export const skinPref = profilePref(PROFILE_SKINS_KEY, SKIN_KEY, normalizeSkin);
 export const modePref = profilePref(PROFILE_MODES_KEY, MODE_KEY, normalizeMode);
 
 /** Everything a peer window could change that this one has to repaint for. */
 const APPEARANCE_KEYS = new Set([SKIN_KEY, PROFILE_SKINS_KEY, MODE_KEY, PROFILE_MODES_KEY]);
+const AppearanceChangeEvent = "hermes:appearance-preference-change";
+
+function subscribeAppearancePreference(listener: () => void) {
+    const onStorage = (event: StorageEvent) => {
+        if (!event.key || APPEARANCE_KEYS.has(event.key)) listener();
+    };
+    const stopProfile = $activeGatewayProfile.listen(listener);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(AppearanceChangeEvent, listener);
+    return () => {
+        stopProfile();
+        window.removeEventListener("storage", onStorage);
+        window.removeEventListener(AppearanceChangeEvent, listener);
+    };
+}
+
+function readWorkspaceColorMode(): "light" | "dark" | null {
+    const mode = modePref.read(normalizeProfileKey($activeGatewayProfile.get()));
+    return mode === "light" || mode === "dark" ? mode : null;
+}
+
+export function useKronTermColorMode(): "light" | "dark" | null {
+    return useSyncExternalStore(subscribeAppearancePreference, readWorkspaceColorMode, () => null);
+}
 
 // Last active profile — lets the boot paint pick its appearance before the
 // gateway reports which profile actually launched.
@@ -268,7 +307,8 @@ if (typeof window !== "undefined") {
     const profile = readBootProfileKey();
     const pref = modePref.resolve(profile);
     const resolved = resolveMode(pref);
-    const theme = deriveTheme(skinPref.resolve(profile), resolved);
+    const selectedTheme = deriveTheme(skinPref.resolve(profile), resolved);
+    const theme = isNativeHud() ? systemHudTheme(selectedTheme, readHudSystemAppearance()) : selectedTheme;
     applyTheme(theme, resolved);
 }
 
@@ -306,6 +346,14 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+    const nativeHud = isNativeHud();
+    const workspaceColorMode = useKronTermColorMode();
+    const [hudAppearance, setHudAppearance] = useState(() => (nativeHud ? readHudSystemAppearance() : undefined));
+    useEffect(() => {
+        if (!nativeHud) return;
+        const api = (window as unknown as { api?: ElectronApi }).api;
+        return api?.onSystemAppearanceChange?.(setHudAppearance);
+    }, [nativeHud]);
     // Skin + mode are assigned per profile; the active profile drives which
     // appearance shows. Single-profile users only ever see "default", so their
     // behavior is unchanged.
@@ -346,37 +394,33 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setModeState(modePref.resolve(profileKey));
     }, [profileKey]);
 
-    // Appearance is per-profile localStorage, and every desktop window is another
-    // renderer on the same origin — so a switch made in the HUD (or any peer
-    // window) only ever repainted the window it was made in. `storage` fires in
-    // the OTHER windows, which is exactly the set that needs to catch up.
     useEffect(() => {
-        const onStorage = (event: StorageEvent) => {
-            if (event.key && !APPEARANCE_KEYS.has(event.key)) {
-                return;
-            }
-
+        const syncAppearance = () => {
             const live = normalizeProfileKey($activeGatewayProfile.get());
-
             setThemeNameState(skinPref.resolve(live));
             setModeState(modePref.resolve(live));
         };
-
-        window.addEventListener("storage", onStorage);
-
-        return () => window.removeEventListener("storage", onStorage);
+        return subscribeAppearancePreference(syncAppearance);
     }, []);
 
     const systemDark = useMediaQuery("(prefers-color-scheme: dark)");
     const resolvedMode = resolveMode(mode, systemDark);
 
     const activeTheme = useMemo(
-        () => deriveTheme(themeName, resolvedMode),
+        () => {
+            const theme = deriveTheme(themeName, resolvedMode);
+            return nativeHud
+                ? systemHudTheme(
+                      theme,
+                      workspaceColorMode ? { ...hudAppearance, colorScheme: workspaceColorMode } : hudAppearance
+                  )
+                : theme;
+        },
         // deriveTheme resolves its seed through the merged registry, so the theme
         // stores are its reactivity too — an in-place palette edit of the ACTIVE
         // skin (live theme authoring) must repaint, not just a name switch.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [themeName, resolvedMode, userThemes, backendThemes, registryVersion]
+        [themeName, resolvedMode, userThemes, backendThemes, registryVersion, nativeHud, hudAppearance, workspaceColorMode]
     );
 
     // What actually gets painted (matches the `.dark` class applyTheme toggles).
@@ -394,11 +438,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         const next = normalizeSkin(name);
         setThemeNameState(next);
         skinPref.assign(liveProfile(), next);
+        window.dispatchEvent(new Event(AppearanceChangeEvent));
     }, []);
 
     const setMode = useCallback((next: ThemeMode) => {
         setModeState(next);
         modePref.assign(liveProfile(), next);
+        window.dispatchEvent(new Event(AppearanceChangeEvent));
     }, []);
 
     // Drain a backend-driven skin switch (Hermes authoring/activating a skin from a

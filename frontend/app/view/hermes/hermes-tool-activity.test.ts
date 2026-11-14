@@ -38,7 +38,7 @@ describe("hermesToolActivityToAgentActivity", () => {
         });
     });
 
-    it("skips tools the KronTerm runtime already publishes precisely", () => {
+    it("skips tools the KronOS runtime already publishes precisely", () => {
         expect(hermesToolActivityToAgentActivity({ phase: "running", name: "widget_click" })).toBeNull();
         expect(hermesToolActivityToAgentActivity({ phase: "running", name: "kron_computer_click" })).toBeNull();
         expect(isBridgePublishedTool("workspace_os_action")).toBe(true);

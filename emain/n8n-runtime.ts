@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
@@ -17,11 +17,11 @@ import { validateN8nDraft } from "./n8n-builder";
 import { releaseN8nRequests } from "./n8n-client";
 import { writeN8nWidgetNodes } from "./n8n-widget-nodes";
 import { n8nScopeKey } from "./n8n-workspace-store";
-import { releaseWorkflowSession } from "./workflow-account";
+import { registerWorkflowSession, releaseWorkflowSession, workflowAccount } from "./workflow-account";
 
 const StartupTimeoutMs = 90_000;
 
-export type N8nRuntimeStatus = { running: boolean; url?: string };
+export type N8nRuntimeStatus = { running: boolean; url?: string; occupiedGeneration?: number };
 
 export function resolveN8nPaths(): { root: string; bin: string; extensions: string } {
     const resources = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
@@ -60,8 +60,12 @@ export async function n8nCatalogReady(data: string): Promise<boolean> {
     const folder = path.join(data, ".cache/n8n/public/types");
     try {
         // n8n writes the catalog after its health endpoint becomes ready.
-        JSON.parse(await fs.promises.readFile(path.join(folder, "credentials.json"), "utf8"));
-        const nodes = JSON.parse(await fs.promises.readFile(path.join(folder, "nodes.json"), "utf8"));
+        const [credentialsJson, nodesJson] = await Promise.all([
+            fs.promises.readFile(path.join(folder, "credentials.json"), "utf8"),
+            fs.promises.readFile(path.join(folder, "nodes.json"), "utf8"),
+        ]);
+        JSON.parse(credentialsJson);
+        const nodes = JSON.parse(nodesJson);
         return ["CUSTOM.kronTermTool", "CUSTOM.kronTermHarness", "CUSTOM.kronTermWidget", "CUSTOM.hermesAgent"].every(
             (name) => nodes.some((node: { name: string }) => node.name === name)
         );
@@ -73,19 +77,39 @@ export async function n8nCatalogReady(data: string): Promise<boolean> {
 export class N8nRuntime {
     private child: ChildProcess;
     private owner: string;
+    private ownerContext: HermesSurfaceContext;
     private url: string;
     private ready = false;
     private dataDirectory: string;
+    private nodeCatalog: { modified: number; size: number; inode: number; nodes: Promise<any[]> };
     private generation = 0;
     private startPromise: Promise<N8nRuntimeStatus>;
 
-    status(): N8nRuntimeStatus {
+    status(context?: HermesSurfaceContext): N8nRuntimeStatus {
+        if (context && this.owner && !this.owns(context)) {
+            return { running: false, occupiedGeneration: this.generation };
+        }
         return { running: this.ready, ...(this.ready ? { url: this.url } : {}) };
+    }
+
+    private owns(context: HermesSurfaceContext): boolean {
+        return Boolean(context?.workspaceId && context.tabId && this.owner?.startsWith(`n8n:${n8nScopeKey(context)}:`));
+    }
+
+    handoffOwner(context: HermesSurfaceContext, generation: number): HermesSurfaceContext {
+        if (
+            !context?.workspaceId ||
+            !context.tabId ||
+            !Number.isSafeInteger(generation) ||
+            this.status(context).occupiedGeneration !== generation
+        )
+            throw new Error("The workflow attachment changed. Refresh the workflow panel and try again.");
+        return this.ownerContext;
     }
 
     start(context: HermesSurfaceContext, widgets?: Record<string, unknown>): Promise<N8nRuntimeStatus> {
         if (!context?.workspaceId || !context.tabId) return Promise.reject(new Error("Open a workspace tab first."));
-        const key = createHash("sha256").update(`${context.workspaceId}:${context.tabId}`).digest("hex").slice(0, 24);
+        const key = n8nScopeKey(context);
         if (this.owner && !this.owner.startsWith(`n8n:${key}:`)) {
             return Promise.reject(new Error("Stop n8n before attaching it to another workspace tab."));
         }
@@ -93,6 +117,7 @@ export class N8nRuntime {
         if (this.ready) return Promise.resolve(this.status());
         const owner = `n8n:${key}:${randomUUID()}`;
         this.owner = owner;
+        this.ownerContext = { workspaceId: context.workspaceId, tabId: context.tabId };
         const generation = ++this.generation;
         const pending = this.launch(structuredClone(context), key, owner, generation, widgets).catch((error) => {
             if (generation === this.generation) this.stop();
@@ -115,7 +140,9 @@ export class N8nRuntime {
         widgets?: Record<string, unknown>
     ): Promise<N8nRuntimeStatus> {
         const paths = resolveN8nPaths();
+        let startupError: Error;
         const assertCurrent = () => {
+            if (startupError) throw startupError;
             if (generation !== this.generation) throw new Error("n8n startup was cancelled.");
         };
         const bridge = await startKronTermToolServer(() => context, owner);
@@ -139,6 +166,8 @@ export class N8nRuntime {
             }
         }
         this.url = `http://127.0.0.1:${port}`;
+        const sessionToken = randomBytes(32).toString("hex");
+        registerWorkflowSession(this.url, sessionToken);
         const nodeExecutable =
             process.env.KRONTERM_N8N_NODE ||
             [
@@ -150,10 +179,13 @@ export class N8nRuntime {
         const child = spawn(nodeExecutable, [paths.bin, "start"], {
             cwd: path.dirname(path.dirname(paths.bin)),
             detached: process.platform !== "win32",
-            stdio: ["ignore", "ignore", "pipe"],
+            stdio: ["ignore", "pipe", "pipe"],
             env: {
                 ...process.env,
                 NODE_ENV: "production",
+                PATH: [path.isAbsolute(nodeExecutable) ? path.dirname(nodeExecutable) : undefined, process.env.PATH]
+                    .filter(Boolean)
+                    .join(path.delimiter),
                 N8N_LISTEN_ADDRESS: "127.0.0.1",
                 N8N_HOST: "127.0.0.1",
                 N8N_PORT: String(port),
@@ -170,24 +202,38 @@ export class N8nRuntime {
                 N8N_VERSION_NOTIFICATIONS_ENABLED: "false",
                 N8N_PERSONALIZATION_ENABLED: "false",
                 N8N_SECURE_COOKIE: "false",
+                EXTERNAL_HOOK_FILES: path.join(paths.root, "session-hook.cjs"),
+                EXTERNAL_HOOK_FILES_SEPARATOR: path.delimiter,
+                KRONTERM_N8N_BIN: paths.bin,
+                KRONTERM_N8N_SESSION_TOKEN: sessionToken,
                 KRONTERM_N8N_TOOL_URL: bridge.nativeUrl,
                 KRONTERM_N8N_TOOL_TOKEN: bridge.token,
             },
         });
         this.child = child;
         let failure = "";
-        child.stderr.on("data", (chunk) => {
+        const captureFailure = (chunk: Buffer) => {
             failure = (failure + chunk.toString()).slice(-4096);
-        });
+        };
+        child.stdout.on("data", captureFailure);
+        child.stderr.on("data", captureFailure);
         child.once("error", (error) => {
             failure = error.message;
-            if (this.child === child) this.stop();
+            if (this.child === child) {
+                startupError = new Error(`n8n stopped during startup. ${failure}`);
+                this.stop();
+            }
         });
-        child.once("exit", () => {
-            if (this.child === child) this.stop();
+        child.once("exit", (code, signal) => {
+            if (this.child === child) {
+                startupError = new Error(`n8n stopped during startup (exit ${code ?? signal}). ${failure}`);
+                this.stop();
+            }
         });
+        let readinessFailure = "";
         const deadline = Date.now() + StartupTimeoutMs;
         while (Date.now() < deadline) {
+            assertCurrent();
             if (this.child !== child || child.exitCode != null || child.signalCode != null) {
                 throw new Error(`n8n stopped during startup. ${failure}`);
             }
@@ -195,28 +241,35 @@ export class N8nRuntime {
             try {
                 const health = await fetch(`${this.url}/healthz/readiness`, { signal: AbortSignal.timeout(1000) });
                 assertCurrent();
-                if (health.ok && (await n8nCatalogReady(data))) {
+                if (health.ok) {
+                    const [catalogReady] = await Promise.all([n8nCatalogReady(data), workflowAccount(this.url)]);
                     assertCurrent();
                     if (this.child !== child) throw new Error("n8n stopped during startup.");
-                    this.ready = true;
-                    return this.status();
+                    if (catalogReady) {
+                        this.ready = true;
+                        return this.status();
+                    }
                 }
-            } catch {
+            } catch (error) {
                 assertCurrent();
+                if ([401, 403].includes(error?.status)) throw error;
+                readinessFailure = error instanceof Error ? error.message : String(error);
             }
             await delay(300);
         }
-        throw new Error(`n8n did not become ready within 90 seconds. ${failure}`);
+        throw new Error(`n8n did not become ready within 90 seconds. ${readinessFailure} ${failure}`);
     }
 
     stop(): N8nRuntimeStatus {
         this.generation++;
         this.ready = false;
         this.startPromise = null;
+        this.nodeCatalog = null;
         const child = this.child;
         this.child = null;
         if (this.owner) revokeKronTermToolCaller(this.owner);
         this.owner = null;
+        this.ownerContext = null;
         if (this.url) {
             releaseN8nRequests(this.url);
             revokeManagedRuntimeRequests(new URL(this.url).origin);
@@ -242,16 +295,35 @@ export class N8nRuntime {
     }
 
     assertScope(context: HermesSurfaceContext): void {
-        if (!this.ready || !this.owner?.startsWith(`n8n:${n8nScopeKey(context)}:`)) {
+        if (this.owner && !this.owns(context)) {
+            throw new Error("Workflows are connected to another tab. Switch the connection from the Workflows panel.");
+        }
+        if (!this.ready) {
             throw new Error("Start the workflow canvas in this workspace first.");
         }
     }
 
     async nodes(context: HermesSurfaceContext): Promise<any[]> {
         this.assertScope(context);
-        return JSON.parse(
-            await fs.promises.readFile(path.join(this.dataDirectory, ".cache/n8n/public/types/nodes.json"), "utf8")
-        );
+        const generation = this.generation;
+        const file = path.join(this.dataDirectory, ".cache/n8n/public/types/nodes.json");
+        const { mtimeMs, size, ino } = await fs.promises.stat(file);
+        if (generation !== this.generation) throw new Error("The workflow runtime changed. Retry in the current workspace.");
+        const cached = this.nodeCatalog;
+        if (cached?.modified !== mtimeMs || cached.size !== size || cached.inode !== ino) {
+            const nodes = fs.promises.readFile(file, "utf8").then((json) => JSON.parse(json));
+            this.nodeCatalog = { modified: mtimeMs, size, inode: ino, nodes };
+        }
+        const catalog = this.nodeCatalog;
+        try {
+            const nodes = await catalog.nodes;
+            if (generation !== this.generation)
+                throw new Error("The workflow runtime changed. Retry in the current workspace.");
+            return nodes;
+        } catch (error) {
+            if (this.nodeCatalog === catalog) this.nodeCatalog = null;
+            throw error;
+        }
     }
 
     async nodePorts(context: HermesSurfaceContext, graph: N8nWorkflowDraft): Promise<Record<string, unknown>> {

@@ -17,7 +17,7 @@ const WebCapability = {
 };
 
 describe("Hermes native bridge capability policy", () => {
-    it("keeps the full KronTerm toolset outside web mode", () => {
+    it("keeps the full KronOS toolset outside web mode", () => {
         assert.equal(
             isToolAllowedBySurfaceCapability("workspace_snapshot", { ...WebCapability, hostMode: "kronterm" }),
             true
@@ -41,7 +41,7 @@ describe("Hermes native bridge capability policy", () => {
         assert.equal(isToolAllowedBySurfaceCapability("terminal_open", capability), false);
     });
 
-    it("restores workspace tools when the host returns to KronTerm mode", () => {
+    it("restores workspace tools when the host returns to KronOS mode", () => {
         assert.equal(isToolAllowedBySurfaceCapability("workspace_snapshot", WebCapability), false);
         assert.equal(
             isToolAllowedBySurfaceCapability("workspace_snapshot", { ...WebCapability, hostMode: "kronterm" }),

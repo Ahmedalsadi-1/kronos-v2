@@ -1,7 +1,9 @@
 import { clipboard, ipcMain, nativeImage, webContents, type WebContents } from "electron";
+import type { BrowserAccountCommand } from "../../frontend/types/browser-account";
 import type { BrowserGrabRect, BrowserGrabScreenshot } from "../../frontend/types/browser-grab";
 import { GRAB_BUDGET } from "../../frontend/types/browser-grab";
 import { browserNavigationSnapshot } from "../../frontend/types/browser-navigation";
+import { browserAccount } from "./browser-account";
 import { browserAccessibilitySnapshot } from "./browser-accessibility";
 import { BrowserGrabSessionController } from "./browser-grab-session-controller";
 import { buildGuestOverlayScript } from "./grab-guest-script";
@@ -119,6 +121,10 @@ export function parseBrowserCookies(json: unknown): Electron.CookiesSetDetails[]
 }
 
 export function registerBrowserToolsIpc(isTrusted: (sender: WebContents) => boolean): void {
+    ipcMain.handle("browser-account", (event, input: BrowserAccountCommand) => {
+        if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
+        return browserAccount(ownedBrowserGuest(event.sender, input?.guestId), input);
+    });
     ipcMain.handle("browser-accessibility-snapshot", async (event, guestId: unknown) => {
         if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
         return browserAccessibilitySnapshot(ownedBrowserGuest(event.sender, guestId));

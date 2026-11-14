@@ -101,7 +101,7 @@ export const makeHostProfile = (
     baseUrl: input.baseUrl,
     kind: input.kind,
     color: HostColors[existingCount % HostColors.length],
-    capabilities: input.capabilities?.length ? input.capabilities : hostCapabilitiesForKind(input.kind),
+    capabilities: input.capabilities ?? hostCapabilitiesForKind(input.kind),
     token: input.token?.trim() || undefined,
     createdAt: Date.now(),
 });

@@ -6,9 +6,15 @@ import { arrangeTaskLineage, searchTaskNodes, taskTabForCard, type CanvasTaskTab
 
 import { PersistentBlock as BlockView } from "@/app/block/persistent-block";
 import { ContextMenuModel } from "@/app/store/contextmenu";
-import { atoms, createBlock } from "@/app/store/global";
+import { atoms, createBlock, getApi } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
+import {
+    OSResourceDragMimeType,
+    readOSResourceDragPayload,
+    type OSResourceReference,
+} from "@/app/store/os-resource-service";
 import { RpcApi } from "@/app/store/wshclientapi";
+import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import type { NodeModel } from "@/layout/lib/types";
 import * as services from "@/store/services";
@@ -21,6 +27,8 @@ import {
     Bot,
     Circle,
     Diamond,
+    FilePlus,
+    FileText,
     GitFork,
     GripHorizontal,
     Hand,
@@ -45,6 +53,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type DragEvent as ReactDragEvent,
     type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
     type WheelEvent as ReactWheelEvent,
@@ -81,7 +90,13 @@ import {
     workspaceCanvasEdgePanDelta,
     workspaceCanvasViewportRect,
 } from "./workspace-canvas-drift";
-import { makeCanvasFrameScheduler } from "./workspace-canvas-frame";
+import {
+    canvasFileCardSize,
+    canvasFileResource,
+    isLocalCanvasFilePath,
+    readNativeCanvasFiles,
+} from "./workspace-canvas-files";
+import { finishCanvasPan, makeCanvasFrameScheduler } from "./workspace-canvas-frame";
 import { aggregateWorkspaceCanvasRuns, type WorkspaceCanvasRunAggregate } from "./workspace-canvas-task-graph";
 import {
     canvasBoundsForRects,
@@ -98,6 +113,7 @@ import {
     type WorkspaceCanvasSize,
 } from "./workspace-canvas-utils";
 import { CanvasWorkflows } from "./workspace-canvas-workflows";
+import { OSCanvasFilePreview } from "./os-canvas-file-preview";
 import "./workspace-canvas.scss";
 import { registerWorkspaceSurfaceModeProvider } from "./workspace-surface-runtime";
 
@@ -113,15 +129,16 @@ type WorkspaceCanvasTool = "select" | "hand" | "note" | "rectangle" | "ellipse" 
 
 const WidgetMenuGroups = ["Work", "Web", "System", "Custom"] as const;
 type WidgetMenuGroup = (typeof WidgetMenuGroups)[number];
-const CanvasPrimaryDockViews = ["hermes", "term", "preview", "web"];
+const CanvasPrimaryDockViews = ["term", "preview", "web"];
 
-type WorkspaceCanvasObjectKind = "note" | "rectangle" | "ellipse" | "diamond" | "connector" | "draw" | "group";
+type WorkspaceCanvasObjectKind = "note" | "rectangle" | "ellipse" | "diamond" | "connector" | "draw" | "group" | "file";
 type WorkspaceCanvasColor = "amber" | "blue" | "green" | "rose" | "slate";
 
 type WorkspaceCanvasPrimitiveObject = WorkspaceCanvasRect & {
     id: string;
     kind: WorkspaceCanvasObjectKind;
     text?: string;
+    resource?: string;
     color?: WorkspaceCanvasColor;
     points?: WorkspaceCanvasPoint[];
     memberids?: string[];
@@ -136,6 +153,7 @@ type WorkspaceCanvasState = {
     rects?: Record<string, WorkspaceCanvasRect>;
     objects?: WorkspaceCanvasObject[];
     bookmarks?: Record<string, WorkspaceCanvasCamera>;
+    followAgent?: boolean;
 };
 
 function widgetMenuGroup(key: string, widget: WidgetConfigType): WidgetMenuGroup {
@@ -292,6 +310,7 @@ function canvasObjectLabel(object: WorkspaceCanvasObject): string {
     if (object.kind === "note") {
         return object.text?.trim() ? `Note: ${object.text.trim().slice(0, 72)}` : "Empty note";
     }
+    if (object.kind === "file") return object.text || "File";
     if (object.kind === "draw") {
         return "Freehand drawing";
     }
@@ -593,6 +612,7 @@ WorkspaceCanvasNode.displayName = "WorkspaceCanvasNode";
 type CanvasObjectViewProps = {
     relatedCards: WorkspaceCanvasAgentCard[];
     onOpenReference: (card: WorkspaceCanvasAgentCard) => void;
+    onOpenFile: (path: string) => void;
     onFollow: (card: WorkspaceCanvasAgentCard, mode: "follow" | "quote") => void;
     contextSelected: boolean;
     object: WorkspaceCanvasObject;
@@ -618,6 +638,7 @@ const CanvasObjectView = memo(
         onShowContextMenu,
         relatedCards,
         onOpenReference,
+        onOpenFile,
         onFollow,
     }: CanvasObjectViewProps) => {
         const [activeTaskTab, setActiveTaskTab] = useState<CanvasTaskTab>("Summary");
@@ -910,6 +931,51 @@ const CanvasObjectView = memo(
         }
 
         const rect = normalizeObjectRect(object);
+        if (object.kind === "file" && object.resource) {
+            const path = object.resource;
+            const name = object.text || path.split(/[\\/]/).pop();
+            const open = () => onOpenFile(path);
+            return (
+                <article
+                    className={cn("workspace-canvas-file-card", selected && "is-selected")}
+                    style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+                    aria-label={name}
+                    onPointerDown={(event) => {
+                        event.stopPropagation();
+                        onSelect(object.id);
+                    }}
+                    onFocus={() => onSelect(object.id)}
+                >
+                    <header
+                        onPointerDown={(event) => {
+                            if (event.button === 0 && tool === "select") onStartMove(event, object);
+                        }}
+                    >
+                        <FileText size={15} aria-hidden="true" />
+                        <span title={path}>{name}</span>
+                        <button
+                            type="button"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={open}
+                            aria-label={`Open ${name} in Files`}
+                            title="Open in Files"
+                        >
+                            <ArrowUpRight size={15} aria-hidden="true" />
+                        </button>
+                    </header>
+                    <OSCanvasFilePreview key={path} path={path} onOpen={open} />
+                    {selected && (
+                        <button
+                            type="button"
+                            className="workspace-canvas-object-resize"
+                            onPointerDown={(event) => onStartResize(event, object)}
+                            aria-label={`Resize ${name} card`}
+                            tabIndex={-1}
+                        />
+                    )}
+                </article>
+            );
+        }
         if (object.kind === "note") {
             return (
                 <article
@@ -1108,12 +1174,12 @@ const WorkspaceCanvasBatchPanel = memo(
                 data-canvas-overlay
                 onPointerDown={(event) => event.stopPropagation()}
                 onWheel={(event) => event.stopPropagation()}
-                aria-label="KronTerm Agent batch job"
+                aria-label="KronOS Agent batch job"
             >
                 <header>
                     <span>
                         <i className={makeIconClass("sparkles", true)} aria-hidden="true" />
-                        <strong>KronTerm Agent · Batch job</strong>
+                        <strong>KronOS Agent · Batch job</strong>
                     </span>
                     <button
                         type="button"
@@ -1196,6 +1262,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     const fullConfig = useAtomValue(atoms.fullConfigAtom);
     const [composerContext, setComposerContext] = useAtom(workspaceCanvasComposerContextAtom);
     const viewportRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const interactionRef = useRef<CanvasInteraction | null>(null);
     const persistTimerRef = useRef<number | null>(null);
     const momentumFrameRef = useRef<number | null>(null);
@@ -1209,6 +1276,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(tabData.blockids?.[0] ?? null);
     const selectedBlockIdRef = useRef(selectedBlockId);
     const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+    const [fileNotice, setFileNotice] = useState("");
     const selectedObjectIdRef = useRef(selectedObjectId);
     const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
     const [tool, setTool] = useState<WorkspaceCanvasTool>("select");
@@ -1226,7 +1294,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     const [selectedContextIds, setSelectedContextIds] = useState<string[]>([]);
     const [manualContextNodes, setManualContextNodes] = useState<CanvasComposerContextNode[]>([]);
     const [reducedMotion, setReducedMotion] = useState(false);
-    const [agentFollowEnabled, setAgentFollowEnabled] = useState(true);
+    const [agentFollowEnabled, setAgentFollowEnabled] = useState(() => canvasState.followAgent === true);
     const [activeAgentBlockId, setActiveAgentBlockId] = useState<string | null>(null);
     const cameraRef = useRef(camera);
     const rectsRef = useRef(rects);
@@ -1236,7 +1304,6 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     const contextModeRef = useRef<"follow" | "quote">("follow");
     const reducedMotionRef = useRef(reducedMotion);
     const agentFollowEnabledRef = useRef(agentFollowEnabled);
-    const activeAgentBlockIdRef = useRef(activeAgentBlockId);
     const homeReturnCameraRef = useRef<WorkspaceCanvasCamera | null>(null);
     const fittedRectRef = useRef<{ blockId: string; rect: WorkspaceCanvasRect } | null>(null);
     const mruBlockIdsRef = useRef<string[]>(tabData.blockids ?? []);
@@ -1246,8 +1313,6 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     selectedObjectIdRef.current = selectedObjectId;
     selectedContextIdsRef.current = selectedContextIds;
     reducedMotionRef.current = reducedMotion;
-    agentFollowEnabledRef.current = agentFollowEnabled;
-    activeAgentBlockIdRef.current = activeAgentBlockId;
     bookmarksRef.current = bookmarks;
     const contextMode = composerContext.tabid === tabId ? composerContext.mode : "follow";
     contextModeRef.current = contextMode;
@@ -1265,7 +1330,10 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
 
     const visibleWidgets = useMemo(() => {
         return (Object.entries(fullConfig?.widgets ?? {}) as Array<[string, WidgetConfigType]>)
-            .filter(([, widget]) => widget && widget["display:hidden"] !== true)
+            .filter(([, widget]) =>
+                widget && widget["display:hidden"] !== true &&
+                resolveBlockView(widget.blockdef?.meta?.view) !== "hermes"
+            )
             .sort(([, a], [, b]) => (a["display:order"] ?? 0) - (b["display:order"] ?? 0));
     }, [fullConfig]);
 
@@ -1317,6 +1385,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                     rects: rectsRef.current,
                     objects: objectsRef.current,
                     bookmarks: bookmarksRef.current,
+                    followAgent: agentFollowEnabledRef.current,
                 },
             } as unknown as MetaType,
         });
@@ -1331,6 +1400,17 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             persistCanvasState();
         }, CanvasSaveDelayMs);
     }, [persistCanvasState]);
+
+    const setAgentFollow = useCallback(
+        (enabled: boolean) => {
+            if (agentFollowEnabledRef.current === enabled) return;
+            agentFollowEnabledRef.current = enabled;
+            followedAgentBlockIdRef.current = null;
+            setAgentFollowEnabled(enabled);
+            schedulePersist();
+        },
+        [schedulePersist]
+    );
 
     const toggleExpand = useCallback((blockId: string) => {
         setExpandedBlockId((current) => (current === blockId ? null : blockId));
@@ -1524,13 +1604,20 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                     followedAgentBlockIdRef.current = null;
                 }
             }
-            if (followTarget && followedAgentBlockIdRef.current !== followTarget) {
+            const activeElement = document.activeElement;
+            if (
+                followTarget &&
+                followedAgentBlockIdRef.current !== followTarget &&
+                !expandedBlockId &&
+                !interactionRef.current &&
+                !selectedObjectIdRef.current &&
+                !(
+                    viewportRef.current?.contains(activeElement) &&
+                    activeElement?.matches("input, textarea, [contenteditable]")
+                )
+            ) {
                 followedAgentBlockIdRef.current = followTarget;
                 cancelCameraMomentum();
-                selectedBlockIdRef.current = followTarget;
-                setSelectedBlockId(followTarget);
-                setSelectedObjectId(null);
-                setExpandedBlockId((current) => (current && current !== followTarget ? null : current));
                 updateCamera(
                     centerWorkspaceCanvasCamera(
                         rectsRef.current[followTarget],
@@ -1609,7 +1696,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                 return [...primitiveObjects, ...nextCards];
             });
         });
-    }, [cancelCameraMomentum, updateCamera, updateObjects]);
+    }, [cancelCameraMomentum, expandedBlockId, updateCamera, updateObjects]);
 
     useEffect(() => {
         const onComposerSubmit = (event: Event) => {
@@ -1813,9 +1900,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
 
     const startPan = useCallback(
         (event: ReactPointerEvent<HTMLElement>) => {
-            if (activeAgentBlockIdRef.current) {
-                setAgentFollowEnabled(false);
-            }
+            setAgentFollow(false);
             cancelCameraMomentum();
             const point = { x: event.clientX, y: event.clientY };
             interactionRef.current = {
@@ -1829,7 +1914,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             };
             capturePointer(event.pointerId);
         },
-        [cancelCameraMomentum]
+        [cancelCameraMomentum, setAgentFollow]
     );
 
     const startObjectMove = useCallback((event: ReactPointerEvent<HTMLElement>, object: WorkspaceCanvasObject) => {
@@ -1893,7 +1978,61 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
         addNoteAtPoint({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
     }, [addNoteAtPoint]);
 
+    const addFiles = useCallback(
+        (resources: OSResourceReference[], point: WorkspaceCanvasPoint, anchor: "center" | "top-left" = "center") => {
+            if (!resources.length) {
+                setFileNotice("No local files could be added.");
+                return;
+            }
+            const occupied = [...Object.values(rectsRef.current), ...objectsRef.current.map(objectBounds)];
+            const cards = resources.map(({ name, resource }): WorkspaceCanvasPrimitiveObject => {
+                const size = canvasFileCardSize(resource);
+                const preferred = {
+                    x: anchor === "center" ? Math.round(point.x - size.width / 2) : point.x,
+                    y: anchor === "center" ? Math.round(point.y - size.height / 2) : point.y,
+                    ...size,
+                };
+                const placement = findNonOverlappingCanvasRect(preferred, occupied, 24);
+                occupied.push(placement);
+                return { ...placement, id: makeObjectId("file"), kind: "file", text: name, resource };
+            });
+            updateObjects((current) => [...current, ...cards]);
+            const selected = cards[0].id;
+            selectedBlockIdRef.current = null;
+            selectedObjectIdRef.current = selected;
+            setExpandedBlockId(null);
+            setSelectedBlockId(null);
+            setSelectedObjectId(selected);
+            setTool("select");
+            setFileNotice("");
+            return selected;
+        },
+        [updateObjects]
+    );
+
+    const onCanvasFileDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+        if (event.defaultPrevented) return;
+        const transfer = event.dataTransfer;
+        const point = canvasPoint(event.clientX, event.clientY);
+        if (transfer.files.length) {
+            event.preventDefault();
+            addFiles(readNativeCanvasFiles(transfer.files, getApi().getPathForFile), point);
+            return;
+        }
+        const resource = readOSResourceDragPayload(transfer);
+        if (
+            resource &&
+            (resource.kind === "file" || resource.kind === "generated-artifact") &&
+            isLocalCanvasFilePath(resource.resource)
+        ) {
+            event.preventDefault();
+            addFiles([resource], point);
+        }
+    };
+
     const onCanvasPointerDownCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.target instanceof Element && event.target.closest("audio[controls], video[controls]")) return;
+        const shouldPan = event.button === 1 || (event.button === 0 && (tool === "hand" || spacePressedRef.current));
         viewportRef.current?.focus({ preventScroll: true });
         if (expandedBlockId) {
             return;
@@ -1901,7 +2040,6 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
         if (event.target instanceof Element && event.target.closest("[data-canvas-overlay]")) {
             return;
         }
-        const shouldPan = event.button === 1 || (event.button === 0 && (tool === "hand" || spacePressedRef.current));
         if (shouldPan) {
             event.preventDefault();
             event.stopPropagation();
@@ -2086,8 +2224,13 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
         }
         canvasPointerFrames.flush();
         interactionRef.current = null;
-        if (interaction.kind === "pan" && performance.now() - interaction.lastTime < 80) {
-            startCameraMomentum(interaction.velocity);
+        if (interaction.kind === "pan") {
+            finishCanvasPan(
+                event.type,
+                performance.now() - interaction.lastTime,
+                () => startCameraMomentum(interaction.velocity),
+                schedulePersist
+            );
         }
         if (interaction.kind === "create") {
             objectsRef.current = objectsRef.current
@@ -2114,9 +2257,8 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             return;
         }
         event.preventDefault();
-        if (activeAgentBlockIdRef.current) {
-            setAgentFollowEnabled(false);
-        }
+        cancelCameraMomentum();
+        setAgentFollow(false);
         if (event.ctrlKey || event.metaKey) {
             const point = viewportPoint(event.clientX, event.clientY);
             const factor = Math.exp(-event.deltaY * 0.002);
@@ -2132,6 +2274,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
 
     const zoomBy = useCallback(
         (factor: number) => {
+            cancelCameraMomentum();
             updateCamera(
                 zoomCanvasCameraAtPoint(cameraRef.current, cameraRef.current.zoom * factor, {
                     x: viewportSizeRef.current.width / 2,
@@ -2139,7 +2282,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                 })
             );
         },
-        [updateCamera]
+        [cancelCameraMomentum, updateCamera]
     );
 
     const allBounds = useMemo(() => {
@@ -2150,14 +2293,16 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     }, [blockIdsKey, objects, rects]);
 
     const fitAll = useCallback(() => {
+        cancelCameraMomentum();
         if (!allBounds || viewportSizeRef.current.width === 0) {
             updateCamera(DefaultCamera);
             return;
         }
         updateCamera(fitCanvasCameraToBounds(allBounds, viewportSizeRef.current));
-    }, [allBounds, updateCamera]);
+    }, [allBounds, cancelCameraMomentum, updateCamera]);
 
     const resetView = useCallback(() => {
+        cancelCameraMomentum();
         const screenCenter = {
             x: viewportSizeRef.current.width / 2,
             y: viewportSizeRef.current.height / 2,
@@ -2168,7 +2313,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             y: screenCenter.y - canvasCenter.y,
             zoom: 1,
         });
-    }, [updateCamera]);
+    }, [cancelCameraMomentum, updateCamera]);
 
     const arrangeWidgets = useCallback(() => {
         if (blockIds.length === 0) {
@@ -2219,21 +2364,15 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     );
 
     const toggleAgentFollow = useCallback(() => {
-        setAgentFollowEnabled((current) => {
-            const next = !current;
-            agentFollowEnabledRef.current = next;
-            if (!next || !activeAgentBlockId) {
-                return next;
-            }
-            const rect = rectsRef.current[activeAgentBlockId];
-            if (rect) {
-                followedAgentBlockIdRef.current = activeAgentBlockId;
-                cancelCameraMomentum();
-                focusCanvasBlock(activeAgentBlockId);
-            }
-            return next;
-        });
-    }, [activeAgentBlockId, cancelCameraMomentum, focusCanvasBlock]);
+        const enabled = !agentFollowEnabledRef.current;
+        setAgentFollow(enabled);
+        if (!enabled || !activeAgentBlockId || expandedBlockId || selectedObjectIdRef.current) return;
+        const rect = rectsRef.current[activeAgentBlockId];
+        if (!rect) return;
+        followedAgentBlockIdRef.current = activeAgentBlockId;
+        cancelCameraMomentum();
+        updateCamera(centerWorkspaceCanvasCamera(rect, viewportSizeRef.current, cameraRef.current.zoom));
+    }, [activeAgentBlockId, cancelCameraMomentum, expandedBlockId, setAgentFollow, updateCamera]);
 
     const focusCanvasTarget = useCallback(
         (targetId: string) => {
@@ -2507,6 +2646,16 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
         [launchBlock]
     );
 
+    const openCanvasFile = useCallback(
+        (path: string) => {
+            setFileNotice("");
+            void launchBlock("file-preview", { meta: { view: "preview", file: path } }).catch(() => {
+                setFileNotice("Could not open the file in Files.");
+            });
+        },
+        [launchBlock]
+    );
+
     const launchApps = useCallback(async () => {
         if (appsWidgetEntry) {
             await launchWidget(...appsWidgetEntry);
@@ -2546,7 +2695,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             const contextNode: CanvasComposerContextNode = {
                 action: "focus",
                 blockid: blockId,
-                detail: `Use the ${title} KronTerm widget (${viewType}) as active task context.`,
+                detail: `Use the ${title} KronOS widget (${viewType}) as active task context.`,
                 id: `block:${blockId}`,
                 phase: "succeeded",
                 surface: canvasSurfaceForView(viewType),
@@ -2592,7 +2741,11 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                         ? { meta: { view: "term", controller: "shell" } }
                         : card.agent.surface === "file"
                           ? { meta: { view: "preview", file: "~" } }
-                          : { meta: { view: "hermes" } };
+                          : null;
+            if (!blockDef) {
+                hermesSurfaceController.requestOpenPanel();
+                return;
+            }
             const blockId = await launchBlock(`task:${card.id}`, blockDef);
             if (!blockId || placement !== "side") {
                 return;
@@ -2855,6 +3008,22 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                     arrangeWidgets();
                     return { success: true, message: "Canvas widgets arranged into a fitted grid." };
                 }
+                if (input.action === "add_file") {
+                    if (!input.file || !isLocalCanvasFilePath(input.file)) {
+                        return { success: false, message: "An absolute local file path is required." };
+                    }
+                    if ([input.x, input.y].some((coordinate) => coordinate != null && !Number.isFinite(coordinate))) {
+                        return { success: false, message: "File card coordinates must be finite." };
+                    }
+                    const size = canvasFileCardSize(input.file);
+                    const center = makeViewportCenteredCanvasRect(cameraRef.current, viewportSizeRef.current, size);
+                    const id = addFiles(
+                        [canvasFileResource(input.file, input.text)],
+                        { x: input.x ?? center.x, y: input.y ?? center.y },
+                        "top-left"
+                    );
+                    return { success: true, message: `Pinned canvas file ${id}.` };
+                }
                 if (input.action === "add_note") {
                     const color = ["amber", "blue", "green", "rose", "slate"].includes(input.color ?? "")
                         ? (input.color as WorkspaceCanvasColor)
@@ -2974,6 +3143,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                     selectedBlockIdRef.current = input.blockid;
                     setSelectedBlockId(input.blockid);
                     setSelectedObjectId(null);
+
                     return { success: true, message: `Focused canvas widget ${input.blockid}.` };
                 }
                 if (input.action === "move" || input.action === "resize") {
@@ -3054,7 +3224,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                 return { success: false, message: `Action ${input.action} is unavailable in canvas presentation.` };
             },
         });
-    }, [arrangeWidgets, blockIdsKey, expandedBlockId, fitAll, selectedBlockId, tabId, updateObjects, updateRects]);
+    }, [addFiles, arrangeWidgets, blockIdsKey, expandedBlockId, fitAll, selectedBlockId, tabId, updateObjects, updateRects]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -3269,6 +3439,17 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             onPointerMove={onCanvasPointerMove}
             onPointerUp={onCanvasPointerUp}
             onPointerCancel={onCanvasPointerUp}
+            onDragOver={(event) => {
+                if (
+                    !event.defaultPrevented &&
+                    (event.dataTransfer.types.includes("Files") ||
+                        event.dataTransfer.types.includes(OSResourceDragMimeType))
+                ) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "copy";
+                }
+            }}
+            onDrop={onCanvasFileDrop}
             onWheel={onWheel}
             onContextMenu={showCanvasContextMenu}
             aria-label="Workspace canvas"
@@ -3279,6 +3460,28 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                 data-canvas-overlay
                 onPointerDown={(event) => event.stopPropagation()}
             >
+                <input
+                    type="file"
+                    multiple
+                    hidden
+                    ref={fileInputRef}
+                    onChange={(event) => {
+                        const input = event.currentTarget;
+                        if (!input.files?.length) return;
+                        const size = viewportSizeRef.current;
+                        const point = screenPointToCanvas(cameraRef.current, { x: size.width / 2, y: size.height / 2 });
+                        addFiles(readNativeCanvasFiles(input.files, getApi().getPathForFile), point);
+                        input.value = "";
+                    }}
+                />
+                <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Add files to canvas"
+                    aria-label="Add files to canvas"
+                >
+                    <FilePlus size={16} aria-hidden="true" />
+                </button>
                 <button type="button" onClick={fitAll}>
                     Fit
                 </button>
@@ -3289,7 +3492,22 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                 <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)}>
                     +
                 </button>
+                <button
+                    type="button"
+                    className="workspace-canvas-agent-follow"
+                    onClick={toggleAgentFollow}
+                    aria-pressed={agentFollowEnabled}
+                    title="Follow agent activity with the canvas camera"
+                >
+                    <Target size={14} aria-hidden="true" />
+                    Follow agent
+                </button>
             </div>
+            {fileNotice && (
+                <div className="workspace-canvas-file-notice" role="status">
+                    {fileNotice}
+                </div>
+            )}
             {nodeSearchOpen && (
                 <section
                     className="workspace-canvas-node-search"
@@ -3365,21 +3583,6 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             <p className="workspace-canvas-accessibility-text" aria-live="polite" aria-atomic="true">
                 {canvasSelectionStatus}
             </p>
-            {false && activeAgentBlockId ? (
-                <button
-                    type="button"
-                    className={`workspace-canvas-agent-follow ${agentFollowEnabled ? "is-active" : ""}`}
-                    data-canvas-overlay
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={toggleAgentFollow}
-                    aria-label={agentFollowEnabled ? "Pause canvas agent follow" : "Follow active agent widget"}
-                    aria-pressed={agentFollowEnabled}
-                    title={agentFollowEnabled ? "Pause agent follow" : "Follow active widget"}
-                >
-                    <Target aria-hidden="true" />
-                    <span>{agentFollowEnabled ? "Following agent" : "Agent active"}</span>
-                </button>
-            ) : null}
             <div
                 className="workspace-canvas-grid"
                 style={{
@@ -3396,7 +3599,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                     >
                         <div className="workspace-canvas-identity">
                             <LayoutGrid />
-                            <span>KronTerm · Drift canvas</span>
+                            <span>KronOS · Drift canvas</span>
                             <span className="workspace-canvas-zoom">{Math.round(camera.zoom * 100)}%</span>
                             <div className="workspace-canvas-bookmarks" role="group" aria-label="Canvas bookmarks">
                                 <Bookmark aria-hidden="true" />
@@ -3528,13 +3731,13 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                         onPointerDown={(event) => event.stopPropagation()}
                         onWheel={(event) => event.stopPropagation()}
                         role="toolbar"
-                        aria-label="KronTerm widgets"
+                        aria-label="KronOS widgets"
                     >
                         <div className="workspace-canvas-widget-dock-items">
                             {dockWidgets.map(([key, widget]) => {
                                 const view = resolveBlockView(String(widget.blockdef?.meta?.view));
                                 const agent = view === "hermes";
-                                const label = agent ? "KronTerm Agent" : widget.label || view || key;
+                                const label = agent ? "KronOS Agent" : widget.label || view || key;
                                 return (
                                     <button
                                         type="button"
@@ -3549,7 +3752,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                                             className={makeIconClass(widget.icon, true, { defaultIcon: "browser" })}
                                             style={{ color: widget.color }}
                                         />
-                                        {agent && <span>KronTerm Agent</span>}
+                                        {agent && <span>KronOS Agent</span>}
                                     </button>
                                 );
                             })}
@@ -3660,7 +3863,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                                                                 <i className={makeIconClass("gear", true)} />
                                                                 <span>
                                                                     <strong>Settings</strong>
-                                                                    <small>Open KronTerm settings in the canvas</small>
+                                                                    <small>Open KronOS settings in the canvas</small>
                                                                 </span>
                                                             </button>
                                                         ) : null}
@@ -3729,7 +3932,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             {objects.length === 0 && blockIds.length === 0 ? (
                 <div className="workspace-canvas-empty-state" aria-live="polite">
                     <strong>Empty canvas</strong>
-                    <span>Drop in a widget or start a Kronos task to build spatially.</span>
+                    <span>Drop files here, add a widget, or start a KronOS task.</span>
                 </div>
             ) : null}
 
@@ -3744,6 +3947,7 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
                     .map((object) => (
                         <CanvasObjectView
                             relatedCards={taskCards}
+                            onOpenFile={openCanvasFile}
                             onOpenReference={(card) => {
                                 if (card.agent.blockid && blockIds.includes(card.agent.blockid))
                                     focusCanvasBlock(card.agent.blockid);

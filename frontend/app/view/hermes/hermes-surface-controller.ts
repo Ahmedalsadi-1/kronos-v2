@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export type HermesSurfacePresentation = "closed" | "hud" | "panel" | "widget";
+export type HermesSurfacePresentation = "closed" | "hud" | "panel";
 
 export type HermesHudGeometry = {
     x: number;
@@ -14,12 +14,6 @@ export type HermesSurfaceSnapshot = {
     presentation: HermesSurfacePresentation;
     geometry: HermesHudGeometry;
     sessionId: string | null;
-    widgetBlockId: string | null;
-};
-
-type WidgetHost = {
-    blockId: string;
-    closeToHud: () => void;
 };
 
 const GeometryStorageKey = "kronterm.hermes.hud.geometry.v1";
@@ -104,15 +98,8 @@ class HermesSurfaceController {
         presentation: "closed",
         geometry: loadGeometry(),
         sessionId: null,
-        widgetBlockId: null,
     };
     private listeners = new Set<() => void>();
-    private widgetHosts = new Map<string, WidgetHost>();
-    private expandHandler: (() => Promise<void>) | null = null;
-    private expanding = false;
-    private widgetRequested = false;
-    private returnAfterWidgetClose: Exclude<HermesSurfacePresentation, "widget"> = "closed";
-
     getSnapshot = (): HermesSurfaceSnapshot => this.snapshot;
 
     subscribe = (listener: () => void): (() => void) => {
@@ -120,44 +107,16 @@ class HermesSurfaceController {
         return () => this.listeners.delete(listener);
     };
 
-    setExpandHandler(handler: (() => Promise<void>) | null): () => void {
-        this.expandHandler = handler;
-        return () => {
-            if (this.expandHandler === handler) {
-                this.expandHandler = null;
-            }
-        };
-    }
-
     requestOpenHud(sessionId?: string | null): void {
-        const activeHost = this.snapshot.widgetBlockId
-            ? this.widgetHosts.get(this.snapshot.widgetBlockId)
-            : [...this.widgetHosts.values()][0];
-        if (activeHost) {
-            this.snapshot = { ...this.snapshot, sessionId: sessionId ?? this.snapshot.sessionId };
-            this.returnAfterWidgetClose = "hud";
-            activeHost.closeToHud();
-            return;
-        }
         this.update({
             presentation: "hud",
             sessionId: sessionId ?? this.snapshot.sessionId,
-            widgetBlockId: null,
             geometry: clampHermesHudGeometry(this.snapshot.geometry),
         });
     }
 
     requestOpenPanel(sessionId?: string | null): void {
-        const activeHost = this.snapshot.widgetBlockId
-            ? this.widgetHosts.get(this.snapshot.widgetBlockId)
-            : [...this.widgetHosts.values()][0];
-        if (this.snapshot.presentation === "widget" && activeHost) {
-            this.snapshot = { ...this.snapshot, sessionId: sessionId ?? this.snapshot.sessionId };
-            this.returnAfterWidgetClose = "panel";
-            activeHost.closeToHud();
-            return;
-        }
-        this.update({ presentation: "panel", sessionId: sessionId ?? this.snapshot.sessionId, widgetBlockId: null });
+        this.update({ presentation: "panel", sessionId: sessionId ?? this.snapshot.sessionId });
     }
 
     requestOpenChat(sessionId?: string | null): void {
@@ -168,81 +127,8 @@ class HermesSurfaceController {
         this.requestOpenHud(sessionId);
     }
 
-    returnToHud(sessionId?: string | null): void {
-        this.update({
-            presentation: "hud",
-            sessionId: sessionId ?? this.snapshot.sessionId,
-            widgetBlockId: null,
-            geometry: clampHermesHudGeometry(this.snapshot.geometry),
-        });
-    }
-
     dismiss(): void {
-        this.update({ presentation: "closed", widgetBlockId: null });
-    }
-
-    async expandToWidget(): Promise<void> {
-        if (this.expanding || !this.expandHandler) {
-            return;
-        }
-        this.expanding = true;
-        this.widgetRequested = true;
-        try {
-            await this.expandHandler();
-            const activeHost = [...this.widgetHosts.values()][0];
-            if (activeHost) {
-                this.widgetRequested = false;
-                this.returnAfterWidgetClose = "closed";
-                this.update({ presentation: "widget", widgetBlockId: activeHost.blockId });
-            }
-        } catch (error) {
-            this.widgetRequested = false;
-            throw error;
-        } finally {
-            this.expanding = false;
-        }
-    }
-
-    activateWidget(blockId: string): void {
-        if (!this.widgetHosts.has(blockId)) {
-            return;
-        }
-        this.returnAfterWidgetClose = "closed";
-        this.update({ presentation: "widget", widgetBlockId: blockId });
-    }
-
-    registerWidgetHost(host: WidgetHost): () => void {
-        this.widgetHosts.set(host.blockId, host);
-        const activeHost = this.snapshot.widgetBlockId && this.widgetHosts.get(this.snapshot.widgetBlockId);
-        if (!activeHost || this.snapshot.presentation === "hud") {
-            this.widgetRequested = false;
-            this.update({ presentation: "widget", widgetBlockId: host.blockId });
-        }
-        return () => {
-            this.widgetHosts.delete(host.blockId);
-            if (this.snapshot.widgetBlockId !== host.blockId) {
-                return;
-            }
-            const next = [...this.widgetHosts.values()][0];
-            if (next) {
-                this.update({ presentation: "widget", widgetBlockId: next.blockId });
-            } else if (this.snapshot.presentation === "widget") {
-                this.update({
-                    presentation: this.returnAfterWidgetClose,
-                    widgetBlockId: null,
-                });
-                this.returnAfterWidgetClose = "closed";
-            }
-        };
-    }
-
-    disposeWidget(blockId: string): void {
-        if (this.snapshot.presentation !== "widget" || this.snapshot.widgetBlockId !== blockId) return;
-        this.update({
-            presentation: this.returnAfterWidgetClose === "closed" ? "hud" : this.returnAfterWidgetClose,
-            widgetBlockId: null,
-        });
-        this.returnAfterWidgetClose = "closed";
+        this.update({ presentation: "closed" });
     }
 
     setSession(sessionId: string | null): void {
@@ -272,16 +158,10 @@ class HermesSurfaceController {
     }
 
     resetForTests(): void {
-        this.widgetHosts.clear();
-        this.expandHandler = null;
-        this.expanding = false;
-        this.widgetRequested = false;
-        this.returnAfterWidgetClose = "closed";
         this.snapshot = {
             presentation: "closed",
             geometry: clampHermesHudGeometry({}),
             sessionId: null,
-            widgetBlockId: null,
         };
         this.emit();
     }
@@ -291,8 +171,7 @@ class HermesSurfaceController {
         if (
             next.presentation === this.snapshot.presentation &&
             next.geometry === this.snapshot.geometry &&
-            next.sessionId === this.snapshot.sessionId &&
-            next.widgetBlockId === this.snapshot.widgetBlockId
+            next.sessionId === this.snapshot.sessionId
         ) {
             return;
         }

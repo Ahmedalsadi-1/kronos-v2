@@ -27,7 +27,7 @@ const useCases: UseCase[] = [
         href: "/use-cases/code-review",
         cardText: "Inspect diffs, terminal output, browser state, and side-panel context before a human pass.",
         description:
-            "Kronterm turns code review into a workspace-native loop instead of a detached comment thread. KronosCode can inspect the file diff, connect the changed files to terminal test output, use browser context when UI behavior matters, and present the risky parts back to the builder with explicit approval points.",
+            "KronOS turns code review into a workspace-native loop instead of a detached comment thread. KronosCode can inspect the file diff, connect the changed files to terminal test output, use browser context when UI behavior matters, and present the risky parts back to the builder with explicit approval points.",
         outcome:
             "A reviewer sees what changed, why it changed, which commands ran, what failed or passed, and what still needs human judgment before merge.",
         media: { type: "image", src: productAssets.diff, alt: "KronosCode file diff panel for code review" },
@@ -41,10 +41,10 @@ const useCases: UseCase[] = [
         href: "/use-cases/bug-investigation",
         cardText: "Keep browser widgets, terminal logs, files, and sandbox state together while narrowing root cause.",
         description:
-            "When a bug crosses frontend, backend, and environment boundaries, Kronterm keeps the evidence in one place. The browser widget can hold the repro, the terminal can hold dev server and test output, files stay inspectable in the same workspace, and KronosCode can reason across those surfaces instead of guessing from a pasted stack trace.",
+            "When a bug crosses frontend, backend, and environment boundaries, KronOS keeps the evidence in one place. The browser widget can hold the repro, the terminal can hold dev server and test output, files stay inspectable in the same workspace, and KronosCode can reason across those surfaces instead of guessing from a pasted stack trace.",
         outcome:
             "A vague report becomes a concrete chain of evidence: reproduction steps, observed browser behavior, relevant logs, suspected files, and the next approved command or edit.",
-        media: { type: "video", src: productAssets.browserVideo, alt: "Kronterm browser widget used for bug investigation" },
+        media: { type: "video", src: productAssets.browserVideo, alt: "KronOS browser widget used for bug investigation" },
         icon: PanelTop,
         evidence: ["web browser widget", "dev server terminal output", "file explorer context", "KronosCode workspace reasoning"]
     },
@@ -55,7 +55,7 @@ const useCases: UseCase[] = [
         href: "/use-cases/refactors",
         cardText: "Plan multi-file edits, inspect diffs, run validation, and keep every command approval-driven.",
         description:
-            "Refactors fail when the plan, edits, and validation live in different places. Kronterm lets builders keep the current branch, active files, diff preview, terminal commands, and KronosCode plan in view while changes move from idea to tested result. The AI can assist across files, but the builder keeps control over commands and final acceptance.",
+            "Refactors fail when the plan, edits, and validation live in different places. KronOS lets builders keep the current branch, active files, diff preview, terminal commands, and KronosCode plan in view while changes move from idea to tested result. The AI can assist across files, but the builder keeps control over commands and final acceptance.",
         outcome:
             "A large code change is broken into an inspectable plan, concrete edits, reviewable diffs, test runs, and a summary that explains what changed and what still deserves attention.",
         media: { type: "image", src: productAssets.explorer, alt: "KronosCode file explorer and project context for refactoring" },
@@ -69,10 +69,10 @@ const useCases: UseCase[] = [
         href: "/use-cases/agent-builders",
         cardText: "Coordinate local agents, cloud models, browser tasks, sandbox desktops, and project files.",
         description:
-            "Kronterm is built for people creating agent systems, not only people prompting one. The product includes terminal control, browser widgets, sandbox desktop tools, file access, agent panels, and model/provider configuration surfaces. That gives agent builders a command center for testing tools, observing behavior, and approving actions before automation touches real work.",
+            "KronOS is built for people creating agent systems, not only people prompting one. The product includes terminal control, browser widgets, sandbox desktop tools, file access, agent panels, and model/provider configuration surfaces. That gives agent builders a command center for testing tools, observing behavior, and approving actions before automation touches real work.",
         outcome:
             "Agent workflows become observable: what the agent saw, which desktop or browser action it took, what files it touched, which command it wants next, and where a human approved or stopped the run.",
-        media: { type: "image", src: productAssets.devElectron, alt: "Kronterm dev Electron app showing terminal, vertical tabs, and side tool rail" },
+        media: { type: "image", src: productAssets.devElectron, alt: "KronOS dev Electron app showing terminal, vertical tabs, and side tool rail" },
         icon: Bot,
         evidence: ["sandbox desktop tools", "agent control panel", "local and cloud model support", "terminal and browser operation"]
     }
@@ -109,7 +109,7 @@ export function UseCaseSelectorDeck() {
                     Built for
                     <span>every builder role.</span>
                 </h2>
-                <p>From code review to agent builders, real workflows powered by Kronterm and KronosCode.</p>
+                <p>From code review to agent builders, real workflows powered by KronOS and KronosCode.</p>
             </div>
 
             <div className={`usecase-card-stage ${openingIndex == null ? "" : "is-opening"}`} aria-label="Use case cards">
@@ -132,7 +132,7 @@ export function UseCaseSelectorDeck() {
             <p className="usecase-drag-note">← select a role to explore →</p>
 
             <div className="usecase-selector-layout">
-                <div className="usecase-selector-tabs" role="tablist" aria-label="Choose a Kronterm use case">
+                <div className="usecase-selector-tabs" role="tablist" aria-label="Choose a KronOS use case">
                     {useCases.map((useCase, index) => {
                         const Icon = useCase.icon;
                         return (
@@ -187,7 +187,7 @@ export function UseCaseSelectorDeck() {
 
             <div className="usecase-source-note">
                 <Terminal size={15} aria-hidden="true" />
-                <span>Grounded in Kronterm surfaces: terminal blocks, browser widgets, file diffs, sandbox desktop tools, side rail, and KronosCode approval flows.</span>
+                <span>Grounded in KronOS surfaces: terminal blocks, browser widgets, file diffs, sandbox desktop tools, side rail, and KronosCode approval flows.</span>
                 <Boxes size={15} aria-hidden="true" />
             </div>
         </section>

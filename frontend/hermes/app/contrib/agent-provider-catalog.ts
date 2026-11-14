@@ -25,7 +25,7 @@ export const AgentCliProviders: readonly AgentCliProvider[] = [
     provider("codex", "Codex", "codex", "https://developers.openai.com/codex/cli"),
     provider("claude-code", "Claude Code", "claude", "https://docs.anthropic.com/en/docs/claude-code/overview"),
     provider("gemini", "Gemini CLI", "gemini", "https://github.com/google-gemini/gemini-cli"),
-    provider("kronterm-agent", "KronTerm Agent", "opencode", "https://opencode.ai/docs"),
+    provider("kronterm-agent", "OpenCode", "opencode", "https://opencode.ai/docs"),
     provider("pi", "Pi", "pi", "https://github.com/badlogic/pi-mono"),
     provider("openclaw", "OpenClaw", "openclaw", "https://docs.openclaw.ai"),
     provider("aider", "Aider", "aider", "https://aider.chat/docs/"),

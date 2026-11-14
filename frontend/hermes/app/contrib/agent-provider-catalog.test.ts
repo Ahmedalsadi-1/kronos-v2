@@ -20,9 +20,9 @@ describe("agent CLI provider catalog", () => {
         });
     });
 
-    it("presents the OpenCode-compatible runtime as KronTerm Agent", () => {
+    it("distinguishes the external OpenCode CLI from KronOS Agent", () => {
         expect(AgentCliProviders.find((provider) => provider.id === "kronterm-agent")).toMatchObject({
-            label: "KronTerm Agent",
+            label: "OpenCode",
             executable: "opencode",
         });
         expect(AgentCliProviders.some((provider) => provider.id === "opencode")).toBe(false);

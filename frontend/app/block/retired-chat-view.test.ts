@@ -9,6 +9,10 @@ describe("retired chat widget compatibility", () => {
         expect(resolveBlockView(view)).toBe("hermes");
     });
 
+    test("restores a saved Media Library widget as Files", () => {
+        expect(resolveBlockView("medialibrary")).toBe("preview");
+    });
+
     test.each(["hermes", "term", "web", "preview", "kronsettings", "waveai"])("preserves %s", (view) => {
         expect(resolveBlockView(view)).toBe(view);
     });

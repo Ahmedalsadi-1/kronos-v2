@@ -4,7 +4,7 @@
 import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
+import { publishWorkspacePresentation, readWebReturnPresentation } from "@/app/tab/workspace-presentation";
 import { configureHermesDesktopShim, installHermesDesktopShim } from "@/app/view/hermes/hermes-desktop-shim";
 import { getApi } from "@/store/global";
 import { markKronTermWebHost, markKronTermWidgetHost } from "@hermes/lib/kronterm-host";
@@ -54,12 +54,6 @@ interface WebModeSurfaceProps {
     runtime: Pick<WebModeRuntimeState, "status"> & { message?: string };
 }
 
-function prepareHermesWebModeHost(): void {
-    markKronTermWidgetHost();
-    markKronTermWebHost(true);
-    installHermesDesktopShim({ baseUrl: "http://127.0.0.1:9119" });
-}
-
 function WebModeSurface({ children, onExit, onRetry, runtime }: WebModeSurfaceProps) {
     return (
         <section className="web-mode" aria-label="Kronos web mode" data-hermes-web-mode="">
@@ -72,7 +66,7 @@ function WebModeSurface({ children, onExit, onRetry, runtime }: WebModeSurfacePr
                 </div>
             ) : (
                 <div className="web-mode-status" role="alert">
-                    <h3>KronTerm Agent could not start</h3>
+                    <h3>KronOS Agent could not start</h3>
                     <p className="web-mode-error">{runtime.message}</p>
                     <button type="button" className="web-mode-retry" onClick={onRetry}>
                         Retry
@@ -106,10 +100,10 @@ const WebModeView = memo(
         const [runtime, setRuntime] = useState<WebModeRuntimeState>({ status: "starting" });
         const [retryKey, setRetryKey] = useState(0);
         const [capabilities, setCapabilities] = useState(() => normalizeWebCapabilities(initialCapabilities));
-        prepareHermesWebModeHost();
-
         useEffect(() => {
+            markKronTermWidgetHost();
             markKronTermWebHost(true);
+            installHermesDesktopShim();
             return () => markKronTermWebHost(false);
         }, []);
 
@@ -156,18 +150,25 @@ const WebModeView = memo(
         );
 
         const exitWebMode = useCallback(() => {
-            publishWorkspacePresentation("widgets");
-            void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": "widgets" });
+            const presentation = publishWorkspacePresentation(readWebReturnPresentation());
+            void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": presentation });
         }, []);
 
         useEffect(() => {
+            let pendingExit: number;
             const handleKeyDown = (event: KeyboardEvent) => {
-                if (event.key === "Escape") {
-                    exitWebMode();
-                }
+                if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || event.repeat) return;
+                window.clearTimeout(pendingExit);
+                // The composer can claim Escape in its own window listener.
+                pendingExit = window.setTimeout(() => {
+                    if (!event.defaultPrevented) exitWebMode();
+                }, 0);
             };
             window.addEventListener("keydown", handleKeyDown);
-            return () => window.removeEventListener("keydown", handleKeyDown);
+            return () => {
+                window.clearTimeout(pendingExit);
+                window.removeEventListener("keydown", handleKeyDown);
+            };
         }, [exitWebMode]);
 
         useEffect(() => {

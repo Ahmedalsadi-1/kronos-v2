@@ -30,11 +30,32 @@ The generated browser assets live in `public/workflow-native/`. Runtime, main,
 or preload bridge changes require a complete Electron restart; reloading a tab
 alone does not update those processes.
 
-KronTerm's first-run account gate uses the shared account form. Existing configured
-accounts continue into the workspace without another signup. Open the left
-**Workflows** tab, then select a saved workflow or choose **Workflow actions →
-New workflow**. The right inspector provides **Nodes**, and **Executions** becomes
-available after the selected workflow has execution history.
+Workflow access inherits the managed Hermes desktop session. There is no separate
+workflow signup or password. Open the left **Workflows** tab, then select a saved
+workflow or choose **Workflow actions → New workflow**. The right inspector
+provides **Nodes**, and **Executions** becomes available after the selected workflow
+has execution history.
+
+Electron starts Hermes before workflow operations, then starts the loopback-only
+workflow runtime with a fresh, private session capability. The `session-hook.cjs`
+lifecycle adapter exchanges that capability for an ordinary browser-bound n8n
+session. Capabilities and cookies stay out of renderer responses. Startup waits
+for both the complete node catalog and an authenticated session. Expired sessions
+renew through the same exchange; stopping the runtime revokes its capability,
+cached sessions, renderer request grants, and outstanding requests.
+
+Existing local database owners are reused without changing their ID, password,
+projects, workflows, or credentials. New databases provision an internal local
+owner with a random password that is never persisted by KronTerm. The legacy
+`~/.kronterm/account.enc` file is no longer read or changed. Existing owner MFA
+requirements are preserved and require recovery before managed access can proceed.
+
+Hermes currently authenticates its local runtime using a desktop session token.
+A production user identity provider is not implemented by this adapter. Its login
+and logout must authorize/revoke this same workflow entry point; a cloud or
+multi-user service also needs explicit user-to-workflow ownership isolation. The
+local owner session exchange must remain restricted to desktop-owned loopback
+runtimes and must not be exposed as a public sign-in endpoint.
 
 The native layout uses original Vue nodes, controls, picker, node editor, and
 management content in OS scene/chrome/detail slots. The original Viewport subtree now mounts through Vue into the shared OS world;
@@ -60,6 +81,26 @@ encrypted credentials under
 - **KronTerm Widget** lists, launches, observes, and controls widgets. Use
   `List Widgets` to discover configured widgets and `List Blocks` for their IDs.
   Other tools remain available through the Tool node.
+- **KronOS ComfyUI** queues a workflow exported from ComfyUI in API format. Pass
+  the returned `promptId` to **Check Render** to get its status and output image
+  references. A connected Check Render node reuses the address from the matching
+  input render when its address is blank. Each check reads the current state
+  once, so use an n8n Wait node before checking again if needed.
+
+Output-port **+** pickers include the current workspace's live widgets. Choosing
+one opens a centered connection dialog; dragging an output onto a live OS widget
+opens the same dialog. The source node/port is captured when configuration opens
+and restored through the original editor insertion path. Widget binding and the
+active workflow are checked again before inserting.
+
+Browser connections can navigate the bound browser to one URL or open a group:
+the first URL uses the existing widget, and subsequent URLs create separate
+browser widgets. Other widgets support state, snapshot, text, and key actions.
+Sandbox connections (Labs) offer commands, VM-browser URLs, and bounded Hermes AI
+tasks on the selected running VM. Computer control must already be assigned to
+this workspace. No connection action starts a VM, reclaims human control, or
+executes a VM command on the host. AI workers pin the VM and control generation;
+changing or revoking the grant stops the old worker from using a new grant.
 
 Configured widgets also get individual launch nodes. Widget nodes expose `blockId` when returned by the tool, so later nodes can target them. Each node keeps the raw `result` and n8n item links. Failed
 tool results fail the node. Bridge tokens stay in the managed process environment.
@@ -76,11 +117,12 @@ conversion between KronTerm graphs and n8n workflows.
 
 ```sh
 node --test integrations/n8n/nodes/nodes.test.cjs
-npx vitest run emain/n8n-runtime.test.ts
+node --test integrations/n8n/managed-session.test.cjs
+npx vitest run emain/n8n-runtime.test.ts emain/workflow-account.test.ts
 node integrations/n8n/smoke.mjs
 ```
 
-The smoke test creates a temporary local n8n account and database. It checks the
+The smoke test creates a temporary managed local database without a user login. It checks the
 editor, loaded node catalog, and a real n8n workflow against an authenticated test
 bridge. It does not run live agent tasks or change workspace widgets.
 
@@ -93,7 +135,8 @@ https://docs.n8n.io/deploy/host-n8n/deploy-as-an-oem-integration.md
 
 The current launcher supports the development checkout. A packaged distribution
 must ship the production closure from `upstream/compiled` as `n8n/runtime` and the
-`nodes` folder as `n8n/nodes` in Electron resources, after the distribution terms
+`nodes` folder as `n8n/nodes`, plus `session-hook.cjs` and `managed-session.cjs`
+at the `n8n/` resource root (included by the Electron packaging config), after the distribution terms
 are settled.
 
 ## OS workflow surfaces
@@ -132,7 +175,7 @@ the renderer uses a scoped API proxy with session renewal.
 
 The integrated targeted Vitest run passed 82 tests across 16 files, including
 runtime/authentication boundaries, document commands, OS camera contracts,
-shared account gating, and sidebar/inspector behavior. Isolated fixture checks
+and sidebar/inspector behavior. Isolated fixture checks
 have shown original picker/node-editor rendering, adding Hermes Agent,
 authenticated credential navigation, and real execution output `answer: 42`.
 

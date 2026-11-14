@@ -1,0 +1,63 @@
+{
+  "results": [
+    {
+      "width": 574,
+      "height": 1080,
+      "scheme": "Light",
+      "background": "rgb(244, 244, 246)",
+      "overflow": false,
+      "undersized": []
+    },
+    {
+      "width": 574,
+      "height": 1080,
+      "scheme": "Dark",
+      "background": "rgb(28, 28, 30)",
+      "overflow": false,
+      "undersized": []
+    },
+    {
+      "width": 574,
+      "height": 900,
+      "scheme": "Light",
+      "background": "rgb(244, 244, 246)",
+      "overflow": false,
+      "undersized": []
+    },
+    {
+      "width": 574,
+      "height": 900,
+      "scheme": "Dark",
+      "background": "rgb(28, 28, 30)",
+      "overflow": false,
+      "undersized": []
+    },
+    {
+      "width": 574,
+      "height": 800,
+      "scheme": "Light",
+      "background": "rgb(244, 244, 246)",
+      "overflow": false,
+      "undersized": []
+    },
+    {
+      "width": 574,
+      "height": 800,
+      "scheme": "Dark",
+      "background": "rgb(28, 28, 30)",
+      "overflow": false,
+      "undersized": []
+    }
+  ],
+  "accessibility": {
+    "label": "#f5f5f7",
+    "secondary": "#f5f5f7",
+    "blurred": 0,
+    "composerTransition": "1e-05s"
+  },
+  "focus": {
+    "label": "Send",
+    "outline": "solid"
+  },
+  "errors": []
+}

@@ -1,6 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-    <rect width="512" height="512" rx="118" fill="#0b0b0e"/>
-    <path d="M118 116h276v280H118z" fill="#9a7af0" rx="60"/>
-    <path d="M174 164h55v76l75-76h70l-95 94 105 90h-75l-80-72v72h-55z" fill="#0b0b0e"/>
-    <circle cx="389" cy="123" r="27" fill="#b2c66f"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+    <style>
+        .kronterm-cube {
+            --kronterm-cube-edge: #343b45;
+            --kronterm-cube-top: #fbfcfe;
+            --kronterm-cube-left: #e5e9ee;
+            --kronterm-cube-right: #f2f4f7;
+            --kronterm-cube-inset: #535d6b;
+        }
+        @media (prefers-color-scheme: dark) {
+            .kronterm-cube {
+                --kronterm-cube-edge: #d8dfe8;
+                --kronterm-cube-top: #30353d;
+                --kronterm-cube-left: #1b1f26;
+                --kronterm-cube-right: #242a32;
+                --kronterm-cube-inset: #abb6c4;
+            }
+        }
+    </style>
+    <g class="kronterm-cube" stroke="var(--kronterm-cube-edge)" stroke-width="1.65" stroke-linejoin="round">
+        <path d="M5.5 13.4 24 24.1v21.3L5.5 34.7Z" fill="var(--kronterm-cube-left)"/>
+        <path d="M24 24.1 42.5 13.4v21.3L24 45.4Z" fill="var(--kronterm-cube-right)"/>
+        <path d="M24 2.7 42.5 13.4 24 24.1 5.5 13.4Z" fill="var(--kronterm-cube-top)"/>
+        <path d="M24 7.4 34.2 13.3 24 19.2 13.8 13.3Zm0 2.8-5.4 3.1 5.4 3.1 5.4-3.1Z"
+              fill="var(--kronterm-cube-inset)" fill-rule="evenodd" stroke="none"/>
+    </g>
 </svg>

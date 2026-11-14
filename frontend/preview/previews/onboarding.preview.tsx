@@ -71,7 +71,7 @@ function UpgradeOnboardingPatchV() {
                                 <Logo />
                             </div>
                             <div className="text-center text-[25px] font-normal text-foreground">
-                                KronTerm {version.version} Update
+                                KronOS {version.version} Update
                             </div>
                         </header>
                         <div className="flex-1">{version.content()}</div>

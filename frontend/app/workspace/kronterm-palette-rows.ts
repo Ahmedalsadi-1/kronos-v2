@@ -5,6 +5,7 @@
 // when the Hermes app runs embedded in a KronTerm window; standalone Hermes
 // never sees them.
 
+import { getApi } from "@/app/store/global";
 import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import { registry } from "@hermes/contrib/registry";
 import { isKronTermWidgetHost } from "@hermes/lib/kronterm-host";
@@ -16,8 +17,20 @@ function registerKronTermPaletteRows(): void {
         return;
     }
     registered = true;
+    registry.registerMany([
+        {
+            id: "kronterm.sign-in",
+            area: "palette",
+            data: {
+                id: "kronterm.sign-in",
+                label: "Sign in to KronOS",
+                keywords: ["account", "login"],
+                run: () => getApi().openKronosSignIn(),
+            },
+        },
+    ]);
     registry.registerMany(
-        (["tabs", "widgets", "canvas", "os"] as const).map((presentation) => ({
+        (["tabs", "widgets", "os"] as const).map((presentation) => ({
             id: `kronterm.presentation.${presentation}`,
             area: "palette" as const,
             data: {

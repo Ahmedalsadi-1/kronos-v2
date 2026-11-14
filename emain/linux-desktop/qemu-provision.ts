@@ -31,7 +31,11 @@ disable_root: true
 package_update: true
 packages: [${LinuxGuestPackages.join(", ")}]
 write_files:
-${LinuxGuestCloudFiles}${wallpaper}  - path: /etc/systemd/system/kronterm-cua.service
+${LinuxGuestCloudFiles}${wallpaper}  - path: /etc/motd
+    permissions: '0644'
+    content: |
+      KronOS Linux (Ubuntu 24.04 LTS)
+  - path: /etc/systemd/system/kronterm-cua.service
     content: |
       [Unit]
       After=network.target
@@ -65,6 +69,10 @@ export function makeLinuxVmMetadata(): string {
     return `instance-id: kronterm-${randomUUID()}\nlocal-hostname: kronterm-linux\n`;
 }
 
+export function linuxVmQemuDrive(directory: string): string {
+    return `file=${directory}/ubuntu.qcow2,format=qcow2,if=virtio`;
+}
+
 export function linuxVmQemuArgs(directory: string, sshPort: number): string[] {
     if (!Number.isInteger(sshPort) || sshPort < 1024 || sshPort > 65535) throw new Error("Invalid SSH port.");
     return [
@@ -79,7 +87,7 @@ export function linuxVmQemuArgs(directory: string, sshPort: number): string[] {
         "-bios",
         "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
         "-drive",
-        `file=${directory}/ubuntu.qcow2,format=qcow2,if=virtio`,
+        linuxVmQemuDrive(directory),
         "-drive",
         `file=${directory}/seed.iso,format=raw,if=virtio,readonly=on`,
         "-netdev",

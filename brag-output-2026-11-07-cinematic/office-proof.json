@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "outputDir": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad",
+  "frames": [
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/frame-00-at-8s.png",
+      "time": 8
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/frame-01-at-13s.png",
+      "time": 13
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/frame-02-at-65s.png",
+      "time": 65
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/frame-03-at-73s.png",
+      "time": 73
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/frame-04-at-78s.png",
+      "time": 78
+    },
+    {
+      "path": "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/frame-05-at-79.75s.png",
+      "time": 79.75
+    }
+  ],
+  "contactSheets": [
+    "/Users/albsheralsadi/kronterm/brag-output-2026-11-07-cinematic/composition/.hyperframes/artifacts/snapshots/0b1a73c3-876b-4c05-9c2a-c3f6fddc9fad/contact-sheet.jpg"
+  ],
+  "_meta": {
+    "version": "0.9.22",
+    "latestVersion": "0.9.22",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-08T02:01:11.331Z",
+    "skillsOutdated": 4,
+    "skillsMissing": 0
+  }
+}

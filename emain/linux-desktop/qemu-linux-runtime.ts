@@ -1,14 +1,32 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as wait } from "node:timers/promises";
 import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "../../frontend/types/linux-desktops";
+import { SandboxLoginProviders } from "../../frontend/types/sandbox-login";
 import { normalizeToolResult, ToolOperationContext } from "../../mcp-kron-term/src/tool-execution";
+import {
+    hasComputerInteraction,
+    hasWorkspaceComputerAssignment,
+    rememberComputerControl,
+    restoredComputerControl,
+} from "../computer-access-policy";
+import { GuestLogin, type PrivateBrowserInput, type PrivateBrowserResult } from "../guest-login";
+import { runPrivateGuestCommand } from "../private-guest-command";
 import { runLinuxDesktopCommand } from "./command-runner";
-import { linuxVmQemuArgs, LinuxVmVncSetup, makeLinuxVmCloudInit, makeLinuxVmMetadata } from "./qemu-provision";
+import { LinuxGuestSources } from "./guest-assets";
+import {
+    linuxVmQemuArgs,
+    linuxVmQemuDrive,
+    LinuxVmVncSetup,
+    makeLinuxVmCloudInit,
+    makeLinuxVmMetadata,
+} from "./qemu-provision";
 import { QemuVncBridge } from "./qemu-vnc-bridge";
 import { DATA_DIR } from "./upstream/openmaus/kronterm-adapter";
+import { isManagedQemu } from "./vm-process";
 
 const VmId = "linux-vm:ubuntu";
 const SshPort = 59622;
@@ -22,6 +40,7 @@ const Actions = new Set([
     "stop",
     "remove",
     "screenshot",
+    "pick-element",
     "click",
     "drag",
     "type",
@@ -40,6 +59,8 @@ export class QemuLinuxDesktopRuntime {
     private screenshotPromise: Promise<LinuxDesktopActionResult>;
     private queuedCount = 0;
     private statusCache: { desktop: LinuxDesktop; time: number };
+    private statusProbe: Promise<LinuxDesktop>;
+    private statusRevision = 0;
     private guestHealth: { pid: number; checkedAt: number };
     private idleTimer: ReturnType<typeof setTimeout>;
     private startupGrace = false;
@@ -51,25 +72,46 @@ export class QemuLinuxDesktopRuntime {
 
     private configureViewer() {
         if (this.viewerUrl || this.viewerSetup || Date.now() < this.viewerRetryAt) return;
-        this.viewerSetup = (async () => {
+        const setup = (async () => {
             await this.ssh(LinuxVmVncSetup, 300_000);
-            this.viewerUrl = await this.vncBridge.open(this.sshArgs());
+            if (this.viewerSetup !== setup) return;
+            const url = await this.vncBridge.open(this.sshArgs());
+            if (this.viewerSetup !== setup) return;
+            this.viewerUrl = url;
             this.viewerError = "";
         })()
             .catch((error) => {
+                if (this.viewerSetup !== setup) return;
                 this.viewerError = `Computer connection setup failed: ${error instanceof Error ? error.message : error}`;
                 this.viewerRetryAt = Date.now() + 15_000;
             })
             .finally(() => {
+                if (this.viewerSetup !== setup) return;
                 this.viewerSetup = undefined;
                 this.statusCache = undefined;
             });
+        this.viewerSetup = setup;
+    }
+
+    private resetViewer() {
+        this.viewerSetup = undefined;
+        this.vncBridge.close();
+        this.viewerUrl = "";
+        this.viewerError = "";
+        this.viewerRetryAt = 0;
     }
 
     private scheduleIdle(ms = 300_000) {
         this.startupGrace = ms > 300_000;
         clearTimeout(this.idleTimer);
         this.idleTimer = setTimeout(() => {
+            if (
+                hasComputerInteraction(this.vmId) ||
+                (this.owner === "agent" && hasWorkspaceComputerAssignment(this.vmId, this.assignedAgentId))
+            ) {
+                this.scheduleIdle();
+                return;
+            }
             const action: LinuxDesktopAction = {
                 desktopId: this.vmId,
                 action: "stop",
@@ -89,7 +131,14 @@ export class QemuLinuxDesktopRuntime {
         private vmId = VmId,
         private directory = Directory,
         private sshPort = SshPort
-    ) {}
+    ) {
+        const restored = restoredComputerControl(this.vmId);
+        if (restored) {
+            this.owner = restored.owner;
+            this.assignedAgentId = restored.agentId;
+            this.generation = restored.generation;
+        }
+    }
 
     private async exists(file: string): Promise<boolean> {
         return stat(file)
@@ -97,17 +146,16 @@ export class QemuLinuxDesktopRuntime {
             .catch(() => false);
     }
     private async pid(): Promise<number> {
+        let contents: string;
         try {
-            const pid = Number((await readFile(join(this.directory, "qemu.pid"), "utf8")).trim());
-            if (!Number.isInteger(pid) || pid < 2) return undefined;
-            process.kill(pid, 0);
-            const { stdout } = await this.runner("ps", ["-p", String(pid), "-o", "command="], 3000);
-            return stdout.includes("qemu-system-aarch64") && stdout.includes(join(this.directory, "ubuntu.qcow2"))
-                ? pid
-                : undefined;
-        } catch {
-            return undefined;
+            contents = await readFile(join(this.directory, "qemu.pid"), "utf8");
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+            throw error;
         }
+        const pid = Number(contents.trim());
+        if (!Number.isInteger(pid) || pid < 2 || pid > 0x7fffffff) return undefined;
+        return isManagedQemu(pid, linuxVmQemuDrive(this.directory)) ? pid : undefined;
     }
     private sshArgs(command?: string): string[] {
         return [
@@ -136,40 +184,54 @@ export class QemuLinuxDesktopRuntime {
     private async ssh(command: string, timeout = 15_000) {
         return this.runner("ssh", this.sshArgs(command), timeout);
     }
+    private invalidateStatus() {
+        this.statusCache = undefined;
+        this.statusProbe = undefined;
+        this.statusRevision++;
+    }
     async list(): Promise<LinuxDesktop[]> {
-        if (this.statusCache && Date.now() - this.statusCache.time < 2000) {
-            return [
-                {
-                    ...this.statusCache.desktop,
-                    controlOwner: this.owner,
-                    controlGeneration: this.generation,
-                    assignedAgentId: this.assignedAgentId,
-                },
-            ];
-        }
+        const revision = this.statusRevision;
+        const desktop =
+            this.statusCache && Date.now() - this.statusCache.time < 2000
+                ? this.statusCache.desktop
+                : await (this.statusProbe ??= this.probeStatus(revision).finally(() => {
+                      if (revision === this.statusRevision) this.statusProbe = undefined;
+                  }));
+        if (revision !== this.statusRevision) return this.list();
+        return [
+            {
+                ...desktop,
+                controlOwner: this.owner,
+                controlGeneration: this.generation,
+                assignedAgentId: this.assignedAgentId,
+            },
+        ];
+    }
+    private async probeStatus(revision: number): Promise<LinuxDesktop> {
         if (this.platform !== "darwin" || this.architecture !== "arm64") {
-            return [
-                {
-                    id: this.vmId,
-                    name: "Ubuntu Virtual Machine",
-                    provider: "cua-qemu",
-                    runtime: "QEMU · ARM64",
-                    status: "unavailable",
-                    ready: false,
-                    imagePrepared: false,
-                    viewerUrl: "",
-                    problem: "This QEMU VM backend currently requires Apple Silicon macOS.",
-                    controlOwner: this.owner,
-                    controlGeneration: this.generation,
-                    assignedAgentId: this.assignedAgentId,
-                    workspacePath: this.directory,
-                },
-            ];
+            return {
+                id: this.vmId,
+                name: "KronOS Linux",
+                provider: "cua-qemu",
+                runtime: "QEMU · ARM64",
+                status: "unavailable",
+                ready: false,
+                imagePrepared: false,
+                viewerUrl: "",
+                problem: "This QEMU VM backend currently requires Apple Silicon macOS.",
+                controlOwner: this.owner,
+                controlGeneration: this.generation,
+                assignedAgentId: this.assignedAgentId,
+                workspacePath: this.directory,
+            };
         }
-        const prepared =
-            (await this.exists(join(this.directory, "ubuntu.qcow2"))) &&
-            (await this.exists(join(this.directory, "seed.iso")));
-        const runningPid = await this.pid();
+        const [disk, seed, runningPid] = await Promise.all([
+            this.exists(join(this.directory, "ubuntu.qcow2")),
+            this.exists(join(this.directory, "seed.iso")),
+            this.pid(),
+        ]);
+        if (revision !== this.statusRevision) return;
+        const prepared = disk && seed;
         const running = Boolean(runningPid);
         if (this.guestHealth?.pid !== runningPid) this.guestHealth = undefined;
         let ready = running && this.guestHealth != null && Date.now() - this.guestHealth.checkedAt < 15_000;
@@ -177,51 +239,48 @@ export class QemuLinuxDesktopRuntime {
             try {
                 await this.ssh(
                     (this.guestHealth == null
-                        ? '(cloud-init status --wait >/dev/null 2>&1 || test "$?" = 2) && '
+                        ? "cloud-init status 2>/dev/null | grep -Eq '^status: ((degraded )?done|degraded)$' && "
                         : "") +
                         "DISPLAY=:1 /usr/local/bin/cua-driver status --socket /run/kronterm-cua/kronterm-cua.sock",
                     15_000
                 );
+                if (revision !== this.statusRevision) return;
                 ready = true;
                 this.guestHealth = { pid: runningPid, checkedAt: Date.now() };
             } catch {
+                if (revision !== this.statusRevision) return;
                 this.guestHealth = undefined;
             }
         }
         if (ready) this.configureViewer();
-        if (!running) {
-            this.vncBridge.close();
-            this.viewerUrl = "";
-        }
-        const desktops: LinuxDesktop[] = [
-            {
-                id: this.vmId,
-                name: "Ubuntu Virtual Machine",
-                provider: "cua-qemu",
-                runtime: "QEMU · ARM64 · 2 CPU · 2 GB",
-                status: running ? "running" : prepared ? "stopped" : "missing",
-                ready,
-                imagePrepared: prepared,
-                viewerUrl: ready ? this.viewerUrl : "",
-                problem: ready
-                    ? this.viewerError || (this.viewerUrl ? undefined : "Configuring the VM computer connection…")
-                    : this.progress ||
-                      (running
-                          ? "Ubuntu is starting and installing its desktop and CUA driver."
-                          : prepared
-                            ? "Start the virtual machine."
-                            : "Prepare Ubuntu VM: 620 MB download plus desktop packages."),
-                controlOwner: this.owner,
-                controlGeneration: this.generation,
-                assignedAgentId: this.assignedAgentId,
-                workspacePath: this.directory,
-            },
-        ];
-        this.statusCache = { desktop: desktops[0], time: Date.now() };
+        if (!running) this.resetViewer();
+        const desktop: LinuxDesktop = {
+            id: this.vmId,
+            name: "KronOS Linux",
+            provider: "cua-qemu",
+            runtime: "QEMU · ARM64 · 2 CPU · 2 GB",
+            status: running ? "running" : prepared ? "stopped" : "missing",
+            ready,
+            imagePrepared: prepared,
+            viewerUrl: ready ? this.viewerUrl : "",
+            problem: ready
+                ? this.viewerError || (this.viewerUrl ? undefined : "Configuring the VM computer connection…")
+                : this.progress ||
+                  (running
+                      ? "Ubuntu is starting and installing its desktop and CUA driver."
+                      : prepared
+                        ? "Start the virtual machine."
+                        : "First launch downloads Ubuntu 24.04 LTS (620 MB) and installs the desktop."),
+            controlOwner: this.owner,
+            controlGeneration: this.generation,
+            assignedAgentId: this.assignedAgentId,
+            workspacePath: this.directory,
+        };
+        this.statusCache = { desktop, time: Date.now() };
         // Observation does not renew the idle lease.
         if (running && (!this.idleTimer || (ready && this.startupGrace)))
             this.scheduleIdle(ready ? 300_000 : 1_200_000);
-        return desktops;
+        return desktop;
     }
     private id(id: string) {
         if (id !== this.vmId) throw new Error("Unknown Linux VM.");
@@ -233,12 +292,29 @@ export class QemuLinuxDesktopRuntime {
         this.owner = "agent";
         this.assignedAgentId = agentId;
         this.generation++;
+        rememberComputerControl(this.vmId, {
+            owner: this.owner,
+            agentId: this.assignedAgentId,
+            generation: this.generation,
+        });
         return (await this.list())[0];
     }
-    async takeover(id: string) {
+    async takeover(id: string, expected?: { agentId: string; generation: number }) {
         this.id(id);
+        if (
+            expected &&
+            (this.owner !== "agent" ||
+                expected.agentId !== this.assignedAgentId ||
+                expected.generation !== this.generation)
+        )
+            throw new Error("Control changed. Refresh and wait for desktop assignment or takeover.");
         this.owner = "user";
         this.generation++;
+        rememberComputerControl(this.vmId, {
+            owner: this.owner,
+            agentId: this.assignedAgentId,
+            generation: this.generation,
+        });
         return (await this.list())[0];
     }
     async resume(id: string, generation: number) {
@@ -247,7 +323,56 @@ export class QemuLinuxDesktopRuntime {
             throw new Error("Refresh and assign an agent before resuming.");
         this.owner = "agent";
         this.generation++;
+        rememberComputerControl(this.vmId, {
+            owner: this.owner,
+            agentId: this.assignedAgentId,
+            generation: this.generation,
+        });
         return (await this.list())[0];
+    }
+    privateBrowser(id: string, generation: number, input: PrivateBrowserInput): Promise<PrivateBrowserResult> {
+        const action: LinuxDesktopAction = { desktopId: id, action: "exec", expectedGeneration: generation };
+        const agentId = input.action === "inspect" ? input.agentId : undefined;
+        if (agentId) action.assignedAgentId = agentId;
+        const pending = this.queue.then(async () => {
+            this.check(action, Boolean(agentId));
+            this.scheduleIdle();
+            const script = Buffer.from(GuestLogin).toString("base64");
+            const output = await runPrivateGuestCommand(
+                "ssh",
+                this.sshArgs(`python3 -c "import base64;exec(base64.b64decode('${script}'))"`),
+                JSON.stringify(input)
+            );
+            this.check(action, Boolean(agentId));
+            let result: any;
+            try {
+                result = JSON.parse(output);
+            } catch {
+                throw new Error("Invalid secure browser response.");
+            }
+            if (
+                !["submitted", "needs-user", "ready"].includes(result?.phase) ||
+                typeof result.passwordVisible !== "boolean" ||
+                !["required", "authenticated", "unknown"].includes(result.status) ||
+                !Array.isArray(result.providers) ||
+                result.providers.length > SandboxLoginProviders.length ||
+                result.providers.some((provider) => !SandboxLoginProviders.includes(provider))
+            )
+                throw new Error("Invalid secure browser response.");
+            return {
+                phase: result.phase,
+                passwordVisible: result.passwordVisible,
+                status: result.status,
+                providers: [...new Set<PrivateBrowserResult["providers"][number]>(result.providers)],
+                registration: result.registration === true,
+                signUpAvailable: result.signUpAvailable === true,
+            };
+        });
+        this.queue = pending.then(
+            () => undefined,
+            () => undefined
+        );
+        return pending;
     }
     private check(action: LinuxDesktopAction, agent: boolean) {
         ToolOperationContext.getStore()?.signal.throwIfAborted();
@@ -259,15 +384,17 @@ export class QemuLinuxDesktopRuntime {
                   action.assignedAgentId !== this.assignedAgentId ||
                   !this.assignedAgentId ||
                   action.expectedGeneration !== this.generation
-                : action.action !== "screenshot" &&
-                  (this.owner !== "user" || action.expectedGeneration !== this.generation)
+                : action.action === "pick-element"
+                  ? action.expectedGeneration !== this.generation
+                  : action.action !== "screenshot" &&
+                    (this.owner !== "user" || action.expectedGeneration !== this.generation)
         )
             throw new Error("Control changed. Refresh and wait for desktop assignment or takeover.");
         if (this.platform !== "darwin" || this.architecture !== "arm64")
             throw new Error("QEMU VM requires Apple Silicon macOS.");
     }
     async performAgent(action: LinuxDesktopAction) {
-        if (["prepare", "create", "remove"].includes(action.action))
+        if (["prepare", "create", "remove", "pick-element"].includes(action.action))
             throw new Error("VM provisioning requires the management UI.");
         return this.queued(action, true);
     }
@@ -277,7 +404,7 @@ export class QemuLinuxDesktopRuntime {
     private queued(action: LinuxDesktopAction, agent: boolean): Promise<LinuxDesktopActionResult> {
         action = structuredClone(action);
         this.check(action, agent);
-        if (action.action !== "screenshot") this.screenshotPromise = undefined;
+        if (action.action !== "screenshot" && action.action !== "pick-element") this.screenshotPromise = undefined;
         if (action.action === "screenshot" && this.screenshotPromise) {
             return this.screenshotPromise.then((result) => {
                 this.check(action, agent);
@@ -308,17 +435,34 @@ export class QemuLinuxDesktopRuntime {
     private async prepare(check: () => void) {
         if (await this.pid()) throw new Error("Stop the VM before preparing its disk.");
         check();
+        await this.runner("qemu-system-aarch64", ["--version"]).catch((error) => {
+            if (error.code !== "ENOENT") throw error;
+            throw new Error("Install QEMU with Homebrew (brew install qemu), then launch KronOS Linux again.");
+        });
+        check();
         await mkdir(this.directory, { recursive: true, mode: 0o700 });
         const base = join(this.directory, "ubuntu-base.qcow2");
-        if (!(await this.exists(base))) {
-            this.progress = "Downloading Ubuntu ARM64 (620 MB)…";
-            await this.runner("curl", ["--fail", "--location", BaseUrl, "-o", `${base}.part`], 20 * 60_000);
+        const verifyImage = async (path: string) => {
+            const hash = await this.runner("shasum", ["-a", "256", path], 120_000);
+            if (hash.stdout.split(/\s+/, 1)[0] !== CloudImageSha)
+                throw new Error("Ubuntu image checksum does not match the pinned release.");
             check();
-            await this.runner("mv", [`${base}.part`, base]);
+        };
+        if (await this.exists(base)) {
+            await verifyImage(base);
+        } else {
+            const partial = `${base}.part`;
+            try {
+                this.progress = "Downloading Ubuntu ARM64 (620 MB)…";
+                await this.runner("curl", ["--fail", "--location", BaseUrl, "-o", partial], 20 * 60_000);
+                check();
+                await verifyImage(partial);
+                await rename(partial, base);
+            } finally {
+                await rm(partial, { force: true });
+                this.progress = undefined;
+            }
         }
-        const hash = await this.runner("shasum", ["-a", "256", base], 120_000);
-        if (!hash.stdout.startsWith(CloudImageSha))
-            throw new Error("Ubuntu image checksum does not match the pinned release.");
         if (!(await this.exists(join(this.directory, "id_ed25519"))))
             await this.runner("ssh-keygen", [
                 "-q",
@@ -342,7 +486,7 @@ export class QemuLinuxDesktopRuntime {
                 if (error.code !== "ENOENT") throw error;
             }
         }
-        if (wallpaper == null) throw new Error("The bundled computer wallpaper is missing. Rebuild KronTerm.");
+        if (wallpaper == null) throw new Error("The bundled computer wallpaper is missing. Rebuild KronOS.");
         await writeFile(join(seed, "user-data"), makeLinuxVmCloudInit(publicKey, wallpaper.toString("base64")));
         await writeFile(join(seed, "meta-data"), makeLinuxVmMetadata());
         if (!(await this.exists(join(this.directory, "ubuntu.qcow2")))) {
@@ -377,28 +521,51 @@ export class QemuLinuxDesktopRuntime {
         if (this.busy) throw new Error("Linux VM is busy.");
         this.busy = true;
         try {
-            if (action.action !== "screenshot") this.scheduleIdle();
-            if (["prepare", "create", "start", "stop", "remove"].includes(action.action)) this.statusCache = undefined;
+            const changesLifecycle = ["prepare", "create", "start", "stop", "remove"].includes(action.action);
+            if (!changesLifecycle && action.action !== "screenshot" && action.action !== "pick-element")
+                this.scheduleIdle();
+            if (changesLifecycle) this.invalidateStatus();
             if (action.action === "prepare") await this.prepare(() => this.check(action, agent));
             else if (action.action === "create" || action.action === "start") {
-                if (!(await this.exists(join(this.directory, "seed.iso")))) throw new Error("Prepare the VM first.");
                 if (!(await this.pid())) {
+                    const [disk, seed] = await Promise.all([
+                        this.exists(join(this.directory, "ubuntu.qcow2")),
+                        this.exists(join(this.directory, "seed.iso")),
+                    ]);
+                    if (!disk || !seed) {
+                        if (action.action !== "create")
+                            throw new Error("Open the desktop in KronOS to prepare it first.");
+                        await this.prepare(() => this.check(action, agent));
+                    }
                     this.check(action, agent);
                     await this.runner("qemu-system-aarch64", linuxVmQemuArgs(this.directory, this.sshPort), 30_000);
                     this.scheduleIdle(1_200_000);
                 }
             } else if (action.action === "stop") {
-                this.guestHealth = undefined;
                 const pid = await this.pid();
                 this.check(action, agent);
-                if (pid) process.kill(pid, "SIGTERM");
-                await this.viewerSetup;
-                this.vncBridge.close();
-                this.viewerUrl = "";
-                this.viewerRetryAt = 0;
+                if (pid) {
+                    try {
+                        await this.ssh("sudo systemd-run --on-active=1s --quiet /usr/bin/systemctl poweroff", 5000);
+                    } catch (error) {
+                        this.check(action, agent);
+                        if (this.guestHealth) throw new Error("Could not shut down the guest. Try Stop VM again.");
+                        if ((await this.pid()) === pid) {
+                            this.check(action, agent);
+                            process.kill(pid, "SIGTERM");
+                        }
+                    }
+                    const deadline = Date.now() + 30_000;
+                    while ((await this.pid()) === pid) {
+                        if (Date.now() >= deadline)
+                            throw new Error("The guest is still shutting down. Try again shortly.");
+                        await wait(250);
+                    }
+                }
+                this.guestHealth = undefined;
+                this.resetViewer();
                 clearTimeout(this.idleTimer);
                 this.idleTimer = undefined;
-                this.statusCache = undefined;
             } else if (action.action === "remove") {
                 if (await this.pid()) throw new Error("Stop the VM before removing it.");
                 this.check(action, agent);
@@ -411,6 +578,43 @@ export class QemuLinuxDesktopRuntime {
                 const desktop = (await this.list())[0];
                 this.check(action, agent);
                 if (!desktop.ready) throw new Error(desktop.problem || "VM desktop is not ready.");
+                if (action.action === "pick-element") {
+                    const { x, y } = action;
+                    if (![x, y].every((value) => Number.isInteger(value) && value >= 0 && value < 16384))
+                        throw new Error("Invalid VM selection coordinates.");
+                    const script = Buffer.from(LinuxGuestSources["pick-element.py"]).toString("base64");
+                    const result = await this.ssh(
+                        `DISPLAY=:1 python3 -c "import base64;exec(base64.b64decode('${script}'))" ${x} ${y}`,
+                        4000
+                    ).catch(() => undefined);
+                    this.check(action, agent);
+                    if (!result?.stdout || result.stdout.length > 2048) return { desktop };
+                    const { application, role, name, frame } = JSON.parse(result.stdout);
+                    if (
+                        typeof role !== "string" ||
+                        !frame ||
+                        ![frame.x, frame.y, frame.width, frame.height].every(Number.isInteger) ||
+                        frame.width <= 0 ||
+                        frame.height <= 0 ||
+                        x < frame.x ||
+                        x >= frame.x + frame.width ||
+                        y < frame.y ||
+                        y >= frame.y + frame.height
+                    )
+                        return { desktop };
+                    return {
+                        desktop,
+                        element: {
+                            role: role.slice(0, 100),
+                            application: typeof application === "string" ? application.slice(0, 180) : "",
+                            name:
+                                typeof name === "string" && !/password|secret|token/i.test(role)
+                                    ? name.slice(0, 180)
+                                    : "",
+                            frame: { x: frame.x, y: frame.y, width: frame.width, height: frame.height },
+                        },
+                    };
+                }
                 if (action.action === "screenshot") {
                     const { stdout } = await this.ssh(
                         "DISPLAY=:1 /usr/local/bin/cua-driver call get_desktop_state '{}' --socket /run/kronterm-cua/kronterm-cua.sock --screenshot-out-file /tmp/kronterm-frame.png >/dev/null && base64 -w0 /tmp/kronterm-frame.png",
@@ -541,9 +745,10 @@ export class QemuLinuxDesktopRuntime {
                 }
                 return { desktop, output: stdout.slice(0, 20_000) };
             }
+            if (changesLifecycle) this.invalidateStatus();
             return { desktop: (await this.list())[0] };
         } catch (error) {
-            this.statusCache = undefined;
+            this.invalidateStatus();
             throw error;
         } finally {
             this.busy = false;

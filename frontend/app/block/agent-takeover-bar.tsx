@@ -75,7 +75,7 @@ export function AgentTakeoverBar({
             </svg>
             <span className="agent-takeover-copy">
                 <span className="agent-takeover-title">
-                    {activity?.appname || `KronTerm ${activity?.surface ?? "browser"} control`}
+                    {activity?.appname || `KronOS ${activity?.surface ?? "browser"} control`}
                 </span>
                 <span className="agent-takeover-status">Agent is in control</span>
             </span>

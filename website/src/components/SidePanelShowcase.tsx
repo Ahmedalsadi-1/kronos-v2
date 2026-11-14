@@ -3,7 +3,7 @@ import { productAssets } from "../data/site";
 
 const sidePanelItems = [
     { icon: Files, label: "Files", text: "Inspect project structure and keep edited files close to the active workspace." },
-    { icon: GitBranch, label: "Git", text: "Track branches, diffs, pull requests, and review state without leaving Kronterm." },
+    { icon: GitBranch, label: "Git", text: "Track branches, diffs, pull requests, and review state without leaving KronOS." },
     { icon: Globe, label: "Web", text: "Keep browser previews and references beside terminal and code context." },
     { icon: Boxes, label: "Sandbox", text: "Route risky tests, automation, and agent execution into controlled environments." },
     { icon: Sparkles, label: "KronosCode", text: "Expose side-panel context to the AI engine for better planning and review." },
@@ -17,12 +17,12 @@ export function SidePanelShowcase() {
                 <p className="eyebrow">Side panel command layer</p>
                 <h2 id="sidepanel-title">Every workspace surface is one click from the side panel.</h2>
                 <p>
-                    Kronterm’s side panel makes files, git, browser context, sandboxes, apps, and KronosCode controls feel like one product surface instead of disconnected tools.
+                    KronOS’s side panel makes files, git, browser context, sandboxes, apps, and KronosCode controls feel like one product surface instead of disconnected tools.
                 </p>
             </div>
             <div className="sidepanel-layout">
                 <div className="sidepanel-visual">
-                    <img src={productAssets.sidepanel} alt="Kronterm side panel showing files, git tree, web, sandbox, apps, and settings" />
+                    <img src={productAssets.sidepanel} alt="KronOS side panel showing files, git tree, web, sandbox, apps, and settings" />
                     <div className="sidepanel-glass-card">
                         <strong>KronosCode context</strong>
                         <span>Files, git state, browser preview, sandbox logs, and approval controls are available from the same panel.</span>

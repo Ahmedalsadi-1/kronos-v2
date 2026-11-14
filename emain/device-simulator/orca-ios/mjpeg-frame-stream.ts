@@ -1,6 +1,6 @@
 import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'node:http'
 import { request as httpsRequest } from 'node:https'
-import { extractJpegFrames } from './mjpeg-frame-parser'
+import { MjpegFrameParser } from './mjpeg-frame-parser'
 
 const RECONNECT_DELAY_MS = 1_000
 const REQUEST_TIMEOUT_MS = 10_000
@@ -41,7 +41,7 @@ function requestForUrl(url: URL, response: (res: IncomingMessage) => void): Clie
 }
 
 export class MjpegFrameStream {
-  private pending: Buffer<ArrayBufferLike> = Buffer.alloc(0)
+  private readonly parser = new MjpegFrameParser()
   private reconnectTimer: NodeJS.Timeout | null = null
   private request: ClientRequest | null = null
   private stopped = false
@@ -67,7 +67,7 @@ export class MjpegFrameStream {
     }
     this.request?.destroy()
     this.request = null
-    this.pending = Buffer.alloc(0)
+    this.parser.reset()
   }
 
   private scheduleReconnect(): void {
@@ -81,48 +81,48 @@ export class MjpegFrameStream {
   }
 
   private openRequest(): void {
-    if (this.stopped) {
+    if (this.stopped || this.request) {
       return
     }
 
     const req = requestForUrl(this.streamUrl, (res) => {
+      if (this.request !== req) {
+        res.destroy()
+        return
+      }
       if (res.statusCode && res.statusCode >= 400) {
-        this.callbacks.onError(`Simulator stream returned HTTP ${res.statusCode}.`)
-        res.resume()
-        this.scheduleReconnect()
+        req.destroy(new Error(`Simulator stream returned HTTP ${res.statusCode}.`))
         return
       }
 
-      res.on('data', (chunk: Buffer) => this.handleChunk(chunk))
-      res.on('end', () => this.scheduleReconnect())
-      res.on('error', (error) => {
-        this.callbacks.onError(error.message)
-        this.scheduleReconnect()
+      res.on('data', (chunk: Buffer) => {
+        if (this.request === req) this.handleChunk(chunk)
       })
+      res.once('close', () => finish())
+      res.once('error', finish)
     })
+
+    const finish = (error?: Error): void => {
+      if (this.request !== req) return
+      this.request = null
+      this.parser.reset()
+      if (error) this.callbacks.onError(error.message)
+      this.scheduleReconnect()
+    }
 
     this.request = req
     req.on('timeout', () => req.destroy(new Error('Simulator stream timed out.')))
-    req.on('error', (error) => {
-      if (this.stopped) {
-        return
-      }
-      this.callbacks.onError(error.message)
-      this.scheduleReconnect()
-    })
+    req.once('error', finish)
+    req.once('close', () => finish())
     req.end()
   }
 
   private handleChunk(chunk: Buffer<ArrayBufferLike>): void {
-    const result = extractJpegFrames(this.pending, chunk)
-    this.pending = result.pending
-    for (const frame of result.frames) {
+    this.parser.push(chunk, (frame) => {
       const now = Date.now()
-      if (this.lastFrameAt > 0 && now - this.lastFrameAt < MIN_FRAME_INTERVAL_MS) {
-        continue
-      }
+      if (this.stopped || (this.lastFrameAt > 0 && now - this.lastFrameAt < MIN_FRAME_INTERVAL_MS)) return
       this.lastFrameAt = now
       this.callbacks.onFrame(frame)
-    }
+    })
   }
 }

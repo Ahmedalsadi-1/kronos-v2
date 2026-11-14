@@ -1,0 +1,1131 @@
+diff --git a/packages/frontend/@n8n/composables/src/useClipboard.ts b/packages/frontend/@n8n/composables/src/useClipboard.ts
+index 01a9f77d..ce9f9db6 100644
+--- a/packages/frontend/@n8n/composables/src/useClipboard.ts
++++ b/packages/frontend/@n8n/composables/src/useClipboard.ts
+@@ -46,6 +46,8 @@ export function useClipboard({
+ 	 * @param event
+ 	 */
+ 	function onPaste(event: ClipboardEvent) {
++        const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++        if(nativeHost?.shouldHandleEvent && !nativeHost.shouldHandleEvent(event)) return;
+ 		if (!onPasteCallback.value) {
+ 			return;
+ 		}
+diff --git a/packages/frontend/@n8n/composables/src/useDocumentTitle.ts b/packages/frontend/@n8n/composables/src/useDocumentTitle.ts
+index a52b1c45..d2d21135 100644
+--- a/packages/frontend/@n8n/composables/src/useDocumentTitle.ts
++++ b/packages/frontend/@n8n/composables/src/useDocumentTitle.ts
+@@ -1,6 +1,6 @@
+ import { ref, type Ref } from 'vue';
+ 
+-const DEFAULT_TITLE = 'n8n';
++const DEFAULT_TITLE = (window as any).__KRONTERM_WORKFLOW_HOST__ ? 'KronTerm' : 'n8n';
+ const DEFAULT_TAGLINE = 'Workflow Automation';
+ 
+ export type WorkflowTitleStatus =
+diff --git a/packages/frontend/@n8n/composables/src/useStyles.ts b/packages/frontend/@n8n/composables/src/useStyles.ts
+index 2e326741..f5243590 100644
+--- a/packages/frontend/@n8n/composables/src/useStyles.ts
++++ b/packages/frontend/@n8n/composables/src/useStyles.ts
+@@ -4,7 +4,9 @@ const setAppZIndexes = () => {
+ 	Object.keys(APP_Z_INDEXES).forEach((key) => {
+ 		const variableName = `--${key.toLowerCase().replaceAll('_', '-')}--z`;
+ 		const value = APP_Z_INDEXES[key as keyof typeof APP_Z_INDEXES];
+-		document.documentElement.style.setProperty(variableName, `${value}`);
++		const nativeWorkflowHost = typeof window !== 'undefined' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
++        if(nativeWorkflowHost) nativeWorkflowHost.setCssVar?.(variableName, String(value));
++        else document.documentElement.style.setProperty(variableName, `${value}`);
+ 	});
+ };
+ 
+diff --git a/packages/frontend/@n8n/design-system/src/composables/useMessage.ts b/packages/frontend/@n8n/design-system/src/composables/useMessage.ts
+index d25e5f78..f9b01d0b 100644
+--- a/packages/frontend/@n8n/design-system/src/composables/useMessage.ts
++++ b/packages/frontend/@n8n/design-system/src/composables/useMessage.ts
+@@ -5,6 +5,7 @@ import { h } from 'vue';
+ 
+ import N8nCheckbox from '../v2/components/Checkbox/Checkbox.vue';
+ 
++const nativeMessageOptions = () => { const host = typeof window !== 'undefined' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null; return host?.detailTarget ? {appendTo:host.detailTarget, lockScroll:false} : {}; };
+ export type MessageBoxConfirmResult = 'confirm' | 'cancel';
+ 
+ type AdditionalConfirmOptions = {
+@@ -34,6 +35,7 @@ export function useMessage() {
+ 			cancelButtonClass: 'btn--cancel',
+ 			confirmButtonClass: 'btn--confirm',
+ 			dangerouslyUseHTMLString: true,
++            ...nativeMessageOptions(),
+ 		};
+ 
+ 		if (typeof configOrTitle === 'string') {
+@@ -61,6 +63,7 @@ export function useMessage() {
+ 			showClose: config?.showClose ?? false,
+ 			closeOnClickModal: false,
+ 			dangerouslyUseHTMLString: true,
++            ...nativeMessageOptions(),
+ 			beforeClose: (action, _instance, done) => {
+ 				if (action !== 'confirm' || confirmedCheckbox) {
+ 					done();
+@@ -118,6 +121,7 @@ export function useMessage() {
+ 			cancelButtonClass: 'btn--cancel',
+ 			confirmButtonClass: 'btn--confirm',
+ 			dangerouslyUseHTMLString: true,
++            ...nativeMessageOptions(),
+ 		};
+ 
+ 		if (typeof configOrTitle === 'string') {
+diff --git a/packages/frontend/@n8n/stores/src/useRootStore.ts b/packages/frontend/@n8n/stores/src/useRootStore.ts
+index 068f64cd..52b2b39c 100644
+--- a/packages/frontend/@n8n/stores/src/useRootStore.ts
++++ b/packages/frontend/@n8n/stores/src/useRootStore.ts
+@@ -239,6 +239,7 @@ export const useRootStore = defineStore(STORES.ROOT, () => {
+ 	// #endregion
+ 
+ 	return {
++		setNativeBaseUrl: (value: string) => { if((window as any).__KRONTERM_WORKFLOW_HOST__) state.value.baseUrl=value; },
+ 		baseUrl,
+ 		formUrl,
+ 		formTestUrl,
+diff --git a/packages/frontend/@n8n/stores/src/versions.store.ts b/packages/frontend/@n8n/stores/src/versions.store.ts
+index a547cf62..458a409c 100644
+--- a/packages/frontend/@n8n/stores/src/versions.store.ts
++++ b/packages/frontend/@n8n/stores/src/versions.store.ts
+@@ -140,6 +140,7 @@ export const useVersionsStore = defineStore(STORES.VERSIONS, () => {
+ 	// ---------------------------------------------------------------------------
+ 
+ 	const fetchVersions = async () => {
++        if(typeof window !== 'undefined' && (window as any).__KRONTERM_WORKFLOW_HOST__) return;
+ 		try {
+ 			const { enabled, endpoint } = versionNotificationSettings.value;
+ 			if (enabled && endpoint) {
+@@ -207,6 +208,7 @@ export const useVersionsStore = defineStore(STORES.VERSIONS, () => {
+ 	};
+ 
+ 	const fetchWhatsNew = async () => {
++        if(typeof window !== 'undefined' && (window as any).__KRONTERM_WORKFLOW_HOST__) return;
+ 		try {
+ 			const { enabled, whatsNewEnabled, whatsNewEndpoint } = versionNotificationSettings.value;
+ 			if (enabled && whatsNewEnabled && whatsNewEndpoint) {
+diff --git a/packages/frontend/editor-ui/src/app/App.vue b/packages/frontend/editor-ui/src/app/App.vue
+index c2864fe7..459228f9 100644
+--- a/packages/frontend/editor-ui/src/app/App.vue
++++ b/packages/frontend/editor-ui/src/app/App.vue
+@@ -136,6 +136,7 @@ const setLayoutRef = (el: Element) => {
+ useExposeCssVar('--toast--offset', toastBottomOffset);
+ useExposeCssVar('--toast--right', toastRightOffset);
+ useExposeCssVar('--ask-assistant--floating-button--margin-bottom', askAiFloatingButtonBottomOffset);
++const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ </script>
+ 
+ <template>
+@@ -147,7 +148,7 @@ useExposeCssVar('--ask-assistant--floating-button--margin-bottom', askAiFloating
+ 		<AppLayout @mounted="setLayoutRef">
+ 			<RouterView />
+ 		</AppLayout>
+-		<AppModals />
++		<Teleport :to="nativeWorkflowHost?.detailTarget || 'body'" :disabled="!nativeWorkflowHost?.detailTarget"><div class="kronterm-native-modal-root"><AppModals /></div></Teleport>
+ 		<AppCommandBar />
+ 		<template #overlays>
+ 			<div :id="CODEMIRROR_TOOLTIP_CONTAINER_ELEMENT_ID" />
+diff --git a/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue b/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue
+index 6813154a..a25362ea 100644
+--- a/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue
++++ b/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue
+@@ -134,6 +134,7 @@ function syncTabsWithRoute(to: RouteLocation, from?: RouteLocation): void {
+ }
+ 
+ function onTabSelected(tab: MAIN_HEADER_TABS, event: MouseEvent) {
++    if(nativeWorkflowHost && tab === MAIN_HEADER_TABS.EXECUTIONS) { nativeWorkflowHost.onInspector?.('executions'); return; }
+ 	const openInNewTab = event.ctrlKey || event.metaKey;
+ 
+ 	switch (tab) {
+@@ -248,6 +249,7 @@ async function onWorkflowDeactivated() {
+ 		}
+ 	}
+ }
++const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ </script>
+ 
+ <template>
+@@ -256,11 +258,11 @@ async function onWorkflowDeactivated() {
+ 			:class="{
+ 				[$style['main-header']]: true,
+ 				[$style.expanded]: !uiStore.sidebarMenuCollapsed,
+-				[$style['canvas-only']]: settingsStore.isCanvasOnly,
++				[$style['canvas-only']]: settingsStore.isCanvasOnly && !nativeWorkflowHost,
+ 			}"
+ 		>
+-			<template v-if="!settingsStore.isCanvasOnly">
+-				<div v-show="!hideMenuBar" :class="$style['top-menu']">
++			<template v-if="!settingsStore.isCanvasOnly || nativeWorkflowHost">
++				<div v-show="!hideMenuBar || nativeWorkflowHost" :class="$style['top-menu']">
+ 					<WorkflowDetails
+ 						v-if="workflowName"
+ 						:id="workflowId"
+@@ -277,7 +279,7 @@ async function onWorkflowDeactivated() {
+ 				v-if="onWorkflowPage"
+ 				:items="tabBarItems"
+ 				:model-value="activeHeaderTab"
+-				:floating="settingsStore.isCanvasOnly"
++				:floating="settingsStore.isCanvasOnly && !nativeWorkflowHost"
+ 				@update:model-value="onTabSelected"
+ 			/>
+ 		</div>
+diff --git a/packages/frontend/editor-ui/src/app/components/app/AppLayout.vue b/packages/frontend/editor-ui/src/app/components/app/AppLayout.vue
+index c02975ba..eb30f09a 100644
+--- a/packages/frontend/editor-ui/src/app/components/app/AppLayout.vue
++++ b/packages/frontend/editor-ui/src/app/components/app/AppLayout.vue
+@@ -1,5 +1,7 @@
+ <script lang="ts" setup>
+ import { defineAsyncComponent, ref } from 'vue';
++import KronTermHostLayout from '@/app/layouts/KronTermHostLayout.vue';
++const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ import { useRoute, useRouter } from 'vue-router';
+ 
+ const DefaultLayout = defineAsyncComponent(
+@@ -25,7 +27,7 @@ const emit = defineEmits<{
+ 	mounted: [element: Element];
+ }>();
+ 
+-const initialized = ref<boolean>(false);
++const initialized = ref<boolean>(Boolean((window as any).__KRONTERM_WORKFLOW_HOST__));
+ 
+ const removeListener = router.afterEach(() => {
+ 	initialized.value = true;
+@@ -38,7 +40,8 @@ function onMounted(element: Element) {
+ </script>
+ 
+ <template>
+-	<div v-if="!initialized" />
++	<KronTermHostLayout v-if="nativeHost" />
++	<div v-else-if="!initialized" />
+ 	<Suspense v-else>
+ 		<SettingsLayout v-if="route.meta.layout === 'settings'" @mounted="onMounted" />
+ 		<WorkflowLayout v-else-if="route.meta.layout === 'workflow'" @mounted="onMounted" />
+diff --git a/packages/frontend/editor-ui/src/app/composables/useBackendStatus.ts b/packages/frontend/editor-ui/src/app/composables/useBackendStatus.ts
+index 2c4e2b55..cf73e9fd 100644
+--- a/packages/frontend/editor-ui/src/app/composables/useBackendStatus.ts
++++ b/packages/frontend/editor-ui/src/app/composables/useBackendStatus.ts
+@@ -35,7 +35,17 @@ export function useBackendStatus() {
+ 		const healthUrl = origin + settingsStore.endpointHealth;
+ 
+ 		try {
+-			const response = await fetch(healthUrl, {
++			const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++            if(nativeHost?.request) {
++                const requestId = crypto.randomUUID();
++                const cancel = () => { void nativeHost.cancelRequest?.(requestId); };
++                controller.signal.addEventListener('abort', cancel, {once:true});
++                try {
++                    const result = await nativeHost.request({route:settingsStore.endpointHealth,method:'GET',requestId});
++                    return result.status >= 200 && result.status < 300 && result.data?.status === 'ok';
++                } finally { controller.signal.removeEventListener('abort', cancel); }
++            }
++            const response = await fetch(healthUrl, {
+ 				cache: 'no-store',
+ 				signal: controller.signal,
+ 			});
+diff --git a/packages/frontend/editor-ui/src/app/composables/useExposeCssVar.ts b/packages/frontend/editor-ui/src/app/composables/useExposeCssVar.ts
+index eda0e432..9502aee1 100644
+--- a/packages/frontend/editor-ui/src/app/composables/useExposeCssVar.ts
++++ b/packages/frontend/editor-ui/src/app/composables/useExposeCssVar.ts
+@@ -5,6 +5,8 @@ import { onBeforeUnmount, toValue, watch, type MaybeRef } from 'vue';
+  * Composable to exposes CSS variable globally
+  */
+ export function useExposeCssVar(name: string, value: MaybeRef<string>) {
++    const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    if(nativeWorkflowHost) { const stop = watch(() => toValue(value), latest => nativeWorkflowHost.setCssVar?.(name, latest), {immediate:true}); onBeforeUnmount(stop); return; }
+ 	const originalValue = document.documentElement.style.getPropertyValue(name);
+ 	const variable = useCssVar(name);
+ 
+diff --git a/packages/frontend/editor-ui/src/app/composables/useHistoryHelper.ts b/packages/frontend/editor-ui/src/app/composables/useHistoryHelper.ts
+index fe0302fd..6b352a8e 100644
+--- a/packages/frontend/editor-ui/src/app/composables/useHistoryHelper.ts
++++ b/packages/frontend/editor-ui/src/app/composables/useHistoryHelper.ts
+@@ -109,12 +109,14 @@ export function useHistoryHelper(
+ 	 */
+ 	function isMessageDialogOpen(): boolean {
+ 		return (
+-			document.querySelector(`${ELEMENT_UI_OVERLAY_SELECTOR}:not([style*="display: none"])`) !==
++			((window as any).__KRONTERM_WORKFLOW_HOST__?.querySelector || document.querySelector.bind(document))(`${ELEMENT_UI_OVERLAY_SELECTOR}:not([style*="display: none"])`) !==
+ 			null
+ 		);
+ 	}
+ 
+ 	function handleKeyDown(event: KeyboardEvent) {
++        const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++        if(nativeHost?.shouldHandleEvent && !nativeHost.shouldHandleEvent(event)) return;
+ 		const currentNodeViewTab = getNodeViewTab(activeRoute);
+ 		const isNDVOpen = ndvStore.value?.isNDVOpen;
+ 		const isAnyModalOpen = uiStore.isAnyModalOpen || isMessageDialogOpen();
+diff --git a/packages/frontend/editor-ui/src/app/composables/useKeybindings.ts b/packages/frontend/editor-ui/src/app/composables/useKeybindings.ts
+index a2c38fb4..77925fc7 100644
+--- a/packages/frontend/editor-ui/src/app/composables/useKeybindings.ts
++++ b/packages/frontend/editor-ui/src/app/composables/useKeybindings.ts
+@@ -198,6 +198,8 @@ export const useKeybindings = (
+ 	// 5. For non-letter keys (arrows, function keys, etc.), allow `byCode` as a
+ 	//    last resort to ensure consistent physical-key behavior across layouts.
+ 	function onKeyDown(event: KeyboardEvent) {
++        const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++        if(nativeHost?.shouldHandleEvent && !nativeHost.shouldHandleEvent(event)) return;
+ 		if (isDisabled.value) return;
+ 
+ 		const { byKey, byCode, byLayout } = toShortcutString(event);
+diff --git a/packages/frontend/editor-ui/src/app/init/toastNotifier.ts b/packages/frontend/editor-ui/src/app/init/toastNotifier.ts
+index e291a892..6c3f5d16 100644
+--- a/packages/frontend/editor-ui/src/app/init/toastNotifier.ts
++++ b/packages/frontend/editor-ui/src/app/init/toastNotifier.ts
+@@ -24,6 +24,7 @@ export function registerToastNotifier(): void {
+ 
+ 		if (suppressed && !(allowErrors && options.type === 'error')) return undefined;
+ 
+-		return ElNotification(options);
++		const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++        return ElNotification(nativeWorkflowHost ? {...options, appendTo:nativeWorkflowHost.chromeTarget || nativeWorkflowHost.detailTarget || nativeWorkflowHost.sceneElement} : options);
+ 	});
+ }
+diff --git a/packages/frontend/editor-ui/src/app/layouts/BaseLayout.vue b/packages/frontend/editor-ui/src/app/layouts/BaseLayout.vue
+index 30b3d0c0..abd362b5 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/BaseLayout.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/BaseLayout.vue
+@@ -1,5 +1,7 @@
+ <script setup lang="ts">
+ import { onMounted, useTemplateRef } from 'vue';
++import KronTermHostFrame from './KronTermHostFrame.vue';
++const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ 
+ const layoutRef = useTemplateRef('layout');
+ 
+@@ -13,7 +15,8 @@ onMounted(() => {
+ </script>
+ 
+ <template>
+-	<div ref="layout" class="app-grid" :class="$style.appGrid">
++<KronTermHostFrame v-if="nativeHost" @mounted="emit('mounted', $event)"><template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}" /></template></KronTermHostFrame>
++	<div v-else ref="layout" class="app-grid" :class="$style.appGrid">
+ 		<div v-if="!!$slots.banners" id="banners" :class="$style.banners">
+ 			<slot name="banners" />
+ 		</div>
+diff --git a/packages/frontend/editor-ui/src/app/layouts/DefaultLayout.vue b/packages/frontend/editor-ui/src/app/layouts/DefaultLayout.vue
+index 9c0c0454..82ae5f76 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/DefaultLayout.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/DefaultLayout.vue
+@@ -1,11 +1,13 @@
+ <script lang="ts" setup>
+ import BaseLayout from './BaseLayout.vue';
++import { useSettingsStore } from '@n8n/stores/settings.store';
++const settingsStore = useSettingsStore();
+ import AppSidebar from '@/app/components/app/AppSidebar.vue';
+ </script>
+ 
+ <template>
+ 	<BaseLayout>
+-		<template #sidebar>
++		<template v-if="!settingsStore.isCanvasOnly" #sidebar>
+ 			<AppSidebar />
+ 		</template>
+ 		<RouterView />
+diff --git a/packages/frontend/editor-ui/src/app/layouts/SettingsLayout.vue b/packages/frontend/editor-ui/src/app/layouts/SettingsLayout.vue
+index 405aae42..d2309a46 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/SettingsLayout.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/SettingsLayout.vue
+@@ -5,9 +5,11 @@ import { isRouteLocationRaw } from '@/app/utils/typeGuards';
+ import { onMounted, ref } from 'vue';
+ import type { HistoryState } from 'vue-router';
+ import { useRouter } from 'vue-router';
++import { useSettingsStore } from '@n8n/stores/settings.store';
+ import SettingsSidebar from '@/app/components/SettingsSidebar.vue';
+ 
+ const router = useRouter();
++const settingsStore = useSettingsStore();
+ 
+ const previousRoute = ref<HistoryState[string] | undefined>();
+ 
+@@ -31,7 +33,7 @@ onMounted(() => {
+ 
+ <template>
+ 	<BaseLayout>
+-		<template #sidebar>
++		<template v-if="!settingsStore.isCanvasOnly" #sidebar>
+ 			<SettingsSidebar @return="onReturn" />
+ 		</template>
+ 
+diff --git a/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue b/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue
+index 8ce702e2..1bba5578 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue
+@@ -1,6 +1,13 @@
+ <script lang="ts" setup>
+-import { watch, onMounted, onBeforeUnmount, provide } from 'vue';
++import { watch, onMounted, onBeforeUnmount, provide, inject } from 'vue';
++const nativeRole = inject('kronterm:surface-role', 'standalone');
++const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ import BaseLayout from './BaseLayout.vue';
++import { useNDVStore } from '@/features/ndv/shared/ndv.store';
++import { nextTick } from 'vue';
++import KronTermExecutions from './KronTermExecutions.vue';
++import { useRoute } from 'vue-router';
++import { useUIStore } from '@/app/stores/ui.store';
+ import { useLayoutProps } from '@/app/composables/useLayoutProps';
+ import { InstanceAiEditorCapabilityKey } from '@/app/composables/useInstanceAiEditorCapability';
+ import { useWorkflowInitialization } from '@/app/composables/useWorkflowInitialization';
+@@ -26,6 +33,9 @@ const chatHubPanelStore = useChatHubPanelStore();
+ const pushConnectionStore = usePushConnectionStore();
+ const settingsStore = useSettingsStore();
+ const isCanvasOnly = settingsStore.isCanvasOnly;
++const route = useRoute();
++const uiStore = useUIStore();
++declare global { interface Window { krontermWorkflowState?: () => { id: string; dirty: boolean } } }
+ 
+ // The editor remembers the logs panel across reloads. The store holds session
+ // state only, so the AI Assistant artifact never inherits this value (INS-1192).
+@@ -51,6 +61,28 @@ const {
+ 	cleanup,
+ } = useWorkflowInitialization();
+ 
++if (nativeHost && nativeRole !== 'management') {
++    nativeHost.getDocumentState = () => currentWorkflowDocumentStore.value?.hydrated ? ({ workflowId: currentWorkflowDocumentStore.value.workflowId, dirty: uiStore.stateIsDirty, versionId: currentWorkflowDocumentStore.value.versionId, checksum: currentWorkflowDocumentStore.value.checksum }) : null;
++    nativeHost.refreshDocument = async (draft: any) => {
++        const document = currentWorkflowDocumentStore.value;
++        if (!document || !draft || document.workflowId !== draft.id) throw new Error('The workflow document is not ready.');
++        if (uiStore.stateIsDirty) throw new Error('Save the local workflow edits before applying Hermes changes.');
++        const ndv = useNDVStore(document.documentId);
++        const activeNodeId = ndv.activeNode?.id;
++        const selectedIds = nativeHost.getSelection?.() || [];
++        nativeHost.isReconcilingDocument = true;
++        try {
++            document.hydrate(draft);
++            const active = activeNodeId ? document.getNodeById(activeNodeId) : null;
++            if (active) ndv.setActiveNodeName(active.name, 'canvas_default_view');
++            uiStore.markStateClean();
++            await nextTick();
++            nativeHost.setSelection?.(selectedIds);
++        } finally { nativeHost.isReconcilingDocument = false; }
++        nativeHost.onDirty?.(uiStore.stateIsDirty);
++        return { workflowId: document.workflowId, versionId: document.versionId };
++    };
++}
+ const { setup: setupPostMessages, cleanup: cleanupPostMessages } = usePostMessageHandler({
+ 	currentWorkflowDocumentStore,
+ });
+@@ -58,18 +90,21 @@ const { setup: setupPostMessages, cleanup: cleanupPostMessages } = usePostMessag
+ // As the standalone editor host, this layout defines what the editor's
+ // Instance AI entry points do here: hand the current workflow off to a new
+ // thread. Editors embedded elsewhere get their host's capability — or none.
+-provide(InstanceAiEditorCapabilityKey, useInstanceAiHandoffCapability());
++provide(InstanceAiEditorCapabilityKey, nativeHost ? {openWorkflow: async () => { nativeHost.openChat?.(); }, openCredential: async (context) => {nativeHost.openChat?.({credential:context}); return false;} } : useInstanceAiHandoffCapability());
+ 
+ onMounted(async () => {
+-	pushConnectionStore.pushConnect();
++    if(nativeRole === 'management') { isLoading.value = false; return; }
++	if(nativeRole !== 'management') pushConnectionStore.pushConnect();
+ 	setupPostMessages();
+ 	await initializeData();
+ 	await initializeWorkflow();
++	if (isCanvasOnly) window.krontermWorkflowState = () => ({ id: workflowId.value ?? '', dirty: uiStore.stateIsDirty });
+ });
+ 
+ watch(
+ 	workflowId,
+ 	async (newId, oldId) => {
++        if(nativeRole === 'management') return;
+ 		if (newId !== oldId && newId) {
+ 			await initializeWorkflow(true);
+ 		}
+@@ -91,9 +126,11 @@ watch(
+ );
+ 
+ onBeforeUnmount(() => {
+-	pushConnectionStore.pushDisconnect();
++    if(nativeRole === 'management') return;
++	if(nativeRole !== 'management') pushConnectionStore.pushDisconnect();
+ 	cleanupPostMessages();
+ 	cleanup();
++	if (isCanvasOnly) delete window.krontermWorkflowState;
+ });
+ </script>
+ 
+@@ -112,6 +149,9 @@ onBeforeUnmount(() => {
+ 		document store and must mount so its onMounted redirect can fire. -->
+ 		<LoadingView v-if="isLoading || (!currentWorkflowDocumentStore && !isOnboardingRoute)" />
+ 		<RouterView v-else />
++		<template v-if="isCanvasOnly && !route.path.includes('/executions') && !route.path.includes('/evaluation')" #aside>
++			<KronTermExecutions :workflow-id="workflowId" />
++		</template>
+ 		<template v-if="layoutProps.logs" #footer>
+ 			<LogsPanel />
+ 		</template>
+diff --git a/packages/frontend/editor-ui/src/app/router.ts b/packages/frontend/editor-ui/src/app/router.ts
+index 6191fc99..003bd3dc 100644
+--- a/packages/frontend/editor-ui/src/app/router.ts
++++ b/packages/frontend/editor-ui/src/app/router.ts
+@@ -5,7 +5,7 @@ import type {
+ 	RouteLocationRaw,
+ 	RouteLocationNormalized,
+ } from 'vue-router';
+-import { createRouter, createWebHistory, isNavigationFailure, RouterView } from 'vue-router';
++import { createRouter, createMemoryHistory, createWebHistory, isNavigationFailure, RouterView } from 'vue-router';
+ import { generateNanoId } from '@n8n/utils/generate-nano-id';
+ import { useExternalHooks } from '@/app/composables/useExternalHooks';
+ import { useSettingsStore } from '@n8n/stores/settings.store';
+@@ -1212,7 +1212,7 @@ function withCanvasReadOnlyMeta(route: RouteRecordRaw) {
+ }
+ 
+ const router = createRouter({
+-	history: createWebHistory(import.meta.env.DEV ? '/' : (window.BASE_PATH ?? '/')),
++	history: (window as any).__KRONTERM_WORKFLOW_HOST__ ? createMemoryHistory('/') : createWebHistory(import.meta.env.DEV ? '/' : (window.BASE_PATH ?? '/')),
+ 	scrollBehavior(to: RouteLocationNormalized, _, savedPosition) {
+ 		// saved position == null means the page is NOT visited from history (back button)
+ 		if (savedPosition === null && to.name === VIEWS.TEMPLATES && to.meta?.setScrollPosition) {
+diff --git a/packages/frontend/editor-ui/src/app/stores/pushConnection.store.ts b/packages/frontend/editor-ui/src/app/stores/pushConnection.store.ts
+index 191ad890..76c72ec9 100644
+--- a/packages/frontend/editor-ui/src/app/stores/pushConnection.store.ts
++++ b/packages/frontend/editor-ui/src/app/stores/pushConnection.store.ts
+@@ -49,6 +49,8 @@ export const usePushConnectionStore = defineStore(STORES.PUSH, () => {
+ 	const getConnectionUrl = () => {
+ 		const restUrl = rootStore.restUrl;
+ 		const url = `/push?pushRef=${rootStore.pushRef}`;
++        const nativePushUrl = (window as any).__KRONTERM_WORKFLOW_HOST__?.pushUrl;
++        if (nativePushUrl) return `${nativePushUrl}?pushRef=${rootStore.pushRef}`;
+ 
+ 		if (useWebSockets.value) {
+ 			const { protocol, host } = window.location;
+diff --git a/packages/frontend/editor-ui/src/app/stores/ui.store.ts b/packages/frontend/editor-ui/src/app/stores/ui.store.ts
+index 637482dd..4523d497 100644
+--- a/packages/frontend/editor-ui/src/app/stores/ui.store.ts
++++ b/packages/frontend/editor-ui/src/app/stores/ui.store.ts
+@@ -197,7 +197,7 @@ export const useUIStore = defineStore(STORES.UI, () => {
+ 	);
+ 
+ 	const appliedTheme = computed(() => {
+-		return theme.value === 'system' ? preferredSystemTheme.value : theme.value;
++		return (window as any).__KRONTERM_WORKFLOW_HOST__?.appearance?.value ?? (theme.value === 'system' ? preferredSystemTheme.value : theme.value);
+ 	});
+ 
+ 	const contextBasedTranslationKeys = computed(() => {
+@@ -318,7 +318,7 @@ export const useUIStore = defineStore(STORES.UI, () => {
+ 	);
+ 
+ 	const headerHeight = computed(() => {
+-		const style = getComputedStyle(document.body);
++		const style = getComputedStyle((window as any).__KRONTERM_WORKFLOW_HOST__?.sceneElement || document.body);
+ 		return Number(style.getPropertyValue('--header--height'));
+ 	});
+ 
+diff --git a/packages/frontend/editor-ui/src/app/stores/ui.utils.ts b/packages/frontend/editor-ui/src/app/stores/ui.utils.ts
+index 2a612e85..80fe4ada 100644
+--- a/packages/frontend/editor-ui/src/app/stores/ui.utils.ts
++++ b/packages/frontend/editor-ui/src/app/stores/ui.utils.ts
+@@ -2,6 +2,8 @@ import { LOCAL_STORAGE_THEME } from '@/app/constants';
+ import type { AppliedThemeOption, ThemeOption } from '@/Interface';
+ 
+ export function applyThemeToBody(theme: ThemeOption, window_?: Window) {
++    const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    if(nativeWorkflowHost && (!window_ || window_ === window)) return;
+ 	if (theme === 'system') {
+ 		(window_ ?? window).document.body.removeAttribute('data-theme');
+ 	} else {
+diff --git a/packages/frontend/editor-ui/src/app/views/NodeView.vue b/packages/frontend/editor-ui/src/app/views/NodeView.vue
+index dd56a689..51091249 100644
+--- a/packages/frontend/editor-ui/src/app/views/NodeView.vue
++++ b/packages/frontend/editor-ui/src/app/views/NodeView.vue
+@@ -1,4 +1,6 @@
+ <script setup lang="ts">
++import { bindNativeWidgetInsertion, bindNativeNodeEditor } from '@/kronterm-native-node-focus.mjs';
++import { inject as nativeInject } from 'vue';
+ import {
+ 	computed,
+ 	defineAsyncComponent,
+@@ -316,7 +318,7 @@ const hideCanvasControls = computed(() => {
+ const stripedCanvasBackground = computed(() => route.query.canvasBackground !== 'dots');
+ 
+ const isDemoRoute = computed(() => route.name === VIEWS.DEMO);
+-const isCanvasOnlyLogoVisible = computed(() => settingsStore.isCanvasOnly && !isDemoRoute.value);
++const isCanvasOnlyLogoVisible = computed(() => settingsStore.isCanvasOnly && !isDemoRoute.value && !(window as any).__KRONTERM_WORKFLOW_HOST__);
+ const isReadOnlyRoute = computed(() => !!route?.meta?.readOnlyCanvas);
+ const isReadOnlyEnvironment = computed(() => {
+ 	return sourceControlStore.preferences.branchReadOnly;
+@@ -335,6 +337,7 @@ const runWorkflowButtonType = computed(() =>
+ 
+ const isCanvasReadOnly = computed(() => {
+ 	return (
++        (window as any).__KRONTERM_WORKFLOW_HOST__?.documentMutation?.value ||
+ 		isDemoRoute.value ||
+ 		isReadOnlyEnvironment.value ||
+ 		collaborationStore.shouldBeReadOnly ||
+@@ -368,7 +371,7 @@ const isWriterAnotherTab = computed(() => {
+ const showFallbackNodes = computed(() => triggerNodes.value.length === 0);
+ 
+ const keyBindingsEnabled = computed(() => {
+-	return !ndvStore.value.activeNode && uiStore.activeModals.length === 0;
++	return !(window as any).__KRONTERM_WORKFLOW_HOST__?.managementOpen?.value && !(window as any).__KRONTERM_WORKFLOW_HOST__?.documentMutation?.value && !ndvStore.value.activeNode && uiStore.activeModals.length === 0;
+ });
+ 
+ const isLogsPanelOpen = computed(() => logsStore.isOpen);
+@@ -584,6 +587,7 @@ function onClickNode(_id: string, event: VueFlowXYPosition) {
+ }
+ 
+ async function onSetNodeActivated(id: string, event?: MouseEvent) {
++    if(nativeWorkflowHost?.managementOpen?.value) void nativeWorkflowHost.navigate('/workflow/' + workflowId.value);
+ 	if (isDemoRoute.value && !canOpenNDV.value) return;
+ 
+ 	// Handle Ctrl/Cmd + Double Click case
+@@ -1153,6 +1157,7 @@ function onOpenSelectiveNodeCreator(
+ }
+ 
+ function onToggleNodeCreator(options: ToggleNodeCreatorOptions) {
++    if(options.createNodeActive) nativeWorkflowHost?.onInspector?.('nodes');
+ 	nodeCreatorStore.setNodeCreatorState({ ...options, workflowId: workflowId.value });
+ 
+ 	if (!options.createNodeActive) {
+@@ -1533,6 +1538,8 @@ watch(isChatHubAvailable, (available) => {
+ });
+ 
+ function onOpenChat() {
++    const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    if(nativeHost?.openChat) { nativeHost.openChat(); return; }
+ 	if (isChatHubAvailable.value) {
+ 		chatHubPanelStore.open();
+ 	} else {
+@@ -1541,6 +1548,8 @@ function onOpenChat() {
+ }
+ 
+ function onToggleChat() {
++    const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    if (nativeHost?.openChat) { nativeHost.openChat(); return; }
+ 	if (isChatHubAvailable.value) {
+ 		if (isChatHubPanelOpen.value) {
+ 			chatHubPanelStore.close();
+@@ -2075,6 +2084,7 @@ watch(
+ );
+ 
+ onBeforeRouteLeave(async (to, from, next) => {
++    if ((window as any).__KRONTERM_WORKFLOW_HOST__ && !(to.meta.layout === 'workflow' && to.meta.nodeView)) { next(); return; }
+ 	// Close the focus panel when leaving the workflow view
+ 	if (focusPanelStore.focusPanelActive) {
+ 		focusPanelStore.closeFocusPanel();
+@@ -2179,10 +2189,20 @@ onBeforeUnmount(() => {
+ 	removeUndoRedoEventBindings();
+ 	canvasEventBus.off('saved:workflow', onSaveFromWithinExecutionDebug);
+ });
++const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++const unbindNativeNodeEditor = bindNativeNodeEditor(nativeInject('kronterm:surface-role', 'root') === 'workflow' ? nativeWorkflowHost : null, clearNodeActive);
++onBeforeUnmount(unbindNativeNodeEditor);
++const unbindNativeWidgetInsertion = bindNativeWidgetInsertion(nativeInject('kronterm:surface-role', 'root') === 'workflow' ? nativeWorkflowHost : null, () => !isCanvasReadOnly.value && checkIfEditingIsAllowed(), async (node: any) => {
++        const result = await addNodesAndConnections([node], [], {viewport:viewportBoundaries.value,telemetry:true});
++        const added = result.addedNodes[0];
++        if(added){selectNodes([added.id]);nativeWorkflowHost.onSelection?.(added.id);setNodeActive(added.id, 'canvas_default_view');}
++        return added;
++      });
++      onBeforeUnmount(unbindNativeWidgetInsertion);
+ </script>
+ 
+ <template>
+-	<div :class="$style.wrapper">
++	<div :class="$style.wrapper" :style="nativeWorkflowHost ? {height:'100%'} : undefined">
+ 		<WorkflowCanvas
+ 			v-if="!isLoading"
+ 			:id="workflowDocumentStore?.workflowId"
+@@ -2268,7 +2288,7 @@ onBeforeUnmount(() => {
+ 				v-if="!isCanvasReadOnly"
+ 				:class="$style.evaluationsCanvasInfoCardWrapper"
+ 			/>
+-			<div v-if="!isCanvasReadOnly || canExecuteOnCanvas" :class="$style.executionButtonsContainer">
++			<Teleport :to="nativeWorkflowHost?.chromeTarget || 'body'" :disabled="!nativeWorkflowHost?.chromeTarget"><div class="kronterm-execution-controls" data-workflow-controls><div v-if="!isCanvasReadOnly || canExecuteOnCanvas" :class="$style.executionButtonsContainer">
+ 				<div :class="$style.executionButtons">
+ 					<CanvasRunWorkflowButton
+ 						v-if="isRunWorkflowButtonVisible"
+@@ -2318,6 +2338,7 @@ onBeforeUnmount(() => {
+ 				</div>
+ 			</div>
+ 
++			</div></Teleport>
+ 			<N8nCallout
+ 				v-if="isReadOnlyEnvironment"
+ 				theme="warning"
+@@ -2367,6 +2388,7 @@ onBeforeUnmount(() => {
+ 				/>
+ 			</Suspense>
+ 		</WorkflowCanvas>
++		<Teleport :to="nativeWorkflowHost?.focusTarget || nativeWorkflowHost?.detailTarget || 'body'" :disabled="!(nativeWorkflowHost?.focusTarget || nativeWorkflowHost?.detailTarget)"><div class="kronterm-focus-portal">
+ 		<FocusSidebar
+ 			v-if="
+ 				!isLoading && (experimentalNdvStore.isNdvInFocusPanelEnabled ? !isCanvasReadOnly : true)
+@@ -2374,6 +2396,7 @@ onBeforeUnmount(() => {
+ 			:is-canvas-read-only="isCanvasReadOnly"
+ 			@context-menu-action="onContextMenuAction"
+ 		/>
++		</div></Teleport>
+ 	</div>
+ </template>
+ 
+diff --git a/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue b/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue
+index 49ceda0f..ee8074f4 100644
+--- a/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue
++++ b/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue
+@@ -755,12 +755,18 @@ onBeforeUnmount(() => {
+ 	ndvEventBus.off('updateInputNodeName', setSelectedInput);
+ 	unregisterKeyboardListener();
+ });
++const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
++const nativeExpanded = ref(false);
++watch(nativeExpanded, expanded => nativeWorkflowHost?.onDetailExpanded?.(expanded));
++watch(activeNode, node => { if(nativeDetailsRole === 'workflow') nativeWorkflowHost?.onNodeEditorOpen?.(Boolean(node)); });
++import { inject } from 'vue';
++const nativeDetailsRole = inject('kronterm:surface-role', 'root');
+ </script>
+ 
+ <template>
+-	<Teleport v-if="activeNode && !isActiveStickyNode" :to="`#${APP_MODALS_ELEMENT_ID}`">
++	<Teleport v-if="activeNode && !isActiveStickyNode" :to="(nativeDetailsRole === 'workflow' && nativeWorkflowHost?.focusTarget) || nativeWorkflowHost?.detailTarget || `#${APP_MODALS_ELEMENT_ID}`">
+ 		<div
+-			data-test-id="ndv-backdrop"
++			v-if="!nativeWorkflowHost" data-test-id="ndv-backdrop"
+ 			:class="$style.backdrop"
+ 			:style="{ zIndex: APP_Z_INDEXES.NDV }"
+ 			@click="close"
+@@ -769,11 +775,13 @@ onBeforeUnmount(() => {
+ 		<dialog
+ 			ref="dialogRef"
+ 			open
+-			aria-modal="true"
++			:aria-modal="nativeWorkflowHost ? 'false' : 'true'"
+ 			data-test-id="ndv"
++            :data-workflow-node-editor="nativeWorkflowHost ? '' : undefined"
+ 			:class="$style.dialog"
+-			:style="{ zIndex: APP_Z_INDEXES.NDV }"
++			:style="nativeWorkflowHost ? {zIndex: APP_Z_INDEXES.NDV, display: nativeDetailsRole === 'workflow' && nativeWorkflowHost.managementOpen?.value ? 'none' : undefined, position: 'absolute', inset: nativeWorkflowHost.dockedPanels ? '8px' : (nativeExpanded ? '8px' : '104px 8px 8px auto'), width: nativeWorkflowHost.dockedPanels ? 'calc(100% - 16px)' : (nativeExpanded ? 'calc(100% - 16px)' : 'min(760px, calc(100% - 16px))'), height: nativeWorkflowHost.dockedPanels ? 'calc(100% - 16px)' : (nativeExpanded ? 'calc(100% - 16px)' : 'calc(100% - 112px)'), minWidth:0, minHeight:0, maxWidth:'calc(100% - 16px)', margin:0, pointerEvents: 'auto'} : { zIndex: APP_Z_INDEXES.NDV }"
+ 		>
++			<button v-if="nativeWorkflowHost" type="button" data-test-id="native-expand-node-editor" :aria-label="nativeExpanded ? 'Restore node editor' : 'Expand node editor'" class="kronterm-expand-node-editor" @click="nativeExpanded = !nativeExpanded">{{ nativeExpanded ? '↙' : '↗' }}</button>
+ 			<NDVFloatingNodes :root-node="activeNode" @switch-selected-node="onSwitchSelectedNode" />
+ 			<div
+ 				ref="containerRef"
+diff --git a/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/NodeCreator.vue b/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/NodeCreator.vue
+index fde740ef..70e22790 100644
+--- a/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/NodeCreator.vue
++++ b/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/NodeCreator.vue
+@@ -185,9 +185,11 @@ onClickOutside(
+ 	},
+ 	{ ignore: OUTSIDE_CLICK_WHITELIST },
+ );
++const nativePickerTarget = (window as any).__KRONTERM_WORKFLOW_HOST__?.pickerTarget ?? ref(null);
+ </script>
+ 
+ <template>
++<Teleport :to="nativePickerTarget || 'body'" :disabled="!nativePickerTarget">
+ 	<div>
+ 		<aside :class="$style.nodeCreatorScrim" />
+ 		<N8nIconButton
+@@ -217,6 +219,7 @@ onClickOutside(
+ 			</div>
+ 		</SlideTransition>
+ 	</div>
++</Teleport>
+ </template>
+ 
+ <style module lang="scss">
+diff --git a/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/Panel/NodesListPanel.vue b/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/Panel/NodesListPanel.vue
+index 0d8eb6ad..70dac834 100644
+--- a/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/Panel/NodesListPanel.vue
++++ b/packages/frontend/editor-ui/src/features/shared/nodeCreator/components/Panel/NodesListPanel.vue
+@@ -1,4 +1,5 @@
+ <script setup lang="ts">
++import NativeWorkspaceWidgetSlot from "@/NativeWorkspaceWidgetSlot.vue";
+ import type { NodeFilterType } from '@/Interface';
+ import {
+ 	ADD_EMPTY_GROUP_NODE_CREATOR_ITEM,
+@@ -297,6 +298,7 @@ function onBackButton() {
+ 			<CommunityNodeInfo v-if="communityNodeDetails && !isActionsMode" />
+ 
+ 			<div :class="$style.renderedItems">
++<NativeWorkspaceWidgetSlot v-if="!isActionsMode && !isAgentsMode && !communityNodeDetails" :query="activeViewStack.search" />
+ 				<N8nNotice
+ 					v-if="activeViewStack.info && !activeViewStack.search"
+ 					:class="$style.info"
+diff --git a/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts b/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts
+index 3e521f45..e0ae0a0a 100644
+--- a/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts
++++ b/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts
+@@ -147,6 +147,7 @@ export const useNodeCreatorStore = defineStore(STORES.NODE_CREATOR, () => {
+ 		connectionType,
+ 		workflowId,
+ 	}: ToggleNodeCreatorOptions & { workflowId: string }) {
++        if(createNodeActive) (window as any).__KRONTERM_WORKFLOW_HOST__?.onInspector?.('nodes');
+ 		if (!nodeCreatorView) {
+ 			nodeCreatorView =
+ 				useWorkflowDocumentStore(createWorkflowDocumentId(workflowId)).workflowTriggerNodes.length >
+diff --git a/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue b/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue
+index 771032e7..fe359cbd 100644
+--- a/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue
++++ b/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue
+@@ -149,10 +149,12 @@ const instanceAiCapability = useInstanceAiEditorCapability();
+ // button hands the current workflow off to a thread. The behavior is the host's
+ // (WorkflowLayout vs the artifact); this component never branches on context.
+ async function onInstanceAiCanvasActionClick() {
++    if ((window as any).__KRONTERM_WORKFLOW_HOST__?.openChat) { (window as any).__KRONTERM_WORKFLOW_HOST__.openChat(); return; }
+ 	await instanceAiCapability.openWorkflow?.('canvas_action_button');
+ }
+ 
+ async function onAskAssistantButtonClick() {
++    if ((window as any).__KRONTERM_WORKFLOW_HOST__?.openChat) { (window as any).__KRONTERM_WORKFLOW_HOST__.openChat(); return; }
+ 	// Open builder when available in this editor, otherwise the assistant.
+ 	if (aiBuilder.value) {
+ 		await chatPanelStore.toggle({ mode: 'builder' });
+@@ -183,11 +185,13 @@ function openCommandBar(event: MouseEvent) {
+ 		document.dispatchEvent(keyboardEvent);
+ 	});
+ }
++const nativeWorkflowHost = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ </script>
+ 
+ <template>
++	<Teleport :to="nativeWorkflowHost?.toolsTarget || nativeWorkflowHost?.chromeTarget || 'body'" :disabled="!nativeWorkflowHost?.chromeTarget"><div class="kronterm-add-controls" data-workflow-controls>
+ 	<N8nButtonList
+-		v-if="!createNodeActive"
++		v-if="nativeWorkflowHost?.toolsTarget || !createNodeActive || nativeWorkflowHost?.pickerParked?.value"
+ 		orientation="vertical"
+ 		variant="toolbar"
+ 		:class="$style.nodeButtonsWrapper"
+@@ -295,6 +299,7 @@ function openCommandBar(event: MouseEvent) {
+ 			</N8nButton>
+ 		</N8nTooltip>
+ 	</N8nButtonList>
++	</div></Teleport>
+ 	<Suspense>
+ 		<LazyNodeCreator
+ 			:active="createNodeActive"
+diff --git a/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue b/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue
+index 27efe217..67c214a1 100644
+--- a/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue
++++ b/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue
+@@ -1,4 +1,5 @@
+ <script lang="ts" setup>
++import { focusNativeNode } from '@/kronterm-native-node-focus.mjs';
+ import ContextMenu from '@/features/shared/contextMenu/components/ContextMenu.vue';
+ import type { ContextMenuTarget } from '@/features/shared/contextMenu/composables/useContextMenu';
+ import { useContextMenu } from '@/features/shared/contextMenu/composables/useContextMenu';
+@@ -688,6 +689,7 @@ async function onAddNodesToChat(
+ 	source: AddNodesToChatSource = 'keyboard',
+ ) {
+ 	const doc = workflowDocumentStore.value;
++    if(krontermHost) { krontermHost.openChat?.({nodeIds:ids,workflowId:doc.workflowId}); return; }
+ 	await addSelectedNodesToChat({
+ 		workflowId: doc.workflowId,
+ 		selectedNodeIds: ids,
+@@ -864,7 +866,9 @@ const selectionBoxStyle = computed(() => {
+ 	};
+ });
+ 
++let nativeNodeDragged = false;
+ function onNodeDragStart(event: NodeDragEvent) {
++    if(krontermHost) nativeNodeDragged = true;
+ 	groupDrag.onNodeDragStart(event);
+ }
+ 
+@@ -873,6 +877,7 @@ function onNodeDrag(event: NodeDragEvent) {
+ }
+ 
+ function onNodeDragStop(event: NodeDragEvent) {
++    if(krontermHost) requestAnimationFrame(() => { nativeNodeDragged = false; });
+ 	const moves = groupDrag.processNodeDragStop(event);
+ 	if (moves.length > 0) commitManualNodePositions(moves);
+ }
+@@ -1219,6 +1224,7 @@ function onNodeClick({ event, node }: NodeMouseEvent) {
+ 	}
+ 
+ 	emit('click:node', node.id, getProjectedPosition(event));
++    focusNativeNode(event, node.id, krontermHost, onSetNodeActivated, {nonParameterNode:node.data?.type === STICKY_NODE_TYPE,suppressInteraction:props.suppressInteraction,dragging:nativeNodeDragged});
+ 
+ 	if (event.ctrlKey || event.metaKey || selectedNodes.value.length < 2) {
+ 		return;
+@@ -1342,6 +1348,7 @@ function onReplaceNode(id: string) {
+ }
+ 
+ function onAddToAi(id: string) {
++    if(krontermHost) { krontermHost.openChat?.({nodeIds:[id]}); return; }
+ 	focusedNodesStore.confirmNodes([id], 'context_menu');
+ 	void chatPanelStore.open({ mode: 'builder' });
+ }
+@@ -1552,10 +1559,10 @@ function getReplaceTargetId(): string | undefined {
+ const defaultZoom = 1;
+ const isPaneMoving = ref(false);
+ 
+-useViewportAutoAdjust(viewportRef, viewport, setViewport);
++if (!(window as any).__KRONTERM_WORKFLOW_HOST__ || inject('kronterm:surface-role', 'root') !== 'workflow') useViewportAutoAdjust(viewportRef, viewport, setViewport);
+ 
+ function getProjectedPosition(event?: MouseEvent | TouchEvent) {
+-	const bounds = viewportRef.value?.getBoundingClientRect() ?? { left: 0, top: 0 };
++	const bounds = krontermHost?.viewportTarget?.getBoundingClientRect() ?? viewportRef.value?.getBoundingClientRect() ?? { left: 0, top: 0 };
+ 	const [offsetX, offsetY] = event ? getMousePosition(event) : [0, 0];
+ 
+ 	return project({
+@@ -1569,10 +1576,12 @@ function onClickPane(event: MouseEvent) {
+ }
+ 
+ async function onFitBounds(nodes: GraphNode[]) {
++    if(krontermHost) { krontermHost.onCameraIntent?.({fitBounds:getRectOfNodes(nodes),scope:'workflow'});return; }
+ 	await fitBounds(getRectOfNodes(nodes), { padding: 2 });
+ }
+ 
+ async function onFitView() {
++    if(krontermHost) { if(!initialized.value) return; krontermHost.onCameraIntent?.({fitBounds:getRectOfNodes(graphNodes.value),scope:'workflow'});return; }
+ 	if (document.hidden) {
+ 		fitViewWhileHidden = true;
+ 		return;
+@@ -1581,14 +1590,17 @@ async function onFitView() {
+ }
+ 
+ async function onZoomTo(zoomLevel: number) {
++    if(krontermHost) { const camera=krontermHost.camera || viewport.value; const ratio=zoomLevel/camera.zoom; krontermHost.onCameraIntent?.({camera:{x:dimensions.value.width/2-(dimensions.value.width/2-camera.x)*ratio,y:dimensions.value.height/2-(dimensions.value.height/2-camera.y)*ratio,zoom:zoomLevel}}); return; }
+ 	await zoomTo(zoomLevel);
+ }
+ 
+ async function onZoomIn() {
++    if(krontermHost) return onZoomTo(viewport.value.zoom * 1.2);
+ 	await zoomIn();
+ }
+ 
+ async function onZoomOut() {
++    if(krontermHost) return onZoomTo(viewport.value.zoom / 1.2);
+ 	await zoomOut();
+ }
+ 
+@@ -1982,6 +1994,7 @@ onUnmounted(() => {
+ });
+ 
+ onPaneReady(async () => {
++    if (krontermHost) { await setViewport(krontermHost.camera || {x:0,y:0,zoom:1}); isPaneReady.value = true; krontermHost.onReady?.(); return; }
+ 	if (props.initialViewport) {
+ 		await setViewport(props.initialViewport);
+ 	} else {
+@@ -1991,6 +2004,7 @@ onPaneReady(async () => {
+ });
+ 
+ onNodesInitialized(() => {
++    if(krontermHost && krontermHost.lastFittedWorkflowId !== workflowDocumentStore.value?.workflowId) { krontermHost.lastFittedWorkflowId = workflowDocumentStore.value?.workflowId; void nextTick(() => onFitView()); }
+ 	initialized.value = true;
+ 
+ 	if (pendingConnections) {
+@@ -2057,6 +2071,34 @@ provide(CanvasKey, {
+ defineExpose({
+ 	executeContextMenuAction: onContextMenuAction,
+ });
++
++// The original canvas publishes its objects and camera into the OS registry.
++const krontermHost = inject('kronterm:surface-role', 'root') === 'workflow' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
++if (krontermHost) {
++    const canvasToken = Symbol('workflow-scene');
++    krontermHost.activeCanvasToken = canvasToken;
++    krontermHost.fitWorkflow = () => onFitView();
++    onUnmounted(() => { if(krontermHost.activeCanvasToken === canvasToken) { krontermHost.onObjects?.([]); delete krontermHost.setSelection; delete krontermHost.moveNode; delete krontermHost.removeNode; delete krontermHost.fitWorkflow; } });
++    let objectSignature = '';
++    let applyingSelection = false;
++    watch([graphNodes, () => workflowDocumentStore.value?.allNodes], ([nodes, canonicalNodes]) => {
++        if(krontermHost.activeCanvasToken !== canvasToken) return;
++        const canonicalIds = new Set((canonicalNodes || []).map(node => node.id));
++        const objects = nodes.filter(node => canonicalIds.has(node.id)).map(node => ({ id: node.id, name: node.data?.name, position: {x: node.computedPosition?.x ?? node.position.x, y: node.computedPosition?.y ?? node.position.y}, dimensions: {...node.dimensions}, type: node.data?.type }));
++        const signature = JSON.stringify(objects);
++        if (signature !== objectSignature) { objectSignature = signature; krontermHost.onObjects?.(objects); }
++    }, { deep: true, immediate: true });
++    krontermHost.getSelection = () => selectedNodesAndGroups.value.map(node => node.id);
++    krontermHost.setSelection = (ids: string[]) => { applyingSelection = true; removeSelectedNodes(selectedNodesAndGroups.value); addSelectedNodes(ids.map(id => findNode(id)).filter(Boolean)); void nextTick(() => { applyingSelection = false; }); };
++    const requireMutableNode = (id: string) => {
++        if(krontermHost.activeCanvasToken !== canvasToken || !findNode(id)) throw new Error('Workflow node is unavailable');
++        if(props.readOnly || props.suppressInteraction || krontermHost.documentMutation?.value) throw new Error('Workflow is read only');
++    };
++    krontermHost.moveNode = (id: string, position: any) => { requireMutableNode(id); if(!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) throw new Error('Invalid node position'); onUpdateNodePosition(id, position); };
++    krontermHost.removeNode = (id: string) => { requireMutableNode(id); onDeleteNode(id); };
++    watch(selectedNodesAndGroups, (nodes) => { if(!applyingSelection) krontermHost.onSelection?.(nodes[0]?.id); });
++}
++
+ </script>
+ 
+ <template>
+@@ -2064,13 +2106,20 @@ defineExpose({
+ 		:id="id"
+ 		:nodes="vueFlowNodes"
+ 		:edges="connections"
+-		:class="classes"
+-		:style="selectionBoxStyle"
++		:class="[classes, krontermHost ? 'kronterm-passive-scene' : null]"
++		:style="[selectionBoxStyle, krontermHost ? { background: 'transparent', pointerEvents: 'none' } : {}]"
+ 		:apply-changes="false"
+ 		:connection-line-options="{ markerEnd: MarkerType.ArrowClosed }"
+ 		:connection-radius="60"
+-		:pan-on-drag="panningMouseButton"
+-		pan-on-scroll
++		:pan-on-drag="krontermHost ? false : panningMouseButton"
++		:auto-pan-on-node-drag="!krontermHost"
++		:auto-pan-on-connect="!krontermHost"
++		:elevate-nodes-on-select="!krontermHost"
++		:pan-on-scroll="!krontermHost"
++		:zoom-on-scroll="!krontermHost"
++		:zoom-on-pinch="!krontermHost"
++		:zoom-on-double-click="!krontermHost"
++		:prevent-scrolling="!krontermHost"
+ 		snap-to-grid
+ 		:snap-grid="[GRID_SIZE, GRID_SIZE]"
+ 		:min-zoom="0"
+@@ -2175,10 +2224,10 @@ defineExpose({
+ 			<CanvasConnectionLine v-bind="connectionLineProps" />
+ 		</template>
+ 
+-		<CanvasArrowHeadMarker :id="arrowHeadMarkerId" />
++		<Teleport :to="krontermHost?.worldTarget || 'body'" :disabled="!krontermHost?.worldTarget"><CanvasArrowHeadMarker :id="arrowHeadMarkerId" /></Teleport>
+ 
+ 		<slot name="canvas-background" v-bind="{ viewport }">
+-			<CanvasBackground :viewport="viewport" :striped="readOnly && stripedBackground" />
++			<CanvasBackground v-if="!krontermHost" :viewport="viewport" :striped="readOnly && stripedBackground" />
+ 		</slot>
+ 
+ 		<!-- A selection that is exactly one group acts through the group's own
+@@ -2193,7 +2242,7 @@ defineExpose({
+ 			@add-nodes-to-chat="onAddNodesToChat($event, 'selection_toolbar')"
+ 		/>
+ 
+-		<Transition name="minimap">
++		<Teleport :to="krontermHost?.chromeTarget || 'body'" :disabled="!krontermHost?.chromeTarget"><div class="kronterm-minimap-controls"><Transition name="minimap">
+ 			<MiniMap
+ 				v-show="isMinimapVisible"
+ 				data-test-id="canvas-minimap"
+@@ -2208,8 +2257,9 @@ defineExpose({
+ 				@mouseenter="onMinimapMouseEnter"
+ 				@mouseleave="onMinimapMouseLeave"
+ 			/>
+-		</Transition>
++		</Transition></div></Teleport>
+ 
++		<Teleport :to="krontermHost?.toolsTarget || krontermHost?.chromeTarget || 'body'" :disabled="!krontermHost?.chromeTarget"><div class="kronterm-canvas-controls" data-workflow-controls>
+ 		<CanvasControlButtons
+ 			v-if="!hideControls"
+ 			data-test-id="canvas-controls"
+@@ -2226,6 +2276,7 @@ defineExpose({
+ 			@toggle-zoom-mode="onToggleZoomMode"
+ 		/>
+ 
++		</div></Teleport>
+ 		<Suspense>
+ 			<ContextMenu @action="onContextMenuAction" />
+ 		</Suspense>
+diff --git a/packages/frontend/editor-ui/src/features/workflows/canvas/components/WorkflowCanvas.vue b/packages/frontend/editor-ui/src/features/workflows/canvas/components/WorkflowCanvas.vue
+index 1b81cd11..6ca2a960 100644
+--- a/packages/frontend/editor-ui/src/features/workflows/canvas/components/WorkflowCanvas.vue
++++ b/packages/frontend/editor-ui/src/features/workflows/canvas/components/WorkflowCanvas.vue
+@@ -232,7 +232,7 @@ defineExpose({
+ 	executeContextMenuAction: (action: ContextMenuAction, nodeIds: string[]) =>
+ 		canvasRef.value?.executeContextMenuAction(action, nodeIds),
+ 	ensureNodesAreVisible: (ids: string[]) => {
+-		const canvasElement = viewportRef.value;
++		const canvasElement = nativeWorkflowHost?.viewportTarget || viewportRef.value;
+ 
+ 		if (!canvasElement) {
+ 			return;
+@@ -296,11 +296,13 @@ defineExpose({
+ 		});
+ 	},
+ });
++const nativeWorkflowHost = inject('kronterm:surface-role', 'root') === 'workflow' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
++import { inject } from 'vue';
+ </script>
+ 
+ <template>
+ 	<div :class="$style.wrapper" data-test-id="canvas-wrapper">
+-		<div id="canvas" :class="$style.canvas">
++		<div id="canvas" :class="$style.canvas" :style="nativeWorkflowHost ? {background: 'transparent'} : undefined">
+ 			<Canvas
+ 				:id="id"
+ 				ref="canvas"
+diff --git a/packages/frontend/editor-ui/src/features/workflows/canvas/components/elements/nodes/CanvasNode.vue b/packages/frontend/editor-ui/src/features/workflows/canvas/components/elements/nodes/CanvasNode.vue
+index effe400b..87b5a076 100644
+--- a/packages/frontend/editor-ui/src/features/workflows/canvas/components/elements/nodes/CanvasNode.vue
++++ b/packages/frontend/editor-ui/src/features/workflows/canvas/components/elements/nodes/CanvasNode.vue
+@@ -1,6 +1,7 @@
+ <script lang="ts" setup>
+ import {
+ 	computed,
++	inject,
+ 	onBeforeUnmount,
+ 	onMounted,
+ 	provide,
+@@ -373,12 +374,15 @@ onBeforeUnmount(() => {
+ 	props.eventBus?.off('nodes:action', emitCanvasNodeEvent);
+ 	canvasNodeEventBus.value?.off('update:node:class', onUpdateClass);
+ });
++const nativeWorkflowHost = inject('kronterm:surface-role', 'root') === 'workflow' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
+ </script>
+ 
+ <template>
+ 	<div
+ 		:class="classes"
+ 		:data-test-id="dataTestId"
++		:data-os-object-kind="nativeWorkflowHost ? 'workflow-node' : undefined"
++		:data-os-object-id="nativeWorkflowHost ? `workflow:${nativeWorkflowHost.workflowId}:${id}` : undefined"
+ 		:data-node-name="data.name"
+ 		:data-node-type="data.type"
+ 	>
+diff --git a/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useCanvasNodeHover.ts b/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useCanvasNodeHover.ts
+index 3c20bc8b..8bff9ae7 100644
+--- a/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useCanvasNodeHover.ts
++++ b/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useCanvasNodeHover.ts
+@@ -1,7 +1,7 @@
+ import { type CanvasNode } from '../canvas.types';
+ import { getRectOfNodes, type Rect, type VueFlowStore } from '@vue-flow/core';
+ import { useThrottleFn } from '@vueuse/core';
+-import { type ComputedRef, onMounted, onUnmounted, ref } from 'vue';
++import { type ComputedRef, inject, onMounted, onUnmounted, ref } from 'vue';
+ 
+ /**
+  * From a given node list, finds a node that the mouse cursor is within its hit box.
+@@ -13,10 +13,11 @@ export function useCanvasNodeHover(
+ 	getHitBox: (rect: Rect) => Rect,
+ ) {
+ 	const id = ref<string | undefined>();
++    const host=inject('kronterm:surface-role','root') === 'workflow' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
+ 
+ 	const recalculate = useThrottleFn(
+ 		(event: MouseEvent) => {
+-			const bounds = store.viewportRef.value?.getBoundingClientRect();
++			const bounds = (host?.viewportTarget || store.viewportRef.value)?.getBoundingClientRect();
+ 
+ 			if (!bounds) {
+ 				return;
+@@ -71,11 +72,11 @@ export function useCanvasNodeHover(
+ 	);
+ 
+ 	onMounted(() => {
+-		store.vueFlowRef.value?.addEventListener('mousemove', recalculate);
++		(host?.viewportTarget || store.vueFlowRef.value)?.addEventListener('mousemove', recalculate);
+ 	});
+ 
+ 	onUnmounted(() => {
+-		store.vueFlowRef.value?.removeEventListener('mousemove', recalculate);
++		(host?.viewportTarget || store.vueFlowRef.value)?.removeEventListener('mousemove', recalculate);
+ 	});
+ 
+ 	return { id };
+diff --git a/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useVueFlowTransformPaneTeleport.ts b/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useVueFlowTransformPaneTeleport.ts
+index bb98a83a..3b878c76 100644
+--- a/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useVueFlowTransformPaneTeleport.ts
++++ b/packages/frontend/editor-ui/src/features/workflows/canvas/composables/useVueFlowTransformPaneTeleport.ts
+@@ -1,4 +1,4 @@
+-import { nextTick, ref, watch } from 'vue';
++import { inject, nextTick, ref, watch } from 'vue';
+ import { useVueFlow } from '@vue-flow/core';
+ 
+ // Vue-flow's transform pane has no public API; the class name is part of its
+@@ -8,13 +8,14 @@ const TRANSFORM_PANE_SELECTOR = '.vue-flow__transformationpane';
+ 
+ export function useVueFlowTransformPaneTeleport() {
+ 	const { vueFlowRef } = useVueFlow();
++    const host=inject('kronterm:surface-role','root') === 'workflow' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
+ 	const teleportTarget = ref<HTMLElement | null>(null);
+ 
+ 	watch(
+ 		vueFlowRef,
+ 		() => {
+ 			void nextTick(() => {
+-				const el = vueFlowRef.value?.querySelector(TRANSFORM_PANE_SELECTOR);
++				const el = (host?.worldTarget || vueFlowRef.value)?.querySelector(TRANSFORM_PANE_SELECTOR);
+ 				teleportTarget.value = el instanceof HTMLElement ? el : null;
+ 			});
+ 		},

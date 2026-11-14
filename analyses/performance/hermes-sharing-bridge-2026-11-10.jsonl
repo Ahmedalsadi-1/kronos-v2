@@ -1,0 +1,12 @@
+{"variant": "baseline", "p50_ms": 10.767791500000001, "p95_ms": 27.68931905, "total_ms": 1251.561627, "ready_rss_kib": 33888, "settled_rss_kib": 101456, "peak_rss_kib": 101440, "calls": 110, "connections": 110}
+{"variant": "current", "p50_ms": 0.536396, "p95_ms": 1.1584232, "total_ms": 62.564121, "ready_rss_kib": 34048, "settled_rss_kib": 34416, "peak_rss_kib": 34400, "calls": 110, "connections": 1}
+{"variant": "current", "p50_ms": 0.654104, "p95_ms": 1.1643851, "total_ms": 69.048498, "ready_rss_kib": 33664, "settled_rss_kib": 34080, "peak_rss_kib": 34080, "calls": 110, "connections": 1}
+{"variant": "baseline", "p50_ms": 5.581125, "p95_ms": 9.3182226, "total_ms": 653.265956, "ready_rss_kib": 33968, "settled_rss_kib": 105376, "peak_rss_kib": 105632, "calls": 110, "connections": 110}
+{"variant": "baseline", "p50_ms": 4.741125, "p95_ms": 6.10900625, "total_ms": 530.175129, "ready_rss_kib": 33568, "settled_rss_kib": 105904, "peak_rss_kib": 105904, "calls": 110, "connections": 110}
+{"variant": "current", "p50_ms": 1.0606879999999999, "p95_ms": 2.72684615, "total_ms": 133.034251, "ready_rss_kib": 33760, "settled_rss_kib": 34160, "peak_rss_kib": 34160, "calls": 110, "connections": 1}
+{"variant": "current", "p50_ms": 0.5268955, "p95_ms": 5.6992461500000005, "total_ms": 110.300168, "ready_rss_kib": 33984, "settled_rss_kib": 34368, "peak_rss_kib": 34368, "calls": 110, "connections": 1}
+{"variant": "baseline", "p50_ms": 5.192937499999999, "p95_ms": 9.515345850000001, "total_ms": 626.603417, "ready_rss_kib": 33712, "settled_rss_kib": 105968, "peak_rss_kib": 105968, "calls": 110, "connections": 110}
+{"variant": "baseline", "p50_ms": 5.6836459999999995, "p95_ms": 20.12269135, "total_ms": 952.037204, "ready_rss_kib": 33488, "settled_rss_kib": 92608, "peak_rss_kib": 97328, "calls": 110, "connections": 110}
+{"variant": "current", "p50_ms": 0.200083, "p95_ms": 0.34218395, "total_ms": 21.89496, "ready_rss_kib": 33472, "settled_rss_kib": 33888, "peak_rss_kib": 33888, "calls": 110, "connections": 1}
+{"variant": "current", "p50_ms": 0.2767495, "p95_ms": 1.31674135, "total_ms": 47.043957, "ready_rss_kib": 33712, "settled_rss_kib": 34112, "peak_rss_kib": 34112, "calls": 110, "connections": 1}
+{"variant": "baseline", "p50_ms": 9.0980205, "p95_ms": 33.6441976, "total_ms": 1258.646669, "ready_rss_kib": 32944, "settled_rss_kib": 97152, "peak_rss_kib": 102208, "calls": 110, "connections": 110}

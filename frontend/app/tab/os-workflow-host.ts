@@ -6,6 +6,11 @@ import { clampSpatialZoom, fitSpatialViewportToBounds, type SpatialRect } from "
 export type WorkflowCamera = { x: number; y: number; zoom: number };
 export type WorkflowCameraIntent = { camera?: WorkflowCamera; fitBounds?: SpatialRect; scope?: string };
 
+export function loadWorkflowEditor<T>(directory: "comfy-native" | "workflow-native"): Promise<T> {
+    const url = new URL(`./${directory}/editor.js`, document.baseURI).href;
+    return import(/* @vite-ignore */ url);
+}
+
 export function resolveWorkflowCameraIntent(
     intent: WorkflowCameraIntent,
     current: WorkflowCamera,

@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 import {
     coucouActivityPayload,
@@ -13,6 +14,25 @@ import {
 const event = { event: "ready" as const, x: -1512, y: 100, width: 1512, height: 982, inset: 32 };
 
 describe("Coucou notch bridge", () => {
+    test("every literal native control survives the companion wire parser", () => {
+        const source = readFileSync("native/coucou/kronterm-views.swift", "utf8");
+        const actions = [...source.matchAll(/\.action\("([a-z-]+)"/g)].map((match) => match[1]);
+        expect(actions.length).toBeGreaterThan(20);
+        for (const action of new Set(actions)) {
+            expect(
+                parseCoucouHudEvent(JSON.stringify({ ...event, event: "action", action, route: "coucou" })),
+                action
+            ).toBeDefined();
+        }
+    });
+    test.each(["preview-hide", "media-toggle", "media-previous", "media-next"])(
+        "accepts the native %s control through the wire parser",
+        (action) => {
+            expect(
+                parseCoucouHudEvent(JSON.stringify({ ...event, event: "action", action, route: "source-1" }))
+            ).toMatchObject({ action, route: "source-1" });
+        }
+    );
     test("accepts workflow and Bots widget launches", () => {
         for (const action of ["workflowcanvas", "bots"]) {
             expect(parseCoucouHudEvent(JSON.stringify({ ...event, event: "action", action }))).toMatchObject({
@@ -127,6 +147,19 @@ describe("Coucou notch bridge", () => {
     test("keeps a tall chat inside small displays", () => {
         const bounds = coucouChatBounds({ ...event, x: 0, y: 0, width: 280, height: 500 });
         expect(bounds).toEqual({ x: 16, y: 52, width: 248, height: 428 });
+    });
+    test("recovers measured chat rectangles that extend outside their display", () => {
+        const bounds = coucouChatBounds({
+            ...event,
+            contentX: -10_000,
+            contentY: -500,
+            contentWidth: 360,
+            contentHeight: 720,
+        });
+        expect(bounds.x).toBeGreaterThanOrEqual(event.x);
+        expect(bounds.y).toBeGreaterThanOrEqual(event.y);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(event.x + event.width);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(event.y + event.height);
     });
     test("uses the native island content rectangle for integrated chat", () => {
         expect(

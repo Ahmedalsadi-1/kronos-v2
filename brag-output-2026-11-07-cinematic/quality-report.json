@@ -1,0 +1,47 @@
+{
+  "duration": 80.0,
+  "width": 1920,
+  "height": 1080,
+  "fps": "30/1",
+  "frames": 2400,
+  "videoCodec": "h264",
+  "audioCodec": "aac",
+  "audioChannels": 2,
+  "audioSampleRate": "48000",
+  "audioMeasurement": {
+    "input_i": "-16.82",
+    "input_tp": "-4.07",
+    "input_lra": "8.70",
+    "input_thresh": "-27.16",
+    "output_i": "-17.47",
+    "output_tp": "-5.60",
+    "output_lra": "7.10",
+    "output_thresh": "-27.62",
+    "normalization_type": "dynamic",
+    "target_offset": "0.47"
+  },
+  "fullDecode": "pass",
+  "posterTime": 78.5,
+  "posterBakedIntoFrameZero": true,
+  "reviewFrameTimes": [
+    1.8,
+    8,
+    18,
+    32,
+    38,
+    55,
+    65,
+    73,
+    78.5,
+    44.8
+  ],
+  "audioListening": "Measured, not heard by a human",
+  "evidenceGaps": "See CAPTURE-GAPS.md",
+  "posterFrameZeroMeanAbsoluteError": 2.68,
+  "visualReadback": "Decoded export frames inspected, including request at 18s, loaded Python result at 32s, selector controls at 38s and 44.8s, moving recordings at 55s and physical notch/closing frames.",
+  "sourceEvidenceLimitations": [
+    "Direct property change and selected-element prompt result not verified",
+    "Working sandbox task and simultaneous fleet run not verified",
+    "All requested native software-notch transitions not captured"
+  ]
+}

@@ -6,11 +6,12 @@ import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { RpcApi } from "../../frontend/app/store/wshclientapi";
-import { sandboxComputerForTab } from "../computer-access-policy";
+import { hasSandboxComputerForTab } from "../computer-access-policy";
 import { ElectronWshClient } from "../emain-wsh";
 import { withKronosCodeAttachArgs } from "../kronoscode-runtime";
 import { KronTermAcpSurfaceSystemPrompt } from "../kronterm-surface-prompt";
-import { availableKronTermToolNames, startKronTermToolServer } from "../kronterm-tool-server";
+import { availableKronTermToolNames, revokeKronTermToolCaller, startKronTermToolServer } from "../kronterm-tool-server";
+import { resolveKronTermSharedSkillDirs } from "../shared-skill-roots";
 import { detectInstalledAgents, spawnAcpAgent } from "./acp-connector";
 import {
     AcpCapabilityLease,
@@ -21,6 +22,7 @@ import {
 import { AcpFailureEvidence, makeAcpTraceEnvelope } from "./acp-observability";
 import { NdjsonTransport } from "./acp-transport";
 import {
+    ACP_BACKENDS_ALL,
     AcpAgentCapabilities,
     AcpAgentInfo,
     AcpAgentStatus,
@@ -43,7 +45,7 @@ export function normalizeAcpAgentInfo(backend: string, agentInfo: AcpAgentInfo |
     if (backend !== "kronterm-agent" || !agentInfo) {
         return agentInfo;
     }
-    return { ...agentInfo, name: "KronTerm Agent", title: "KronTerm Agent" };
+    return { ...agentInfo, name: ACP_BACKENDS_ALL[backend].name, title: ACP_BACKENDS_ALL[backend].name };
 }
 
 interface AcpAgentManagerOptions {
@@ -62,13 +64,13 @@ interface AcpAgentManagerOptions {
         workflowRunId?: string;
     };
     mcpServers?: AcpSessionMcpServer[];
+    disableBuiltInSurface?: boolean;
     maxReconnectAttempts?: number;
     reconnectDelayMs?: number;
 }
 
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
 const DEFAULT_RECONNECT_DELAY_MS = 2000;
-const SharedSkillDirectories = [".agents/skills", ".kronoscode/skills", ".hermes/skills", ".kilocode/skills"];
 
 const waveSurfaceBootstrap = KronTermAcpSurfaceSystemPrompt;
 
@@ -130,6 +132,9 @@ export class AcpAgentManager extends EventEmitter {
     private reconnectDelayMs: number;
     private reconnectTimer: NodeJS.Timeout | null = null;
     private intentionalStop = false;
+    private startup: AbortController | undefined;
+    private promptTransport: NdjsonTransport | undefined;
+    private readonly disableBuiltInSurface: boolean;
 
     constructor(opts: AcpAgentManagerOptions) {
         super();
@@ -140,11 +145,14 @@ export class AcpAgentManager extends EventEmitter {
         this.hostSurfaceContext = opts.surfaceContext;
         this.surfaceContext = opts.surfaceContext;
         this.requestedMcpServers = opts.mcpServers ?? [];
+        this.disableBuiltInSurface = opts.disableBuiltInSurface ?? false;
         this.maxReconnectAttempts = opts.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS;
         this.reconnectDelayMs = opts.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
     }
 
     async initialize(opts: AcpAgentManagerOptions): Promise<void> {
+        const startup = new AbortController();
+        this.startup = startup;
         this.setStatus("connecting");
         this.savedOpts = opts;
         this.intentionalStop = false;
@@ -157,13 +165,20 @@ export class AcpAgentManager extends EventEmitter {
                 cliPath,
                 this.workspace,
                 opts.customArgs,
-                opts.customEnv
+                opts.customEnv,
+                startup.signal
             );
 
-            this.transport = new NdjsonTransport(child, isDetached, this.workspace);
+            const transport = new NdjsonTransport(child, isDetached, this.workspace);
+            if (startup.signal.aborted) {
+                transport.kill();
+                startup.signal.throwIfAborted();
+            }
+            this.transport = transport;
             this.setupTransportHandlers();
 
-            const initResult = await this.transport.initialize();
+            const initResult = await transport.initialize();
+            startup.signal.throwIfAborted();
             this.capabilities = initResult.capabilities;
             this.modes = initResult.modes;
             this.currentMode = initResult.modes?.currentModeId ?? initResult.modes?.availableModes?.[0]?.id ?? null;
@@ -187,17 +202,22 @@ export class AcpAgentManager extends EventEmitter {
             }
             await this.ensureSession(opts.resumeSessionId, opts.resumeSessionConversationId);
 
-            this.transport.startKeepalive();
+            startup.signal.throwIfAborted();
+            transport.startKeepalive();
             this.setStatus("connected");
         } catch (err) {
+            if (startup.signal.aborted) throw err;
             this.transport?.kill();
             this.transport = null;
+            revokeKronTermToolCaller(`acp:${this.conversationId}`);
             this.sessionId = null;
             this.confirmations = [];
             this.error = err instanceof Error ? err.message : String(err);
             this.setStatus("error");
             this.emitEvent("error", { error: this.error }, { source: "initialization", message: this.error });
             throw err;
+        } finally {
+            if (this.startup === startup) this.startup = undefined;
         }
     }
 
@@ -206,14 +226,20 @@ export class AcpAgentManager extends EventEmitter {
         const transport = this.transport;
 
         transport.on("session_update", (update: AcpSessionUpdate) => {
+            if (this.transport !== transport || this.intentionalStop) return;
             this.handleSessionUpdate(update);
         });
 
         transport.on("permission_request", (data: { id: number; params: AcpPermissionRequest }) => {
+            if (this.transport !== transport || this.intentionalStop) {
+                transport.sendResponse(data.id, { outcome: { outcome: "cancelled" } });
+                return;
+            }
             this.handlePermissionRequest(data.id, data.params);
         });
 
         transport.on("notification", (data: { method: string; params: any }) => {
+            if (this.transport !== transport || this.intentionalStop) return;
             if (data.method.includes("model") && data.params) {
                 this.modelInfo = data.params.modelInfo ?? data.params;
                 this.emitEvent("agent_info", {
@@ -231,6 +257,7 @@ export class AcpAgentManager extends EventEmitter {
         });
 
         transport.on("error", (err: Error) => {
+            if (this.transport !== transport || this.intentionalStop) return;
             this.error = err.message;
             this.setStatus("error");
             this.emitEvent("error", { error: err.message }, { source: "transport", message: err.message });
@@ -244,6 +271,8 @@ export class AcpAgentManager extends EventEmitter {
                 data.signal ?? "none"
             })`;
             this.transport = null;
+            revokeKronTermToolCaller(`acp:${this.conversationId}`);
+            if (this.intentionalStop) return;
             this.sessionId = null;
             this.confirmations = [];
             this.surfaceMcpAvailable = false;
@@ -252,7 +281,7 @@ export class AcpAgentManager extends EventEmitter {
             this.setStatus("error");
             this.emitEvent("error", { error: message }, { source: "transport", message, signal: data.signal });
 
-            if (!this.intentionalStop && this.reconnectAttempts < this.maxReconnectAttempts) {
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 const delay = this.reconnectDelayMs * Math.pow(2, this.reconnectAttempts);
                 this.reconnectAttempts++;
                 this.reconnectTimer = setTimeout(() => {
@@ -524,7 +553,12 @@ export class AcpAgentManager extends EventEmitter {
         return normalized;
     }
 
+    get hasSurfaceMcp(): boolean {
+        return this.surfaceMcpAvailable;
+    }
+
     private async buildSessionMcpServers(): Promise<AcpSessionMcpServer[]> {
+        if (this.disableBuiltInSurface) return this.normalizeMcpServers(this.requestedMcpServers);
         const mcpServers: AcpSessionMcpServer[] = [];
         const spawnTarget = this.resolveSurfaceSpawnTarget();
         if (this.supportsMcpType("stdio") && spawnTarget) {
@@ -534,23 +568,13 @@ export class AcpAgentManager extends EventEmitter {
             ];
             if (spawnTarget.native) {
                 const toolServer = await startKronTermToolServer(
-                    () => (this.surfaceContext ? { ...this.surfaceContext } : null),
+                    () => ({ ...this.surfaceContext, agentWorkspace: this.workspace }),
                     `acp:${this.conversationId}`
                 );
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_URL", value: toolServer.nativeUrl });
                 surfaceEnv.push({ name: "KRONTERM_NATIVE_TOOL_TOKEN", value: toolServer.token });
             }
-            const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
-            const sharedSkillDirs = Array.from(
-                new Set(
-                    [
-                        ...(process.env.KRONTERM_SHARED_SKILL_DIRS ?? "").split(path.delimiter).filter(Boolean),
-                        ...SharedSkillDirectories.map((directory) => path.join(this.workspace, directory)),
-                        path.resolve(import.meta.dirname, "../..", ".agents/skills"),
-                        ...(resourcesPath ? [path.join(resourcesPath, "kronterm-skills")] : []),
-                    ].filter((directory) => fs.existsSync(directory) && fs.statSync(directory).isDirectory())
-                )
-            );
+            const sharedSkillDirs = resolveKronTermSharedSkillDirs({ cwd: this.workspace });
             if (sharedSkillDirs.length > 0) {
                 surfaceEnv.push({ name: "KRONTERM_SHARED_SKILL_DIRS", value: sharedSkillDirs.join(path.delimiter) });
             }
@@ -622,11 +646,13 @@ export class AcpAgentManager extends EventEmitter {
     }
 
     private async ensureSession(resumeSessionId?: string, resumeSessionConversationId?: string): Promise<void> {
-        if (!this.transport || this.sessionId) {
+        const transport = this.transport;
+        if (!transport || this.sessionId) {
             return;
         }
 
         const mcpServers = await this.buildSessionMcpServers();
+        if (this.transport !== transport || this.intentionalStop) throw new Error("ACP session stopped during setup");
         let sessionResult: any;
         let usableResumeSessionId = resumeSessionId;
         if (resumeSessionId && resumeSessionConversationId && resumeSessionConversationId !== this.conversationId) {
@@ -640,20 +666,22 @@ export class AcpAgentManager extends EventEmitter {
             if (!this.capabilities?.loadSession) {
                 throw new Error("This agent cannot restore its saved session. Start a new chat.");
             }
-            sessionResult = await this.transport.sendRequest("session/load", {
+            sessionResult = await transport.sendRequest("session/load", {
                 sessionId: usableResumeSessionId,
                 cwd: this.normalizeCwdForAgent(this.workspace),
                 mcpServers,
             });
         }
         if (!sessionResult) {
-            sessionResult = await this.transport.sendRequest(
+            sessionResult = await transport.sendRequest(
                 "session/new",
                 this.buildNewSessionParams(usableResumeSessionId, mcpServers)
             );
         }
 
-        this.sessionId = sessionResult?.sessionId || sessionResult?.id || usableResumeSessionId || uuidv4();
+        if (this.transport !== transport || this.intentionalStop) throw new Error("ACP session stopped during setup");
+        this.sessionId = sessionResult?.sessionId || sessionResult?.id || usableResumeSessionId;
+        if (!this.sessionId) throw new Error("ACP provider returned no session ID");
         this.emitEvent("session_id", { sessionId: this.sessionId });
         this.modes = sessionResult?.modes ?? this.modes;
         this.configOptions = sessionResult?.configOptions ?? this.configOptions;
@@ -667,9 +695,9 @@ export class AcpAgentManager extends EventEmitter {
                 configOptions: this.configOptions,
             });
         }
-        if (this.currentMode) {
+        if (this.currentMode && this.currentMode !== sessionResult?.modes?.currentModeId) {
             try {
-                await this.transport.sendRequest("session/set_mode", {
+                await transport.sendRequest("session/set_mode", {
                     sessionId: this.sessionId,
                     modeId: this.currentMode,
                 });
@@ -687,10 +715,10 @@ export class AcpAgentManager extends EventEmitter {
         return this.surfaceContext?.tabId === tabId && (this.status === "running" || this.confirmations.length > 0);
     }
 
-    async sendMessage(opts: AcpIpcSendMessageRequest): Promise<void> {
-        if (sandboxComputerForTab(this.surfaceContext?.tabId))
+    async sendMessage(opts: AcpIpcSendMessageRequest): Promise<string | undefined> {
+        if (hasSandboxComputerForTab(this.surfaceContext?.tabId))
             throw new Error(
-                "Computer mode requires KronTerm Agent. Disable Computer mode before using an external ACP engine with host tools."
+                "Computer mode requires KronOS Agent. Disable Computer mode before using an external ACP engine with host tools."
             );
         if (!this.transport || !this.transport.isInitialized()) {
             throw new Error("Agent not initialized");
@@ -734,6 +762,7 @@ export class AcpAgentManager extends EventEmitter {
             this.setStatus("finished");
             this.emitEvent("finish", { stopReason: promptResult?.stopReason });
         }
+        return typeof promptResult?.stopReason === "string" ? promptResult.stopReason : undefined;
     }
 
     getMode() {

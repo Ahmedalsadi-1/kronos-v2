@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import krontermLogo from '../../../app/asset/logo.svg?url'
 
 import { Button } from '@hermes/components/ui/button'
 import { ConfirmDialog } from '@hermes/components/ui/confirm-dialog'
@@ -1165,7 +1166,11 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
                 </div>
               ) : (
                 <Button disabled={cloudSigningIn} onClick={() => void cloudSignIn()}>
-                  {cloudSigningIn ? <Loader2 className="animate-spin" /> : <LogIn />}
+                  {cloudSigningIn ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <img alt="" className="size-4 shrink-0 object-contain" src={krontermLogo} />
+                  )}
                   {g.cloudSignIn}
                 </Button>
               )

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/jotaiStore";
-import { ShieldCheck } from "lucide-react";
+import { Lock, Shield, ShieldCheck } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { displayWebviewUrl } from "./browser-annotations";
 import type { WebViewModel } from "./webview";
@@ -29,11 +29,13 @@ export function BrowserAddressBar({
     url,
     focused,
     faviconUrl,
+    previewPageUrl,
 }: {
     model: WebViewModel;
     url: string;
     focused: boolean;
     faviconUrl: string;
+    previewPageUrl?: string;
 }) {
     const [suggestions, setSuggestions] = useState<{ url: string; label: string }[]>([]);
     const [active, setActive] = useState(-1);
@@ -88,7 +90,13 @@ export function BrowserAddressBar({
     };
     return (
         <>
-            {faviconUrl && !faviconBroken ? (
+            {previewPageUrl != null ? (
+                previewPageUrl.startsWith("https://") ? (
+                    <Lock className="browser-preview-lock" aria-hidden="true" />
+                ) : (
+                    <Shield aria-hidden="true" />
+                )
+            ) : faviconUrl && !faviconBroken ? (
                 <img
                     src={faviconUrl}
                     alt=""
@@ -132,6 +140,7 @@ export function BrowserAddressBar({
                     model.handleBlur(event);
                 }}
                 aria-label="Address and search"
+                placeholder={previewPageUrl != null ? "Search or enter address" : undefined}
                 role="combobox"
                 aria-autocomplete="list"
                 aria-expanded={focused && suggestions.length > 0}

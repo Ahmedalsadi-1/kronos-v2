@@ -32,6 +32,13 @@ export type ComputerTargetSnapshot = {
     imageDataUrl?: string;
     capturedAt?: number;
 };
+export type DeviceSelectedElement = {
+    application?: string;
+    role: string;
+    name?: string;
+    id?: string;
+    frame: { x: number; y: number; width: number; height: number };
+};
 export type ComputerTargetAction = {
     targetId: string;
     action: ComputerTargetCapability;

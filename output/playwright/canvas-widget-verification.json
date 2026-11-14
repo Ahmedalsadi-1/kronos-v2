@@ -1,0 +1,48 @@
+{
+  "workflow": {
+    "id": "Yfa84Z1qjKEPowDc",
+    "name": "Canvas verification - Nov 5"
+  },
+  "verifiedExecution": {
+    "id": "4",
+    "status": "success",
+    "nodes": [
+      "Start",
+      "Result: answer 42",
+      "web"
+    ],
+    "urls": [
+      "https://example.com",
+      "https://example.org"
+    ]
+  },
+  "savedConnection": {
+    "source": "Result: answer 42",
+    "outputType": "main",
+    "outputIndex": 0,
+    "target": "web",
+    "blockId": "4eb5adfe-cbf0-4221-92b3-2592f2c0a6ad"
+  },
+  "liveGeometry": {
+    "viewport": [
+      1595,
+      791
+    ],
+    "nodeEditor": [
+      820,
+      540
+    ],
+    "widgetDialog": {
+      "x": 567.5,
+      "y": 205,
+      "width": 460,
+      "height": 381
+    }
+  },
+  "screenshots": [
+    "canvas-centered-node-popup.png",
+    "canvas-widget-connection-popup.png"
+  ],
+  "directDrag": "Interrupted by app restart; not counted as passed.",
+  "sandbox": "Command, VM URL and AI-task paths covered by validation/scope tests. No assigned VM was live-run in this verification."
+}

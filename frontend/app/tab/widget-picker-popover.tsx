@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { blockViewToIcon, blockViewToName } from "@/app/block/blockutil";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { shouldIncludeWidgetForWorkspace } from "@/app/workspace/widgetfilter";
 import type { WidgetsEnv } from "@/app/workspace/widgets";
@@ -22,9 +23,12 @@ interface WidgetPickerPopoverProps {
     anchorElement: HTMLElement;
     open: boolean;
     onClose: () => void;
+    includeMediaWidgets?: boolean;
 }
 
-const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPickerPopoverProps) => {
+const MediaWidgetViews = ["preview", "videostudio", "audiostudio", "imagestudio", "blenderproject"];
+
+const WidgetPickerPopover = memo(({ anchorElement, open, onClose, includeMediaWidgets }: WidgetPickerPopoverProps) => {
     const env = useWaveEnv<WidgetsEnv>();
     const fullConfig = useAtomValue(env.atoms.fullConfigAtom);
     const workspaceId = useAtomValue(env.atoms.workspaceId);
@@ -32,16 +36,31 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
     const [query, setQuery] = useState("");
     const widgets = useMemo(() => {
         const widgetsMap = fullConfig?.widgets ?? {};
-        return Object.entries(widgetsMap)
+        const configuredViews = new Set(Object.values(widgetsMap).map((widget) => widget.blockdef?.meta?.view));
+        const entries = Object.entries(widgetsMap)
             .filter(([, widget]) => {
                 if (widget["display:hidden"]) {
                     return false;
                 }
                 return shouldIncludeWidgetForWorkspace(widget, workspaceId);
             })
-            .map(([key, widget]) => ({ key, widget }))
-            .sort((a, b) => (a.widget["display:order"] ?? 0) - (b.widget["display:order"] ?? 0));
-    }, [fullConfig?.widgets, workspaceId]);
+            .map(([key, widget]) => ({ key, widget }));
+        if (includeMediaWidgets) {
+            for (const view of MediaWidgetViews) {
+                if (configuredViews.has(view)) continue;
+                entries.push({
+                    key: `builtin:${view}`,
+                    widget: {
+                        label: view === "preview" ? "Files" : blockViewToName(view),
+                        icon: blockViewToIcon(view),
+                        blockdef: { meta: view === "preview" ? { view, file: "~" } : { view } },
+                        "display:order": 10,
+                    },
+                });
+            }
+        }
+        return entries.sort((a, b) => (a.widget["display:order"] ?? 0) - (b.widget["display:order"] ?? 0));
+    }, [fullConfig?.widgets, includeMediaWidgets, workspaceId]);
     const visibleWidgets = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         if (!normalizedQuery) {
@@ -55,9 +74,10 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
     }, [query, widgets]);
     const { refs, floatingStyles, context } = useFloating({
         open,
-        onOpenChange: (nextOpen) => {
+        onOpenChange: (nextOpen, _event, reason) => {
             if (!nextOpen) {
                 onClose();
+                if (reason === "escape-key") anchorElement.focus();
             }
         },
         placement: "bottom-start",
@@ -89,7 +109,7 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
                 ref={refs.setFloating}
                 style={floatingStyles}
                 className="widget-picker-popover"
-                role="menu"
+                role="dialog"
                 aria-label="Add a widget"
                 {...getFloatingProps()}
             >
@@ -125,14 +145,17 @@ const WidgetPickerPopover = memo(({ anchorElement, open, onClose }: WidgetPicker
                                     type="button"
                                     key={key}
                                     className="widget-picker-popover-item"
-                                    role="menuitem"
                                     onClick={() => {
                                         void env.createBlock(widget.blockdef, widget.magnified);
                                         onClose();
                                     }}
                                     title={widget.description || label}
                                 >
-                                    <span className="widget-picker-popover-icon" style={{ color: widget.color }}>
+                                    <span
+                                        className="widget-picker-popover-icon"
+                                        style={{ color: widget.color }}
+                                        aria-hidden="true"
+                                    >
                                         <i className={makeIconClass(widget.icon, true, { defaultIcon: "browser" })} />
                                     </span>
                                     <span>{label}</span>

@@ -640,7 +640,7 @@ export function SkillsView({
           <SelectContent>
             {profiles.map(p => (
               <SelectItem key={p.name} value={p.name}>
-                {p.is_default ? 'KronTerm (default)' : p.name}
+                {p.is_default ? 'KronOS (default)' : p.name}
               </SelectItem>
             ))}
           </SelectContent>

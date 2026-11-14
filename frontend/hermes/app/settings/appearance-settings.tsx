@@ -8,13 +8,14 @@ import { SegmentedControl } from '@hermes/components/ui/segmented-control'
 import type { DesktopMarketplaceSearchItem } from '@hermes/global'
 import { useI18n } from '@hermes/i18n'
 import { triggerHaptic } from '@hermes/lib/haptics'
-import { Check, Download, Loader2, Palette, Trash2 } from '@hermes/lib/icons'
+import { Check, Download, Loader2, Palette, SlidersHorizontal, Trash2 } from '@hermes/lib/icons'
 import { selectableCardClass } from '@hermes/lib/selectable-card'
 import { normalize } from '@hermes/lib/text'
 import { cn } from '@hermes/lib/utils'
 import { $backdrop, setBackdrop } from '@hermes/store/backdrop'
 import { $composerPopoutGesturesEnabled, setComposerPopoutGesturesEnabled } from '@hermes/store/composer-popout'
 import { $embedAllowed, $embedMode, clearEmbedAllowed, type EmbedMode, setEmbedMode } from '@hermes/store/embed-consent'
+import { $interfaceAppearance, setInterfaceAppearance } from '@hermes/store/interface-appearance'
 import { $activeGatewayProfile, $profiles, normalizeProfileKey } from '@hermes/store/profile'
 import { $reactionsEnabled, setReactionsEnabled } from '@hermes/store/reactions-enabled'
 import { $reasoningCollapsedByDefault, setReasoningCollapsedByDefault } from '@hermes/store/reasoning-disclosure'
@@ -28,6 +29,7 @@ import type { DesktopTheme } from '@hermes/themes/types'
 import { $marketplaceInstalls, isUserTheme, removeUserTheme } from '@hermes/themes/user-themes'
 
 import { MODE_OPTIONS } from './constants'
+import { useKronTermSettingsHost } from './kronterm-settings-host'
 import { PetSettings } from './pet-settings'
 import { ListRow, SectionHeading, SettingsContent, ToggleRow } from './primitives'
 import { TerminalFontSetting } from './terminal-font-setting'
@@ -250,6 +252,8 @@ function MarketplaceThemeResults({
 export function AppearanceSettings() {
   const { t, isSavingLocale } = useI18n()
   const { themeName, mode, resolvedMode, availableThemes, setTheme, setMode } = useTheme()
+  const kronTermSettings = useKronTermSettingsHost()
+  const { font, buttonStyle } = useStore($interfaceAppearance)
   const toolViewMode = useStore($toolViewMode)
   const reasoningCollapsedByDefault = useStore($reasoningCollapsedByDefault)
   const sessionListDensity = useStore($sessionListDensity)
@@ -328,6 +332,45 @@ export function AppearanceSettings() {
             title={t.language.label}
           />
 
+          <div className="mt-4">
+            <SectionHeading icon={SlidersHorizontal} title={a.workspaceAppearanceTitle} />
+          </div>
+
+          <ListRow
+            action={
+              <SegmentedControl
+                onChange={id => setInterfaceAppearance({ font: id })}
+                options={[
+                  { id: 'default', label: a.controlDefault },
+                  { id: 'system', label: a.interfaceFontSystem },
+                  { id: 'inter', label: 'Inter' },
+                  { id: 'mono', label: a.interfaceFontMono }
+                ]}
+                value={font}
+              />
+            }
+            description={a.interfaceFontDesc}
+            title={a.interfaceFontTitle}
+          />
+
+          <ListRow
+            action={
+              <SegmentedControl
+                onChange={id => setInterfaceAppearance({ buttonStyle: id })}
+                options={[
+                  { id: 'default', label: a.controlDefault },
+                  { id: 'flat', label: a.buttonStyleFlat },
+                  { id: 'outlined', label: a.buttonStyleOutlined }
+                ]}
+                value={buttonStyle}
+              />
+            }
+            description={a.buttonStyleDesc}
+            title={a.buttonStyleTitle}
+          />
+
+          {kronTermSettings?.renderAppearance?.()}
+
           <ListRow
             below={
               <>
@@ -361,6 +404,7 @@ export function AppearanceSettings() {
                         return (
                           <div className="group relative" key={theme.name}>
                             <button
+                              aria-pressed={active}
                               className={cn('w-full p-2 text-left', selectableCardClass({ active, prominent: true }))}
                               onClick={() => {
                                 triggerHaptic('crisp')

@@ -62,7 +62,7 @@ const Templates: Record<WorkflowKind, { title: string; instruction: string }[]> 
         {
             title: "Execute workflow",
             instruction:
-                "Complete the parameterized task through existing KronTerm tools within the bound targets. Follow runtime permission policies. Do not replay uncertain external side effects. Record outputs and action evidence.",
+                "Complete the parameterized task through existing KronOS tools within the bound targets. Follow runtime permission policies. Do not replay uncertain external side effects. Record outputs and action evidence.",
         },
         {
             title: "Verify outputs",
@@ -409,7 +409,7 @@ export class WorkflowStore {
                 definition?.steps ??
                 input.steps ??
                 Templates[kind]
-            ).map((step, index) => ({
+            ).map((step: Pick<WorkflowStep, "title" | "instruction"> & Partial<WorkflowStep>, index) => ({
                 ...step,
                 id: "id" in step ? step.id : `step-${index + 1}`,
                 dependsOn: "dependsOn" in step ? step.dependsOn : index ? [`step-${index}`] : [],

@@ -88,7 +88,7 @@ export function OSOverviewPreview() {
                     background: "var(--kt-bar)",
                 }}
             >
-                <strong>KronTerm</strong>
+                <strong>KronOS</strong>
                 <OSNativeTaskGroups />
                 <span>OS overview component preview · sample windows</span>
                 <label style={{ marginLeft: "auto" }}>

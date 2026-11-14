@@ -279,7 +279,7 @@ export class KronosCodeHermesBackend {
         const engines: HermesAgentBackendInfo[] = [
             {
                 id: "hermes",
-                label: "KronTerm Agent",
+                label: "KronOS Agent",
                 description: "System agent with full workspace control",
                 available: true,
             },
@@ -381,7 +381,7 @@ export class KronosCodeHermesBackend {
 
     private async loadDraftModelOptions(backend: string): Promise<unknown> {
         const api = this.getApi();
-        if (!api) throw new Error("Agent model discovery requires KronTerm");
+        if (!api) throw new Error("Agent model discovery requires KronOS");
         const agent = (await api.acpDetectAgents()).find((item) => item.backend === backend && item.available);
         if (!agent) throw new Error(`${backend} is unavailable`);
         const conversationId = `hermes-models-${crypto.randomUUID()}`;
@@ -480,7 +480,7 @@ export class KronosCodeHermesBackend {
 
     private async createSession(params: Record<string, unknown>): Promise<unknown> {
         const api = this.getApi();
-        if (!api) throw new Error("KronosCode is only available inside KronTerm");
+        if (!api) throw new Error("KronosCode is only available inside KronOS");
         const backend = this.active;
         const agent = (await api.acpDetectAgents()).find((candidate) => candidate.backend === backend);
         if (!agent?.available) throw new Error(`${agent?.name || backend} is not installed or available`);
@@ -552,7 +552,7 @@ export class KronosCodeHermesBackend {
         if (session.closing) throw new Error("This chat is closing");
         if (session.turnActive) throw new Error("KronosCode is already running a turn");
         const api = this.getApi();
-        if (!api) throw new Error("KronosCode is only available inside KronTerm");
+        if (!api) throw new Error("KronosCode is only available inside KronOS");
         if (session.stored?.resumestate === "restart-required" && !session.stored?.acpsessionid)
             throw new Error("This session cannot be resumed safely. Start a new chat.");
         if (session.stored.resumestate === "restart-required") {

@@ -42,12 +42,14 @@ export function BrowserNavigationRow({
     controls,
     reloadIcon = "rotate-right",
     reloadLabel = "Reload",
+    beforeAddress,
     children,
 }: {
     addressSlot: React.ReactNode;
     controls?: Partial<BrowserNavigationControls>;
     reloadIcon?: string;
     reloadLabel?: string;
+    beforeAddress?: React.ReactNode;
     children?: React.ReactNode;
 }) {
     return (
@@ -79,6 +81,7 @@ export function BrowserNavigationRow({
                     title={reloadLabel}
                 />
             ) : null}
+            {beforeAddress}
             <div
                 className="webview-omnibox"
                 onClick={(event) => {
@@ -96,10 +99,11 @@ export function BrowserNavigationRow({
 
 export const BrowserNavigationControlRow = BrowserNavigationRow;
 
-export function BrowserChromeToolbar({ children }: { children: React.ReactNode }) {
+export function BrowserChromeToolbar({ children, preview }: { children: React.ReactNode; preview?: boolean }) {
     return (
         <div
             className="webview-browser-chrome"
+            data-browser-preview={preview || undefined}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onPointerDown={(event) => event.stopPropagation()}
         >

@@ -10,6 +10,7 @@ import { getOverrideConfigAtom, refocusNode } from "@/store/global";
 import * as WOS from "@/store/wos";
 import { goHistory, goHistoryBack, goHistoryForward } from "@/util/historyutil";
 import { checkKeyPressed } from "@/util/keyutil";
+import { getModelPreviewFormat } from "@/util/model-preview";
 import { addOpenMenuItems } from "@/util/previewutil";
 import { base64ToString, fireAndForget, isBlank, jotaiLoadableValue, stringToBase64 } from "@/util/util";
 import { formatRemoteUri } from "@/util/waveutil";
@@ -262,6 +263,10 @@ export class PreviewModel implements ViewModel {
                     },
                 };
             }
+            const file = jotaiLoadableValue(get(this.loadableFileInfo), null);
+            if (file && !file.isdir && !file.notfound && getModelPreviewFormat(file.path)) {
+                return "cube";
+            }
             return iconForFile(mimeType);
         });
         this.editMode = atom((get) => {
@@ -403,7 +408,9 @@ export class PreviewModel implements ViewModel {
             return null;
         });
         this.metaFilePath = atom<string>((get) => {
-            const file = get(this.blockAtom)?.meta?.file;
+            const meta = get(this.blockAtom)?.meta;
+            const previousFolder = meta?.view === "medialibrary" ? meta["medialibrary:folder"] : null;
+            const file = meta?.file ?? (typeof previousFolder === "string" ? previousFolder : null);
             if (isBlank(file)) {
                 return "~";
             }
@@ -540,6 +547,9 @@ export class PreviewModel implements ViewModel {
         }
         if (fileInfo?.notfound) {
             return { specializedView: "codeedit" };
+        }
+        if (!fileInfo.isdir && getModelPreviewFormat(fileInfo.path)) {
+            return { specializedView: "streaming" };
         }
         if (mimeType == null) {
             return { errorStr: `Unable to determine mimetype for: ${fileInfo.path}` };

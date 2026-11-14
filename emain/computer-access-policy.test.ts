@@ -73,9 +73,42 @@ it("uses the runtime chat's registered workspace instead of the focused chat and
         expect(resolveComputerChatContext(focused, "stored-one").sandboxComputerId).toBe("linux-vm:one");
         expect(() => resolveComputerChatContext(focused)).toThrow("no registered Computer scope");
         expect(() => resolveComputerChatContext(focused, "forged-session")).toThrow("no registered Computer scope");
-        expect(() => registerComputerChats("another-tab", ["live-one"])).toThrow("another workspace");
+        registerComputerChats("another-tab", ["live-one"]);
+        expect(resolveComputerChatContext(focused, "live-one").tabId).toBe("owner-tab");
     } finally {
         bindSandboxComputer("owner-tab");
         bindSandboxComputer("focused-tab");
+    }
+});
+
+it("advertises workspace and VM tools together only for an explicit Hybrid grant", () => {
+    bindSandboxComputer("hybrid-tab", "linux-vm:ubuntu", "hybrid");
+    try {
+        const scope = withSandboxComputerScope({ tabId: "hybrid-tab" });
+        expect(scope.sandboxComputerMode).toBe("hybrid");
+        const capability = { ...scope, token: "fixture" };
+        for (const name of [
+            "terminal_run",
+            "file_read",
+            "browser_navigate",
+            "widget_click",
+            "workspace_snapshot",
+            "n8n_search_nodes",
+            "n8n_edit_workflow",
+            "sandbox_vm_exec",
+            "sandbox_vm_desktop",
+        ])
+            expect(isToolAllowedBySurfaceCapability(name, capability as any)).toBe(true);
+        for (const name of ["kron_computer_click", "device_control", "linux_desktop_exec"])
+            expect(isToolAllowedBySurfaceCapability(name, capability as any)).toBe(false);
+        expect(
+            isToolAllowedBySurfaceCapability("terminal_run", { ...capability, delegationScope: "sandbox" } as any)
+        ).toBe(false);
+        bindSandboxComputer("hybrid-tab", "linux-vm:ubuntu");
+        const sandboxCapability = { ...withSandboxComputerScope({ tabId: "hybrid-tab" }), token: "fixture" };
+        for (const name of ["terminal_run", "n8n_search_nodes", "n8n_edit_workflow"])
+            expect(isToolAllowedBySurfaceCapability(name, sandboxCapability as any)).toBe(false);
+    } finally {
+        bindSandboxComputer("hybrid-tab");
     }
 });

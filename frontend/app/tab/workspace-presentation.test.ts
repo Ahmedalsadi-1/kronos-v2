@@ -2,18 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { getAdjacentWorkspacePresentation, isWorkspacePresentation } from "./workspace-presentation";
+import {
+    getAdjacentWorkspacePresentation,
+    isWorkspacePresentation,
+    normalizeWorkspacePresentation,
+} from "./workspace-presentation";
 
 describe("workspace presentation navigation", () => {
     it("cycles forward and backward through every presentation", () => {
         expect(getAdjacentWorkspacePresentation("widgets", 1)).toBe("tabs");
-        expect(getAdjacentWorkspacePresentation("tabs", 1)).toBe("canvas");
-        expect(getAdjacentWorkspacePresentation("canvas", 1)).toBe("os");
-        expect(getAdjacentWorkspacePresentation("os", 1)).toBe("web");
-        expect(getAdjacentWorkspacePresentation("web", 1)).toBe("widgets");
-        expect(getAdjacentWorkspacePresentation("widgets", -1)).toBe("web");
-        expect(getAdjacentWorkspacePresentation("web", -1)).toBe("os");
-        expect(getAdjacentWorkspacePresentation("os", -1)).toBe("canvas");
+        expect(getAdjacentWorkspacePresentation("tabs", 1)).toBe("os");
+        expect(getAdjacentWorkspacePresentation("os", 1)).toBe("widgets");
+        expect(getAdjacentWorkspacePresentation("widgets", -1)).toBe("os");
+        expect(getAdjacentWorkspacePresentation("os", -1)).toBe("tabs");
+    });
+
+    it("maps saved legacy layouts to active presentations", () => {
+        expect(normalizeWorkspacePresentation("canvas")).toBe("os");
+        expect(normalizeWorkspacePresentation("web")).toBe("tabs");
+        expect(normalizeWorkspacePresentation("browsermode")).toBe("tabs");
     });
 
     it("accepts only supported presentations", () => {

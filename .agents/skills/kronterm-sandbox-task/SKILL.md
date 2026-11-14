@@ -5,6 +5,14 @@ description: Start, control, and finish a scoped KronTerm Linux sandbox task usi
 
 # KronTerm Sandbox Task
 
+## Selected Sandbox or Hybrid mode
+
+When the user has selected a computer beside the agent selector, use `sandbox_vm_status` and the `sandbox_vm_*` tools. This selection already provides the assignment; do not request a second reservation or call the separate `sandbox_task_start` lifecycle. Keep the grant through follow-up turns, thinking pauses, ordinary questions and intermediate steps. Only call `sandbox_vm_handback` when the overall task is complete, the user requests control, or direct human input is required; supply the matching reason and explain it to the user. It leaves the VM and browser session running and revokes agent input until the user's Return to agent action. Delegated workers report completion; the parent chat performs handback. Active workspace assignments keep the VM alive; the five-minute idle shutdown below applies after handback or to separately reserved tasks.
+
+For login, navigate to the exact website in the VM and call `sandbox_vm_login` with `action=request` and its HTTPS origin. It opens a secure card in this chat for manual entry, 1Password, MFA completion, remembered account policy and Return to agent. Stop issuing other tools while the user completes the card. Ask first is the default; Automatic is an explicit website/account/VM preference. Never save passwords, tokens or cookies in ordinary memory or pass credentials into generic tools. Verify the signed-in website after control returns; a submitted form or a reused profile is not proof of authentication. `sandbox_vm_login_preferences` can list or change saved preferences. The viewer's Return to agent button also restores normal control after a handback outside login.
+
+The lifecycle below applies to separately reserved machine tasks outside selected Computer mode.
+
 Use the managed guest, not native host controls. Loading this skill or listing targets must not boot a machine.
 
 ## Start

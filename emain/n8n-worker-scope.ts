@@ -40,3 +40,37 @@ export function selectWorkflowWorkerTarget(workerId: string, workflowId: string)
         if (worker.n8nWorkerId === workerId) worker.n8nWorkflowId = workflowId;
     }
 }
+
+export function validateWorkflowComputerGrant(
+    context: HermesSurfaceContext,
+    desktops: {
+        id: string;
+        ready: boolean;
+        controlOwner: string;
+        assignedAgentId?: string;
+        controlGeneration: number;
+    }[]
+): void {
+    if (!context?.n8nWorkerId || context.sandboxComputerGeneration == null) return;
+    const desktop = desktops.find((entry) => entry.id === context.sandboxComputerId);
+    if (
+        !desktop?.ready ||
+        desktop.controlOwner !== "agent" ||
+        desktop.assignedAgentId !== `sandbox:${context.tabId}` ||
+        desktop.controlGeneration !== context.sandboxComputerGeneration
+    )
+        throw new Error("The workflow VM control grant changed. Run the task again after reconnecting the VM.");
+}
+
+export function pinWorkflowComputerAction<
+    T extends { desktopId: string; assignedAgentId?: string; expectedGeneration?: number },
+>(context: HermesSurfaceContext, action: T): T {
+    if (!context?.n8nWorkerId || context.sandboxComputerGeneration == null) return action;
+    if (
+        action.desktopId !== context.sandboxComputerId ||
+        action.assignedAgentId !== `sandbox:${context.tabId}` ||
+        action.expectedGeneration !== context.sandboxComputerGeneration
+    )
+        throw new Error("The workflow VM control grant changed. Reconnect the VM before running this task again.");
+    return { ...action, expectedGeneration: context.sandboxComputerGeneration };
+}

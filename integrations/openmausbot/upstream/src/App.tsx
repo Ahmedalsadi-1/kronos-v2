@@ -276,13 +276,13 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
 
   return (
     <div className="flex h-full flex-col">
-      <KronTermDesktopLink />
+      {new URLSearchParams(location.search).get("roomOnly") !== "1" && <KronTermDesktopLink />}
       <UpdateBanner sidebarIndicator={!calendarFocus && (sidebarInline || drawerOpen)} />
       <CloudAsleepStrip />
       <CloudSendStrip cloudHome={state.config?.cloudHome === true} />
       <AppNotices quiet={paletteOpen || drawerOpen || Boolean(localVmWorkspaceBotId) || handedOver} viewer={viewer} />
       <div className="relative flex min-h-0 flex-1">
-      {!calendarFocus && <button
+      {!calendarFocus && !(group && new URLSearchParams(location.search).get("roomOnly") === "1") && <button
         type="button"
         ref={menuButtonRef}
         aria-label="Open bot list"
@@ -299,7 +299,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
           className="absolute inset-0 z-30 bg-black/50 md:hidden"
         />
       )}
-      {!calendarFocus && <Sidebar
+      {!calendarFocus && !(group && new URLSearchParams(location.search).get("roomOnly") === "1") && <Sidebar
         collapseToIcons={collapseSidebar}
         open={drawerOpen}
         onClose={() => {
@@ -405,17 +405,18 @@ function Application() {
     initAnalytics();
   }, []);
   const viewer = useWelcomeViewer();
+  const projectRoom = location.pathname === "/kronterm-app" && new URLSearchParams(location.search).get("roomOnly") === "1";
   return (
     <DesktopCapabilitiesProvider>
       <StoreProvider>
         <ThreadRefsProvider>
           <Shell viewer={viewer} />
         </ThreadRefsProvider>
-        <WelcomeGate viewer={viewer} />
+        {!projectRoom && <WelcomeGate viewer={viewer} />}
         <CloudTimeZoneSync viewer={viewer} />
-        <GuidedTour />
+        {!projectRoom && <GuidedTour />}
         <LiveCallHost />
-        <FirstConversationTour quiet={spotlightsQuiet(viewer)} />
+        {!projectRoom && <FirstConversationTour quiet={spotlightsQuiet(viewer)} />}
       </StoreProvider>
     </DesktopCapabilitiesProvider>
   );

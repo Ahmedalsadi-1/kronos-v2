@@ -6,7 +6,7 @@ const Welcome = {
     content: [
         {
             type: "text",
-            text: 'App=com.github.Electron (pid 1)\nWindow: "Kronterm - T1", App: Electron.\n0 standard window Kronterm - T1, Secondary Actions: Raise\n\t1 container (settable, string) Kronterm - T1\n5 menu bar\n\t6 Electron\n\t7 File\n\t8 Edit',
+            text: 'App=com.github.Electron (pid 1)\nWindow: "KronOS - T1", App: Electron.\n0 standard window KronOS - T1, Secondary Actions: Raise\n\t1 container (settable, string) KronOS - T1\n5 menu bar\n\t6 Electron\n\t7 File\n\t8 Edit',
         },
     ],
 };

@@ -58,7 +58,7 @@ export function ComputersSettings() {
         );
     const button =
         "cursor-pointer rounded-md border border-(--ui-stroke-secondary) px-3 py-1.5 text-xs hover:bg-(--chrome-action-hover) disabled:opacity-50";
-    if (!manager) return <p className="p-6 text-sm">Computer providers are available in the KronTerm desktop app.</p>;
+    if (!manager) return <p className="p-6 text-sm">Computer providers are available in the KronOS desktop app.</p>;
     return (
         <div className="space-y-6 p-6">
             <div>
@@ -251,7 +251,7 @@ export function ComputersSettings() {
             <p className="text-xs text-(--ui-text-tertiary)">
                 OpenMausBot computers require a running Docker, Podman or Apple Container service. Ubuntu VMs require
                 QEMU on Apple Silicon. Preparing a desktop downloads its image; prepared computers start directly from
-                KronTerm. Computer mode is limited to KronTerm Agent, whose tools are routed through the sandbox
+                KronOS. Computer mode is limited to KronOS Agent, whose tools are routed through the sandbox
                 boundary.
             </p>
         </div>

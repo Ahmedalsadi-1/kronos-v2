@@ -120,6 +120,8 @@ export class BotDesktopBridge {
                 }
                 for (const bot of bots) {
                     if (this.stopped) break;
+                    // Project desktops are shared and provisioned only when a teammate needs tools.
+                    if (bot.room || bot.id.startsWith("project-")) continue;
                     if (!this.active.has(bot.id)) this.active.set(bot.id, await Registry.ensure(bot));
                 }
             })

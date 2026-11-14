@@ -46,7 +46,7 @@ const FALLBACK: CatalogAgent[] = [
     },
     {
         id: "kronterm-desktop",
-        name: "Kronterm Desktop",
+        name: "KronOS Desktop",
         kind: "desktop",
         status: "missing",
         available: false,

@@ -41,31 +41,42 @@
 
     .resize-handle {
         z-index: var(--zindex-layout-resize-handle);
+        display: grid;
+        place-items: center;
+        touch-action: none;
+        outline: none;
 
         .line {
-            visibility: hidden;
+            border-radius: 999px;
+            background: var(--focus-ring-color);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--motion-standard, 140ms) var(--ease-standard, ease-out);
         }
         &.flex-row {
             cursor: ew-resize;
             .line {
-                height: 100%;
-                width: calc(50% + 1px);
-                border-right: 1px solid var(--accent-color);
+                height: min(56px, 100%);
+                width: 2px;
             }
         }
         &.flex-column {
             cursor: ns-resize;
             .line {
-                height: calc(50% + 1px);
-                border-bottom: 1px solid var(--accent-color);
+                height: 2px;
+                width: min(56px, 100%);
             }
         }
-        &:hover .line {
-            visibility: visible;
 
-            // Ignore the prefers-reduced-motion override, since we are not applying a true animation here, just a delay.
-            transition-property: visibility !important;
-            transition-delay: var(--animation-time-s) !important;
+        &:is(:hover, :active, :focus-visible) .line {
+            opacity: 1;
+        }
+
+        @media (forced-colors: active) {
+            &:focus-visible {
+                outline: 1px solid Highlight;
+                outline-offset: -1px;
+            }
         }
     }
 
@@ -76,12 +87,7 @@
         height: 100%;
 
         &.dragging {
-            filter: blur(8px);
-        }
-
-        &.resizing {
-            border: 1px solid var(--accent-color);
-            backdrop-filter: blur(8px);
+            opacity: 0.55;
         }
 
         .tile-leaf {
@@ -100,10 +106,10 @@
                 height: 100%;
             }
         }
+    }
 
-        &:not(:only-child) .tile-leaf {
-            padding: calc(min(var(--gap-size-px), 2px) / 2);
-        }
+    &.has-splits .tile-leaf {
+        padding: calc(max(0px, var(--gap-size-px)) / 2);
     }
 
     --block-blur: 2px;
@@ -132,6 +138,13 @@
             transition-duration: var(--animation-time-s);
             transition-timing-function: linear;
             transition-property: transform, width, height, background-color;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        &.animate :is(.tile-node, .placeholder),
+        .resize-handle .line {
+            transition: none;
         }
     }
 

@@ -5,8 +5,8 @@ macOS private-beta distribution or a general App Store release.
 
 KronTerm for iPhone opens directly into its native agent chat. The native React agent conversation uses the selected host API; Browser, Workspace, Files, Code, Terminal, and Preview are secondary surfaces opened only when the task needs them. A focused pane fills the iPhone screen, and The agent conversation and Workspace are one tap apart.
 
-KronosCode remains the single AI engine across desktop and mobile. See the [project README](../README.md) for the desktop
-capability and availability map.
+Remote iPhone chat requires a Labs host with the KronosCode session API. The managed desktop Hermes runtime uses a different
+gateway. See the [project README](../README.md) for desktop capabilities and availability.
 
 The Phase 1 Auto planner classifies each objective. File edits, JavaScript, WebAssembly, and previews target the iPhone. Linux-specific work targets Local Linux. Docker, databases, large Node projects, Rust, and Go target Kron Sandbox. A personal Mac, Windows PC, Linux machine, or SSH host remains optional.
 
@@ -55,13 +55,13 @@ npm run ios:open
 
 Set `VITE_KRONTERM_CLOUD_URL` to pre-register a managed Browser Host or Kron Sandbox. A production managed host should use HTTPS and provide the same `/health` and `/api` contract as the connector. `VITE_KRONTERM_CLOUD_TOKEN` is supported for local development only and must not be embedded in release builds.
 
-During browser development at `127.0.0.1:4174`, the app automatically registers the Hermes host through the local connector at `127.0.0.1:4119`. Override it with `VITE_KRONTERM_LOCAL_URL`.
+During browser development at `127.0.0.1:4174`, the app lists the local connector at `127.0.0.1:4119`. Override it with `VITE_KRONTERM_LOCAL_URL`.
 
 The native Xcode project is already included under `ios/`; `npm run ios:sync` rebuilds and copies the web runtime before opening or archiving it. The local Capacitor plugin lives at `plugins/local-shell` and links the BSD-3-Clause `ios_system` command frameworks.
 
 ## Optional personal computer connector
 
-Start Hermes/KronTerm, then run:
+Start a compatible Labs agent API host, then run:
 
 ```bash
 npm run host -- --lan --upstream https://your-agent-api.example
@@ -83,7 +83,7 @@ When the bridge is reachable:
 - Taps, text entry, app opening, scrolling, and swipes are followed by a fresh screen/tree observation.
 - Audit entries contain action metadata and outcomes, not typed text, screenshots, API keys, or prompts.
 
-KronosCode remains the only AI engine. PhoneAgent's `set_api_key` and `submit_prompt` methods are intentionally not registered or forwarded. The integration uses PhoneAgent for RPC execution, Qalti's observe/act/verify loop for result checking, and iGentic's approval/policy/audit model for control safety.
+The integration uses PhoneAgent for RPC execution, Qalti's observe/act/verify loop for result checking, and iGentic's approval/policy/audit model for control safety. PhoneAgent's `set_api_key` and `submit_prompt` methods are intentionally unavailable.
 
 ## App Store boundary
 

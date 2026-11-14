@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react";
 import { useEffect, useState } from "react";
 
 import { useSessionView } from "@hermes/app/chat/session-view";
+import { Button } from "@hermes/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -119,7 +120,7 @@ export function AgentEnginePill({ compact = false, disabled }: { compact?: boole
     const shown = sessionEngine ?? hostEngines.active;
     const selectedEngine = hostEngines.engines.find((engine) => engine.id === shown) ?? {
         id: shown,
-        label: shown === "openmausbot" ? "Bot" : shown === "hermes" ? "KronTerm Agent" : shown === "kronoscode" ? "KronosCode" : shown,
+        label: shown === "openmausbot" ? "Bot" : shown === "hermes" ? "KronOS Agent" : shown === "kronoscode" ? "KronosCode" : shown,
         description: "ACP agent",
         available: true,
     };
@@ -133,18 +134,20 @@ export function AgentEnginePill({ compact = false, disabled }: { compact?: boole
         >
             <Tip label={sessionEngine ? "Agent for this chat · choose the agent for new chats" : "Choose the agent"}>
                 <DropdownMenuTrigger asChild>
-                    <button
+                    <Button
                         aria-label={`Agent: ${label}`}
                         data-hermes-agent-picker=""
                         className={cn(
-                            "flex cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-(--chrome-action-hover)",
+                            "p-0",
                             compact && "size-(--composer-control-size)"
                         )}
                         disabled={disabled}
+                        size={compact ? "icon-sm" : "sm"}
                         type="button"
+                        variant="ghost"
                     >
                         <EngineMark engine={selectedEngine} />
-                    </button>
+                    </Button>
                 </DropdownMenuTrigger>
             </Tip>
             <DropdownMenuContent align="center" className="agent-engine-menu max-h-96 w-96 overflow-y-auto">

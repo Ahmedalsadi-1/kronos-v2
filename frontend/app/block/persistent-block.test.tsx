@@ -9,7 +9,12 @@ import { atom } from "jotai";
 import { act, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { makePersistentNodeModel, PersistentBlock, PersistentBlockProvider } from "./persistent-block";
+import {
+    makePersistentNodeModel,
+    PersistentBlock,
+    PersistentBlockProvider,
+    PersistentBlockSlot,
+} from "./persistent-block";
 
 const counts = vi.hoisted(() => ({ mounts: 0, disposes: 0 }));
 vi.mock("./block", () => ({
@@ -43,6 +48,105 @@ afterEach(() => {
 });
 
 describe("persistent block ownership", () => {
+    it("moves a browser to an alternate slot and restores its canvas slot without remounting", async () => {
+        vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+        let frame: FrameRequestCallback;
+        vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+            frame = callback;
+            return 1;
+        });
+        vi.stubGlobal("cancelAnimationFrame", vi.fn());
+        const element = document.createElement("div");
+        document.body.append(element);
+        const root = createRoot(element);
+        const browser = model();
+        const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(300);
+        const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(240);
+        const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+            return new DOMRect(this.closest("[data-test-alternate-slot]") ? 350 : 0, 0, 300, 240);
+        });
+        const render = (alternate: boolean) =>
+            act(() =>
+                root.render(
+                    <PersistentBlockProvider blockIds={["browser"]}>
+                        <PersistentBlock nodeModel={browser} preview={false} />
+                        {alternate && (
+                            <section data-test-alternate-slot="">
+                                <PersistentBlockSlot blockId="browser" />
+                            </section>
+                        )}
+                    </PersistentBlockProvider>
+                )
+            );
+        try {
+            await render(false);
+            const input = element.querySelector("input");
+            const host = element.querySelector<HTMLElement>("[data-live-blockid]");
+            expect(host.style.left).toBe("0px");
+            await render(true);
+            frame(0);
+            expect(host.style.left).toBe("350px");
+            expect(element.querySelector("input")).toBe(input);
+            await render(false);
+            frame(16);
+            expect(host.style.left).toBe("0px");
+            expect(element.querySelector("input")).toBe(input);
+            expect(counts.mounts).toBe(1);
+        } finally {
+            await act(() => root.unmount());
+            bounds.mockRestore();
+            height.mockRestore();
+            width.mockRestore();
+            element.remove();
+        }
+    });
+
+    it("skips layout and appearance reads for inactive slots while retaining the live session", async () => {
+        vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+        let frame: FrameRequestCallback;
+        vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+            frame = callback;
+            return 1;
+        });
+        vi.stubGlobal("cancelAnimationFrame", vi.fn());
+        const element = document.createElement("div");
+        document.body.append(element);
+        const root = createRoot(element);
+        const browser = model();
+        const render = (visible: boolean) =>
+            act(() =>
+                root.render(
+                    <PersistentBlockProvider blockIds={["browser"]}>
+                        {visible && <PersistentBlock nodeModel={browser} preview={false} />}
+                    </PersistentBlockProvider>
+                )
+            );
+        try {
+            await render(true);
+            const input = element.querySelector("input");
+            await render(false);
+            const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+            const appearance = vi.spyOn(window, "getComputedStyle");
+            try {
+                frame(0);
+                frame(16);
+                expect(geometry).not.toHaveBeenCalled();
+                expect(appearance).not.toHaveBeenCalled();
+                expect(element.querySelector("input")).toBe(input);
+                expect(element.querySelector<HTMLElement>("[data-live-blockid]").style.display).toBe("none");
+            } finally {
+                geometry.mockRestore();
+                appearance.mockRestore();
+            }
+            await render(true);
+            expect(element.querySelector("input")).toBe(input);
+            expect(counts.mounts).toBe(1);
+        } finally {
+            await act(() => root.unmount());
+            element.remove();
+        }
+    });
+
     it("keeps one live mount and DOM input through presentation and inactive-tab changes", async () => {
         vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
         const element = document.createElement("div");

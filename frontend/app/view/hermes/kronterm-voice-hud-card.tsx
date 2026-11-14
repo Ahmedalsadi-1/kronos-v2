@@ -13,13 +13,13 @@ export function KrontermVoiceHudCard({ onClose }: { onClose?: () => void }) {
         idle: "Voice ready",
         listening: "Listening…",
         transcribing: "Transcribing…",
-        thinking: "KronTerm is thinking",
-        speaking: "KronTerm is speaking",
+        thinking: "KronOS is thinking",
+        speaking: "KronOS is speaking",
         error: "Voice unavailable",
     };
     return (
         <aside
-            aria-label="KronTerm voice conversation"
+            aria-label="KronOS voice conversation"
             data-coucou-voice-card=""
             className="pointer-events-auto fixed inset-x-3 top-12 z-[116] flex min-h-[98px] items-center gap-5 overflow-hidden rounded-[18px] border border-white/10 bg-[#121317] px-7 py-4 text-white shadow-2xl"
         >
@@ -51,10 +51,10 @@ export function KrontermVoiceHudCard({ onClose }: { onClose?: () => void }) {
                               ? "Transcribing…"
                               : voice.status === "listening"
                                 ? "Transcript appears after you finish speaking"
-                                : "Say something to KronTerm…")}
+                                : "Say something to KronOS…")}
                 </p>
                 {voice.response && (
-                    <p className="mt-1 truncate text-[13px] text-[#c7b9ff]">KronTerm: {voice.response}</p>
+                    <p className="mt-1 truncate text-[13px] text-[#c7b9ff]">KronOS: {voice.response}</p>
                 )}
             </div>
             <div className="relative flex gap-1">

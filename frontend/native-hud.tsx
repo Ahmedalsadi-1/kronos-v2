@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SystemUIProvider, useSystemAppearance } from "@/app/components/system-ui";
 import { globalStore } from "@/app/store/jotaiStore";
 import { useTabModel } from "@/app/store/tab-model";
 import { HermesApp } from "@/app/view/hermes/hermes-app";
@@ -8,6 +9,7 @@ import { installHermesDesktopShim } from "@/app/view/hermes/hermes-desktop-shim"
 import { HermesConnectionState, useHermesConnection } from "@/app/view/hermes/use-hermes-connection";
 import { KronSettingsViewModel } from "@/app/view/kronsettings/kronsettings-model";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
+import "@/app/workspace/coucou-chrome.css";
 import { NativeHudFallback } from "@/app/workspace/native-hud-fallback";
 import { NativeIslandProviders } from "@/app/workspace/native-island-app";
 import { PRIMARY_SESSION_VIEW } from "@hermes/app/chat/session-view";
@@ -38,6 +40,7 @@ function NativeHudContent({ tabId, onReady }: { tabId: string; onReady: () => vo
     );
     const { ready, error, retry } = useHermesConnection(tabId, true, "kronterm");
     const [companionAvailable, setCompanionAvailable] = useState(false);
+    const appearance = useSystemAppearance();
 
     useEffect(() => api.onNativeNotchAvailability(setCompanionAvailable), []);
 
@@ -85,7 +88,11 @@ function NativeHudContent({ tabId, onReady }: { tabId: string; onReady: () => vo
     return (
         <main
             data-coucou-hud={nativeNotch ? "" : undefined}
-            className={`flex h-screen w-screen flex-col overflow-hidden text-white ${nativeNotch ? "bg-black" : "gap-2 bg-transparent p-2"}`}
+            data-color-scheme={appearance.colorScheme}
+            data-contrast={appearance.contrast}
+            data-reduced-motion={appearance.reducedMotion || undefined}
+            data-reduced-transparency={appearance.reducedTransparency || undefined}
+            className={`native-hud-shell flex h-screen w-screen flex-col overflow-hidden ${nativeNotch ? "" : "gap-2 p-2"}`}
         >
             <section className="relative min-h-0 flex-1 overflow-visible">
                 {ready ? (
@@ -100,14 +107,16 @@ function NativeHudContent({ tabId, onReady }: { tabId: string; onReady: () => vo
 }
 
 document.documentElement.dataset.nativeSurface = "hud";
-document.title = "KronTerm HUD";
+document.title = "KronOS HUD";
 document.body.style.background = "transparent";
 document.body.style.margin = "0";
 document.body.classList.remove("init");
 export function NativeHud({ tabId, onReady }: { tabId: string; onReady: () => void }) {
     return (
         <NativeIslandProviders tabId={tabId}>
-            <NativeHudContent tabId={tabId} onReady={onReady} />
+            <SystemUIProvider>
+                <NativeHudContent tabId={tabId} onReady={onReady} />
+            </SystemUIProvider>
         </NativeIslandProviders>
     );
 }

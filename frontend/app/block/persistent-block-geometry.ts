@@ -99,8 +99,10 @@ export function collectSurfaceOccluders(
             candidates.add(candidate);
     }
     if (osMode) {
-        for (const world of sceneRoot.querySelectorAll("[data-workflow-world]")) {
-            for (const node of world.shadowRoot?.querySelectorAll(".vue-flow__node") ?? []) {
+        for (const world of sceneRoot.querySelectorAll("[data-workflow-world], [data-comfy-workflow-world]")) {
+            for (const node of world.shadowRoot?.querySelectorAll(
+                ".vue-flow__node, [data-os-object-kind='workflow-node']"
+            ) ?? []) {
                 if ((Number.parseInt(getComputedStyle(node).zIndex) || 0) > ownerZ) candidates.add(node);
             }
         }

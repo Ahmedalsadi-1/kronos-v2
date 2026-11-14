@@ -117,3 +117,9 @@ it("rejects expired observations and never replays an action after failed verifi
         now.mockRestore();
     }
 });
+
+it("swarm callers cannot use an unassigned device", async () => {
+    const runtime = new DeviceFarmRuntime({ list: async () => [] } as any);
+    await expect(runtime.authorize("device", "caller", true)).rejects.toThrow("Assign this device");
+    await expect(runtime.authorize("device", "caller")).resolves.toBeUndefined();
+});

@@ -23,6 +23,7 @@ beforeEach(() => {
             isDestroyed: () => false,
             getType: () => "webview",
             isCurrentlyAudible: () => true,
+            isAudioMuted: () => false,
             executeJavaScript: mocks.execute,
         },
     ];
@@ -37,6 +38,7 @@ it("reads live browser metadata and controls the same source", async () => {
         artist: "Artist",
         source: "Browser",
         playing: true,
+        muted: false,
         canSkip: false,
     });
     await controlNowPlaying("web:17", "toggle");

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { WorkspaceService } from "@/app/store/services";
-import { AsyncLocalStorage } from "node:async_hooks";
+import { desktopCapturer } from "electron";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import type { AgentActivityEvent } from "../frontend/types/agent-activity";
+import { reusableTerminal } from "../mcp-kron-term/src/terminal-reuse";
 import { ToolFailure, ToolOperationContext, type ToolTarget } from "../mcp-kron-term/src/tool-execution";
 import {
     validateWorkspaceSurfaceControl,
@@ -13,6 +15,8 @@ import {
     type SurfaceCapability,
     type WorkspaceSurfaceControl,
 } from "../mcp-kron-term/src/wsh-bridge";
+import { createAgentPreviewPublisher } from "./agent-native-preview";
+import { attributeAgentSurfaceActivity } from "./agent-surface-context";
 import {
     arrangeNativeHudIslands,
     closeNativeHudIsland,
@@ -28,7 +32,25 @@ import { notifyDesktopPetActivity, notifyDesktopPetSurfaceActivity } from "./ema
 import * as windows from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
 import type { HermesSurfaceContext } from "./hermes-runtime";
+import { selectNativeSurfaceSource } from "./native-surface-selection";
+import { isSwarmScoped, swarmBlockTarget, type SwarmTarget } from "./swarm-target-scope";
 import { resolveToolRequestContext, withToolRequestContext } from "./tool-request-context";
+
+let nativePreviewSources: ReturnType<typeof desktopCapturer.getSources>;
+const publishWithPreview = createAgentPreviewPublisher(notifyDesktopPetSurfaceActivity, async (appName) => {
+    nativePreviewSources ??= desktopCapturer
+        .getSources({
+            types: ["window"],
+            thumbnailSize: { width: 1280, height: 800 },
+        })
+        .finally(() => {
+            nativePreviewSources = undefined;
+        });
+    const sources = await nativePreviewSources;
+    const source = selectNativeSurfaceSource(sources, appName);
+    if (!source || source.thumbnail.isEmpty()) throw new Error("App preview unavailable");
+    return source.thumbnail.toDataURL();
+});
 
 type SurfaceContextProvider = () => HermesSurfaceContext | null;
 
@@ -65,12 +87,7 @@ function normalizeBrowserUrl(value: string): string {
     return url.href;
 }
 
-const ActivitySourceStore = new AsyncLocalStorage<"hermes">();
-
-/** Attributes surface activity published during `fn` to the calling agent (the /mcp path stays "acp"). */
-export function runWithAgentActivitySource<T>(source: "hermes", fn: () => Promise<T>): Promise<T> {
-    return ActivitySourceStore.run(source, fn);
-}
+export { runWithAgentActivitySource } from "./agent-surface-context";
 
 export class KronTermNativeToolBridge extends WshBridge {
     private contextProvider: SurfaceContextProvider;
@@ -123,6 +140,8 @@ export class KronTermNativeToolBridge extends WshBridge {
             const owner = await this.owner(targetBlock);
             if (!owner?.tabid || !owner.workspaceid)
                 throw new ToolFailure("TARGET_CLOSED", "Widget has no owning workspace/tab");
+            if (isSwarmScoped(caller) && (owner.tabid !== caller.tabId || owner.workspaceid !== caller.workspaceId))
+                throw new ToolFailure("STALE_TARGET", "Swarm block moved out of its assigned tab or workspace.");
             if ((tabId && tabId !== owner.tabid) || (workspaceId && workspaceId !== owner.workspaceid)) {
                 throw new ToolFailure(
                     "TARGET_MISMATCH",
@@ -222,6 +241,17 @@ export class KronTermNativeToolBridge extends WshBridge {
         });
     }
 
+    async swarmTargets(): Promise<SwarmTarget[]> {
+        const context = this.context();
+        if (isSwarmScoped(context) || context.hostMode === "web-fullscreen" || !context.workspaceId) return [];
+        const blocks = (await this.rpc("blockslist", { workspaceid: context.workspaceId })) as BlocksListEntry[];
+        return blocks.flatMap((block) => {
+            if (block.tabid !== context.tabId) return [];
+            const target = swarmBlockTarget(block);
+            return target ? [target] : [];
+        });
+    }
+
     private async discoverWorkspaces(): Promise<any[]> {
         if (this.discoveryPending) return this.discoveryPending;
         const request = (async () => {
@@ -309,11 +339,13 @@ export class KronTermNativeToolBridge extends WshBridge {
             blockid: context.blockId ?? "",
         })) as CommandCreateSurfaceTokenRtnData;
         if (!token?.token || token.tabid !== context.tabId || (token.blockid ?? "") !== (context.blockId ?? "")) {
-            throw new Error("KronTerm could not issue a capability for the active workspace tab");
+            throw new Error("KronOS could not issue a capability for the active workspace tab");
         }
         return {
             nativeCallerId: context.nativeCallerId,
             sandboxComputerId: context.sandboxComputerId,
+            sandboxComputerMode: context.sandboxComputerMode,
+            delegationScope: context.delegationScope,
             token: token.token,
             tabId: token.tabid,
             blockId: token.blockid || undefined,
@@ -370,10 +402,10 @@ export class KronTermNativeToolBridge extends WshBridge {
     private context(): HermesSurfaceContext {
         const context = resolveToolRequestContext(this.contextProvider);
         if (!context?.tabId) {
-            throw new Error("KronTerm surface is not attached to a workspace tab");
+            throw new Error("KronOS surface is not attached to a workspace tab");
         }
         if (!ElectronWshClient) {
-            throw new Error("KronTerm TypeScript RPC client is not ready");
+            throw new Error("KronOS TypeScript RPC client is not ready");
         }
         return context;
     }
@@ -389,6 +421,8 @@ export class KronTermNativeToolBridge extends WshBridge {
     private assertBlockScope(targetBlockId: string): string {
         const normalized = blockId(targetBlockId);
         const context = this.context();
+        if (isSwarmScoped(context) && normalized !== context.swarmTarget?.blockId)
+            throw new ToolFailure("SCOPE_DENIED", "Block is outside the swarm attempt's target grant.");
         if (context.hostMode === "web-fullscreen" && context.blockId && normalized !== blockId(context.blockId)) {
             throw new Error(`Block ${normalized} is outside the active web surface capability`);
         }
@@ -397,7 +431,45 @@ export class KronTermNativeToolBridge extends WshBridge {
 
     private async rpc(command: string, data: unknown, route?: string): Promise<unknown> {
         const context = this.context();
-        if ((context.sandboxComputerId || context.delegationScope === "widgets") && command.startsWith("widget")) {
+        if (isSwarmScoped(context)) {
+            const target = context.swarmTarget;
+            const input = data as { blockid?: string; oref?: string; meta?: Record<string, string>; action?: string };
+            const navigation =
+                command === "setmeta" &&
+                target?.kind === "browser" &&
+                Object.keys(input.meta ?? {}).length === 1 &&
+                /^https?:\/\//i.test(input.meta?.url ?? "");
+            const focus =
+                command === "workspacesurfacecontrol" &&
+                input?.action === "focus" &&
+                Object.entries(input).every(([key, value]) => key === "action" || key === "blockid" || value == null);
+            const id = command === "blockinfo" ? data : navigation ? blockId(input.oref ?? "") : input?.blockid;
+            if (!target?.blockId || id !== target.blockId)
+                throw new ToolFailure("SCOPE_DENIED", "RPC is outside the swarm attempt's block grant.");
+            if (command !== "blockinfo") {
+                if (
+                    !navigation &&
+                    !focus &&
+                    !["captureblockscreenshot", "webselector"].includes(command) &&
+                    (!command.startsWith("widget") || command.startsWith("widgetclipboard"))
+                )
+                    throw new ToolFailure("SCOPE_DENIED", "RPC is outside the swarm attempt's operation grant.");
+                const info = await this.owner(id);
+                const current = swarmBlockTarget({ blockid: id, tabid: info?.tabid, meta: info?.block?.meta });
+                if (
+                    current?.kind !== target.kind ||
+                    info?.tabid !== target.tabId ||
+                    info?.workspaceid !== context.workspaceId ||
+                    !current.resourceKeys.every((key) => target.resourceKeys.includes(key))
+                )
+                    throw new ToolFailure("STALE_TARGET", "Swarm block or browser session changed.");
+            }
+        }
+        if (
+            ((context.sandboxComputerId && context.sandboxComputerMode !== "hybrid") ||
+                context.delegationScope === "widgets") &&
+            command.startsWith("widget")
+        ) {
             const id = (data as { blockid?: string })?.blockid;
             if (!id) throw new Error("Computer mode requires an explicit widget target.");
             const info = (await this.rpc("blockinfo", id)) as BlockInfoData;
@@ -416,7 +488,7 @@ export class KronTermNativeToolBridge extends WshBridge {
             throw new ToolFailure("CANCELLED", "Tool execution was cancelled", false, !operation.readOnly);
         const target =
             (data as { blockid?: string })?.blockid ?? (command === "setblockfocus" ? String(data) : undefined);
-        if (route && target && operation) {
+        if ((route || command === "controllerinput") && target && operation) {
             const owner =
                 context.blockId === target
                     ? { tabid: context.tabId, workspaceid: context.workspaceId }
@@ -432,10 +504,12 @@ export class KronTermNativeToolBridge extends WshBridge {
         if (route && operation && !route.includes(":island:")) await this.ensureTabReady(context.tabId);
         if (operation?.signal.aborted)
             throw new ToolFailure("CANCELLED", "Tool execution was cancelled", false, !operation.readOnly);
-        const options: RpcOpts & { signal?: AbortSignal } = route ? { route } : {};
+        const options: RpcOpts & { signal?: AbortSignal; waitForCancelAck?: boolean } = route ? { route } : {};
         if (operation) {
             options.timeout = Math.max(1, operation.deadline - Date.now());
-            options.signal = operation.signal;
+            // A dispatched write still owns the target until its remote response arrives.
+            if (!operation.tracksSettlement || operation.readOnly) options.signal = operation.signal;
+            options.waitForCancelAck = operation.tracksSettlement && command === "widgetwaitcondition";
         }
         const rpcStart = performance.now();
         let result: any;
@@ -724,29 +798,32 @@ export class KronTermNativeToolBridge extends WshBridge {
             onTool?: (event: { type: string; data?: unknown }) => void;
         } = {}
     ): Promise<string> {
+        const signal = options.signal ?? ToolOperationContext.getStore()?.signal;
+        if (signal?.aborted) throw new Error("ACP delegation cancelled (caller stopped or workflow paused)");
         if (this.acpDelegationActive) {
             throw new Error("An ACP specialist is already active; nested or concurrent ACP delegation is not allowed");
         }
         const context = this.context();
         const timeoutMs = timeoutSeconds * 1000;
-        if (options.signal?.aborted) throw new Error("Workflow paused");
-        let abortReject: (error: Error) => void;
-        const aborted = new Promise<never>((_, reject) => {
-            abortReject = reject;
-        });
-        const onAbort = () => abortReject(new Error("Workflow paused"));
-        options.signal?.addEventListener("abort", onAbort, { once: true });
         let deadlineTimer: NodeJS.Timeout | undefined;
-        let deadlineExpired = false;
+        let interruption: Error | undefined;
         let manager: import("./acp/acp-agent-manager").AcpAgentManager | undefined;
         let onEvent: ((event: { type: string; data?: unknown }) => void) | undefined;
         let rejectAgentFailure: ((error: Error) => void) | undefined;
-        const deadline = new Promise<never>((_, reject) => {
-            deadlineTimer = setTimeout(() => {
-                deadlineExpired = true;
-                reject(new Error(`ACP specialist timed out after ${timeoutSeconds} seconds`));
-            }, timeoutMs);
+        let rejectInterruption: (error: Error) => void;
+        const interrupted = new Promise<never>((_, reject) => {
+            rejectInterruption = reject;
         });
+        const interrupt = (error: Error) => {
+            interruption ??= error;
+            rejectInterruption(interruption);
+        };
+        const onAbort = () => interrupt(new Error("ACP delegation cancelled (caller stopped or workflow paused)"));
+        signal?.addEventListener("abort", onAbort, { once: true });
+        deadlineTimer = setTimeout(
+            () => interrupt(new Error(`ACP specialist timed out after ${timeoutSeconds} seconds`)),
+            timeoutMs
+        );
         this.acpDelegationActive = true;
         try {
             const operation = (async () => {
@@ -754,8 +831,9 @@ export class KronTermNativeToolBridge extends WshBridge {
                     import("./acp/acp-agent-manager"),
                     import("./acp/acp-connector"),
                 ]);
-                const agents = await detectInstalledAgents();
-                if (deadlineExpired) throw new Error(`ACP specialist timed out after ${timeoutSeconds} seconds`);
+                if (interruption) throw interruption;
+                const agents = await detectInstalledAgents(backend);
+                if (interruption) throw interruption;
                 const agent = agents.find((candidate) => candidate.backend === backend && candidate.available);
                 if (!agent || backend === "hermes") {
                     throw new Error(`ACP specialist ${backend} is not installed or is unavailable`);
@@ -781,17 +859,21 @@ export class KronTermNativeToolBridge extends WshBridge {
                         ...(internal?.password ? { KRONOSCODE_SERVER_PASSWORD: internal.password } : {}),
                     };
                 }
-                if (deadlineExpired) throw new Error(`ACP specialist timed out after ${timeoutSeconds} seconds`);
+                if (interruption) throw interruption;
 
                 const conversationId = `hermes-acp-${randomUUID()}`;
-                manager = new AcpAgentManager({
+                const managerOptions = {
                     conversationId,
                     backend,
+                    cliPath: agent.cliPath,
                     workspace: options.workspace || process.env.KRONTERM_WORKSPACE || process.cwd(),
                     surfaceContext,
+                    disableBuiltInSurface: !surfaceContext?.tabId,
+                    maxReconnectAttempts: 0,
                     customArgs,
                     customEnv,
-                });
+                };
+                manager = new AcpAgentManager(managerOptions);
                 const answer: string[] = [];
                 const rejectedPermissions: string[] = [];
                 const agentFailure = new Promise<never>((_, reject) => {
@@ -828,44 +910,50 @@ export class KronTermNativeToolBridge extends WshBridge {
                     const rejected = confirmation?.options?.find(
                         (option: { kind?: string }) => option.kind === "reject_once" || option.kind === "reject_always"
                     );
-                    if (!confirmation?.callId || !rejected?.optionId) return;
+                    if (!confirmation?.callId) return;
                     if (options.onPermission) {
                         void options
                             .onPermission(confirmation)
-                            .then((optionId) =>
-                                manager?.confirmTool({
-                                    conversationId,
-                                    msgId: confirmation.msgId,
-                                    callId: confirmation.callId,
-                                    optionId,
-                                })
+                            .then(
+                                (optionId) =>
+                                    !interruption &&
+                                    manager?.confirmTool({
+                                        conversationId,
+                                        msgId: confirmation.msgId,
+                                        callId: confirmation.callId,
+                                        optionId,
+                                    })
                             )
                             .catch((error) => rejectAgentFailure?.(error));
                         return;
                     }
+                    if (!rejected?.optionId) {
+                        rejectAgentFailure(new Error("ACP specialist requested approval without a reject option"));
+                        return;
+                    }
                     rejectedPermissions.push(String(confirmation.title || "approval-required action"));
-                    void manager?.confirmTool({
-                        conversationId,
-                        msgId: confirmation.msgId,
-                        callId: confirmation.callId,
-                        optionId: rejected.optionId,
-                    });
+                    void manager
+                        ?.confirmTool({
+                            conversationId,
+                            msgId: confirmation.msgId,
+                            callId: confirmation.callId,
+                            optionId: rejected.optionId,
+                        })
+                        .catch((error) => rejectAgentFailure?.(error));
                 };
                 manager.on("event", onEvent);
-                await Promise.race([
-                    manager.initialize({
-                        conversationId,
-                        backend,
-                        cliPath: agent.cliPath,
-                        workspace: options.workspace || process.env.KRONTERM_WORKSPACE || process.cwd(),
-                        surfaceContext,
-                        customArgs,
-                        customEnv,
-                    }),
+                await Promise.race([manager.initialize(managerOptions), agentFailure]);
+                if (interruption) throw interruption;
+                const stopReason = await Promise.race([
+                    manager.sendMessage({ conversationId, content: task }),
                     agentFailure,
                 ]);
-                if (deadlineExpired) throw new Error(`ACP specialist timed out after ${timeoutSeconds} seconds`);
-                await Promise.race([manager.sendMessage({ conversationId, content: task }), agentFailure]);
+                if (interruption) throw interruption;
+                if (stopReason != null && stopReason !== "end_turn") {
+                    throw new Error(
+                        `ACP specialist stopped before finishing (${stopReason}). Inspect the target for partial changes before retrying.`
+                    );
+                }
                 const response = answer.join("").trim();
                 if (!response && rejectedPermissions.length === 0) {
                     throw new Error(
@@ -878,14 +966,14 @@ export class KronTermNativeToolBridge extends WshBridge {
                     answer: response,
                     rejectedPermissions,
                     sessionId: manager.sessionId,
-                    toolAccess: surfaceContext ? "tab-scoped-kronterm-mcp" : "none",
+                    toolAccess: manager.hasSurfaceMcp ? "tab-scoped-kronterm-mcp" : "none",
                 });
             })();
-            operation.catch(() => undefined);
-            return await Promise.race([operation, deadline, aborted]);
+            return await Promise.race([operation, interrupted]);
         } finally {
-            options.signal?.removeEventListener("abort", onAbort);
-            if (deadlineTimer) clearTimeout(deadlineTimer);
+            signal?.removeEventListener("abort", onAbort);
+            clearTimeout(deadlineTimer);
+            interruption ??= new Error("ACP specialist stopped");
             rejectAgentFailure?.(new Error("ACP specialist stopped"));
             if (manager && onEvent) manager.off("event", onEvent);
             await manager?.stop().catch(() => undefined);
@@ -986,8 +1074,17 @@ export class KronTermNativeToolBridge extends WshBridge {
         return `updated block:${target}`;
     }
 
-    async openTerminal(cwd?: string, magnified?: boolean): Promise<string> {
-        return this.createBlock("term", { controller: "shell", ...(cwd ? { "cmd:cwd": cwd } : {}) }, magnified);
+    async openTerminal(cwd?: string, magnified?: boolean, newSurface = false): Promise<string> {
+        return this.serializeTerminalOpen(this.context().tabId, async () => {
+            if (!newSurface) {
+                const existing = reusableTerminal(JSON.parse(await this.listBlocks()), cwd);
+                if (existing) {
+                    await this.focusBlock(existing);
+                    return `reused block block:${existing}; inspect terminal_scrollback before sending input`;
+                }
+            }
+            return this.createBlock("term", { controller: "shell", ...(cwd ? { "cmd:cwd": cwd } : {}) }, magnified);
+        });
     }
 
     async terminalScrollback(targetBlockId: string, start = 0, end = 0, lastCommand = false): Promise<string> {
@@ -1003,8 +1100,7 @@ export class KronTermNativeToolBridge extends WshBridge {
         const target = this.assertBlockScope(targetBlockId);
         await this.rpc(
             "controllerinput",
-            { blockid: target, inputdata64: Buffer.from(`${text}${submit ? "\n" : ""}`).toString("base64") },
-            this.blockRoute(target)
+            { blockid: target, inputdata64: Buffer.from(`${text}${submit ? "\n" : ""}`).toString("base64") }
         );
         return "terminal input sent";
     }
@@ -1064,19 +1160,25 @@ export class KronTermNativeToolBridge extends WshBridge {
     }
 
     async fileList(filePath = "."): Promise<string> {
-        return json(await this.rpc("filelist", { path: filePath }));
+        return json((await this.rpc("filelist", { path: filePath, opts: {} })) ?? []);
     }
 
     async fileRead(filePath: string): Promise<string> {
-        const result = (await this.rpc("fileread", { info: { path: filePath } })) as { data64?: unknown };
-        if (typeof result.data64 !== "string") {
-            return json(result);
+        const result = (await this.rpc("fileread", { info: { path: filePath } })) as FileData;
+        if (result?.info?.notfound) throw new Error(`File not found: ${filePath}`);
+        if (result?.info?.isdir) throw new Error(`Path is a directory; use file_list: ${filePath}`);
+        if (typeof result?.data64 !== "string") {
+            if (result?.info?.size === 0) return "";
+            throw new Error(`File read returned no content: ${filePath}`);
         }
         return Buffer.from(result.data64, "base64").toString("utf8");
     }
 
     async fileInfo(filePath: string): Promise<string> {
-        return json(await this.rpc("fileinfo", { info: { path: filePath } }));
+        const result = (await this.rpc("fileinfo", { info: { path: filePath } })) as FileInfo;
+        if (result?.notfound) throw new Error(`File not found: ${filePath}`);
+        if (!result) throw new Error(`File metadata unavailable: ${filePath}`);
+        return json(result);
     }
 
     async lspQuery(
@@ -1587,8 +1689,7 @@ export class KronTermNativeToolBridge extends WshBridge {
     }
 
     async publishAgentSurfaceActivity(activity: Record<string, unknown>): Promise<void> {
-        const source = ActivitySourceStore.getStore();
-        notifyDesktopPetSurfaceActivity((source ? { ...activity, source } : activity) as never);
+        publishWithPreview(attributeAgentSurfaceActivity(activity as AgentActivityEvent));
     }
 
     private rememberSandboxUrl(sessionId: string, value: unknown): void {

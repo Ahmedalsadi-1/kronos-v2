@@ -23,7 +23,7 @@ import { listNativeHudWebContents, publishNativeNotchActivity } from "./emain-hu
 import type { OverlayAnimationCommand } from "./emain-overlay";
 import { sendOverlayAnimation } from "./emain-overlay";
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
-import { focusedWaveWindow } from "./emain-window";
+import { focusedWaveWindow, getWaveWindowByTabId } from "./emain-window";
 
 type DesktopPetContext = "idle" | "terminal" | "browser" | "desktop" | "file" | "thinking";
 type DesktopPetLifecycle = "idle" | AgentActivityPhase;
@@ -505,13 +505,15 @@ function pointFromToolInput(rawInput: Record<string, unknown> | undefined): { x:
     return point ? { x: Math.round(point.x), y: Math.round(point.y) } : null;
 }
 
-function activityTargets(): Electron.WebContents[] {
+function activityTargets(activity?: AgentActivityEvent): Electron.WebContents[] {
     const targets: Electron.WebContents[] = [];
-    const main = focusedWaveWindow?.activeTabView?.webContents;
+    const main = activity?.ownertabid
+        ? getWaveWindowByTabId(activity.ownertabid)?.allLoadedTabViews.get(activity.ownertabid)?.webContents
+        : focusedWaveWindow?.activeTabView?.webContents;
     if (main != null && !main.isDestroyed()) {
         targets.push(main);
     }
-    for (const hud of listNativeHudWebContents()) {
+    for (const hud of listNativeHudWebContents(activity?.ownertabid)) {
         if (!targets.includes(hud)) {
             targets.push(hud);
         }
@@ -525,14 +527,14 @@ function broadcastDesktopPetSurfaceActivity(notification: DesktopPetNotification
         return;
     }
     publishNativeNotchActivity(activity);
-    for (const target of activityTargets()) {
+    for (const target of activityTargets(activity)) {
         target.send("desktop-pet-surface-activity", activity);
     }
 }
 
 function broadcastAgentSurfaceActivity(activity: AgentActivityEvent) {
     publishNativeNotchActivity(activity);
-    for (const target of activityTargets()) {
+    for (const target of activityTargets(activity)) {
         target.send("desktop-pet-surface-activity", activity);
     }
 }

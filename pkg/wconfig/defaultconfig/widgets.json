@@ -43,18 +43,6 @@
             }
         }
     },
-    "defwidget@chat": {
-        "display:order": -5.5,
-        "icon": "sparkles",
-        "label": "KronTerm Agent",
-        "color": "#e8c47c",
-        "description": "Open the built-in KronTerm agent",
-        "blockdef": {
-            "meta": {
-                "view": "hermes"
-            }
-        }
-    },
     "defwidget@warpagent": {
         "display:order": -5.4,
         "icon": "wand-magic-sparkles",
@@ -93,19 +81,6 @@
         "blockdef": {
             "meta": {
                 "view": "installedapps"
-            }
-        }
-    },
-    "defwidget@hermesdesktop": {
-        "display:order": -5.45,
-        "display:group": "agents",
-        "icon": "sparkles",
-        "label": "Kronos",
-        "color": "#8b7cf6",
-        "description": "Open Kronos, the built-in KronTerm agent",
-        "blockdef": {
-            "meta": {
-                "view": "hermes"
             }
         }
     }

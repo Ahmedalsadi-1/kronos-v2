@@ -1,4 +1,4 @@
-// Copyright 2026, KronTerm.
+// Copyright 2026, KronOS.
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "zod";

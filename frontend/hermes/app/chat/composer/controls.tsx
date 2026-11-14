@@ -18,20 +18,8 @@ import { ModelPill } from "./model-pill";
 import type { ChatBarState, VoiceStatus } from "./types";
 
 export const ICON_BTN = "size-(--composer-control-size) shrink-0 rounded-md";
-export const GHOST_ICON_BTN = cn(
-    ICON_BTN,
-    "text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground"
-);
-// Send/voice-conversation primary: solid foreground-on-background circle
-// (reads as black-on-white in light mode, white-on-black in dark mode) to
-// match the reference composer's high-contrast CTA. Keeps the pill itself
-// neutral and lets the action visually dominate the row.
-export const PRIMARY_ICON_BTN = cn(
-    "hermes-composer-primary",
-    "size-(--composer-control-primary-size,var(--composer-control-size)) shrink-0 rounded-full p-0",
-    "bg-foreground text-background hover:bg-foreground/90",
-    "disabled:bg-foreground/30 disabled:text-background disabled:opacity-100"
-);
+export const GHOST_ICON_BTN = cn(ICON_BTN, "text-(--ui-text-secondary) hover:text-foreground");
+const PRIMARY_ICON_BTN = "size-(--composer-control-primary-size,var(--composer-control-size)) p-0";
 
 interface ConversationProps {
     active: boolean;
@@ -88,9 +76,9 @@ export function ComposerControls({
     const showQueueButton = busyAction !== "stop" && hasComposerPayload;
 
     return (
-        <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-(--composer-control-gap)">
             <AgentEnginePill compact={compactModelPill} disabled={disabled || sandboxAccess.enabled} />
-            <MachineLauncherButton disabled={disabled || busy} />
+            <MachineLauncherButton compact disabled={disabled || busy} />
             <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
             <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
             <AutoSpeakButton active={autoSpeak} disabled={disabled} onToggle={onToggleAutoSpeak} />
@@ -140,7 +128,9 @@ export function ComposerControls({
                         aria-label={showStop ? c.stop : c.send}
                         className={PRIMARY_ICON_BTN}
                         disabled={disabled || !canSubmit}
+                        size="icon"
                         type="submit"
+                        variant={showStop ? "outline" : "default"}
                     >
                         {showStop ? (
                             <span className="block size-2.5 rounded-[0.1875rem] bg-current" />
@@ -180,7 +170,7 @@ function ConversationPill({
                   : c.listening;
 
     return (
-        <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-(--composer-control-gap)">
             {/* Keep the ear visible during voice chat — shown paused, since the
           conversation holds the mic (the one time wake must not listen). */}
             <WakeWordButton disabled={disabled} pausedForVoice />
@@ -219,7 +209,8 @@ function ConversationPill({
             )}
             <Button
                 aria-label={c.endConversation}
-                className="h-(--composer-control-size) gap-1.5 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                className="h-(--composer-control-size) px-3"
+                variant="secondary"
                 disabled={disabled}
                 onClick={() => {
                     triggerHaptic("close");
@@ -392,6 +383,7 @@ function DictationButton({
                     status === "recording" && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
                     status === "transcribing" && "bg-primary/10 text-primary"
                 )}
+                aria-busy={status === "transcribing" || undefined}
                 data-active={active}
                 disabled={disabled || !state.enabled || status === "transcribing"}
                 onClick={() => {

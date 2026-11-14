@@ -4,6 +4,7 @@
 import * as electron from "electron";
 import { getWebServerEndpoint } from "../frontend/util/endpoints";
 import { isManagedRuntimeFrame } from "./authkey";
+import { isPenEditorFrameNavigation } from "./pen-frame-navigation";
 
 export const WaveAppPathVarName = "WAVETERM_APP_PATH";
 export const WaveAppResourcesPathVarName = "WAVETERM_RESOURCES_PATH";
@@ -156,6 +157,15 @@ export function shFrameNavHandler(event: Electron.Event<Electron.WebContentsWill
         return;
     }
     const url = event.url;
+    const parent = event.frame.parent;
+    if (isPenEditorFrameNavigation({ url, name: event.frame.name, parentUrl: parent.url, parentName: parent.name, topUrl: event.frame.top.url, parentIsTop: parent === event.frame.top })) return;
+    if (
+        parent === event.frame.top &&
+        event.frame.name === "kronterm-screen-selector" &&
+        URL.canParse(parent.url) &&
+        url === new URL("./selector-toolbar.html", parent.url).href
+    )
+        return;
     if (
         event.frame.parent === event.frame.top &&
         isManagedRuntimeFrame(

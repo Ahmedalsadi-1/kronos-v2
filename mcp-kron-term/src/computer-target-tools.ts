@@ -86,7 +86,7 @@ async function callDeviceTool(
         const endpoint = process.env.KRONTERM_NATIVE_TOOL_URL;
         const token = process.env.KRONTERM_NATIVE_TOOL_TOKEN;
         if (!endpoint || !token)
-            throw new Error("Connect to the running KronTerm native tool server to manage devices.");
+            throw new Error("Connect to the running KronOS native tool server to manage devices.");
         const url = new URL(endpoint);
         if (
             url.protocol !== "http:" ||
@@ -97,7 +97,7 @@ async function callDeviceTool(
             url.search ||
             url.hash
         ) {
-            throw new Error("KronTerm native device transport must use a local HTTP endpoint.");
+            throw new Error("KronOS native device transport must use a local HTTP endpoint.");
         }
         if (url.hostname === "localhost") url.hostname = "127.0.0.1";
         const response = await fetch(url, {
@@ -107,8 +107,8 @@ async function callDeviceTool(
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify({ method: "call", name, arguments: args }),
         });
-        if (!response.ok) throw new Error(`KronTerm device transport returned ${response.status}.`);
-        if (!response.body) throw new Error("KronTerm returned an empty device response.");
+        if (!response.ok) throw new Error(`KronOS device transport returned ${response.status}.`);
+        if (!response.body) throw new Error("KronOS returned an empty device response.");
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let size = 0;
@@ -117,7 +117,7 @@ async function callDeviceTool(
                 const chunk = await reader.read();
                 if (chunk.done) break;
                 size += chunk.value.byteLength;
-                if (size > 28 * 1024 * 1024) throw new Error("KronTerm device response exceeds the size limit.");
+                if (size > 28 * 1024 * 1024) throw new Error("KronOS device response exceeds the size limit.");
                 chunks.push(chunk.value);
             }
         } finally {
@@ -125,7 +125,7 @@ async function callDeviceTool(
         }
         const value = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
         if (typeof value.error === "string") throw new Error(value.error);
-        if (!Array.isArray(value.content)) throw new Error("KronTerm returned an invalid device response.");
+        if (!Array.isArray(value.content)) throw new Error("KronOS returned an invalid device response.");
         return value as CallToolResult;
     } catch (error) {
         return {

@@ -27,3 +27,6 @@ export function usePopoverPortalContainer(explicit?: HTMLElement | null): HTMLEl
 
   return explicit ?? fromDialog ?? undefined
 }
+
+// Desktop modals can sit above the body-level Hermes layers. Keep their secondary portals in the same layer.
+export const DesktopModalPortalContainerContext = React.createContext<HTMLElement | undefined>(undefined)

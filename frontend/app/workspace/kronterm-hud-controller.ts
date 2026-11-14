@@ -123,7 +123,7 @@ class KronTermHudController {
     }
 
     toggle(): boolean {
-        if (!this.snapshot.active) this.snapshot = { ...this.snapshot, keepWorkspaceVisible: false };
+        if (!this.snapshot.active) this.snapshot = { ...this.snapshot, keepWorkspaceVisible: true };
         const active = !this.snapshot.active;
         this.setActive(active);
         return active;

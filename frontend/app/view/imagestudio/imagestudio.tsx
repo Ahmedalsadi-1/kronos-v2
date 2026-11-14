@@ -1,11 +1,25 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
+import {
+    SystemButton,
+    SystemListRow,
+    SystemMaterial,
+    SystemStatusBadge,
+    SystemUIProvider,
+} from "@/app/components/system-ui";
 import { globalStore } from "@/app/store/jotaiStore";
-import { useCoucouWorkbenchAppearance } from "@/app/workspace/coucou-workbench-appearance";
+import { readWorkspacePresentation, subscribeWorkspacePresentation } from "@/app/tab/workspace-presentation";
+import { controlWorkspaceSurface } from "@/app/tab/workspace-surface-runtime";
 import { getApi } from "@/store/global";
+import type { ComfyJob, ComfyRequest, ComfyResponse, ComfyWorkflow } from "@/types/comfyui";
 import { atom, useAtom, useAtomValue } from "jotai";
-import { useEffect, useRef } from "react";
-import type { ComfyJob, ComfyRequest, ComfyResponse, ComfyWorkflow } from "../../../types/comfyui";
+import { Image } from "lucide-react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+
+const FieldClass =
+    "min-w-0 rounded-[var(--kt-radius-control)] border border-[var(--kt-separator)] bg-[var(--kt-content)] px-3 text-[var(--kt-label)] placeholder:text-[var(--kt-label-tertiary)]";
+
+type DisplayedRender = Extract<ComfyRequest, { action: "image" }> & { data: string; digest?: string };
 
 export class ImageStudioModel implements ViewModel {
     viewType = "imagestudio";
@@ -14,28 +28,36 @@ export class ImageStudioModel implements ViewModel {
     noPadding = atom(true);
     viewComponent = ImageStudio;
     blockId: string;
+    tabId: string;
     origin = atom("http://127.0.0.1:8188");
     workflow = atom("");
     jobs = atom<ComfyJob[]>([]);
     busy = atom(false);
     error = atom("");
     health = atom("");
+    pinStatus = atom("");
     selected = atom("");
-    preview = atom("");
-    previewFilename = atom("render.png");
+    preview = atom(null as DisplayedRender);
     private disposed = false;
-    constructor({ blockId }: ViewModelInitType) {
+    constructor({ blockId, tabModel }: ViewModelInitType) {
         this.blockId = blockId;
+        this.tabId = tabModel?.tabId;
+    }
+    select(id: string) {
+        if (globalStore.get(this.selected) === id) return;
+        globalStore.set(this.selected, id);
+        globalStore.set(this.preview, null);
     }
     async run(request: ComfyRequest) {
         if (globalStore.get(this.busy)) return;
         globalStore.set(this.busy, true);
         globalStore.set(this.error, "");
+        if (request.action === "image") globalStore.set(this.preview, null);
         try {
             const api = getApi() as ReturnType<typeof getApi> & {
                 comfyUiRequest?: (request: ComfyRequest) => Promise<ComfyResponse>;
             };
-            if (!api.comfyUiRequest) throw new Error("Image Studio requires the KronTerm desktop ComfyUI bridge.");
+            if (!api.comfyUiRequest) throw new Error("Image Studio requires the KronOS desktop KronRender bridge.");
             const result = await api.comfyUiRequest(request);
             if (this.disposed) return;
             if (result.jobs) globalStore.set(this.jobs, result.jobs);
@@ -44,12 +66,44 @@ export class ImageStudioModel implements ViewModel {
                     this.health,
                     `Connected: ${result.version} · ${result.nodeTypes?.length ?? 0} node types`
                 );
-            if (result.imageData) {
-                globalStore.set(this.preview, result.imageData);
-                if (request.action === "image") globalStore.set(this.previewFilename, request.image.filename);
-            }
+            if (
+                request.action === "image" &&
+                result.imageData &&
+                globalStore.get(this.selected) === request.id &&
+                globalStore.get(this.origin) === request.origin
+            )
+                globalStore.set(this.preview, { ...request, data: result.imageData, digest: result.previewDigest });
         } catch (error) {
             if (!this.disposed) globalStore.set(this.error, String(error instanceof Error ? error.message : error));
+        } finally {
+            globalStore.set(this.busy, false);
+        }
+    }
+    async pinImage() {
+        const preview = globalStore.get(this.preview);
+        if (globalStore.get(this.busy) || !this.tabId || !preview?.digest) return;
+        if (globalStore.get(this.selected) !== preview.id || globalStore.get(this.origin) !== preview.origin) return;
+        globalStore.set(this.busy, true);
+        globalStore.set(this.error, "");
+        globalStore.set(this.pinStatus, "");
+        try {
+            const { filePath } = await getApi().comfyUiRequest({
+                action: "pin-image",
+                origin: preview.origin,
+                id: preview.id,
+                image: preview.image,
+                previewDigest: preview.digest,
+            });
+            if (this.disposed) return;
+            if (!filePath) throw new Error("The render was not saved for the canvas.");
+            await controlWorkspaceSurface(this.tabId, {
+                action: "add_file",
+                file: filePath,
+                text: preview.image.filename,
+            });
+            if (!this.disposed) globalStore.set(this.pinStatus, `Pinned ${preview.image.filename} to the canvas.`);
+        } catch (error) {
+            if (!this.disposed) globalStore.set(this.error, error instanceof Error ? error.message : String(error));
         } finally {
             globalStore.set(this.busy, false);
         }
@@ -59,7 +113,7 @@ export class ImageStudioModel implements ViewModel {
             const workflow = JSON.parse(globalStore.get(this.workflow)) as ComfyWorkflow;
             void this.run({ action: "submit", origin: globalStore.get(this.origin), workflow });
         } catch {
-            globalStore.set(this.error, "Paste valid JSON exported from ComfyUI in API format.");
+            globalStore.set(this.error, "Paste valid JSON exported from KronRender in API format.");
         }
     }
     dispose() {
@@ -67,17 +121,18 @@ export class ImageStudioModel implements ViewModel {
     }
 }
 
-export function ImageStudio({ model }: ViewComponentProps<ImageStudioModel>) {
-    const appearance = useCoucouWorkbenchAppearance();
+export function ImageStudio({ model, contentRef }: ViewComponentProps<ImageStudioModel>) {
     const [origin, setOrigin] = useAtom(model.origin);
     const [workflow, setWorkflow] = useAtom(model.workflow);
-    const [selected, setSelected] = useAtom(model.selected);
+    const selected = useAtomValue(model.selected);
     const jobs = useAtomValue(model.jobs);
     const busy = useAtomValue(model.busy);
     const error = useAtomValue(model.error);
     const health = useAtomValue(model.health);
     const preview = useAtomValue(model.preview);
-    const previewFilename = useAtomValue(model.previewFilename);
+    const pinStatus = useAtomValue(model.pinStatus);
+    const presentation = useSyncExternalStore(subscribeWorkspacePresentation, readWorkspacePresentation);
+    const canPin = model.tabId != null && presentation === "os";
     const importRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
         const timer = setInterval(() => {
@@ -92,154 +147,231 @@ export function ImageStudio({ model }: ViewComponentProps<ImageStudioModel>) {
         return () => clearInterval(timer);
     }, [model]);
     const job = jobs.find((item) => item.id === selected);
-    const button = "cursor-pointer rounded border border-[var(--coucou-border)] px-3 py-1.5 disabled:opacity-40";
+    const addressId = `comfy-address-${model.blockId}`;
+    const workflowId = `workflow-${model.blockId}`;
+    const historyId = `comfy-history-${model.blockId}`;
     return (
-        <section
-            style={appearance}
-            className="h-full overflow-auto bg-[var(--coucou-surface)] p-4 text-[var(--coucou-label)]"
-        >
-            <h2 className="text-lg font-semibold">Image Studio</h2>
-            <p className="mt-1 text-sm text-[var(--coucou-secondary)]">
-                Run API workflows on your local ComfyUI server. Generation uses its installed models and nodes.
-            </p>
-            <div className="my-3 flex flex-wrap gap-2">
-                <input
-                    aria-label="Local ComfyUI address"
-                    className="min-w-48 grow rounded border border-[var(--coucou-border)] bg-transparent px-2"
-                    value={origin}
-                    onChange={(e) => {
-                        setOrigin(e.target.value);
-                        globalStore.set(model.health, "");
-                        globalStore.set(model.jobs, []);
-                        globalStore.set(model.preview, "");
-                    }}
-                    disabled={busy}
-                />
-                <button className={button} disabled={busy} onClick={() => void model.run({ action: "health", origin })}>
-                    Connect
-                </button>
-                <button
-                    className={button}
-                    disabled={busy}
-                    onClick={() => void model.run({ action: "refresh", origin })}
-                >
-                    Refresh jobs
-                </button>
-            </div>
-            {health && (
-                <p role="status" className="mb-3 text-sm">
-                    {health}
-                </p>
-            )}
-            {error && (
-                <p role="alert" className="mb-3 whitespace-pre-wrap text-sm text-red-400">
-                    {error}
-                </p>
-            )}
-            <label className="block text-sm" htmlFor={`workflow-${model.blockId}`}>
-                API workflow JSON
-            </label>
-            <textarea
-                id={`workflow-${model.blockId}`}
-                className="mt-2 h-44 w-full rounded border border-[var(--coucou-border)] bg-[var(--coucou-card)] p-3 font-mono text-xs"
-                value={workflow}
-                onChange={(e) => setWorkflow(e.target.value)}
-                spellCheck={false}
-                placeholder="Import or paste your workflow exported in API format"
-            />
-            <div className="my-3 flex gap-2">
-                <input
-                    ref={importRef}
-                    type="file"
-                    accept=".json,application/json"
-                    className="hidden"
-                    onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 2_000_000) {
-                            globalStore.set(model.error, "Workflow exceeds the 2 MB limit.");
-                            return;
-                        }
-                        try {
-                            setWorkflow(await file.text());
-                        } catch (error) {
-                            globalStore.set(model.error, String(error));
-                        }
-                        e.target.value = "";
-                    }}
-                />
-                <button className={button} onClick={() => importRef.current?.click()}>
-                    Import JSON
-                </button>
-                <button className={button} disabled={busy || !workflow.trim()} onClick={() => model.submit()}>
-                    {busy ? "Working…" : "Queue workflow"}
-                </button>
-            </div>
-            <h3 className="mb-2 font-medium">Your render history</h3>
-            {!jobs.length && (
-                <p className="text-sm text-[var(--coucou-secondary)]">
-                    Connect to load jobs previously submitted by KronTerm.
-                </p>
-            )}
-            <div className="space-y-2">
-                {jobs.map((item) => (
-                    <button
-                        key={item.id}
-                        aria-pressed={selected === item.id}
-                        className={`w-full text-left ${button}`}
-                        onClick={() => {
-                            setSelected(item.id);
-                            globalStore.set(model.preview, "");
-                        }}
-                    >
-                        <span className="font-mono text-xs">{item.id.slice(0, 12)}</span>
-                        <span className="ml-3 text-sm">
-                            {item.status} · {new Date(item.createdAt).toLocaleString()}
-                        </span>
-                    </button>
-                ))}
-            </div>
-            {job && (
-                <div className="mt-4 space-y-3">
-                    {job.error && <p className="whitespace-pre-wrap text-sm text-red-400">{job.error}</p>}
-                    <div className="flex flex-wrap gap-2">
-                        <button className={button} onClick={() => setWorkflow(JSON.stringify(job.workflow, null, 2))}>
-                            Reuse workflow
-                        </button>
-                        {["queued", "running"].includes(job.status) && (
-                            <button
-                                className={button}
-                                disabled={busy}
-                                onClick={() => void model.run({ action: "cancel", origin, id: job.id })}
+        <div ref={contentRef} className="relative h-full w-full">
+            <SystemUIProvider>
+                <SystemMaterial role="region" aria-label="Image Studio" className="h-full overflow-auto p-3 sm:p-4">
+                    <div className="mx-auto grid max-w-6xl gap-4">
+                        <div className="grid gap-2">
+                            <label className="font-medium" htmlFor={addressId}>
+                                Local KronRender address
+                            </label>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                    id={addressId}
+                                    className={`${FieldClass} h-9 flex-[1_1_14rem]`}
+                                    value={origin}
+                                    onChange={(e) => {
+                                        setOrigin(e.target.value);
+                                        globalStore.set(model.health, "");
+                                        globalStore.set(model.jobs, []);
+                                        globalStore.set(model.pinStatus, "");
+                                        model.select("");
+                                    }}
+                                    disabled={busy}
+                                />
+                                <SystemButton
+                                    type="button"
+                                    variant="tinted"
+                                    disabled={busy}
+                                    onClick={() => void model.run({ action: "health", origin })}
+                                >
+                                    Connect
+                                </SystemButton>
+                                <SystemButton
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void model.run({ action: "refresh", origin })}
+                                >
+                                    Refresh jobs
+                                </SystemButton>
+                            </div>
+                            {health && (
+                                <p role="status" className="text-[var(--kt-label-secondary)]">
+                                    {health}
+                                </p>
+                            )}
+                            {pinStatus && (
+                                <p role="status" className="text-[var(--kt-label-secondary)]">
+                                    {pinStatus}
+                                </p>
+                            )}
+                            {error && (
+                                <p
+                                    role="alert"
+                                    className="whitespace-pre-wrap [overflow-wrap:anywhere] text-[var(--kt-danger)]"
+                                >
+                                    {error}
+                                </p>
+                            )}
+                        </div>
+                        <div className="grid items-start gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr))]">
+                            <div className="grid min-w-0 gap-3 rounded-[var(--kt-radius-row)] border border-[var(--kt-separator)] bg-[var(--kt-window)] p-3">
+                                <label className="font-semibold" htmlFor={workflowId}>
+                                    API workflow JSON
+                                </label>
+                                <textarea
+                                    id={workflowId}
+                                    className={`${FieldClass} h-44 w-full resize-y py-2 font-mono text-xs`}
+                                    value={workflow}
+                                    onChange={(e) => setWorkflow(e.target.value)}
+                                    spellCheck={false}
+                                    placeholder="Import or paste a KronRender workflow exported in API format"
+                                />
+                                <div className="flex flex-wrap justify-between gap-2">
+                                    <input
+                                        ref={importRef}
+                                        type="file"
+                                        accept=".json,application/json"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            e.target.value = "";
+                                            if (file.size > 2_000_000) {
+                                                globalStore.set(model.error, "Workflow exceeds the 2 MB limit.");
+                                                return;
+                                            }
+                                            try {
+                                                setWorkflow(await file.text());
+                                            } catch (error) {
+                                                globalStore.set(model.error, String(error));
+                                            }
+                                        }}
+                                    />
+                                    <SystemButton
+                                        type="button"
+                                        variant="tinted"
+                                        onClick={() => importRef.current?.click()}
+                                    >
+                                        Import JSON
+                                    </SystemButton>
+                                    <SystemButton
+                                        type="button"
+                                        variant="filled"
+                                        disabled={busy || !workflow.trim()}
+                                        onClick={() => model.submit()}
+                                    >
+                                        {busy ? "Working…" : "Queue workflow"}
+                                    </SystemButton>
+                                </div>
+                            </div>
+                            <section
+                                aria-labelledby={historyId}
+                                className="grid min-w-0 gap-3 rounded-[var(--kt-radius-row)] border border-[var(--kt-separator)] bg-[var(--kt-window)] p-3"
                             >
-                                Cancel this job
-                            </button>
-                        )}
-                        {job.images.map((image, index) => (
-                            <button
-                                key={index}
-                                className={button}
-                                disabled={busy}
-                                onClick={() => void model.run({ action: "image", origin, id: job.id, image })}
-                            >
-                                Preview {image.filename}
-                            </button>
-                        ))}
+                                <h2 id={historyId} className="font-semibold">
+                                    Render history
+                                </h2>
+                                {!jobs.length ? (
+                                    <p className="text-[var(--kt-label-secondary)]">
+                                        {health
+                                            ? "No renders submitted in this workspace yet."
+                                            : "Connect to load renders from this workspace."}
+                                    </p>
+                                ) : (
+                                    <div className="grid max-h-56 gap-1 overflow-auto p-1">
+                                        {jobs.map((item) => (
+                                            <SystemListRow
+                                                key={item.id}
+                                                title={item.id.slice(0, 12)}
+                                                detail={new Date(item.createdAt).toLocaleString()}
+                                                trailing={
+                                                    <SystemStatusBadge className="capitalize">
+                                                        {item.status.replace("-", " ")}
+                                                    </SystemStatusBadge>
+                                                }
+                                                icon={<Image aria-hidden="true" />}
+                                                aria-pressed={selected === item.id}
+                                                style={
+                                                    selected === item.id
+                                                        ? { backgroundColor: "var(--kt-fill-hover)" }
+                                                        : undefined
+                                                }
+                                                onClick={() => model.select(item.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                {job && (
+                                    <div className="grid min-w-0 justify-items-start gap-2 border-t border-[var(--kt-separator)] pt-3">
+                                        {job.error && (
+                                            <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-[var(--kt-danger)]">
+                                                {job.error}
+                                            </p>
+                                        )}
+                                        <div className="flex min-w-0 flex-wrap gap-2">
+                                            <SystemButton
+                                                type="button"
+                                                variant="tinted"
+                                                onClick={() => setWorkflow(JSON.stringify(job.workflow, null, 2))}
+                                            >
+                                                Reuse workflow
+                                            </SystemButton>
+                                            {["queued", "running"].includes(job.status) && (
+                                                <SystemButton
+                                                    type="button"
+                                                    variant="destructive"
+                                                    disabled={busy}
+                                                    onClick={() =>
+                                                        void model.run({ action: "cancel", origin, id: job.id })
+                                                    }
+                                                >
+                                                    Cancel this job
+                                                </SystemButton>
+                                            )}
+                                            {job.images.map((image, index) => (
+                                                <SystemButton
+                                                    key={index}
+                                                    type="button"
+                                                    variant="tinted"
+                                                    title={`Preview ${image.filename}`}
+                                                    className="max-w-full"
+                                                    disabled={busy}
+                                                    onClick={() =>
+                                                        void model.run({ action: "image", origin, id: job.id, image })
+                                                    }
+                                                >
+                                                    <span className="truncate">Preview {image.filename}</span>
+                                                </SystemButton>
+                                            ))}
+                                        </div>
+                                        {preview && (
+                                            <>
+                                                <img
+                                                    className="max-h-96 max-w-full rounded-[var(--kt-radius-control)] object-contain"
+                                                    src={preview.data}
+                                                    alt="Selected KronRender render"
+                                                />
+                                                <div className="flex flex-wrap gap-2">
+                                                    <SystemButton asChild variant="tinted">
+                                                        <a href={preview.data} download={preview.image.filename}>
+                                                            Save displayed image
+                                                        </a>
+                                                    </SystemButton>
+                                                    {canPin && preview.digest && (
+                                                        <SystemButton
+                                                            type="button"
+                                                            variant="tinted"
+                                                            disabled={busy}
+                                                            onClick={() => void model.pinImage()}
+                                                        >
+                                                            Pin to canvas
+                                                        </SystemButton>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </section>
+                        </div>
                     </div>
-                    {preview && (
-                        <>
-                            <img
-                                className="max-h-96 max-w-full rounded object-contain"
-                                src={preview}
-                                alt="Selected ComfyUI render"
-                            />
-                            <a className={button} href={preview} download={previewFilename}>
-                                Save displayed image
-                            </a>
-                        </>
-                    )}
-                </div>
-            )}
-        </section>
+                </SystemMaterial>
+            </SystemUIProvider>
+        </div>
     );
 }

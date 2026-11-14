@@ -329,6 +329,17 @@ class WorkspaceLayoutModel {
         if (this.outerPanelGroupRef !== outerPanelGroupRef) {
             return;
         }
+        if (this.transitionTimeoutRef != null) {
+            clearTimeout(this.transitionTimeoutRef);
+            this.transitionTimeoutRef = null;
+        }
+        this.panelContainerRef?.querySelectorAll<HTMLElement>("[data-panel]").forEach((panel) => {
+            panel.style.transition = "none";
+        });
+        if (this.focusTimeoutRef != null) {
+            clearTimeout(this.focusTimeoutRef);
+            this.focusTimeoutRef = null;
+        }
         this.aiPanelRef = null;
         this.vtabPanelRef = null;
         this.outerPanelGroupRef = null;
@@ -358,18 +369,22 @@ class WorkspaceLayoutModel {
     // ---- Transitions ----
 
     enableTransitions(duration: number): void {
-        if (!this.panelContainerRef) return;
-        const panels = this.panelContainerRef.querySelectorAll("[data-panel]");
-        panels.forEach((panel: HTMLElement) => {
-            panel.style.transition = "flex 0.2s ease-in-out";
-        });
-        if (this.transitionTimeoutRef) {
+        if (this.transitionTimeoutRef != null) {
             clearTimeout(this.transitionTimeoutRef);
+            this.transitionTimeoutRef = null;
         }
+        if (!this.panelContainerRef) return;
+        const panels = this.panelContainerRef.querySelectorAll<HTMLElement>("[data-panel]");
+        const reducedMotion = globalStore.get(atoms.prefersReducedMotionAtom);
+        const transition =
+            reducedMotion || duration <= 0 ? "none" : `flex ${duration}ms cubic-bezier(0.2, 0.82, 0.2, 1)`;
+        panels.forEach((panel) => {
+            panel.style.transition = transition;
+        });
+        if (transition === "none") return;
         this.transitionTimeoutRef = setTimeout(() => {
-            if (!this.panelContainerRef) return;
-            const panels = this.panelContainerRef.querySelectorAll("[data-panel]");
-            panels.forEach((panel: HTMLElement) => {
+            this.transitionTimeoutRef = null;
+            panels.forEach((panel) => {
                 panel.style.transition = "none";
             });
         }, duration);

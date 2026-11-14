@@ -108,7 +108,7 @@ export function useGatewayRequest() {
       const gateway = gatewayRef.current
 
       if (!gateway) {
-        throw new Error('KronTerm gateway unavailable')
+        throw new Error('KronOS gateway unavailable')
       }
 
       try {

@@ -788,6 +788,10 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
 
         flushQueuedDeltas(sessionId)
         pruneFinishedSessionSubagents(sessionId)
+        const storedSessionId = sessionStateByRuntimeIdRef.current.get(sessionId)?.storedSessionId
+        if (storedSessionId && storedSessionId !== sessionId) {
+          pruneFinishedSessionSubagents(storedSessionId, true)
+        }
         setSessionCompacting(sessionId, false)
         compactedTurnRef.current.delete(sessionId)
         nativeSubagentSessionsRef.current.delete(sessionId)
@@ -998,7 +1002,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         const failure =
           payload?.status === 'error'
             ? {
-                error: coerceGatewayText(payload.error).trim() || finalText || 'KronTerm reported an error',
+                error: coerceGatewayText(payload.error).trim() || finalText || 'KronOS reported an error',
                 partial: Boolean(payload.partial)
               }
             : undefined
@@ -1574,7 +1578,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         // straight to dismissNotification(key).
         clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key)
       } else if (event.type === 'error') {
-        const errorMessage = payload?.message || 'KronTerm reported an error'
+        const errorMessage = payload?.message || 'KronOS reported an error'
         const looksLikeProviderSetup = isProviderSetupErrorMessage(errorMessage)
 
         // A turn that errors out has also ended — drop any open blocking prompt
@@ -1612,7 +1616,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           notify({
             id: `gateway-error:${errorMessage}`,
             kind: 'error',
-            title: 'KronTerm error',
+            title: 'KronOS error',
             message: errorMessage
           })
         }

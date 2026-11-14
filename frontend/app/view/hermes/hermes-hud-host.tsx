@@ -25,6 +25,7 @@ import { ComposerAttachmentUserRemovedEvent, mainComposerScope, type ComposerAtt
 import { $sidebarOpen } from "@hermes/store/layout";
 import { useStore } from "@nanostores/react";
 import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { makeCanvasAttachments, mergeCanvasAttachments } from "./hermes-canvas-context";
 import { HermesChatMount } from "./hermes-chat-mount";
 import { installHermesDesktopShim } from "./hermes-desktop-shim";
@@ -57,14 +58,12 @@ function requestPreferredKronosSurface(): void {
 export function HermesHudHost({
     autoOpen,
     canvasContext,
-    onExpand,
     tabId,
     placement = "floating",
 }: {
     placement?: "floating" | "bottom" | "top" | "shell";
     autoOpen: boolean;
     canvasContext: WorkspaceCanvasComposerContext;
-    onExpand: () => Promise<void>;
     tabId: string;
 }) {
     const surface = useSyncExternalStore(
@@ -89,7 +88,6 @@ export function HermesHudHost({
     const selectionKeyRef = useRef("");
     ensureShim();
 
-    useEffect(() => hermesSurfaceController.setExpandHandler(onExpand), [onExpand]);
     useEffect(() => {
         const dock = () => hermesSurfaceController.requestOpenPanel();
         window.addEventListener(KrontermInspectorChatEvent, dock);
@@ -222,6 +220,12 @@ export function HermesHudHost({
     }
 
     const { x, y, width, height } = surface.geometry;
+    const sidebarStatus = (content: React.ReactNode) => (
+        <>
+            {sidebarTarget && sidebarOpen && createPortal(content, sidebarTarget)}
+            {inspectorTarget && inspectorOpen && createPortal(content, inspectorTarget)}
+        </>
+    );
 
     return (
         <>
@@ -232,13 +236,21 @@ export function HermesHudHost({
                 {connectionReady ? (
                     <HermesLoadBoundary>
                         <Suspense
-                            fallback={<div className="hermes-workspace-panel-state">Loading KronTerm Agent…</div>}
+                            fallback={
+                                <>
+                                    <div className="hermes-workspace-panel-state">Loading KronOS Agent…</div>
+                                    {sidebarStatus(<HermesConnectionState error="" retry={retry} />)}
+                                </>
+                            }
                         >
                             <LazyHermesApp hudMode dockedChat={dockedChat} />
                         </Suspense>
                     </HermesLoadBoundary>
                 ) : (
-                    <HermesConnectionState error={error} retry={retry} />
+                    <>
+                        <HermesConnectionState error={error} retry={retry} />
+                        {sidebarStatus(<HermesConnectionState error={error} retry={retry} />)}
+                    </>
                 )}
             </HermesChatMount>
             {surface.presentation === "hud" && (

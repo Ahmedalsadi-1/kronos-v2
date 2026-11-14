@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/jotaiStore";
+import { OSResourceDragMimeType, readOSResourceDragPayload } from "@/app/store/os-resource-service";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useCoucouWorkbenchAppearance } from "@/app/workspace/coucou-workbench-appearance";
 import { getApi, WOS } from "@/store/global";
@@ -9,7 +10,13 @@ import { getWebServerEndpoint } from "@/util/endpoints";
 import { formatRemoteUri } from "@/util/waveutil";
 import { atom, useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { captionsAtTime, exportTrimmedSubtitles, normalizeVideoProject, type VideoProject } from "./video-project";
+import {
+    captionsAtTime,
+    exportTrimmedSubtitles,
+    isVideoStudioSource,
+    normalizeVideoProject,
+    type VideoProject,
+} from "./video-project";
 
 export class VideoStudioViewModel implements ViewModel {
     viewType = "videostudio";
@@ -17,6 +24,7 @@ export class VideoStudioViewModel implements ViewModel {
     viewName = atom("Video Studio");
     noPadding = atom(true);
     project = atom<VideoProject>(normalizeVideoProject(null));
+    pendingSource = atom("");
     error = atom("");
     status = atom("");
     env: ViewModelInitType["waveEnv"];
@@ -61,19 +69,30 @@ export class VideoStudioViewModel implements ViewModel {
     async importVideo() {
         try {
             const paths = await getApi().selectFiles();
-            if (!paths?.length) return;
-            if (!/\.(mp4|mov|webm|m4v|mkv|avi)$/i.test(paths[0])) {
-                globalStore.set(
-                    this.error,
-                    "Choose a video file. Playback support depends on the installed Chromium codecs."
-                );
-                return;
-            }
-            globalStore.set(this.error, "");
-            this.updateProject(normalizeVideoProject({ source: paths[0] }));
+            if (paths?.length) this.requestSource(paths[0]);
         } catch (error) {
             globalStore.set(this.error, String(error));
         }
+    }
+
+    requestSource(path: unknown) {
+        if (!isVideoStudioSource(path)) {
+            globalStore.set(this.error, "Choose a local MP4, MOV, WebM, M4V, MKV, or AVI video.");
+            return;
+        }
+        const { source } = globalStore.get(this.project);
+        globalStore.set(this.error, "");
+        globalStore.set(this.pendingSource, "");
+        if (path === source) return;
+        if (source) globalStore.set(this.pendingSource, path);
+        else this.updateProject(normalizeVideoProject({ source: path }));
+    }
+
+    replaceSource() {
+        const source = globalStore.get(this.pendingSource);
+        if (!source) return;
+        globalStore.set(this.pendingSource, "");
+        this.updateProject(normalizeVideoProject({ source }));
     }
 
     async exportProject(subtitles = false) {
@@ -93,10 +112,13 @@ export class VideoStudioViewModel implements ViewModel {
 export const VideoStudioView: ViewComponent = ({ model: genericModel }) => {
     const model = genericModel as VideoStudioViewModel;
     const project = useAtomValue(model.project);
+    const pendingSource = useAtomValue(model.pendingSource);
     const error = useAtomValue(model.error);
     const status = useAtomValue(model.status);
     const appearance = useCoucouWorkbenchAppearance();
     const video = useRef<HTMLVideoElement>(null);
+    const importButton = useRef<HTMLButtonElement>(null);
+    const cancelReplaceButton = useRef<HTMLButtonElement>(null);
     const [time, setTime] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [captionText, setCaptionText] = useState("");
@@ -112,7 +134,14 @@ export const VideoStudioView: ViewComponent = ({ model: genericModel }) => {
     useEffect(() => {
         setTime(0);
         setPlaying(false);
+        setCaptionText("");
+        setCaptionStart("0");
+        setCaptionEnd("2");
+        setCaptionError("");
     }, [project.source]);
+    useEffect(() => {
+        if (pendingSource) cancelReplaceButton.current?.focus();
+    }, [pendingSource]);
     const buttonClass =
         "cursor-pointer rounded border border-[var(--coucou-border)] px-3 py-1.5 hover:bg-[var(--coucou-card)] disabled:opacity-50";
     const inputClass = "min-w-0 rounded border border-[var(--coucou-border)] bg-[var(--coucou-card)] px-2 py-1";
@@ -149,9 +178,29 @@ export const VideoStudioView: ViewComponent = ({ model: genericModel }) => {
             style={appearance}
             className="flex h-full min-h-0 flex-col gap-3 overflow-auto bg-[var(--coucou-surface)] p-4 text-[var(--coucou-label)]"
             aria-label="Video Studio"
+            onDragOver={(event) => {
+                if (event.defaultPrevented || !event.dataTransfer.types.includes(OSResourceDragMimeType)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(event) => {
+                if (event.defaultPrevented || !event.dataTransfer.types.includes(OSResourceDragMimeType)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const resource = readOSResourceDragPayload(event.dataTransfer);
+                model.requestSource(
+                    resource?.kind === "file" || resource?.kind === "generated-artifact" ? resource.resource : undefined
+                );
+            }}
         >
             <div className="flex flex-wrap gap-2">
-                <button className={buttonClass} onClick={() => void model.importVideo()}>
+                <button
+                    ref={importButton}
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => void model.importVideo()}
+                >
                     Import video
                 </button>
                 <button className={buttonClass} disabled={!project.source} onClick={() => model.updateProject(project)}>
@@ -169,8 +218,41 @@ export const VideoStudioView: ViewComponent = ({ model: genericModel }) => {
                 </button>
             </div>
             <p className="truncate text-xs text-[var(--coucou-secondary)]" title={project.source}>
-                {project.source || "Import a local video to edit its trim and captions."}
+                {project.source || "Import a video or drag one from Media Library to edit its trim and captions."}
             </p>
+            {pendingSource && (
+                <div
+                    role="group"
+                    aria-label="Replace video source"
+                    className="flex flex-wrap items-center gap-2 rounded border border-[var(--coucou-border)] p-2"
+                >
+                    <p className="min-w-0 basis-full text-sm break-words">
+                        Replace this video with {pendingSource.split(/[\\/]/).pop()}? Replacing clears the trim and
+                        captions.
+                    </p>
+                    <button
+                        ref={cancelReplaceButton}
+                        type="button"
+                        className={buttonClass}
+                        onClick={() => {
+                            globalStore.set(model.pendingSource, "");
+                            importButton.current?.focus();
+                        }}
+                    >
+                        Keep current video
+                    </button>
+                    <button
+                        type="button"
+                        className={buttonClass}
+                        onClick={() => {
+                            model.replaceSource();
+                            importButton.current?.focus();
+                        }}
+                    >
+                        Replace video
+                    </button>
+                </div>
+            )}
             {error && (
                 <p role="alert" className="text-sm text-red-400">
                     {error}
@@ -179,6 +261,7 @@ export const VideoStudioView: ViewComponent = ({ model: genericModel }) => {
             <div className="relative min-h-40 flex-shrink-0 bg-black">
                 {source ? (
                     <video
+                        key={project.source}
                         ref={video}
                         src={source}
                         className="max-h-80 w-full"
@@ -187,13 +270,16 @@ export const VideoStudioView: ViewComponent = ({ model: genericModel }) => {
                         onLoadedMetadata={(event) => {
                             const duration = event.currentTarget.duration;
                             if (!Number.isFinite(duration)) return;
-                            const firstLoad = project.duration === 0;
-                            model.updateProject({
-                                ...project,
-                                duration,
-                                trimEnd: firstLoad ? duration : project.trimEnd,
-                            });
-                            seek(firstLoad ? 0 : project.trimStart);
+                            const current = globalStore.get(model.project);
+                            if (current.source !== project.source) return;
+                            if (duration !== current.duration) {
+                                model.updateProject({
+                                    ...current,
+                                    duration,
+                                    trimEnd: current.duration === 0 ? duration : current.trimEnd,
+                                });
+                            }
+                            seek(Math.min(duration, current.trimStart));
                         }}
                         onTimeUpdate={(event) => {
                             const player = event.currentTarget;

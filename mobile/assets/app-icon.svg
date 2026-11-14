@@ -1,21 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-    <defs>
-        <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#fbf7f0"/>
-            <stop offset="1" stop-color="#ded7ce"/>
-        </linearGradient>
-        <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
-            <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#251f18" flood-opacity=".2"/>
-        </filter>
-    </defs>
-    <rect width="1024" height="1024" fill="url(#paper)"/>
-    <circle cx="116" cy="126" r="210" fill="#ffffff" opacity=".42"/>
-    <circle cx="934" cy="828" r="280" fill="#cbb9a5" opacity=".18"/>
-    <g filter="url(#shadow)">
-        <rect x="249" y="142" width="603" height="678" rx="154" fill="#ffffff" opacity=".58" transform="rotate(7 550 480)"/>
-        <rect x="171" y="186" width="654" height="654" rx="166" fill="#1b1a18"/>
-        <path d="M171 674h654v0c0 92-74 166-166 166H337c-92 0-166-74-166-166Z" fill="#151412"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+    <style>
+        .kronterm-cube {
+            --kronterm-cube-edge: #343b45;
+            --kronterm-cube-top: #fbfcfe;
+            --kronterm-cube-left: #e5e9ee;
+            --kronterm-cube-right: #f2f4f7;
+            --kronterm-cube-inset: #535d6b;
+        }
+        @media (prefers-color-scheme: dark) {
+            .kronterm-cube {
+                --kronterm-cube-edge: #d8dfe8;
+                --kronterm-cube-top: #30353d;
+                --kronterm-cube-left: #1b1f26;
+                --kronterm-cube-right: #242a32;
+                --kronterm-cube-inset: #abb6c4;
+            }
+        }
+    </style>
+    <g class="kronterm-cube" stroke="var(--kronterm-cube-edge)" stroke-width="1.65" stroke-linejoin="round">
+        <path d="M5.5 13.4 24 24.1v21.3L5.5 34.7Z" fill="var(--kronterm-cube-left)"/>
+        <path d="M24 24.1 42.5 13.4v21.3L24 45.4Z" fill="var(--kronterm-cube-right)"/>
+        <path d="M24 2.7 42.5 13.4 24 24.1 5.5 13.4Z" fill="var(--kronterm-cube-top)"/>
+        <path d="M24 7.4 34.2 13.3 24 19.2 13.8 13.3Zm0 2.8-5.4 3.1 5.4 3.1 5.4-3.1Z"
+              fill="var(--kronterm-cube-inset)" fill-rule="evenodd" stroke="none"/>
     </g>
-    <text x="494" y="700" fill="#fffdf8" font-family="Georgia, serif" font-size="548" font-style="italic" font-weight="bold" text-anchor="middle">K</text>
-    <circle cx="754" cy="263" r="55" fill="#2567f2" stroke="#fffdf8" stroke-width="20"/>
 </svg>

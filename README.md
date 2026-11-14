@@ -1,10 +1,10 @@
 <p align="center">
-  <a href="https://www.kronterm.dev">
-    <img alt="KronTerm icon" src="./website/public/assets/product/kronterm-icon.svg" width="96">
+  <a href="https://ahmedalsadi-1.github.io/kronos-releases/">
+    <img alt="KronOS icon" src="./website/public/assets/product/kronterm-cat-mark.png" width="96">
   </a>
 </p>
 
-<h1 align="center">KronTerm</h1>
+<h1 align="center">KronOS</h1>
 
 <p align="center">
   <strong>A living workspace for human + agent development.</strong><br>
@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.kronterm.dev"><img alt="Website" src="https://img.shields.io/badge/kronterm.dev-000000?style=flat-square&logo=google-chrome&logoColor=white"></a>
-  <a href="https://www.kronterm.dev/download"><img alt="Private beta" src="https://img.shields.io/badge/Private_Beta-Request_Access-6C5CE7?style=flat-square"></a>
-  <a href="https://docs.kronterm.dev"><img alt="Documentation" src="https://img.shields.io/badge/Docs-docs.kronterm.dev-00B894?style=flat-square"></a>
+  <a href="https://ahmedalsadi-1.github.io/kronos-releases/"><img alt="Website" src="https://img.shields.io/badge/Website-KronOS-000000?style=flat-square&logo=google-chrome&logoColor=white"></a>
+  <a href="https://github.com/Ahmedalsadi-1/kronos-releases/releases"><img alt="KronOS releases" src="https://img.shields.io/badge/KronOS-Releases-6C5CE7?style=flat-square"></a>
+  <a href="https://ahmedalsadi-1.github.io/kronos-releases/docs/"><img alt="Documentation" src="https://img.shields.io/badge/Docs-KronOS-00B894?style=flat-square"></a>
   <a href="https://discord.gg/XfvZ334gwU"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square"></a>
 </p>
 
@@ -23,25 +23,40 @@
 </p>
 
 <p align="center">
-  <img alt="KronTerm workspace with terminal, browser, files, and KronosCode" src="./assets/kronterm-section/kronterm-homepage.png" width="95%">
+  <img alt="KronOS workspace with terminal, browser, files, and KronOS Agent" src="./website/public/assets/product/kronterm-homepage.png" width="95%">
 </p>
 
-Keep your terminal, browser, files, and AI in one persistent workspace. KronTerm puts the tools you use to build and
+Keep your terminal, browser, files, and AI in one persistent workspace. KronOS puts the tools you use to build and
 check your work beside each other, so you can follow a task without repeatedly rebuilding its context in separate apps.
 
-KronosCode is the agent execution layer. KronTerm Agent provides its chat and control surface, with tool activity,
+KronOS Agent provides the chat and control surface, backed by the managed Hermes runtime, with tool activity,
 approvals, and results available for review as you work.
 
-**macOS private beta.** Windows and Linux builds remain under evaluation; the iPhone client is Labs work.
+**macOS is the initial release target.** Windows and Linux builds remain under evaluation; the iPhone client is Labs work.
 
-**[Request private-beta access](https://www.kronterm.dev/download)** · [Build from source](./BUILD.md)
+**[Downloads and release notes](https://github.com/Ahmedalsadi-1/kronos-releases/releases)** · [Build from source](./BUILD.md)
+
+The application source stays private. Public installers and user-submitted support issues live in a separate
+downloads repository. Connect your own provider key or a compatible local model; no KronOS account is required.
+Diagnostics remain local until a user previews and shares a support report from Settings > About.
 
 ### See the work together
 
-- **Choose your layout.** Switch between tiled widgets, focused tabs, a spatial canvas, and the KronTerm OS desktop shell.
+- **Choose your layout.** Switch between tiled widgets, focused tabs, a spatial canvas, and the KronOS desktop shell.
 - **Give the agent context.** Use selected widgets and task cards as focus or evidence instead of copying everything into chat.
 - **Review, don't guess.** Stage or discard agent edits per file, spin up a parallel worktree for each agent, and schedule the prompts that should run on their own.
 - **Keep actions inspectable.** Follow commands, edits, approvals, and browser evidence alongside your project.
+
+### Motion designer handoff
+
+**Working branch: [`feat/kronsettings-from-kronoschamber`](https://github.com/Ahmedalsadi-1/kronterm/tree/feat/kronsettings-from-kronoschamber).**
+Start with the [designer guide](./docs/motion-designer/START-HERE.md) for the product story, branch instructions,
+footage review workflow and delivery checklist. The [feature reference](./docs/motion-designer/FEATURES.md) covers
+capabilities and development status; the [asset index](./docs/motion-designer/ASSETS.md) and
+[searchable media inventory](./docs/motion-designer/assets.csv) locate recordings, screenshots, brand resources,
+illustrations, audio and existing video projects. [Download this branch as a ZIP](https://github.com/Ahmedalsadi-1/kronterm/archive/refs/heads/feat/kronsettings-from-kronoschamber.zip).
+Keep the archive folders together so project links resolve. Separate nested repositories are represented by revision
+pins and change backups; see the guide before trying to rebuild them.
 
 ### Product videos
 
@@ -51,18 +66,18 @@ builds; feature availability follows the status notes below.
 
 ## What is new
 
-The current development line expands KronTerm from a tiled terminal workspace into a complete human-and-agent desktop.
+The current development line expands KronOS from a tiled terminal workspace into a complete human-and-agent desktop.
 
 | Ability                           | What changed                                                                                                                                                                             | Status                         |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| **Three workspace modes + OS**    | Tiled splits, browser-style widget tabs, freeform spatial canvas, and the new KronTerm OS desktop shell (see below).                                                                     | Private-beta development build |
+| **Three workspace modes + OS**    | Tiled splits, browser-style widget tabs, freeform spatial canvas, and the new KronOS desktop shell (see below).                                                                     | Private-beta development build |
 | **Agent-aware canvas**            | Place live widgets, notes, shapes, connectors, and agent task cards on one zoomable surface.                                                                                             | Private-beta development build |
-| **Context from the canvas**       | Send a widget or agent card to KronosCode as the active focus or as quoted evidence.                                                                                                     | Private-beta development build |
+| **Context from the canvas**       | Send a widget or agent card to KronOS Agent as the active focus or as quoted evidence.                                                                                                     | Private-beta development build |
 | **Visible task graph**            | Follow requests, decisions, actions, approvals, evidence, and outputs through connected cards.                                                                                           | Private-beta development build |
-| **Resilient KronTerm Agent**      | The local agent runtime reports startup and health state, reconnects, and exposes recovery guidance.                                                                                     | Private-beta development build |
-| **KronTerm OS (Spatial Mode)**    | Calm window composition, flat grid overview, connected shell dock, Cover Flow app switcher, and typed `os.*` surface actions for agent control.                                          | Private-beta development build |
+| **Resilient KronOS Agent**      | The local agent runtime reports startup and health state, reconnects, and exposes recovery guidance.                                                                                     | Private-beta development build |
+| **KronOS (Spatial Mode)**    | Calm window composition, flat grid overview, connected shell dock, Cover Flow app switcher, and typed `os.*` surface actions for agent control.                                          | Private-beta development build |
 | **Control Center workflow tools** | Worktrees, changes review, scheduled automations, and lifecycle scripts for the workspace, all inside the OS Control Center (see below).                                                 | Private-beta development build |
-| **KronTerm Agent surface**        | Embedded agent panel with file/terminal/preview slash commands, agent-working badges, activity anchored to the OS HUD, and grouped browser file view with drag-to-canvas.                | Private-beta development build |
+| **KronOS Agent surface**        | Embedded agent panel with file/terminal/preview slash commands, agent-working badges, activity anchored to the OS HUD, and grouped browser file view with drag-to-canvas.                | Private-beta development build |
 | **Global command palette**        | `Cmd+Shift+P` opens the agent command palette (including workspace mode switches) instead of a separate modal.                                                                           | Private-beta development build |
 | **App Stream & native apps**      | Live app-stream rails, native app launches via shared `AppIcon` registry, and real app icons in the shell.                                                                               | Private-beta development build |
 | **Command Center**                | Grouped palette at `Cmd+Shift+Space` for apps, commands, and workspaces.                                                                                                                 | Private-beta development build |
@@ -72,13 +87,34 @@ The current development line expands KronTerm from a tiled terminal workspace in
 | **Minimal UI**                    | A quiet-chrome appearance mode (`app:minimalui`) that trims chrome and lets the work take the foreground.                                                                                | Private-beta development build |
 | **Desktop pet & overlays**        | A companion desktop pet window and live agent activity overlays that surface what agents are doing without stealing focus.                                                               | Private-beta development build |
 | **Voice interaction**             | A microphone control connects local audio capture and transcription to chat, with speech output support.                                                                                 | Experimental                   |
-| **KronTerm for iPhone**           | A native shell opens KronTerm Agent and can connect to managed sandboxes or explicitly paired computers.                                                                                 | Labs                           |
+| **KronOS for iPhone**           | A native shell can open surfaces on a compatible Labs host or an explicitly paired computer.                                                                                           | Labs                           |
 
 Experimental, Labs, and In development features may require additional local dependencies and can change before release.
 
+## Computer, delegation, and workflow development
+
+This branch also contains newer integrations beyond the established workspace surfaces:
+
+- **Computers:** managed desktop providers, per-widget live viewers and fullscreen, workspace-scoped control grants,
+  and device batch/runtime support. See the [computer viewer guide](./frontend/hermes/computer/upstream/README.md)
+  and [provider/access model](./emain/computer-plugins/README.md). These require configured providers and local setup.
+- **Delegation:** subagent presentation and settings for default, model-route and profile-route delegation, backed by
+  configured Hermes runtimes. See the [delegation plugin](./agents/hermes/plugins/advanced-delegation/README.md).
+- **Workflows, in development:** original n8n components share the OS world with workspace content; scoped runtime,
+  tool/widget nodes, node inspection and execution views connect workflows to the agent workspace. See the
+  [integration setup](./integrations/n8n/README.md) and [implementation and remaining interaction gates](./docs/os-mode/workflow-canvas-plan.md).
+  Source and fixture checks do not establish complete rendered interaction acceptance.
+
+The source also registers Video, Audio, Document, Data, Image and Game Studio surfaces, Blender projects, a Media
+Library, personal productivity and Tapflow device sessions. These need separate runtime/capture verification before
+being presented as release-ready features; see the designer guide for the full registered surface inventory.
+
+The designer [feature reference](./docs/motion-designer/FEATURES.md) maps these capabilities to source and visual
+examples. Describe them as development integrations rather than generally available release features.
+
 ## One workspace, multiple ways to work
 
-KronTerm keeps the same widgets and project context while changing how they are presented.
+KronOS keeps the same widgets and project context while changing how they are presented.
 
 ### Tiled widgets
 
@@ -97,7 +133,7 @@ Move and resize live widgets on an infinite canvas. Pan, zoom, fit the workspace
 connect related work. Agent execution appears on the same surface as a live graph, so a request can stay attached to its
 actions, approvals, evidence, and result.
 
-### KronTerm OS (Spatial Mode)
+### KronOS (Spatial Mode)
 
 A calm desktop shell — flat grid overview, connected shell dock, Cover Flow app switcher, native app launches, and drag-to-canvas from the grouped file browser. Motion uses no-overshoot springs with quiet menu entrances. Agents can drive it through typed `os.*` surface actions (`frontend/app/workspace/kronarchy-shell.tsx`).
 
@@ -109,7 +145,7 @@ Set the presentation through KronSettings or with the `app:layoutmode` configura
 }
 ```
 
-Valid values are `widgets`, `tabs`, `canvas`, and `os` (KronTerm OS).
+Valid values are `widgets`, `tabs`, `canvas`, and `os` (KronOS).
 
 For a quieter, lower-chrome look, enable Minimal UI with the `app:minimalui` configuration key (also in KronSettings →
 Visual). It keeps every capability available while trimming visual noise.
@@ -141,13 +177,13 @@ restart, and the workflow tools:
 **Activity Center** carries jobs, approvals, and recovery state — what the agent is doing, what it is waiting for, and
 what needs attention.
 
-## KronosCode
+## KronOS Agent
 
-KronosCode is KronTerm's local agent execution layer. It combines the request with current workspace context, chooses the
+KronOS Agent uses a managed Hermes runtime. It combines the request with current workspace context, chooses the
 correct operating surface, runs tools within that boundary, and returns the result with the evidence still visible.
 
 <p align="center">
-  <img alt="KronosCode working in the KronTerm side panel" src="./assets/kronterm-section/kronterm-sidepanel.png" width="86%">
+  <img alt="KronOS Agent working in the KronOS side panel" src="./website/public/assets/product/kronterm-sidepanel.png" width="86%">
 </p>
 
 ### What the agent can work with
@@ -159,23 +195,23 @@ correct operating surface, runs tools within that boundary, and returns the resu
 | **Browser**             | Inspect structured page state, navigate, click, type, scroll, capture screenshots, and validate flows.                                                            |
 | **Sandbox**             | Create and operate isolated Linux desktops with their own browser, editor, terminal, and filesystem.                                                              |
 | **macOS desktop**       | Inspect accessibility state and perform visible, permission-aware clicks, typing, key presses, scrolling, and dragging.                                           |
-| **Canvas + OS desktop** | Read selected widgets and task cards, follow task lineage, use chosen nodes as focus/quoted evidence, and drive the KronTerm OS desktop via typed `os.*` actions. |
+| **Canvas + OS desktop** | Read selected widgets and task cards, follow task lineage, use chosen nodes as focus/quoted evidence, and drive the KronOS desktop via typed `os.*` actions. |
 | **App Stream**          | Operate live native or remote app surfaces on dedicated rails (AppIcon registry, interaction state).                                                              |
 | **Research and tools**  | Search documentation and the web, call MCP servers, and load task-specific skills.                                                                                |
 
-KronosCode streams meaningful tool activity into the UI. Commands, edits, approvals, browser evidence, and recovery state
+KronOS Agent streams meaningful tool activity into the UI. Commands, edits, approvals, browser evidence, and recovery state
 remain inspectable while the agent works.
 
 ### Managed local runtime
 
-KronTerm Agent is the primary conversation and control surface for KronosCode. KronTerm starts and monitors the local
+KronOS Agent is the primary conversation and control surface. KronOS starts and monitors the local
 runtime, refreshes its short-lived connection credentials, reconnects the embedded client, and shows repair information
-when the runtime cannot become healthy. The mobile client uses the same gateway rather than running a second AI engine.
+when the runtime cannot become healthy.
 
 ### Voice, experimental
 
 The voice control can start the optional Python audio engine, capture speech, transcribe it with `faster-whisper`, and
-submit the transcript to KronosCode. Speech output uses an online TTS provider when configured and an offline system
+submit the transcript to KronOS Agent. Speech output uses an online TTS provider when configured and an offline system
 fallback when available. Voice remains opt-in and can be shut down from KronSettings.
 
 ## Built-in surfaces
@@ -185,11 +221,11 @@ fallback when available. Voice remains opt-in and can be shut down from KronSett
 | **Terminal**                  | Full PTY sessions, connected shell dock, shell integration, command history, and AI-readable scrollback.                                                     |
 | **Browser**                   | Embedded Chromium for documentation, dashboards, localhost, and agent-driven validation, with a toolbar loading bar and Escape-to-restore omnibox edits.     |
 | **Preview and editor**        | Markdown, images, media, PDF, CSV, directories, Monaco-based editing, and grouped file browser with drag-to-canvas.                                          |
-| **KronTerm Agent**            | Workspace-aware chat, tools, approvals, sessions, artifacts, and model controls.                                                                             |
-| **KronTerm Agent panel**      | Embedded agent surface with command center, file/terminal/preview slash commands, and agent-working badges.                                                  |
+| **KronOS Agent**            | Workspace-aware chat, tools, approvals, sessions, artifacts, and model controls.                                                                             |
+| **KronOS Agent panel**      | Embedded agent surface with command center, file/terminal/preview slash commands, and agent-working badges.                                                  |
 | **Kron Sandbox**              | Isolated Linux desktop execution with visible computer use (SandboxDesktopPane).                                                                             |
 | **App stream**                | Live native or remote application surfaces on dedicated rails with interaction state and cursor feedback.                                                    |
-| **KronTerm OS shell**         | Desktop shell — dock, flat grid overview / Cover Flow switcher, native app launches, and `os.*` agent actions.                                               |
+| **KronOS shell**         | Desktop shell — dock, flat grid overview / Cover Flow switcher, native app launches, and `os.*` agent actions.                                               |
 | **Control / Activity Center** | Host permissions, connections, plugin grants, worktrees, changes, automations, lifecycle scripts, and space restoration; plus jobs, approvals, and recovery. |
 | **Command Center**            | Grouped palette (`Cmd+Shift+Space`) for apps, commands, and workspaces, plus the global command palette (`Cmd+Shift+P`) in the agent surface.                |
 | **Desktop pet & overlay**     | Companion pet window (`desktop-pet/`) and overlay surfaces for ambient agent activity.                                                                       |
@@ -198,7 +234,7 @@ fallback when available. Voice remains opt-in and can be shut down from KronSett
 
 ## Durable remote work
 
-KronTerm's SSH sessions survive network changes, sleep, and application restarts. Remote terminals, files, directories,
+KronOS's SSH sessions survive network changes, sleep, and application restarts. Remote terminals, files, directories,
 and previews use the same workspace model as local work, so an agent can reason from the remote evidence you see.
 
 ## Extend it
@@ -207,7 +243,7 @@ and previews use the same workspace model as local work, so an agent can reason 
   editors can drive the same blocks, snapshots, and clicks you see in the app.
 - **wsh CLI and Widget Protocol.** The `wsh` command line and the Widget Protocol let scripts and agents create blocks,
   control surfaces, and read workspace state (`wsh workspace-surface`, `wsh widget`, and friends).
-- **Skills and MCP servers.** KronosCode loads task-specific skills and connects to MCP servers for extra tools.
+- **Skills and MCP servers.** KronOS Agent loads task-specific skills and connects to MCP servers for extra tools.
 - **Agent packages.** `agents/kronoscode/` and `agents/hermes/` are bundled agent boundaries with their own toolsets.
 - **Plugin platform (in development).** A v1 manifest declares what a plugin contributes — widgets, applications,
   commands, typed settings, skills, agent tools, ACP agents, MCP servers, artifact renderers, worktree and source-control
@@ -219,14 +255,14 @@ and previews use the same workspace model as local work, so an agent can reason 
 ## Architecture
 
 ```text
-KronTerm desktop (Electron + React)
-├── workspace presentations: widgets · tabs · canvas · os (KronTerm OS shell)
+KronOS desktop (Electron + React)
+├── workspace presentations: widgets · tabs · canvas · os (KronOS shell)
 │   ├── Kronarchy shell (kronarchy-shell.tsx) — dock, overview, Cover Flow, os.* actions
 │   ├── command center (Cmd+Shift+Space) — grouped apps/commands/workspaces
 │   └── system centers — control center (permissions, connections, grants, worktrees,
 │       changes, automations, lifecycle scripts) · activity center (jobs, approvals)
 ├── interactive surfaces: terminal (connected dock) · browser · files (grouped + drag-to-canvas) · sandbox · app stream rails · native apps
-├── KronTerm Agent: chat · sessions · approvals · artifacts · embedded agent panel (Cmd+Shift+P palette)
+├── KronOS Agent: chat · sessions · approvals · artifacts · embedded agent panel (Cmd+Shift+P palette)
 ├── plugin manifest v1 (frontend/app/plugins/manifest) — capabilities, validation, consent
 ├── agent activity: live overlays · task/evidence graphs · desktop pet · overlay windows
 └── native bridges: audio · accessibility · secure storage · IPC · app icons (AppIcon)
@@ -238,7 +274,7 @@ Go services
 ├── configuration, secrets, events, and persistence
 └── preview, file, and sandbox services
 
-KronosCode runtime
+KronOS Agent runtime
 ├── routed agent execution and specialist tools (typed os.* surface for desktop control)
 ├── MCP servers and loadable skills
 ├── browser, terminal, desktop, sandbox, and canvas context
@@ -254,7 +290,7 @@ The repository also contains:
 - `mcp-kron-term/` for the workspace and computer-use MCP bridge (see [Extend it](#extend-it)).
 - `audio-engine/` for the optional speech pipeline.
 - `desktop-pet/` for the standalone desktop pet window content.
-- `mobile/` for the KronTerm for iPhone Labs client.
+- `mobile/` for the KronOS for iPhone Labs client.
 - `website/` for the product site (`npm --prefix website run build` to validate).
 - `docs/` for the Docusaurus documentation site (`npm --prefix docs run build`).
 - `video/` for the Remotion promo composition (`KronTermPromo` 62s cinematic, see `video/AGENTS.md`).
@@ -279,24 +315,23 @@ Agent actions stay attached to an explicit surface.
 Cloud model providers and managed sandbox providers receive only the data required for the capability you choose. Local
 models can keep model inference on the machine.
 
-## KronTerm for iPhone, Labs
+## KronOS for iPhone, Labs
 
-The iPhone client opens directly into KronTerm Agent and exposes Browser, Workspace, Files, Code, Terminal, and Preview as
-secondary surfaces. It can use a managed KronTerm host or an explicitly paired personal computer. An optional developer
-bridge exposes approval-gated phone control for testing; general control of unrelated iOS apps is outside the normal App
-Store capability boundary.
+The iPhone client opens Browser, Workspace, Files, Code, Terminal, and Preview when the paired host exposes them. Chat
+requires a Labs host with the legacy KronosCode session API. Connecting chat to the desktop's managed Hermes runtime is
+still pending. An optional developer bridge supports approval-gated phone control for testing.
 
 See [`mobile/README.md`](./mobile/README.md) for the implemented slice, setup, and phase boundaries.
 
-## Get KronTerm
+## Get KronOS
 
-KronTerm is onboarding macOS private-beta users and design partners.
+The public preview is available for Apple silicon Macs running macOS 26 or later.
 
-**[Request private-beta access →](https://www.kronterm.dev/download)**
+**[Download the macOS preview](https://ahmedalsadi-1.github.io/kronos-releases/download/)**
 
 | Platform                      | Current status   |
 | ----------------------------- | ---------------- |
-| macOS (Apple Silicon and x64) | Private beta     |
+| macOS (Apple silicon)         | Public preview   |
 | Windows (x64)                 | Under evaluation |
 | Linux (arm64 and x64)         | Under evaluation |
 | iPhone                        | Labs client      |
@@ -315,17 +350,18 @@ Do not run `go build` inside individual subpackages; use the repository tasks an
 
 ## Documentation
 
-- [Product website](https://www.kronterm.dev)
-- [Hosted documentation](https://docs.kronterm.dev)
+- [Product website](https://ahmedalsadi-1.github.io/kronos-releases/)
+- [Hosted documentation](https://ahmedalsadi-1.github.io/kronos-releases/docs/)
 - [Build from source](./BUILD.md)
+- [Launch KronOS Linux on an Apple Silicon Mac](./docs/os-mode/kronos-linux.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Roadmap](./ROADMAP.md)
-- [KronTerm for iPhone](./mobile/README.md)
-- [Bundled KronosCode agent](./agents/kronoscode/README.md)
+- [KronOS for iPhone](./mobile/README.md)
+- [Legacy KronosCode compatibility package](./agents/kronoscode/README.md)
 
 ## License and community
 
-KronTerm is licensed under [Apache License 2.0](./LICENSE). See [`NOTICE`](./NOTICE) and
+KronOS is licensed under [Apache License 2.0](./LICENSE). See [`NOTICE`](./NOTICE) and
 [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md) for attribution and dependency information.
 
 - [Discord](https://discord.gg/XfvZ334gwU)
@@ -333,5 +369,5 @@ KronTerm is licensed under [Apache License 2.0](./LICENSE). See [`NOTICE`](./NOT
 - [GitHub issues](https://github.com/Ahmedalsadi-1/kronterm/issues)
 
 <p align="center">
-  <strong>KronTerm — keep the whole builder loop in view.</strong>
+  <strong>KronOS — keep the whole builder loop in view.</strong>
 </p>

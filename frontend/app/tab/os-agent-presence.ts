@@ -36,12 +36,12 @@ const SurfaceViews: Record<AgentActivitySurface, string[]> = {
 
 export function agentLabelForSource(source: AgentActivitySource | undefined): string {
     if (source === "hermes") {
-        return "KronTerm Agent";
+        return "KronOS Agent";
     }
     if (source === "acp" || source === "kronoscode-tui") {
         return "KronosCode";
     }
-    return "KronTerm Agent";
+    return "KronOS Agent";
 }
 
 function presenceKey(activity: LiveAgentSurfaceActivity): string {

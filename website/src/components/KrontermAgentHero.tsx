@@ -26,12 +26,12 @@ export function KrontermAgentHero() {
         <section className="kronterm-agent-hero">
             <div className="agent-hero-inner">
                 <div className="agent-hero-copy">
-                    <p className="eyebrow">Kronterm + KronosCode</p>
+                    <p className="eyebrow">KronOS + KronosCode</p>
                     <h1>
                         The AI-native workspace <span className="h1-soft">for builders.</span>
                     </h1>
                     <p className="hero-subtitle">
-                        Kronterm combines your terminal, browser, editor, sandboxes, files, and AI agents into one
+                        KronOS combines your terminal, browser, editor, sandboxes, files, and AI agents into one
                         programmable desktop&nbsp;— with KronosCode and Hermes as the private-beta runtime.
                     </p>
                     <div className="cta-row">
@@ -55,7 +55,7 @@ export function KrontermAgentHero() {
                             <span />
                             <span />
                         </div>
-                        <span className="titlebar-label">Kronterm Workspace</span>
+                        <span className="titlebar-label">KronOS Workspace</span>
                         <span className="titlebar-badge">KronosCode 2.0</span>
                     </div>
 

@@ -12,7 +12,6 @@ const DefaultWidgetGroups: Record<string, { label: string; order: number }> = {
     browser: { label: "Browser", order: 1 },
     ai: { label: "AI", order: 2 },
     sandbox: { label: "Sandbox", order: 3 },
-    design: { label: "Design", order: 4 },
     apps: { label: "Apps", order: 5 },
     tools: { label: "Tools", order: 6 },
 };
@@ -22,7 +21,6 @@ const WidgetGroupColors: Record<string, string> = {
     browser: "#60a5fa",
     ai: "#e8c47c",
     sandbox: "#f472b6",
-    design: "#38bdf8",
     apps: "#a78bfa",
     tools: "#94a3b8",
 };
@@ -32,7 +30,6 @@ const WidgetGroupIcons: Record<string, string> = {
     browser: "globe",
     ai: "sparkles",
     sandbox: "desktop",
-    design: "palette",
     apps: "grid-2",
     tools: "wrench",
 };

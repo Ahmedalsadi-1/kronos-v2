@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export type WorkspaceBot = { id: string; name: string; cwd?: string };
+export type WorkspaceBot = { id: string; name: string; cwd?: string; room?: { id: string; name: string } };
 export type BotDesktop = { botId: string; workspaceId: string; tabId: string; blockIds: string[] };
 export type BotWorkspaceBackend = {
     list(): Promise<Workspace[]>;
@@ -21,28 +21,34 @@ export class BotWorkspaceRegistry {
 
     ensure(bot: WorkspaceBot): Promise<BotDesktop> {
         if (!/^[a-zA-Z0-9_-]{1,128}$/.test(bot.id)) return Promise.reject(new Error("Invalid bot identity"));
-        const existing = this.pending.get(bot.id);
-        if (existing) return existing;
+        if (bot.room && !/^[a-zA-Z0-9_-]{1,128}$/.test(bot.room.id))
+            return Promise.reject(new Error("Invalid room identity"));
+        const key = bot.room ? `room:${bot.room.id}` : `bot:${bot.id}`;
+        const existing = this.pending.get(key);
+        if (existing) return existing.then((desktop) => ({ ...desktop, botId: bot.id }));
         const next = this.queue.catch(() => undefined).then(() => this.provision(bot));
         this.queue = next;
-        this.pending.set(bot.id, next);
-        void next.finally(() => this.pending.delete(bot.id)).catch(() => {});
+        this.pending.set(key, next);
+        void next.finally(() => this.pending.delete(key)).catch(() => {});
         return next;
     }
 
     private async provision(bot: WorkspaceBot): Promise<BotDesktop> {
         const backend = this.backend;
-        let workspace = (await backend.list()).find((item) => item.meta?.["agent:botid"] === bot.id);
+        const identity = bot.room ? { "agent:roomid": bot.room.id } : { "agent:botid": bot.id };
+        let workspace = (await backend.list()).find((item) =>
+            bot.room ? item.meta?.["agent:roomid"] === bot.room.id : item.meta?.["agent:botid"] === bot.id
+        );
         if (!workspace) {
-            const id = await backend.create((bot.name.trim() || "Agent").slice(0, 80));
-            await backend.metadata(`workspace:${id}`, { "agent:botid": bot.id, "agent:source": "openmausbot" });
+            const id = await backend.create(((bot.room?.name ?? bot.name).trim() || "Agent").slice(0, 80));
+            await backend.metadata(`workspace:${id}`, { ...identity, "agent:source": "openmausbot" });
             workspace = await backend.get(id);
         }
         const existingTabId = workspace.activetabid || workspace.tabids?.[0];
         const tabId = existingTabId || (await backend.tab(workspace.oid));
         await backend.metadata(`tab:${tabId}`, {
             ...(!existingTabId || !workspace.meta?.["agent:desktopready"] ? { "layout:mode": "os" } : {}),
-            "agent:botid": bot.id,
+            ...identity,
         });
         const blocks = await backend.blocks(tabId);
         const roles = [
@@ -54,11 +60,11 @@ export class BotWorkspaceRegistry {
             if (blocks.some((block) => block.role === role)) continue;
             const initial = blocks.find((block) => !block.role && block.view === meta.view);
             if (initial) {
-                await backend.metadata(`block:${initial.id}`, { "agent:botid": bot.id, "agent:widgetrole": role });
+                await backend.metadata(`block:${initial.id}`, { ...identity, "agent:widgetrole": role });
                 initial.role = role;
                 continue;
             }
-            const id = await backend.createBlock(tabId, { ...meta, "agent:botid": bot.id, "agent:widgetrole": role });
+            const id = await backend.createBlock(tabId, { ...meta, ...identity, "agent:widgetrole": role });
             blocks.push({ id, role });
         }
         if (!workspace.meta?.["agent:desktopready"])

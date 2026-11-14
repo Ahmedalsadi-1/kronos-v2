@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { subscribeAgentWidgetDesignSelection, type AgentWidgetDesignSelection } from "@/app/view/agent-widget-bridge";
+import { getApi } from "@/store/global";
 import { fireAndForget } from "@/util/util";
 import { useAtom } from "jotai";
 import { memo, useEffect, useState } from "react";
@@ -34,6 +35,7 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
     };
     const annotations = allAnnotations.filter((row) => !url || pageKey(row.url) === pageKey(url));
     const [copied, setCopied] = useState(false);
+    const [sendError, setSendError] = useState("");
 
     useEffect(() => {
         return subscribeAgentWidgetDesignSelection((selection) => {
@@ -97,6 +99,24 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
                     {annotations.length === 1 ? "1 annotation" : `${annotations.length} annotations`}
                 </span>
                 <span className="browser-annotation-tray-actions">
+                    <button
+                        type="button"
+                        aria-label="Send browser annotations to Hermes"
+                        title="Send to Hermes"
+                        onClick={() => {
+                            setSendError("");
+                            void getApi()
+                                .sendHermesSelection({
+                                    target: "current",
+                                    text: `Revalidate the selected elements with widget_snapshot on browser block ${JSON.stringify(blockId)} before acting.\n\n${formatAnnotationsBundle(pageUrl, annotations)}`,
+                                })
+                                .catch((error) =>
+                                    setSendError(error instanceof Error ? error.message : "Could not send annotations.")
+                                );
+                        }}
+                    >
+                        <i className="fa-solid fa-arrow-up" aria-hidden="true" />
+                    </button>
                     <button type="button" onClick={copyBundle} aria-label="Copy annotations" title="Copy annotations">
                         <i className={`fa-solid fa-${copied ? "check" : "copy"}`} aria-hidden="true" />
                     </button>
@@ -114,6 +134,7 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
                     </button>
                 </span>
             </header>
+            {sendError && <p role="alert">{sendError}</p>}
             <ol className="browser-annotation-tray-list">
                 {annotations.map((annotation) => (
                     <li key={annotation.id} className="browser-annotation-tray-item">

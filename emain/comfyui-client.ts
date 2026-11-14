@@ -3,25 +3,19 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { ComfyImage, ComfyJob, ComfyRequest, ComfyResponse, ComfyWorkflow } from "../frontend/types/comfyui";
+import {
+    comfyOrigin,
+    type ComfyImage,
+    type ComfyJob,
+    type ComfyRequest,
+    type ComfyResponse,
+    type ComfyWorkflow,
+} from "../frontend/types/comfyui";
 
-export function comfyOrigin(input: string): string {
-    const url = new URL(input);
-    if (
-        url.protocol !== "http:" ||
-        !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
-        url.username ||
-        url.password ||
-        url.pathname !== "/" ||
-        url.search ||
-        url.hash
-    )
-        throw new Error("Use a local ComfyUI address, such as http://127.0.0.1:8188");
-    return url.origin;
-}
+export { comfyOrigin };
 export function validateComfyWorkflow(input: unknown): ComfyWorkflow {
     if (!input || typeof input !== "object" || Array.isArray(input))
-        throw new Error("Paste a ComfyUI workflow exported in API format");
+        throw new Error("Paste a KronRender workflow exported in API format");
     const nodes = Object.entries(input);
     if (!nodes.length || nodes.length > 2000 || JSON.stringify(input).length > 2_000_000)
         throw new Error("Workflow must contain between 1 and 2000 nodes and be under 2 MB");
@@ -87,64 +81,73 @@ export class ComfyUiClient {
             fs.rmSync(temporary, { force: true });
         }
     }
-    private async request(origin: string, route: string, body?: unknown): Promise<Response> {
+    private async request(origin: string, route: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
         let response: Response;
         try {
             response = await this.fetcher(`${origin}${route}`, {
                 method: body == null ? "GET" : "POST",
                 redirect: "error",
-                signal: AbortSignal.timeout(15000),
+                signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]),
                 ...(body == null
                     ? {}
                     : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
             });
         } catch (error) {
             throw new Error(
-                `ComfyUI could not be reached at ${origin}. Start its local server and check the address. ${String(error)}`
+                `KronRender could not be reached at ${origin}. Check the engine address or retry once it is ready. ${String(error)}`
             );
         }
         if (!response.ok)
-            throw new Error(`ComfyUI ${route} returned ${response.status}: ${(await response.text()).slice(0, 1500)}`);
+            throw new Error(`KronRender ${route} returned ${response.status}: ${(await response.text()).slice(0, 1500)}`);
         return response;
     }
-    private owned(origin: string, id: string): ComfyJob {
-        const job = this.jobs.find((row) => row.id === id && row.origin === origin);
-        if (!job) throw new Error("This image job was not submitted by KronTerm");
+    private owned(origin: string, id: string, workspaceId?: string): ComfyJob {
+        const job = this.jobs.find(
+            (row) => row.id === id && row.origin === origin && (workspaceId == null || row.workspaceId === workspaceId)
+        );
+        if (!job) throw new Error("This image job was not submitted by KronOS");
         return job;
     }
-    execute(input: ComfyRequest): Promise<ComfyResponse> {
-        const result = this.pending.then(() => this.executeRequest(input));
+    execute(input: ComfyRequest, workspaceId?: string, signal?: AbortSignal): Promise<ComfyResponse> {
+        const result = this.pending.then(() => {
+            signal?.throwIfAborted();
+            return this.executeRequest(input, workspaceId, signal);
+        });
         this.pending = result.catch(() => undefined);
         return result;
     }
-    private async executeRequest(input: ComfyRequest): Promise<ComfyResponse> {
+    private async executeRequest(input: ComfyRequest, workspaceId?: string, signal?: AbortSignal): Promise<ComfyResponse> {
         if (
             !input ||
             typeof input !== "object" ||
             !["health", "submit", "refresh", "cancel", "image"].includes(input.action)
         ) {
-            throw new Error("Unknown ComfyUI request");
+            throw new Error("Unknown KronRender request");
         }
-        if (typeof input.origin !== "string") throw new Error("ComfyUI address is required");
+        if (typeof input.origin !== "string") throw new Error("KronRender address is required");
         if ((input.action === "cancel" || input.action === "image") && (typeof input.id !== "string" || !input.id)) {
             throw new Error("Image job identity is required");
         }
         if (input.action === "image" && (!input.image || typeof input.image !== "object"))
             throw new Error("Image identity is required");
         const origin = comfyOrigin(input.origin);
+        const jobs = () =>
+            this.jobs.filter((job) => job.origin === origin && (workspaceId == null || job.workspaceId === workspaceId));
         if (input.action === "health") {
-            const stats = await (await this.request(origin, "/system_stats")).json();
-            const objects = await (await this.request(origin, "/object_info")).json();
+            const [stats, objects] = await Promise.all([
+                this.request(origin, "/system_stats", undefined, signal).then((response) => response.json()),
+                this.request(origin, "/object_info", undefined, signal).then((response) => response.json()),
+            ]);
             return {
                 version: stats.system?.comfyui_version ?? "Version not reported",
                 nodeTypes: Object.keys(objects).sort(),
-                jobs: structuredClone(this.jobs.filter((job) => job.origin === origin)),
+                jobs: structuredClone(jobs()),
             };
         }
         if (input.action === "submit") {
             const workflow = validateComfyWorkflow(input.workflow);
             const result = await (
-                await this.request(origin, "/prompt", { prompt: workflow, client_id: randomUUID() })
+                await this.request(origin, "/prompt", { prompt: workflow, client_id: randomUUID() }, signal)
             ).json();
             if (typeof result.prompt_id !== "string" || !result.prompt_id)
                 throw new Error(`Workflow rejected: ${JSON.stringify(result).slice(0, 1500)}`);
@@ -155,22 +158,25 @@ export class ComfyUiClient {
                 createdAt: Date.now(),
                 status: "queued",
                 images: [],
+                ...(workspaceId ? { workspaceId } : {}),
             });
             this.save();
+            if (workspaceId != null) return { jobs: [structuredClone(this.jobs[0])] };
         }
         if (input.action === "cancel") {
-            const job = this.owned(origin, input.id);
+            const job = this.owned(origin, input.id, workspaceId);
             // New servers cancel by ID atomically. A global interrupt could stop someone else's render.
             const result = await (
-                await this.request(origin, `/api/jobs/${encodeURIComponent(job.id)}/cancel`, {})
+                await this.request(origin, `/api/jobs/${encodeURIComponent(job.id)}/cancel`, {}, signal)
             ).json();
             if (result.cancelled !== true)
-                throw new Error("ComfyUI did not cancel this job. It may already be finished; refresh its status.");
+                throw new Error("KronRender did not cancel this job. It may already be finished; refresh its status.");
             job.status = "cancel-requested";
             this.save();
+            if (workspaceId != null) return { jobs: [structuredClone(job)] };
         }
         if (input.action === "image") {
-            const job = this.owned(origin, input.id);
+            const job = this.owned(origin, input.id, workspaceId);
             const image = job.images.find(
                 (row) =>
                     row.filename === input.image.filename &&
@@ -179,10 +185,10 @@ export class ComfyUiClient {
             );
             if (!image) throw new Error("Image does not belong to this job");
             const params = new URLSearchParams(image);
-            const response = await this.request(origin, `/view?${params}`);
+            const response = await this.request(origin, `/view?${params}`, undefined, signal);
             const mime = response.headers.get("content-type")?.split(";")[0];
             if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mime))
-                throw new Error("ComfyUI output is not a supported image");
+                throw new Error("KronRender output is not a supported image");
             if (Number(response.headers.get("content-length")) > 20_000_000)
                 throw new Error("Image is too large to preview (20 MB limit)");
             const reader = response.body.getReader();
@@ -201,8 +207,9 @@ export class ComfyUiClient {
             return { imageData: `data:${mime};base64,${Buffer.concat(chunks).toString("base64")}` };
         }
         if (input.action === "refresh") {
-            const queue = await (await this.request(origin, "/queue")).json();
-            for (const job of this.jobs.filter((row) => row.origin === origin).slice(0, 100)) {
+            const selected = input.id ? [this.owned(origin, input.id, workspaceId)] : jobs().slice(0, 100);
+            const queue = await (await this.request(origin, "/queue", undefined, signal)).json();
+            for (const job of selected) {
                 if (queue.queue_running?.some((entry: unknown[]) => entry[1] === job.id)) {
                     job.status = "running";
                     continue;
@@ -211,7 +218,9 @@ export class ComfyUiClient {
                     job.status = "queued";
                     continue;
                 }
-                const history = await (await this.request(origin, `/history/${encodeURIComponent(job.id)}`)).json();
+                const history = await (
+                    await this.request(origin, `/history/${encodeURIComponent(job.id)}`, undefined, signal)
+                ).json();
                 const entry = history[job.id];
                 if (!entry) {
                     job.status = "unknown";
@@ -234,7 +243,8 @@ export class ComfyUiClient {
                 if (job.status === "failed") job.error = JSON.stringify(entry.status?.messages ?? []).slice(0, 1500);
             }
             this.save();
+            if (input.id) return { jobs: structuredClone(selected) };
         }
-        return { jobs: structuredClone(this.jobs.filter((job) => job.origin === origin)) };
+        return { jobs: structuredClone(jobs()) };
     }
 }

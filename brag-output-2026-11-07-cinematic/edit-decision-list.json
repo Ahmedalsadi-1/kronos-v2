@@ -1,0 +1,32 @@
+[
+  {
+    "id": "awakening",
+    "start": 0,
+    "duration": 16
+  },
+  {
+    "id": "browser",
+    "start": 16,
+    "duration": 18
+  },
+  {
+    "id": "selection",
+    "start": 34,
+    "duration": 12
+  },
+  {
+    "id": "sessions",
+    "start": 46,
+    "duration": 15
+  },
+  {
+    "id": "canvas",
+    "start": 61,
+    "duration": 9
+  },
+  {
+    "id": "return",
+    "start": 70,
+    "duration": 10
+  }
+]

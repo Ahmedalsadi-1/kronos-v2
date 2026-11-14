@@ -55,6 +55,7 @@ declare module "@novnc/novnc" {
         constructor(target: HTMLElement, url: string, options?: RFBOptions);
 
         disconnect(): void;
+        toDataURL(type?: string, encoderOptions?: number): string;
         sendPassword(password: string): void;
         sendCredentials(credentials: { username?: string; password?: string; domain?: string }): void;
         sendKey(keysym: number, code: string, down: boolean): void;

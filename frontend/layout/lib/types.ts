@@ -374,6 +374,9 @@ export interface ResizeHandleProps {
     parentNodeId: string;
     parentIndex: number;
     centerPx: number;
+    beforePercentage: number;
+    minPercentage: number;
+    maxPercentage: number;
     transform: CSSProperties;
     flexDirection: FlexDirection;
 }

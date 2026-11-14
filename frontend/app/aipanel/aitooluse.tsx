@@ -150,7 +150,7 @@ function getToolSourceBadge(toolSource?: string): { label: string; className: st
     }
     if (toolSource === "wave") {
         return {
-            label: "Kronterm bridge",
+            label: "KronOS bridge",
             className: "border-amber-700/60 bg-amber-500/10 text-amber-200",
         };
     }

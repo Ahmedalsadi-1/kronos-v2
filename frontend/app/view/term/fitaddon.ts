@@ -91,6 +91,15 @@ export class FitAddon implements ITerminalAddon, IFitApi {
         const elementPaddingHor = elementPadding.right + elementPadding.left;
         const availableHeight = parentElementHeight - elementPaddingVer;
         const availableWidth = parentElementWidth - elementPaddingHor - scrollbarWidth;
+        // Hidden workspace surfaces must retain their last usable terminal geometry.
+        if (
+            !Number.isFinite(availableHeight) ||
+            !Number.isFinite(availableWidth) ||
+            availableHeight <= 0 ||
+            availableWidth <= 0
+        ) {
+            return undefined;
+        }
         const geometry = {
             cols: Math.max(MINIMUM_COLS, Math.floor(availableWidth / dims.css.cell.width)),
             rows: Math.max(MINIMUM_ROWS, Math.floor(availableHeight / dims.css.cell.height)),

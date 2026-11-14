@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { LinuxDesktop, LinuxDesktopAction, LinuxDesktopActionResult } from "../../frontend/types/linux-desktops";
+import { rememberComputerControl, restoredComputerControl } from "../computer-access-policy";
 import { runLinuxDesktopCommand } from "../linux-desktop/command-runner";
 import {
     containerComputerAction,
@@ -31,6 +32,12 @@ export class OpenMausComputerPlugin implements ComputerProviderRuntime {
         private platform = process.platform
     ) {
         this.target = perBotLocalVmTarget(`kronterm:${id}`);
+        const restored = restoredComputerControl(id);
+        if (restored) {
+            this.owner = restored.owner;
+            this.agentId = restored.agentId;
+            this.generation = restored.generation;
+        }
     }
     async list(): Promise<LinuxDesktop[]> {
         const status = await containerComputerStatus(this.runner, this.platform, this.target);
@@ -66,12 +73,14 @@ export class OpenMausComputerPlugin implements ComputerProviderRuntime {
         this.agentId = agentId;
         this.owner = "agent";
         this.generation++;
+        rememberComputerControl(this.id, { owner: this.owner, agentId: this.agentId, generation: this.generation });
         return (await this.list())[0];
     }
-    async takeover(id: string) {
-        this.check(id);
+    async takeover(id: string, expected?: { agentId: string; generation: number }) {
+        this.check(id, expected?.generation, expected != null, expected?.agentId);
         this.owner = "user";
         this.generation++;
+        rememberComputerControl(this.id, { owner: this.owner, agentId: this.agentId, generation: this.generation });
         return (await this.list())[0];
     }
     async resume(id: string, generation: number) {
@@ -79,6 +88,7 @@ export class OpenMausComputerPlugin implements ComputerProviderRuntime {
         if (!this.agentId) throw new Error("Assign an agent first.");
         this.owner = "agent";
         this.generation++;
+        rememberComputerControl(this.id, { owner: this.owner, agentId: this.agentId, generation: this.generation });
         return (await this.list())[0];
     }
     perform(action: LinuxDesktopAction) {

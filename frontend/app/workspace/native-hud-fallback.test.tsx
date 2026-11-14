@@ -24,8 +24,8 @@ test("keeps retry, preview launchers and explicit exit accessible after a native
     for (const [label, app] of [
         ["Browser", "web"],
         ["Sandbox", "machines"],
-        ["Android", "android"],
-        ["iPhone", "iphone"],
+        ["Android (Labs)", "android"],
+        ["iPhone (Labs)", "iphone"],
         ["Streamed apps", "apps"],
         ["Files", "files"],
         ["Terminal", "terminal"],
@@ -34,7 +34,7 @@ test("keeps retry, preview launchers and explicit exit accessible after a native
         await act(async () => (host.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement).click());
         expect(api.requestNativeHudLaunch).toHaveBeenLastCalledWith(app);
     }
-    await act(async () => (host.querySelector('[aria-label="Exit notch"]') as HTMLButtonElement).click());
+    await act(async () => (host.querySelector('[aria-label="Return to workspace"]') as HTMLButtonElement).click());
     expect(api.requestNativeHudExit).toHaveBeenCalledOnce();
     await act(async () => root.unmount());
 });

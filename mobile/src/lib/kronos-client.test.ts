@@ -1,4 +1,5 @@
-import { messageText, normalizeHostUrl } from "./kronos-client";
+import { vi } from "vitest";
+import { KronosHostClient, messageText, normalizeHostUrl } from "./kronos-client";
 
 describe("normalizeHostUrl", () => {
     it("adds HTTPS and removes an API suffix", () => {
@@ -24,4 +25,27 @@ describe("messageText", () => {
             ])
         ).toBe("Visible answer");
     });
+});
+
+it("distinguishes a valid empty session list from an unrelated host response", async () => {
+    const client = new KronosHostClient({
+        id: "labs",
+        label: "Labs host",
+        baseUrl: "https://labs.example",
+        kind: "managed",
+        color: "#2567f2",
+        capabilities: [],
+        createdAt: 0,
+    });
+    const fetch = vi.spyOn(globalThis, "fetch");
+    try {
+        fetch.mockResolvedValueOnce(Response.json({ status: "ok" }));
+        await expect(client.listSessions()).rejects.toThrow("compatible iPhone session list");
+        fetch.mockResolvedValueOnce(Response.json({ sessions: [] }));
+        await expect(client.listSessions()).resolves.toEqual([]);
+        fetch.mockResolvedValueOnce(Response.json([{ id: "session-1" }]));
+        await expect(client.listSessions()).resolves.toEqual([{ id: "session-1" }]);
+    } finally {
+        fetch.mockRestore();
+    }
 });

@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync, type Dirent } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
+import { discoveryWords, matchesDiscoveryQuery } from "./discovery-query.js";
 
 export const SharedSkillDirsEnv = "KRONTERM_SHARED_SKILL_DIRS";
 
@@ -22,8 +23,19 @@ function frontmatterValue(content: string, key: string): string {
     if (closing === -1) {
         return "";
     }
-    const match = content.slice(3, closing).match(new RegExp(`^${key}:\\s*["']?(.+?)["']?\\s*$`, "m"));
-    return match?.[1]?.trim() ?? "";
+    const lines = content.slice(3, closing).split(/\r?\n/);
+    const index = lines.findIndex((line) => line.startsWith(`${key}:`));
+    if (index < 0) return "";
+    const value = lines[index].slice(key.length + 1).trim();
+    if (/^[>|][-+]?\d?$/.test(value)) {
+        const block: string[] = [];
+        for (const line of lines.slice(index + 1)) {
+            if (line.trim() && !/^\s/.test(line)) break;
+            block.push(line.trim());
+        }
+        return block.join(value.startsWith(">") ? " " : "\n").trim();
+    }
+    return value.replace(/^(["'])(.*)\1$/, "$2");
 }
 
 function sourceName(root: string): string {
@@ -48,7 +60,9 @@ function skillRecord(root: string, directory: string): SharedSkillRecord | null 
     if (!existsSync(filePath) || !statSync(filePath).isFile()) {
         return null;
     }
-    const content = readFileSync(filePath, "utf8");
+    const resolvedFile = realpathSync(filePath);
+    if (!isWithinRoot(rootPath, resolvedFile)) return null;
+    const content = readFileSync(resolvedFile, "utf8");
     const fallbackName = basename(skillDirectory);
     const source = sourceName(rootPath);
     return {
@@ -56,34 +70,18 @@ function skillRecord(root: string, directory: string): SharedSkillRecord | null 
         name: frontmatterValue(content, "name") || fallbackName,
         description: frontmatterValue(content, "description"),
         source,
-        filePath,
+        filePath: resolvedFile,
     };
 }
 
 export class SharedSkillCatalog {
-    private readonly roots: string[];
-
-    constructor(value = process.env[SharedSkillDirsEnv] ?? "") {
-        this.roots = Array.from(
-            new Set(
-                value
-                    .split(process.platform === "win32" ? ";" : ":")
-                    .map((entry) => entry.trim())
-                    .filter(Boolean)
-                    .map((entry) => resolve(entry))
-                    .filter((entry) => existsSync(entry) && statSync(entry).isDirectory())
-            )
-        );
-    }
+    constructor(private readonly value: string | (() => string) = process.env[SharedSkillDirsEnv] ?? "") {}
 
     list(query = ""): SharedSkillSummary[] {
-        const normalizedQuery = query.trim().toLowerCase();
+        const terms = discoveryWords(query, true);
         return this.records()
             .filter((skill) => {
-                if (!normalizedQuery) {
-                    return true;
-                }
-                return `${skill.id} ${skill.name} ${skill.description}`.toLowerCase().includes(normalizedQuery);
+                return matchesDiscoveryQuery(`${skill.id} ${skill.name} ${skill.description}`, terms);
             })
             .map(({ filePath: _, ...skill }) => skill);
     }
@@ -98,17 +96,30 @@ export class SharedSkillCatalog {
     }
 
     configuredRoots(): string[] {
-        return [...this.roots];
+        const value = typeof this.value === "function" ? this.value() : this.value;
+        return Array.from(
+            new Set(
+                value
+                    .split(process.platform === "win32" ? ";" : ":")
+                    .map((entry) => entry.trim())
+                    .filter(Boolean)
+                    .map((entry) => resolve(entry))
+            )
+        );
     }
 
     private records(): SharedSkillRecord[] {
         const records: SharedSkillRecord[] = [];
-        for (const root of this.roots) {
-            const rootSkill = skillRecord(root, root);
-            if (rootSkill) {
-                records.push(rootSkill);
+        for (const root of this.configuredRoots()) {
+            let entries: Dirent[];
+            try {
+                const rootSkill = skillRecord(root, root);
+                if (rootSkill) records.push(rootSkill);
+                entries = readdirSync(root, { withFileTypes: true });
+            } catch {
+                continue;
             }
-            for (const entry of readdirSync(root, { withFileTypes: true })) {
+            for (const entry of entries) {
                 if (!entry.isDirectory() && !entry.isSymbolicLink()) {
                     continue;
                 }

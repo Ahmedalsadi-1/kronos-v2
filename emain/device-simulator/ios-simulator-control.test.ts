@@ -68,6 +68,8 @@ describe("Orca iOS simulator adaptation", () => {
                 new Response(
                     JSON.stringify([
                         {
+                            type: "Application",
+                            AXLabel: "Home Screen",
                             frame: { x: 0, y: 0, width: 100, height: 200 },
                             children: [{ AXLabel: "Settings", frame: { x: 25, y: 50, width: 50, height: 50 } }],
                         },
@@ -81,5 +83,9 @@ describe("Orca iOS simulator adaptation", () => {
         );
         const tree = await control.accessibility(Udid);
         expect(tree[0].children[0].frame).toEqual({ x: 0.25, y: 0.25, width: 0.5, height: 0.25 });
+        expect(await control.pickElement(Udid, 0.5, 0.4)).toMatchObject({
+            application: "Home Screen",
+            name: "Settings",
+        });
     });
 });

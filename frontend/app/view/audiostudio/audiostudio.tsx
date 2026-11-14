@@ -87,7 +87,7 @@ export class AudioStudioModel implements ViewModel {
                 ) => Promise<{ segments: { start: number; end: number; text: string }[]; language?: string }>;
             };
             if (!api.audioTranscribeFile)
-                throw new Error("File transcription requires the updated KronTerm desktop audio bridge.");
+                throw new Error("File transcription requires the updated KronOS desktop audio bridge.");
             if (
                 globalStore.get(this.rows).length &&
                 !window.confirm("Replace current captions with a new local transcription?")

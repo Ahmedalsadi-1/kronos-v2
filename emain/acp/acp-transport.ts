@@ -406,7 +406,7 @@ export class NdjsonTransport extends EventEmitter {
 
     async initialize(capabilities: Record<string, unknown> = {}): Promise<AcpInitializeResult> {
         const result = await this.sendRequest("initialize", {
-            clientInfo: { name: "KronTerm", version: "0.14.3" },
+            clientInfo: { name: "KronOS", version: "0.14.3" },
             protocolVersion: 1,
             clientCapabilities: {
                 fs: { readTextFile: true, writeTextFile: true },

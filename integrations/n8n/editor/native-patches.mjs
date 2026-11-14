@@ -333,9 +333,11 @@ const { setup: setupPostMessages`
       ':floating="settingsStore.isCanvasOnly"',
       ':floating="settingsStore.isCanvasOnly && !nativeWorkflowHost"'
     );
-    const nativeExecutionTab = "\n    if(nativeWorkflowHost && tab === MAIN_HEADER_TABS.EXECUTIONS) { nativeWorkflowHost.onInspector?.('executions'); return; }";
+    const nativeExecutionTab =
+      "\n    if(nativeWorkflowHost && tab === MAIN_HEADER_TABS.EXECUTIONS) { nativeWorkflowHost.onInspector?.('executions'); return; }";
     const tabSelection = "function onTabSelected(tab: MAIN_HEADER_TABS, event: MouseEvent) {";
-    if (!value.includes(tabSelection + nativeExecutionTab)) value = value.replace(tabSelection, tabSelection + nativeExecutionTab);
+    if (!value.includes(tabSelection + nativeExecutionTab))
+      value = value.replace(tabSelection, tabSelection + nativeExecutionTab);
     value = value.replace('v-show="!hideMenuBar"', 'v-show="!hideMenuBar || nativeWorkflowHost"');
     return value;
   });
@@ -541,6 +543,14 @@ const { setup: setupPostMessages`
       onBeforeUnmount(unbindNativeWidgetInsertion);\n</script>`
       );
     }
+    value = value.replace(
+      "checkIfEditingIsAllowed(), async (node: any) => {\n        const result = await addNodesAndConnections",
+      "checkIfEditingIsAllowed(), async (node: any, source: any) => {\n        uiStore.resetLastInteractedWith();\n        if(source?.nodeId){if(!workflowDocumentStore.value.getNodeById(source.nodeId))throw new Error('The source node changed. Reconnect this widget.');uiStore.lastInteractedWithNodeId=source.nodeId;uiStore.lastInteractedWithNodeHandle=source.handleId;uiStore.lastInteractedWithNodeConnection=source.connection;}\n        const result = await addNodesAndConnections"
+    );
+    value = value.replace(
+      "return added;\n      });\n      onBeforeUnmount(unbindNativeWidgetInsertion);",
+      "return added;\n      }, () => ({nodeId:uiStore.lastInteractedWithNodeId,handleId:uiStore.lastInteractedWithNodeHandle,connection:uiStore.lastInteractedWithNodeConnection ? {...uiStore.lastInteractedWithNodeConnection} : undefined}));\n      onBeforeUnmount(unbindNativeWidgetInsertion);"
+    );
     return value;
   });
   patch("features/ndv/shared/views/NodeDetailsView.vue", (value) => {
@@ -572,7 +582,7 @@ const { setup: setupPostMessages`
     );
     value = value.replace(
       ':to="nativeWorkflowHost?.detailTarget || `#${APP_MODALS_ELEMENT_ID}`"',
-      ':to="(nativeDetailsRole === \'workflow\' && nativeWorkflowHost?.focusTarget) || nativeWorkflowHost?.detailTarget || `#${APP_MODALS_ELEMENT_ID}`"'
+      ":to=\"(nativeDetailsRole === 'workflow' && nativeWorkflowHost?.focusTarget) || nativeWorkflowHost?.detailTarget || `#${APP_MODALS_ELEMENT_ID}`\""
     );
     value = value.replace(/(?:v-if="!nativeWorkflowHost" )+/g, "");
     value = value.replace('data-test-id="ndv-backdrop"', 'v-if="!nativeWorkflowHost" data-test-id="ndv-backdrop"');

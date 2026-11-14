@@ -28,7 +28,7 @@ export function CodeReviewHero() {
                 </div>
             </div>
 
-            <div className="review-workspace-card" aria-label="Kronterm code review workspace preview">
+            <div className="review-workspace-card" aria-label="KronOS code review workspace preview">
                 <div className="review-window-bar" aria-hidden="true">
                     <span />
                     <span />
@@ -76,7 +76,7 @@ export function CodeReviewHero() {
                             <li>Side panels keep files, git, and agent context close.</li>
                         </ul>
                         <div className="review-side-image">
-                            <img src={productAssets.sidepanel} alt="Kronterm side panel with files, git, web, sandbox, apps, and settings" />
+                            <img src={productAssets.sidepanel} alt="KronOS side panel with files, git, web, sandbox, apps, and settings" />
                         </div>
                     </aside>
                 </div>

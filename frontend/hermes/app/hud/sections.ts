@@ -39,8 +39,8 @@ export function hudSections(kronTermSections: readonly { id: string; label: stri
         })),
         ...kronTermSections.map((section) => ({
             id: `kronterm:${section.id}`,
-            name: `KronTerm ${section.label}`,
-            detail: "KronTerm settings",
+            name: `KronOS ${section.label}`,
+            detail: "KronOS settings",
             route: `/settings?tab=kronterm:${section.id}`,
             kind: "setting",
         })),

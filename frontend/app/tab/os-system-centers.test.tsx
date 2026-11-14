@@ -105,7 +105,7 @@ describe("OS center keyboard behavior", () => {
         launcher.focus();
         const onClose = vi.fn();
         await render(
-            <OSSystemCenterPanel center="activity" onClose={onClose} onFocusBlock={vi.fn()} onPinResource={vi.fn()} />
+            <OSSystemCenterPanel onClose={onClose} onFocusBlock={vi.fn()} onPinResource={vi.fn()} />
         );
         const close = container.querySelector('[aria-label="Close activity center"]')!;
         expect(document.activeElement).toBe(close);
@@ -125,7 +125,7 @@ describe("OS center keyboard behavior", () => {
         document.body.append(launcher, app);
         launcher.focus();
         await render(
-            <OSSystemCenterPanel center="activity" onClose={vi.fn()} onFocusBlock={vi.fn()} onPinResource={vi.fn()} />
+            <OSSystemCenterPanel onClose={vi.fn()} onFocusBlock={vi.fn()} onPinResource={vi.fn()} />
         );
         app.focus();
         await render(null);

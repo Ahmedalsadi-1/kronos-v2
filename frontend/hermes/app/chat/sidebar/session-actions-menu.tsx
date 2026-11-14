@@ -1,8 +1,10 @@
 import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 
 import { openSession } from '@hermes/app/open-session'
+import { sessionRoute } from '@hermes/app/routes'
 import {
   closeAllTreeTabs,
   closeOtherTreeTabs,
@@ -34,6 +36,14 @@ import { Input } from '@hermes/components/ui/input'
 import { renameSession } from '@hermes/hermes'
 import { useI18n } from '@hermes/i18n'
 import { triggerHaptic } from '@hermes/lib/haptics'
+import { useHermesShellMode } from '@hermes/lib/kronterm-host'
+import {
+  $krontermInspectorCompact,
+  $krontermInspectorOpen,
+  $krontermInspectorSection,
+  $krontermInspectorTarget,
+  KrontermInspectorChatEvent
+} from '@hermes/lib/kronterm-sidebar'
 import { PROFILE_SWATCHES } from '@hermes/lib/profile-color'
 import { exportSession } from '@hermes/lib/session-export'
 import { activeGateway } from '@hermes/store/gateway'
@@ -51,7 +61,7 @@ import {
   setSessions
 } from '@hermes/store/session'
 import { $sessionColorOverrides, setSessionColorOverride } from '@hermes/store/session-color'
-import { $sessionTiles } from '@hermes/store/session-states'
+import { $sessionTiles, openSessionTile } from '@hermes/store/session-states'
 import { ackStoredSessionId } from '@hermes/store/session-unread'
 import { canOpenSessionInTerminal, canOpenSessionWindow, openSessionInTerminal } from '@hermes/store/windows'
 
@@ -206,6 +216,10 @@ function useSessionActions({
 }: SessionActions) {
   const { t } = useI18n()
   const r = t.sidebar.row
+  const navigate = useNavigate()
+  const { hudMode, panelMode } = useHermesShellMode()
+  const hasChatTabs = !hudMode && !panelMode
+  const krontermHost = Boolean(window.hermesDesktop?.krontermSurfaces)
   const [renameOpen, setRenameOpen] = useState(false)
   // The rename item opens a Dialog. When a menu closes, Radix restores focus to
   // its trigger — for a sidebar row that trigger is the row's own <button>, so
@@ -218,6 +232,7 @@ function useSessionActions({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const tiles = useStore($sessionTiles)
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
+  const inspectorTarget = useStore($krontermInspectorTarget)
   const isRemote = useStore($connection)?.mode === 'remote'
   // The row's finished-unread dot is cleared by opening the session (main or
   // tile) — this menu item is the explicit escape hatch for the rest.
@@ -229,10 +244,8 @@ function useSessionActions({
 
   const spec = (partial: Omit<ActionItemSpec, 'onSelect'> & { onSelect: () => void }): ActionItemSpec => partial
 
-  // OPEN — where else this session can go. A tab surface IS a tab already,
-  // so it only offers the window hop (and its own Close, below).
   const openItems: ActionItemSpec[] = [
-    ...(surface === 'row' && !alreadyTabbed
+    ...(hasChatTabs && surface === 'row' && !alreadyTabbed
       ? [
           spec({
             disabled: !sessionId,
@@ -248,7 +261,28 @@ function useSessionActions({
           })
         ]
       : []),
-    ...(canOpenSessionWindow()
+    ...(sessionId && (inspectorTarget || (hasChatTabs && sessionId !== selectedStoredSessionId))
+      ? [
+          spec({
+            icon: 'layout-sidebar-right',
+            label: r.openInSidePanel,
+            onSelect: () => {
+              triggerHaptic('selection')
+              if (inspectorTarget) {
+                markSessionRead(sessionId)
+                navigate(sessionRoute(sessionId))
+                $krontermInspectorCompact.set(false)
+                $krontermInspectorSection.set('chat')
+                $krontermInspectorOpen.set(true)
+                window.dispatchEvent(new Event(KrontermInspectorChatEvent))
+              } else {
+                openSessionTile(sessionId, 'right', 'workspace')
+              }
+            }
+          })
+        ]
+      : []),
+    ...(!krontermHost && canOpenSessionWindow()
       ? [
           spec({
             disabled: !sessionId,
@@ -264,7 +298,7 @@ function useSessionActions({
     // The user's OWN terminal, not the in-app pane: resumes the session in the
     // TUI. Hidden on a remote connection — the emulator we'd open runs on this
     // machine while the session (and its runtime) lives on the remote host.
-    ...(canOpenSessionInTerminal() && !isRemote
+    ...(!krontermHost && canOpenSessionInTerminal() && !isRemote
       ? [
           spec({
             disabled: !sessionId,

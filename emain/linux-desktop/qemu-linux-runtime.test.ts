@@ -2,18 +2,139 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { ToolOperationContext } from "../../mcp-kron-term/src/tool-execution";
 import { DATA_DIR } from "./upstream/openmaus/kronterm-adapter";
+import { isManagedQemu } from "./vm-process";
+
+vi.mock("./vm-process", () => ({ isManagedQemu: vi.fn(() => true) }));
 
 vi.mock("node:fs/promises", () => ({
     stat: vi.fn(async () => ({ size: 1024 })),
     readFile: vi.fn(async () => "99999"),
     mkdir: vi.fn(),
+    rename: vi.fn(),
     rm: vi.fn(),
     writeFile: vi.fn(),
 }));
 
 import { QemuLinuxDesktopRuntime } from "./qemu-linux-runtime";
 
+describe("QEMU status polling", () => {
+    it("uses the native process inspector with the exact configured drive", async () => {
+        const runner = vi.fn();
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        await expect((runtime as any).pid()).resolves.toBe(99999);
+        expect(isManagedQemu).toHaveBeenCalledWith(
+            99999,
+            `file=${join(DATA_DIR, "qemu", "ubuntu.qcow2")},format=qcow2,if=virtio`
+        );
+        vi.mocked(isManagedQemu).mockReturnValueOnce(false);
+        await expect((runtime as any).pid()).resolves.toBeUndefined();
+        vi.mocked(isManagedQemu).mockImplementationOnce(() => {
+            throw new Error("inspection failed");
+        });
+        await expect((runtime as any).pid()).rejects.toThrow("inspection failed");
+        expect(runner).not.toHaveBeenCalled();
+    });
+
+    it("ignores a viewer setup that completes after shutdown", async () => {
+        const runtime = new QemuLinuxDesktopRuntime(vi.fn(), "darwin", "arm64");
+        let finish: (result: { stdout: string }) => void;
+        vi.spyOn(runtime as any, "ssh").mockReturnValue(
+            new Promise((resolve) => {
+                finish = resolve;
+            })
+        );
+        const open = vi.spyOn((runtime as any).vncBridge, "open");
+        (runtime as any).configureViewer();
+        const setup = (runtime as any).viewerSetup;
+        (runtime as any).resetViewer();
+        finish({ stdout: "" });
+        await setup;
+        expect(open).not.toHaveBeenCalled();
+    });
+
+    it("shares a cold readiness probe across concurrent readers", async () => {
+        const runtime = new QemuLinuxDesktopRuntime(vi.fn(), "darwin", "arm64");
+        const pid = vi.spyOn(runtime as any, "pid").mockResolvedValue(1234);
+        const ssh = vi.spyOn(runtime as any, "ssh").mockResolvedValue({ stdout: "" });
+        vi.spyOn(runtime as any, "configureViewer").mockImplementation(() => {});
+        const desktops = await Promise.all(Array.from({ length: 8 }, () => runtime.list()));
+        expect(pid).toHaveBeenCalledTimes(1);
+        expect(ssh).toHaveBeenCalledTimes(1);
+        expect(desktops.every(([desktop]) => desktop.ready)).toBe(true);
+    });
+
+    it("rechecks status if the VM lifecycle changes during a pending probe", async () => {
+        const runtime = new QemuLinuxDesktopRuntime(vi.fn(), "darwin", "arm64");
+        let resolvePid: (pid: number) => void;
+        const pendingPid = new Promise<number>((resolve) => {
+            resolvePid = resolve;
+        });
+        const pid = vi
+            .spyOn(runtime as any, "pid")
+            .mockReturnValueOnce(pendingPid)
+            .mockResolvedValue(undefined);
+        const ssh = vi.spyOn(runtime as any, "ssh").mockResolvedValue({ stdout: "" });
+        const first = runtime.list();
+        (runtime as any).invalidateStatus();
+        const second = runtime.list();
+        resolvePid(1234);
+        expect((await first)[0].status).toBe("stopped");
+        expect((await second)[0].status).toBe("stopped");
+        expect(pid).toHaveBeenCalledTimes(2);
+        expect(ssh).not.toHaveBeenCalled();
+    });
+});
+
 describe("QEMU authority boundaries", () => {
+    it("prepares and starts a new VM only through the user's first-launch action", async () => {
+        const runner = vi.fn(async () => ({ stdout: "" }));
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        const desktopId = "linux-vm:ubuntu";
+        vi.spyOn(runtime, "list").mockResolvedValue([]);
+        vi.spyOn(runtime as any, "pid").mockResolvedValue(undefined);
+        const exists = vi.spyOn(runtime as any, "exists").mockResolvedValue(false);
+        const prepare = vi.spyOn(runtime as any, "prepare").mockResolvedValue(undefined);
+
+        await runtime.assign(desktopId, "agent-a", 0);
+        const agent = { desktopId, assignedAgentId: "agent-a", expectedGeneration: 1 };
+        await expect(runtime.performAgent({ ...agent, action: "create" })).rejects.toThrow("management UI");
+        await expect(runtime.performAgent({ ...agent, action: "start" })).rejects.toThrow("prepare it first");
+        expect(prepare).not.toHaveBeenCalled();
+        expect(runner).not.toHaveBeenCalled();
+
+        await runtime.takeover(desktopId);
+        await runtime.perform({ desktopId, action: "create", expectedGeneration: 2 });
+        expect(prepare).toHaveBeenCalledTimes(1);
+        expect(runner).toHaveBeenCalledWith("qemu-system-aarch64", expect.arrayContaining(["-daemonize"]), 30_000);
+
+        exists.mockResolvedValue(true);
+        await runtime.perform({ desktopId, action: "start", expectedGeneration: 2 });
+        expect(prepare).toHaveBeenCalledTimes(1);
+    });
+
+    it("hands back only the current assignment and fences subsequent agent input", async () => {
+        const runner = vi.fn();
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        vi.spyOn(runtime, "list").mockResolvedValue([]);
+        await runtime.assign("linux-vm:ubuntu", "agent-a", 0);
+        await expect(runtime.takeover("linux-vm:ubuntu", { agentId: "agent-b", generation: 1 })).rejects.toThrow(
+            "Control changed"
+        );
+        await expect(runtime.takeover("linux-vm:ubuntu", { agentId: "agent-a", generation: 0 })).rejects.toThrow(
+            "Control changed"
+        );
+        await runtime.takeover("linux-vm:ubuntu", { agentId: "agent-a", generation: 1 });
+        await expect(
+            runtime.performAgent({
+                desktopId: "linux-vm:ubuntu",
+                action: "exec",
+                command: "printf unexpected",
+                assignedAgentId: "agent-a",
+                expectedGeneration: 1,
+            })
+        ).rejects.toThrow("Control changed");
+        expect(runner).not.toHaveBeenCalled();
+    });
     it("fences an agent start when the user takes over during readiness checks", async () => {
         const runner = vi.fn();
         const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
@@ -60,15 +181,29 @@ describe("QEMU authority boundaries", () => {
 });
 
 describe("QEMU guest input", () => {
+    it("returns an accessible hit only for the selected point and current control generation", async () => {
+        const desktopId = "linux-vm:ubuntu";
+        const element = {
+            application: "xfce4-panel",
+            role: "push button",
+            name: "Browser",
+            frame: { x: 449, y: 598, width: 42, height: 42 },
+        };
+        const runner = vi.fn(async () => ({ stdout: JSON.stringify(element) }));
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        vi.spyOn(runtime, "list").mockResolvedValue([{ id: desktopId, ready: true } as any]);
+        await runtime.assign(desktopId, "agent", 0);
+        const pick = { desktopId, action: "pick-element", expectedGeneration: 1, x: 470, y: 617 } as const;
+        await expect(runtime.perform({ ...pick, expectedGeneration: 0 })).rejects.toThrow("Control changed");
+        expect(runner).not.toHaveBeenCalled();
+        await expect(runtime.perform(pick)).resolves.toMatchObject({ element });
+        await expect(runtime.perform({ ...pick, x: 510 })).resolves.not.toHaveProperty("element");
+    });
     it("passes horizontal scrolling to the guest and leaves zero deltas untouched", async () => {
         const kill = vi.spyOn(process, "kill").mockReturnValue(true);
         const runner = vi.fn(async (command: string, args: string[]) => ({
             stdout:
-                command === "ps"
-                    ? `qemu-system-aarch64 ${join(DATA_DIR, "qemu", "ubuntu.qcow2")}`
-                    : command === "ssh" && args.at(-1).includes("call scroll")
-                      ? "{}"
-                      : "",
+                command === "ssh" && args.at(-1).includes("call scroll") ? "{}" : "",
         }));
         const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
         try {
@@ -109,6 +244,29 @@ describe("QEMU guest input", () => {
 });
 
 describe("VM idle shutdown and driver input", () => {
+    it("waits for the guest to power off before reporting the VM stopped", async () => {
+        const runner = vi.fn(async () => ({ stdout: "" }));
+        const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
+        const kill = vi.spyOn(process, "kill");
+        vi.spyOn(runtime as any, "pid").mockResolvedValueOnce(12345).mockResolvedValue(undefined);
+        try {
+            const result = await runtime.perform({
+                desktopId: "linux-vm:ubuntu",
+                action: "stop",
+                expectedGeneration: 0,
+            });
+            expect(result.desktop.status).toBe("stopped");
+            expect(runner).toHaveBeenCalledWith(
+                "ssh",
+                expect.arrayContaining([expect.stringContaining("systemctl poweroff")]),
+                5000
+            );
+            expect(kill).not.toHaveBeenCalled();
+        } finally {
+            kill.mockRestore();
+        }
+    });
+
     it("stops an idle VM even while screenshots are being observed", async () => {
         vi.useFakeTimers();
         const kill = vi.spyOn(process, "kill").mockReturnValue(true);
@@ -118,7 +276,14 @@ describe("VM idle shutdown and driver input", () => {
             "arm64"
         );
         vi.spyOn(runtime, "list").mockResolvedValue([{ id: "linux-vm:ubuntu", status: "running", ready: true } as any]);
-        vi.spyOn(runtime as any, "pid").mockResolvedValue(12345);
+        vi.spyOn(runtime as any, "pid")
+            .mockResolvedValueOnce(12345)
+            .mockResolvedValueOnce(12345)
+            .mockResolvedValue(undefined);
+        const ssh = (runtime as any).ssh.bind(runtime);
+        vi.spyOn(runtime as any, "ssh").mockImplementation((command: string) =>
+            command.includes("poweroff") ? Promise.reject(new Error("guest unreachable")) : ssh(command)
+        );
         try {
             await runtime.perform({
                 desktopId: "linux-vm:ubuntu",
@@ -145,7 +310,14 @@ describe("VM idle shutdown and driver input", () => {
             "arm64"
         );
         vi.spyOn(runtime, "list").mockResolvedValue([{ id: "linux-vm:ubuntu", status: "running", ready: true } as any]);
-        vi.spyOn(runtime as any, "pid").mockResolvedValue(12345);
+        vi.spyOn(runtime as any, "pid")
+            .mockResolvedValueOnce(12345)
+            .mockResolvedValueOnce(12345)
+            .mockResolvedValue(undefined);
+        const ssh = (runtime as any).ssh.bind(runtime);
+        vi.spyOn(runtime as any, "ssh").mockImplementation((command: string) =>
+            command.includes("poweroff") ? Promise.reject(new Error("guest unreachable")) : ssh(command)
+        );
         const key = { desktopId: "linux-vm:ubuntu", action: "key" as const, key: "Escape", expectedGeneration: 0 };
         try {
             await runtime.perform(key);
@@ -302,12 +474,12 @@ it("reuses boot readiness, probes health periodically, and invalidates it when t
         expect((await runtime.list())[0].ready).toBe(true);
         expect(runner.mock.calls).toHaveLength(2);
         const commands = runner.mock.calls as unknown as [string, string[]][];
-        expect(commands[0][1].at(-1)).toContain("cloud-init status --wait");
+        expect(commands[0][1].at(-1)).toContain("cloud-init status");
         expect(commands[1][1].at(-1)).not.toContain("cloud-init");
         pid++;
         now += 3000;
         expect((await runtime.list())[0].ready).toBe(true);
-        expect(commands[2][1].at(-1)).toContain("cloud-init status --wait");
+        expect(commands[2][1].at(-1)).toContain("cloud-init status");
     } finally {
         clock.mockRestore();
     }

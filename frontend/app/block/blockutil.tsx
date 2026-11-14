@@ -29,7 +29,7 @@ const ViewIconMap: Record<string, string> = {
     documentstudio: "file-lines",
     datastudio: "table",
     blenderproject: "cube",
-    medialibrary: "photo-film",
+    medialibrary: "folder-open",
     imagestudio: "image",
     gamestudio: "gamepad",
     personal: "list-check",
@@ -73,7 +73,7 @@ export function blockViewToName(view: string): string {
     if (view == "documentstudio") return "Document Studio";
     if (view == "datastudio") return "Data Studio";
     if (view == "blenderproject") return "Blender Project";
-    if (view == "medialibrary") return "Media Library";
+    if (view == "medialibrary") return "Files";
     if (view == "imagestudio") return "Image Studio";
     if (view == "gamestudio") return "Game Studio";
     if (view == "personal") return "Tasks & Focus";
@@ -87,13 +87,13 @@ export function blockViewToName(view: string): string {
         return "Web";
     }
     if (view == "waveai") {
-        return "KronTerm Agent";
+        return "KronOS Agent";
     }
     if (view == "help") {
         return "Help";
     }
     if (view == "hermes") {
-        return "KronTerm Agent";
+        return "KronOS Agent";
     }
     if (view == "tips") {
         return "Tips";

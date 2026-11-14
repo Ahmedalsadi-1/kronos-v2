@@ -163,8 +163,20 @@ it("freezes selection without device input and cancels with Escape or ownership 
         labs: true,
     };
     const container = document.createElement("div");
+    document.body.append(container);
     const root = createRoot(container);
     const controller = { act: vi.fn() } as any;
+    const selectRegion = () => {
+        const toolbar = container.querySelector<HTMLIFrameElement>('iframe[name="kronterm-screen-selector"]');
+        return act(async () => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    source: toolbar.contentWindow,
+                    data: { channel: "kronterm:screen-selector", action: "region" },
+                })
+            );
+        });
+    };
     const render = (generation = 1, imageDataUrl = "frozen-frame") =>
         act(async () =>
             root.render(
@@ -187,30 +199,28 @@ it("freezes selection without device input and cancels with Escape or ownership 
         );
     try {
         await render();
-        await act(async () =>
-            container.querySelector<HTMLButtonElement>('[aria-label="Select screen region (Labs)"]').click()
-        );
+        await selectRegion();
         expect(container.querySelector(".kt-computers-tap")).toBeNull();
         await render(1, "new-live-frame");
         expect(container.querySelector<HTMLImageElement>(".kt-device-selection-frame img").getAttribute("src")).toBe(
             "frozen-frame"
         );
         const frame = container.querySelector<HTMLElement>(".kt-device-selection-frame");
+        expect(document.activeElement).toBe(frame);
         await act(async () => {
             frame.dispatchEvent(new MouseEvent("click", { bubbles: true }));
             frame.dispatchEvent(new MouseEvent("pointercancel", { bubbles: true }));
-            frame.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+            document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
         });
         expect(controller.act).not.toHaveBeenCalled();
         expect(container.querySelector(".kt-computers-tap")).not.toBeNull();
-        await act(async () =>
-            container.querySelector<HTMLButtonElement>('[aria-label="Select screen region (Labs)"]').click()
-        );
+        await selectRegion();
         await render(2);
         expect(container.querySelector(".kt-device-selection")).toBeNull();
         expect(controller.act).not.toHaveBeenCalled();
     } finally {
         await act(async () => root.unmount());
+        container.remove();
     }
 });
 

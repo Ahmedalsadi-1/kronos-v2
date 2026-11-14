@@ -56,6 +56,16 @@ export function WorkspaceWidgetPicker({
         };
     }, [active, tabId, revision]);
     useEffect(() => {
+        const configuring = (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (
+                detail?.tabId === tabId &&
+                detail.workflowId === workflowId &&
+                detail.requestId === insertion.current?.requestId
+            )
+                clearTimeout(insertion.current.timer);
+        };
+        window.addEventListener("kronterm:workflow-widget-configuring", configuring);
         const complete = (event: Event) => {
             const detail = (event as CustomEvent).detail;
             if (!insertion.current) return;
@@ -73,6 +83,7 @@ export function WorkspaceWidgetPicker({
         window.addEventListener("kronterm:workflow-widget-inserted", complete);
         return () => {
             window.removeEventListener("kronterm:workflow-widget-inserted", complete);
+            window.removeEventListener("kronterm:workflow-widget-configuring", configuring);
             if (insertion.current) clearTimeout(insertion.current.timer);
             insertion.current = null;
             setPending("");

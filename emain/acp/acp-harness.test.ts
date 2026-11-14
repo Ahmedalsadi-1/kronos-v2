@@ -29,7 +29,7 @@ describe("ACP harness profiles", () => {
 
 describe("ACP capability leases", () => {
     it("classifies workspace control before generic coding", () => {
-        expect(classifyHarnessTask("Fix the KronTerm canvas widget bug").taskClass).toBe("workspace-control");
+        expect(classifyHarnessTask("Fix the KronOS canvas widget bug").taskClass).toBe("workspace-control");
         expect(classifyHarnessTask("Debug a failing TypeScript test").taskClass).toBe("debugging");
     });
 
@@ -83,13 +83,13 @@ describe("ACP capability leases", () => {
             workspace: "/tmp/project",
         });
         const prompt = formatAcpCapabilityLease(lease);
-        expect(prompt).toContain("KronTerm Specialist Capability Lease");
+        expect(prompt).toContain("KronOS Specialist Capability Lease");
         expect(prompt).toContain("approval-required");
         expect(prompt).toContain("Treat the lease as an upper bound");
     });
 });
 
-describe("KronTerm toolset registry", () => {
+describe("KronOS toolset registry", () => {
     it("groups every surface tool family into a named toolset", () => {
         const ids = Object.keys(KronTermToolsets);
         expect(ids).toContain("workspace");
@@ -137,14 +137,14 @@ describe("KronTerm toolset registry", () => {
         const lease = makeAcpCapabilityLease({
             backend: "kronoscode",
             capabilities: null,
-            content: "Fix the KronTerm canvas widget bug",
+            content: "Fix the KronOS canvas widget bug",
             surfaceAvailable: true,
             workspace: "/tmp/kronterm-project",
         });
         expect(lease.toolsets).toEqual(["workspace", "hud", "widget", "sandbox", "desktop", "skills", "agents"]);
     });
 
-    it("does not recommend recursive ACP delegation to a KronTerm Agent child", () => {
+    it("does not recommend recursive ACP delegation to a KronOS Agent child", () => {
         const lease = makeAcpCapabilityLease({
             backend: "kronterm-agent",
             capabilities: null,

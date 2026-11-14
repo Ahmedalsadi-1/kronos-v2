@@ -14,7 +14,6 @@ import {
     type OSDockPin,
 } from "./os-desktop-model";
 import "./os-desktop.scss";
-import { OSNowPlayingCard, type useOSNowPlaying } from "./os-now-playing";
 
 export type OSDesktopWindow = {
     blockId: string;
@@ -225,7 +224,6 @@ const SideDock = memo(
 SideDock.displayName = "SideDock";
 
 export type OSDesktopLayerProps = {
-    media?: ReturnType<typeof useOSNowPlaying>;
     windows: OSDesktopWindow[];
     pins: OSDockPin[];
     installedApps: OSDesktopInstalledApp[];
@@ -243,9 +241,7 @@ export type OSDesktopLayerProps = {
  */
 export const OSDesktopLayer = memo((props: OSDesktopLayerProps) => (
     <div className="os-desktop-layer">
-        <div
-            className={`os-desktop-column is-trailing${props.media?.state?.playing && !props.media.state.muted ? " has-media" : ""}`}
-        >
+        <div className="os-desktop-column is-trailing">
             {props.windows.some((window) => window.minimized) && (
                 <div className="os-desktop-widget os-minimized-apps" aria-label="Minimized applications">
                     {props.windows
@@ -263,7 +259,6 @@ export const OSDesktopLayer = memo((props: OSDesktopLayerProps) => (
                         ))}
                 </div>
             )}
-            {props.media && <OSNowPlayingCard {...props.media} />}
         </div>
     </div>
 ));

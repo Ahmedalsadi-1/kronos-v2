@@ -5,21 +5,17 @@ import Logo from "@/app/asset/logo.svg";
 import { Button } from "@/app/element/button";
 import { FlexiModal } from "@/app/modals/modal";
 import { OnboardingGradientBg } from "@/app/onboarding/onboarding-common";
-import { OnboardingFeatures } from "@/app/onboarding/onboarding-features";
 import { ClientModel } from "@/app/store/client-model";
-import { useSettingsKeyAtom } from "@/app/store/global";
-import { disableGlobalKeybindings, enableGlobalKeybindings, globalRefocus } from "@/app/store/keymodel";
-import { modalsModel } from "@/app/store/modalmodel";
+import { disableGlobalKeybindings, enableGlobalKeybindings } from "@/app/store/keymodel";
 import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import * as services from "@/store/services";
 import { fireAndForget } from "@/util/util";
-import { atom, PrimitiveAtom, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { atom, PrimitiveAtom, useAtomValue, useSetAtom } from "jotai";
 import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
-import { useEffect, useRef, useState } from "react";
-import { debounce } from "throttle-debounce";
+import { useEffect } from "react";
+import { KronOSFirstRun } from "./kronos-first-run";
 
 // Page flow:
 //   init -> (telemetry enabled) -> features
@@ -31,14 +27,11 @@ const pageNameAtom: PrimitiveAtom<PageName> = atom<PageName>("init");
 
 const InitPage = ({
     isCompact,
-    telemetryUpdateFn,
 }: {
     isCompact: boolean;
     telemetryUpdateFn: (value: boolean) => Promise<void>;
 }) => {
-    const telemetrySetting = useSettingsKeyAtom("telemetry:enabled");
     const clientData = useAtomValue(ClientModel.getInstance().clientAtom);
-    const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(!!telemetrySetting);
     const setPageName = useSetAtom(pageNameAtom);
 
     const handleStarClick = async () => {
@@ -61,18 +54,8 @@ const InitPage = ({
         if (!clientData?.tosagreed) {
             fireAndForget(() => services.ClientService.AgreeTos());
         }
-        setPageName(telemetryEnabled ? "features" : "notelemetrystar");
+        setPageName("features");
     };
-
-    const setTelemetry = (value: boolean) => {
-        fireAndForget(() =>
-            telemetryUpdateFn(value).then(() => {
-                setTelemetryEnabled(value);
-            })
-        );
-    };
-
-    const label = telemetryEnabled ? "Enabled" : "Disabled";
 
     return (
         <div className="flex flex-col h-full">
@@ -82,7 +65,7 @@ const InitPage = ({
                 <div className={`${isCompact ? "" : "mb-2.5"} flex justify-center`}>
                     <Logo />
                 </div>
-                <div className="text-center text-[25px] font-normal text-foreground">Welcome to Kronterm</div>
+                <div className="text-center text-[25px] font-normal text-foreground">Welcome to KronOS</div>
             </header>
             <OverlayScrollbarsComponent
                 className="flex-1 overflow-y-auto min-h-0"
@@ -93,7 +76,7 @@ const InitPage = ({
                         <div>
                             <a
                                 target="_blank"
-                                href="https://github.com/krontermdev/kronterm?ref=install"
+                                href="https://github.com/Ahmedalsadi-1/kronos-releases/releases"
                                 rel="noopener"
                                 className="text-accent"
                                 onClick={handleStarClick}
@@ -102,18 +85,18 @@ const InitPage = ({
                             </a>
                         </div>
                         <div className="flex flex-col items-start gap-1 flex-1">
-                            <div className="text-foreground text-base leading-[18px]">Support us on GitHub</div>
+                            <div className="text-foreground text-base leading-[18px]">Your apps and agents, together</div>
                             <div className="text-secondary leading-5">
-                                We're <i>open source</i>, <i>open-model</i>, and committed to providing a free terminal
-                                for individual users. Please show your support by giving us a star on{" "}
+                                Keep terminals, browsers, files, and AI in one persistent workspace. Connect your own
+                                model provider or local endpoint. Read setup and update notes in{" "}
                                 <a
                                     target="_blank"
-                                    href="https://github.com/krontermdev/kronterm?ref=install"
+                                    href="https://github.com/Ahmedalsadi-1/kronos-releases/releases"
                                     rel="noopener"
                                     className="text-accent"
                                     onClick={handleStarClick}
                                 >
-                                    Github&nbsp;(krontermdev/kronterm)
+                                    KronOS releases
                                 </a>
                             </div>
                         </div>
@@ -122,7 +105,7 @@ const InitPage = ({
                         <div>
                             <a
                                 target="_blank"
-                                href="https://discord.gg/XfvZ334gwU"
+                                href="https://github.com/Ahmedalsadi-1/kronos-releases/issues"
                                 rel="noopener"
                                 className="text-accent"
                             >
@@ -130,18 +113,17 @@ const InitPage = ({
                             </a>
                         </div>
                         <div className="flex flex-col items-start gap-1 flex-1">
-                            <div className="text-foreground text-base leading-[18px]">Join our Community</div>
+                            <div className="text-foreground text-base leading-[18px]">Get help when you need it</div>
                             <div className="text-secondary leading-5">
-                                Get help, submit feature requests, report bugs, or just chat with fellow terminal
-                                enthusiasts.
+                                Preview local diagnostics in Settings and share reproducible steps with the team.
                                 <br />
                                 <a
                                     target="_blank"
-                                    href="https://discord.gg/XfvZ334gwU"
+                                    href="https://github.com/Ahmedalsadi-1/kronos-releases/issues"
                                     rel="noopener"
                                     className="text-accent"
                                 >
-                                    Join the KronTerm&nbsp;Discord&nbsp;Channel
+                                    Open KronOS support
                                 </a>
                             </div>
                         </div>
@@ -152,26 +134,18 @@ const InitPage = ({
                         </div>
                         <div className="flex flex-col items-start gap-1 flex-1">
                             <div className="text-secondary leading-5">
-                                Anonymous usage data helps us improve features you use.
+                                Usage telemetry is off for new installs. Support diagnostics stay on this device until
+                                you choose to share a report. Model requests go to the provider you configure.
                                 <br />
                                 <a
                                     className="text-secondary! hover:underline!"
                                     target="_blank"
-                                    href="https://kronterm.dev/privacy"
+                                    href="https://ahmedalsadi-1.github.io/kronos-releases/security/"
                                     rel="noopener"
                                 >
-                                    Privacy Policy
+                                    Privacy and security
                                 </a>
                             </div>
-                            <label className="flex items-center gap-2 cursor-pointer text-secondary">
-                                <input
-                                    type="checkbox"
-                                    checked={telemetryEnabled}
-                                    onChange={(e) => setTelemetry(e.target.checked)}
-                                    className="cursor-pointer accent-gray-500"
-                                />
-                                <span>{label}</span>
-                            </label>
                         </div>
                     </div>
                 </div>
@@ -241,7 +215,7 @@ const NoTelemetryStarPage = ({ isCompact }: { isCompact: boolean }) => {
                     <div className="text-center text-secondary leading-relaxed max-w-md">
                         <p className="mb-4">No problem, we respect your privacy.</p>
                         <p className="mb-4">
-                            But, without usage data, we're flying blind. A GitHub star helps us know KronTerm is useful
+                            But, without usage data, we're flying blind. A GitHub star helps us know KronOS is useful
                             and worth maintaining.
                         </p>
                     </div>
@@ -261,92 +235,19 @@ const NoTelemetryStarPage = ({ isCompact }: { isCompact: boolean }) => {
     );
 };
 
-const FeaturesPage = () => {
-    const [newInstallOnboardingOpen, setNewInstallOnboardingOpen] = useAtom(modalsModel.newInstallOnboardingOpen);
-
-    const handleComplete = () => {
-        setNewInstallOnboardingOpen(false);
-        setTimeout(() => {
-            globalRefocus();
-        }, 10);
-    };
-
-    return <OnboardingFeatures onComplete={handleComplete} />;
-};
-
 const NewInstallOnboardingModal = () => {
-    const modalRef = useRef<HTMLDivElement | null>(null);
-    const [pageName, setPageName] = useAtom(pageNameAtom);
     const clientData = useAtomValue(ClientModel.getInstance().clientAtom);
-    const [isCompact, setIsCompact] = useState<boolean>(window.innerHeight < 800);
-
-    const updateModalHeight = () => {
-        const windowHeight = window.innerHeight;
-        setIsCompact(windowHeight < 800);
-        if (modalRef.current) {
-            const modalHeight = modalRef.current.offsetHeight;
-            const maxHeight = windowHeight * 0.9;
-            if (maxHeight < modalHeight) {
-                modalRef.current.style.height = `${maxHeight}px`;
-            } else {
-                modalRef.current.style.height = "auto";
-            }
-        }
-    };
-
-    useEffect(() => {
-        if (clientData.tosagreed) {
-            setPageName("features");
-        }
-        return () => {
-            setPageName("init");
-        };
-    }, []);
-
-    useEffect(() => {
-        updateModalHeight();
-        const debouncedUpdateModalHeight = debounce(150, updateModalHeight);
-        window.addEventListener("resize", debouncedUpdateModalHeight);
-        return () => {
-            window.removeEventListener("resize", debouncedUpdateModalHeight);
-        };
-    }, []);
-
     useEffect(() => {
         disableGlobalKeybindings();
-        return () => {
-            enableGlobalKeybindings();
-        };
+        return () => enableGlobalKeybindings();
     }, []);
 
-    let pageComp: React.JSX.Element = null;
-    switch (pageName) {
-        case "init":
-            pageComp = (
-                <InitPage
-                    isCompact={isCompact}
-                    telemetryUpdateFn={(value) => services.ClientService.TelemetryUpdate(value)}
-                />
-            );
-            break;
-        case "notelemetrystar":
-            pageComp = <NoTelemetryStarPage isCompact={isCompact} />;
-            break;
-        case "features":
-            pageComp = <FeaturesPage />;
-            break;
-    }
-    if (pageComp == null) {
-        return null;
-    }
-
-    const paddingClass = isCompact ? "!py-3 !px-[30px]" : "!p-[30px]";
-    const widthClass = pageName === "features" ? "w-[860px]" : "w-[560px]";
-
     return (
-        <FlexiModal className={`${widthClass} rounded-[10px] ${paddingClass} relative overflow-hidden`} ref={modalRef}>
+        <FlexiModal className="relative max-h-[90dvh] w-[min(560px,calc(100vw-24px))] overflow-auto rounded-xl">
             <OnboardingGradientBg />
-            <div className="flex flex-col w-full h-full relative z-10">{pageComp}</div>
+            <div className="relative z-10">
+                <KronOSFirstRun alreadyAccepted={Boolean(clientData?.tosagreed)} />
+            </div>
         </FlexiModal>
     );
 };

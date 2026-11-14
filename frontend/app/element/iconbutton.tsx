@@ -22,7 +22,7 @@ export const IconButton = memo(
         return (
             <button
                 ref={ref}
-                className={clsx("wave-iconbutton", className, decl.className, {
+                className={clsx("wave-iconbutton kron-button kron-button-ghost", className, decl.className, {
                     disabled,
                     "no-action": decl.noAction,
                 })}
@@ -50,13 +50,14 @@ export const ToggleIconButton = memo(
         return (
             <button
                 ref={ref}
-                className={clsx("wave-iconbutton", "toggle", className, decl.className, {
+                className={clsx("wave-iconbutton kron-button kron-button-ghost", "toggle", className, decl.className, {
                     active,
                     disabled,
                     "no-action": decl.noAction,
                 })}
                 title={title}
                 aria-label={title}
+                aria-pressed={active}
                 style={{ color: decl.iconColor ?? "inherit" }}
                 onClick={() => setActive(!active)}
                 disabled={disabled}

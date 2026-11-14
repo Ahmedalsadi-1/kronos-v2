@@ -81,6 +81,20 @@ describe("getVisibleWidgetPaneIds", () => {
 });
 
 describe("computeWidgetTabStripScrollMetrics", () => {
+    test("preserves state through interior smooth-scroll frames and updates at the edge", () => {
+        const element = { scrollWidth: 800, clientWidth: 400, scrollLeft: 10 };
+        const initial = computeWidgetTabStripScrollMetrics(element);
+        for (let scrollLeft = 20; scrollLeft < 399; scrollLeft += 10) {
+            element.scrollLeft = scrollLeft;
+            expect(computeWidgetTabStripScrollMetrics(element, initial)).toBe(initial);
+        }
+        element.scrollLeft = 400;
+        const edge = computeWidgetTabStripScrollMetrics(element, initial);
+        expect(edge).not.toBe(initial);
+        expect(edge.canScrollEnd).toBe(false);
+        expect(computeWidgetTabStripScrollMetrics(element, edge)).toBe(edge);
+    });
+
     test("reports no controls when the tab strip fits", () => {
         expect(computeWidgetTabStripScrollMetrics({ scrollWidth: 400, clientWidth: 400, scrollLeft: 0 })).toEqual({
             hasOverflow: false,

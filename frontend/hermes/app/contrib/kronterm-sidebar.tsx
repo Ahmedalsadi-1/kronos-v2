@@ -6,14 +6,24 @@ import { WorkflowsView } from "@hermes/app/workflows";
 import { $workflowSidebarMode, useWorkflowContext } from "@hermes/app/workflows/workflow-context";
 import { SidebarProvider } from "@hermes/components/ui/sidebar";
 import {
+    $comfyLibraryTarget,
     $krontermInspectorTarget,
     $krontermSidebarOwner,
     $krontermSidebarTarget,
+    $penDesignTarget,
+    $workspaceCanvasPanels,
     KrontermSidebarActivateEvent,
     registerKrontermSidebarOwner,
 } from "@hermes/lib/kronterm-sidebar";
 import { $sidebarOpen, setSidebarOpen } from "@hermes/store/layout";
 import { KrontermInspector } from "./kronterm-inspector";
+
+const NavigationLabels = {
+    sessions: "Sessions",
+    workflows: "KronFlow",
+    comfy: "KronRender",
+    design: "Design",
+};
 
 export function KrontermSidebar({ children, preferred = false }: { children: ReactNode; preferred?: boolean }) {
     const target = useStore($krontermSidebarTarget);
@@ -21,6 +31,11 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
     const owner = useStore($krontermSidebarOwner);
     const open = useStore($sidebarOpen);
     const mode = useStore($workflowSidebarMode);
+    const canvasPanels = useStore($workspaceCanvasPanels);
+    const selected = !canvasPanels && (mode === "comfy" || mode === "design") ? "sessions" : mode;
+    const modes = canvasPanels
+        ? (["sessions", "workflows", "comfy", "design"] as const)
+        : (["sessions", "workflows"] as const);
     useWorkflowContext();
     const [identity] = useState(() => Symbol("kronterm-sidebar"));
 
@@ -35,7 +50,9 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
                     <div
                         data-hermes-app=""
                         onClick={(event) => {
-                            if ((event.target as HTMLElement).closest("button, a")) {
+                            const target = event.target as HTMLElement;
+                            if (target.closest("#kronterm-navigation-design, #kronterm-navigation-pane-design")) return;
+                            if (target.closest("button, a")) {
                                 window.dispatchEvent(new Event(KrontermSidebarActivateEvent));
                             }
                         }}
@@ -52,36 +69,40 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
                                 <div
                                     role="tablist"
                                     aria-label="Workspace navigation"
-                                    className="flex shrink-0 items-center gap-4 border-b border-white/10 px-3 pt-2"
+                                    className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 px-2 pt-2"
                                 >
-                                    {(["sessions", "workflows"] as const).map((value) => (
+                                    {modes.map((value) => (
                                         <button
                                             key={value}
                                             id={`kronterm-navigation-${value}`}
                                             role="tab"
                                             type="button"
-                                            aria-selected={mode === value}
+                                            aria-selected={selected === value}
                                             aria-controls={`kronterm-navigation-pane-${value}`}
-                                            tabIndex={mode === value ? 0 : -1}
+                                            tabIndex={selected === value ? 0 : -1}
                                             onClick={() => $workflowSidebarMode.set(value)}
                                             onKeyDown={(event) => {
                                                 if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
                                                     return;
                                                 event.preventDefault();
                                                 const next =
-                                                    event.key === "Home"
-                                                        ? "sessions"
-                                                        : event.key === "End"
-                                                          ? "workflows"
-                                                          : mode === "sessions"
-                                                            ? "workflows"
-                                                            : "sessions";
+                                                    modes[
+                                                        event.key === "Home"
+                                                            ? 0
+                                                            : event.key === "End"
+                                                              ? modes.length - 1
+                                                              : (modes.findIndex((mode) => mode === selected) +
+                                                                    (event.key === "ArrowRight"
+                                                                        ? 1
+                                                                        : modes.length - 1)) %
+                                                                modes.length
+                                                    ];
                                                 $workflowSidebarMode.set(next);
                                                 document.getElementById(`kronterm-navigation-${next}`)?.focus();
                                             }}
-                                            className="cursor-pointer border-b-2 border-transparent pb-2 text-xs text-foreground/55 aria-selected:border-accent aria-selected:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
+                                            className="cursor-pointer border-b-2 border-transparent pb-2 text-[11px] text-foreground/55 aria-selected:border-accent aria-selected:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
                                         >
-                                            {value === "sessions" ? "Sessions" : "Workflows"}
+                                            {NavigationLabels[value]}
                                         </button>
                                     ))}
                                 </div>
@@ -89,7 +110,7 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
                                     id="kronterm-navigation-pane-sessions"
                                     role="tabpanel"
                                     aria-labelledby="kronterm-navigation-sessions"
-                                    hidden={mode !== "sessions"}
+                                    hidden={selected !== "sessions"}
                                     className="min-h-0 flex-1"
                                 >
                                     {children}
@@ -98,11 +119,31 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
                                     id="kronterm-navigation-pane-workflows"
                                     role="tabpanel"
                                     aria-labelledby="kronterm-navigation-workflows"
-                                    hidden={mode !== "workflows"}
+                                    hidden={selected !== "workflows"}
                                     className="min-h-0 flex-1"
                                 >
-                                    <WorkflowsView active={mode === "workflows" && open} />
+                                    <WorkflowsView active={selected === "workflows" && open} />
                                 </div>
+                                {canvasPanels && (
+                                    <div
+                                        ref={setComfyLibraryTarget}
+                                        id="kronterm-navigation-pane-comfy"
+                                        role="tabpanel"
+                                        aria-labelledby="kronterm-navigation-comfy"
+                                        hidden={selected !== "comfy"}
+                                        className="min-h-0 flex-1"
+                                    />
+                                )}
+                                {canvasPanels && (
+                                    <div
+                                        ref={setPenDesignTarget}
+                                        id="kronterm-navigation-pane-design"
+                                        role="tabpanel"
+                                        aria-labelledby="kronterm-navigation-design"
+                                        hidden={selected !== "design"}
+                                        className="min-h-0 flex-1 overflow-auto"
+                                    />
+                                )}
                             </div>
                         </SidebarProvider>
                     </div>,
@@ -121,4 +162,12 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
                 )}
         </>
     );
+}
+
+function setComfyLibraryTarget(target: HTMLDivElement) {
+    $comfyLibraryTarget.set(target);
+}
+
+function setPenDesignTarget(target: HTMLDivElement) {
+    $penDesignTarget.set(target);
 }

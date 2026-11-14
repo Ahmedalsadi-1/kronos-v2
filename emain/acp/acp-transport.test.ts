@@ -16,6 +16,8 @@ import {
 } from "./acp-agent-manager";
 import { NdjsonTransport } from "./acp-transport";
 
+import { resolveKronTermSharedSkillDirs } from "../shared-skill-roots";
+
 vi.mock("../../frontend/app/store/wshclientapi", () => ({
     RpcApi: { CreateSurfaceTokenCommand: vi.fn() },
 }));
@@ -33,6 +35,7 @@ vi.mock("../kronoscode-runtime", () => ({
 }));
 vi.mock("../kronterm-tool-server", () => ({
     availableKronTermToolNames: vi.fn().mockReturnValue([]),
+    revokeKronTermToolCaller: vi.fn(),
     startKronTermToolServer: vi.fn().mockResolvedValue({
         url: "http://127.0.0.1:9100/mcp",
         nativeUrl: "http://127.0.0.1:9100/native",
@@ -142,13 +145,13 @@ describe("NdjsonTransport", () => {
         }
     });
 
-    it("advertises only client methods implemented by Kronterm", async () => {
+    it("advertises only client methods implemented by KronOS", async () => {
         const { child, stdout, writes } = makeChild();
         const transport = new NdjsonTransport(child);
         const initialized = transport.initialize();
 
         const request = JSON.parse(writes[0]);
-        expect(request.params.clientInfo).toEqual({ name: "KronTerm", version: "0.14.3" });
+        expect(request.params.clientInfo).toEqual({ name: "KronOS", version: "0.14.3" });
         expect(request.params.clientCapabilities).toEqual({
             fs: { readTextFile: true, writeTextFile: true },
             terminal: false,
@@ -540,6 +543,7 @@ describe("AcpAgentManager protocol requests", () => {
                         { name: "KRONTERM_WORKSPACE", value: "/tmp/kronterm-workspace" },
                         { name: "KRONTERM_NATIVE_TOOL_URL", value: "http://127.0.0.1:9100/native" },
                         { name: "KRONTERM_NATIVE_TOOL_TOKEN", value: "test-native-tool-token" },
+                        { name: "KRONTERM_SHARED_SKILL_DIRS", value: resolveKronTermSharedSkillDirs({ cwd: "/tmp/kronterm-workspace" }).join(path.delimiter) },
                         { name: "KRONTERM_WSH", value: path.join(process.cwd(), "wsh") },
                         { name: "WAVETERM_WSH", value: path.join(process.cwd(), "wsh") },
                     ],
@@ -548,7 +552,7 @@ describe("AcpAgentManager protocol requests", () => {
         });
     });
 
-    it("gives KronTerm Agent the authenticated HTTP surface advertised by OpenCode ACP", async () => {
+    it("gives KronOS Agent the authenticated HTTP surface advertised by OpenCode ACP", async () => {
         const manager = new AcpAgentManager({
             conversationId: "conversation-kronterm-agent",
             backend: "kronterm-agent",
@@ -591,10 +595,10 @@ describe("AcpAgentManager protocol requests", () => {
         );
     });
 
-    it("keeps the OpenCode wire identity behind the KronTerm Agent product name", async () => {
+    it("keeps the OpenCode wire identity behind the KronOS Coding Agent name", async () => {
         expect(normalizeAcpAgentInfo("kronterm-agent", { name: "OpenCode", version: "1.15.10" })).toEqual({
-            name: "KronTerm Agent",
-            title: "KronTerm Agent",
+            name: "KronOS Coding Agent",
+            title: "KronOS Coding Agent",
             version: "1.15.10",
         });
         expect(normalizeAcpAgentInfo("opencode", { name: "OpenCode", version: "1.15.10" })).toEqual({
@@ -637,6 +641,7 @@ describe("AcpAgentManager protocol requests", () => {
                         { name: "KRONTERM_WORKSPACE", value: "/tmp/kronterm-workspace" },
                         { name: "KRONTERM_NATIVE_TOOL_URL", value: "http://127.0.0.1:9100/native" },
                         { name: "KRONTERM_NATIVE_TOOL_TOKEN", value: "test-native-tool-token" },
+                        { name: "KRONTERM_SHARED_SKILL_DIRS", value: resolveKronTermSharedSkillDirs({ cwd: "/tmp/kronterm-workspace" }).join(path.delimiter) },
                         { name: "KRONTERM_JWT", value: "surface-token" },
                         { name: "WAVETERM_JWT", value: "surface-token" },
                         { name: "KRONTERM_TABID", value: "tab-1" },
@@ -692,7 +697,7 @@ describe("AcpAgentManager protocol requests", () => {
                             { name: "KRONTERM_WORKSPACE", value: workspace },
                             { name: "KRONTERM_NATIVE_TOOL_URL", value: "http://127.0.0.1:9100/native" },
                             { name: "KRONTERM_NATIVE_TOOL_TOKEN", value: "test-native-tool-token" },
-                            { name: "KRONTERM_SHARED_SKILL_DIRS", value: sharedSkills },
+                            { name: "KRONTERM_SHARED_SKILL_DIRS", value: resolveKronTermSharedSkillDirs({ cwd: workspace }).join(path.delimiter) },
                             { name: "KRONTERM_JWT", value: "hermes-surface-token" },
                             { name: "WAVETERM_JWT", value: "hermes-surface-token" },
                             { name: "KRONTERM_TABID", value: "tab-hermes" },
@@ -852,7 +857,9 @@ describe("AcpAgentManager protocol requests", () => {
         const events: any[] = [];
         manager.on("event", (event) => events.push(event));
 
-        await manager.sendMessage({ conversationId: "conversation-usage", content: "hello" });
+        await expect(manager.sendMessage({ conversationId: "conversation-usage", content: "hello" })).resolves.toBe(
+            "end_turn"
+        );
 
         expect(events).toEqual(
             expect.arrayContaining([

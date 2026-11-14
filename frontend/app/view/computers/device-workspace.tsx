@@ -1,12 +1,17 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SystemButton } from "@/app/components/system-ui";
+import { ContextMenuModel } from "@/app/store/contextmenu";
+import { globalStore } from "@/app/store/jotaiStore";
+import { WaveEnvContext } from "@/app/waveenv/waveenv";
 import { getApi } from "@/store/global";
 import type { ComputerTarget, ComputerTargetAction } from "@/types/computer-targets";
 import { Camera, Home, Maximize2, Minus, Power, RefreshCw, RotateCw, Settings2, Volume2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { ComputersPanel } from "./computers";
 import { ComputersController, type ComputersApi, type ComputersState } from "./computers-state";
+import { CompactDeviceBlocksAtom, SingleDeviceWorkspaceWidth } from "./device-workspace-layout";
 import "./device-workspace.css";
 import { PhoneFrame } from "./phone-frame";
 
@@ -15,6 +20,7 @@ export function DeviceWorkspace({
     controller,
     preferredPlatform = "ios",
     initialTargetId,
+    blockId,
     onCloseWidget,
     api = getApi(),
 }: {
@@ -22,12 +28,24 @@ export function DeviceWorkspace({
     controller: ComputersController;
     preferredPlatform?: "ios" | "android";
     initialTargetId?: string;
+    blockId?: string;
     onCloseWidget?: () => void;
     api?: ComputersApi;
 }) {
+    const env = useContext(WaveEnvContext);
     const [windowState, setWindowState] = useState<"normal" | "minimized" | "maximized">("normal");
-    const [closed, setClosed] = useState(false);
     const [mode, setMode] = useState<"single" | "farm">("single");
+    useEffect(() => {
+        if (!blockId || mode !== "single") return;
+        globalStore.set(CompactDeviceBlocksAtom, (ids) => new Set(ids).add(blockId));
+        return () => {
+            globalStore.set(CompactDeviceBlocksAtom, (ids) => {
+                const next = new Set(ids);
+                next.delete(blockId);
+                return next;
+            });
+        };
+    }, [blockId, mode]);
     const [selected, setSelected] = useState(initialTargetId ?? "");
     const [settings, setSettings] = useState(false);
     const [query, setQuery] = useState("");
@@ -44,13 +62,14 @@ export function DeviceWorkspace({
         setClosedTargets((ids) => ids.filter((item) => item !== id));
         setSelected(id);
     };
-    const preferred = state.targets.filter((target) => target.kind.startsWith(preferredPlatform));
+    const openTargets = state.targets.filter((target) => !closedTargets.includes(target.id));
+    const preferred = openTargets.filter((target) => target.kind.startsWith(preferredPlatform));
     const iphones = preferred.filter((target) => /^iPhone\b/i.test(target.name));
     const candidates = preferredPlatform === "ios" && iphones.length ? iphones : preferred;
     const defaultTarget = candidates.find((target) => ["booted", "connected"].includes(target.status)) ?? candidates[0];
-    const selectedId = state.targets.some((target) => target.id === selected)
+    const selectedId = openTargets.some((target) => target.id === selected)
         ? selected
-        : (defaultTarget?.id ?? state.targets[0]?.id);
+        : (defaultTarget?.id ?? openTargets[0]?.id);
     useEffect(() => {
         const refresh = () => {
             if (!document.hidden) void controller.refresh();
@@ -74,164 +93,175 @@ export function DeviceWorkspace({
                 `${target.name} ${target.runtime}`.toLowerCase().includes(query.toLowerCase())
         )
         .slice(0, farmSize ?? state.targets.length);
+    const showWindowMenu = (event: MouseEvent) => {
+        const menu: ContextMenuItem[] = [
+            {
+                label: windowState === "minimized" ? "Restore Window" : "Minimize Window",
+                click: () => setWindowState(windowState === "minimized" ? "normal" : "minimized"),
+            },
+            {
+                label: windowState === "maximized" ? "Restore Window Size" : "Maximize Window",
+                click: () => setWindowState(windowState === "maximized" ? "normal" : "maximized"),
+            },
+        ];
+        if (env) env.showContextMenu(menu, event);
+        else ContextMenuModel.getInstance().showContextMenu(menu, event);
+    };
     return (
-        <section
-            className={`kt-device-workspace is-${mode} window-${closed ? "minimized" : windowState}${settings ? " has-settings" : ""}`}
-            aria-label="Device workspace"
+        <div
+            className="kt-device-workspace-host"
+            style={{ "--device-single-width": SingleDeviceWorkspaceWidth } as CSSProperties}
         >
-            <header className="kt-device-workspace-titlebar" data-os-window-drag="">
-                <div className="kt-device-window-controls" role="group" aria-label="Device workspace window controls">
-                    <button
-                        type="button"
-                        className="is-close"
+            <section
+                className={`kt-device-workspace is-${mode} window-${windowState}${settings ? " has-settings" : ""}`}
+                aria-label="Device workspace"
+            >
+                <header className="kt-device-workspace-titlebar" data-os-window-drag="">
+                    <SystemButton
+                        size="small"
+                        data-device-window-menu=""
+                        aria-label="Devices window menu"
+                        aria-haspopup="menu"
+                        onClick={showWindowMenu}
+                    >
+                        Devices
+                    </SystemButton>
+                    <SystemButton
+                        size="small"
+                        data-device-window-close=""
                         aria-label="Close device workspace"
                         onClick={() => {
                             if (onCloseWidget) onCloseWidget();
-                            else setClosed(true);
+                            else setWindowState("minimized");
                         }}
                     >
-                        <X size={9} />
-                    </button>
-                    <button
-                        type="button"
-                        className="is-minimize"
-                        aria-label={
-                            windowState === "minimized" || closed
-                                ? "Restore device workspace"
-                                : "Minimize device workspace"
-                        }
-                        onClick={() => {
-                            setClosed(false);
-                            setWindowState(windowState === "minimized" || closed ? "normal" : "minimized");
-                        }}
-                    >
-                        <Minus size={9} />
-                    </button>
-                    <button
-                        type="button"
-                        className="is-maximize"
-                        aria-label={
-                            windowState === "maximized" ? "Restore device workspace size" : "Maximize device workspace"
-                        }
-                        onClick={() => {
-                            setClosed(false);
-                            setWindowState(windowState === "maximized" ? "normal" : "maximized");
-                        }}
-                    >
-                        <Maximize2 size={9} />
-                    </button>
-                </div>
-                <strong>Devices</strong>
-            </header>
-            <div className="kt-device-workspace-bar">
-                <label>
-                    <span className="sr-only">Device list</span>
-                    <select
-                        aria-label="Device list"
-                        value={selectedId ?? ""}
-                        onChange={(event) => choose(event.target.value)}
-                    >
-                        {!state.targets.length && <option value="">No devices</option>}
-                        {state.targets.map((target) => (
-                            <option key={target.id} value={target.id}>
-                                {target.name} · {target.kind.startsWith("android") ? "Android" : "iPhone"} ·{" "}
-                                {target.status}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                {mode === "farm" && (
-                    <label className="kt-device-farm-size">
-                        Phones
-                        <input
-                            aria-label="Farm size"
-                            type="number"
-                            min={1}
-                            max={Math.max(1, state.targets.length)}
-                            value={Math.min(farmSize ?? state.targets.length, state.targets.length) || 1}
-                            onChange={(event) => {
-                                const value = Number(event.target.value);
-                                if (!Number.isSafeInteger(value) || value < 1) return;
-                                const next = Math.min(value, state.targets.length || 1);
-                                setFarmSize(next);
-                                try {
-                                    window.localStorage.setItem("kronterm:device-farm-size", String(next));
-                                } catch {
-                                    /* Storage can be disabled in embedded views. */
-                                }
-                            }}
-                        />
-                        <button
-                            onClick={() => {
-                                setFarmSize(null);
-                                try {
-                                    window.localStorage.removeItem("kronterm:device-farm-size");
-                                } catch {}
-                            }}
+                        <X size={16} />
+                    </SystemButton>
+                </header>
+                <div className="kt-device-workspace-bar">
+                    <label>
+                        <span className="sr-only">Device list</span>
+                        <select
+                            aria-label="Device list"
+                            value={selectedId ?? ""}
+                            onChange={(event) => choose(event.target.value)}
                         >
-                            All
-                        </button>
+                            {!selectedId && (
+                                <option value="" disabled>
+                                    {state.targets.length ? "Choose a device" : "No devices"}
+                                </option>
+                            )}
+                            {state.targets.map((target) => (
+                                <option key={target.id} value={target.id}>
+                                    {target.name} · {target.kind.startsWith("android") ? "Android" : "iPhone"} ·{" "}
+                                    {target.status}
+                                </option>
+                            ))}
+                        </select>
                     </label>
-                )}
-                {mode === "farm" && (
-                    <input
-                        aria-label="Search devices"
-                        placeholder="Search devices…"
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                    />
-                )}
-                <div role="group" aria-label="Device presentation">
-                    {(["single", "farm"] as const).map((value) => (
-                        <button key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>
-                            {value === "single" ? "Single" : "Farm"}
-                        </button>
-                    ))}
+                    {mode === "farm" && (
+                        <label className="kt-device-farm-size">
+                            Phones
+                            <input
+                                aria-label="Farm size"
+                                type="number"
+                                min={1}
+                                max={Math.max(1, state.targets.length)}
+                                value={Math.min(farmSize ?? state.targets.length, state.targets.length) || 1}
+                                onChange={(event) => {
+                                    const value = Number(event.target.value);
+                                    if (!Number.isSafeInteger(value) || value < 1) return;
+                                    const next = Math.min(value, state.targets.length || 1);
+                                    setFarmSize(next);
+                                    try {
+                                        window.localStorage.setItem("kronterm:device-farm-size", String(next));
+                                    } catch {
+                                        /* Storage can be disabled in embedded views. */
+                                    }
+                                }}
+                            />
+                            <button
+                                onClick={() => {
+                                    setFarmSize(null);
+                                    try {
+                                        window.localStorage.removeItem("kronterm:device-farm-size");
+                                    } catch {}
+                                }}
+                            >
+                                All
+                            </button>
+                        </label>
+                    )}
+                    {mode === "farm" && (
+                        <input
+                            aria-label="Search devices"
+                            placeholder="Search devices…"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                        />
+                    )}
+                    <div role="group" aria-label="Device presentation">
+                        {(["single", "farm"] as const).map((value) => (
+                            <button key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>
+                                {value === "single" ? "Single" : "Farm"}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        aria-label="Refresh devices"
+                        disabled={state.loading}
+                        onClick={() => void controller.refresh()}
+                    >
+                        <RefreshCw size={15} />
+                    </button>
                 </div>
-                <button aria-label="Refresh devices" disabled={state.loading} onClick={() => void controller.refresh()}>
-                    <RefreshCw size={15} />
-                </button>
-            </div>
-            {state.error && (
-                <p role="alert" className="kt-device-discovery-error">
-                    {state.error}
-                </p>
-            )}
-            {!state.targets.length && (
-                <p role="status">
-                    {state.loading
-                        ? "Finding devices…"
-                        : "No devices found. Install a simulator runtime or connect a phone with debugging enabled."}
-                </p>
-            )}
-            <div className="kt-device-grid">
-                {orderedTargets.map((target) => (
-                    <DeviceTile
-                        key={target.id}
-                        target={target}
-                        api={api}
-                        visible={
-                            !closedTargets.includes(target.id) &&
-                            (mode === "single"
-                                ? target.id === selectedId
-                                : farmTargets.some((item) => item.id === target.id))
-                        }
-                        selected={target.id === selectedId}
-                        settings={settings && target.id === selectedId}
-                        onSelect={() => setSelected(target.id)}
-                        onSettings={() => {
-                            setSelected(target.id);
-                            setSettings(true);
-                        }}
-                        onCloseSettings={() => setSettings(false)}
-                        onRefresh={() => void controller.refresh()}
-                        targets={state.targets}
-                        onChoose={choose}
-                        onClose={onCloseWidget ?? (() => setClosedTargets((ids) => [...ids, target.id]))}
-                    />
-                ))}
-            </div>
-        </section>
+                {state.error && (
+                    <p role="alert" className="kt-device-discovery-error">
+                        {state.error}
+                    </p>
+                )}
+                {!state.targets.length && (
+                    <p role="status" className="kt-device-workspace-message">
+                        {state.loading
+                            ? "Finding devices…"
+                            : "No devices found. Install a simulator runtime or connect a phone with debugging enabled."}
+                    </p>
+                )}
+                <div className="kt-device-content">
+                    <div className="kt-device-grid">
+                        {orderedTargets.map((target) => (
+                            <DeviceTile
+                                key={target.id}
+                                target={target}
+                                api={api}
+                                visible={
+                                    windowState !== "minimized" &&
+                                    !closedTargets.includes(target.id) &&
+                                    (mode === "single"
+                                        ? target.id === selectedId
+                                        : farmTargets.some((item) => item.id === target.id))
+                                }
+                                selected={target.id === selectedId}
+                                settings={settings && target.id === selectedId}
+                                onSelect={() => setSelected(target.id)}
+                                onSettings={() => {
+                                    setSelected(target.id);
+                                    setSettings(true);
+                                }}
+                                onCloseSettings={() => setSettings(false)}
+                                onRefresh={() => void controller.refresh()}
+                                targets={state.targets}
+                                onChoose={choose}
+                                onClose={() => {
+                                    if (mode === "single" && onCloseWidget) onCloseWidget();
+                                    else setClosedTargets((ids) => [...ids, target.id]);
+                                }}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </section>
+        </div>
     );
 }
 
@@ -282,8 +312,6 @@ function DeviceTile({
     const [minimized, setMinimized] = useState(false);
 
     const [expanded, setExpanded] = useState(false);
-    const [position, setPosition] = useState({ x: 0, y: 0 });
-    const drag = useRef<{ x: number; y: number; left: number; top: number }>(null);
     const streaming = visible && !minimized;
     const running = target.status === "booted" || target.status === "connected";
     const can = (action: ComputerTargetAction["action"]) => target.capabilities.includes(action);
@@ -314,56 +342,7 @@ function DeviceTile({
             hidden={!visible}
             data-selected={selected}
             aria-label={target.name}
-            style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
         >
-            <div
-                className="kt-device-window-controls"
-                onPointerDown={(event) => {
-                    if ((event.target as HTMLElement).closest("button")) return;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    drag.current = { x: event.clientX, y: event.clientY, left: position.x, top: position.y };
-                }}
-                onPointerMove={(event) => {
-                    if (!drag.current) return;
-                    setPosition({
-                        x: drag.current.left + event.clientX - drag.current.x,
-                        y: drag.current.top + event.clientY - drag.current.y,
-                    });
-                }}
-                onPointerUp={() => {
-                    drag.current = null;
-                }}
-                onPointerCancel={() => {
-                    drag.current = null;
-                }}
-            >
-                <button
-                    aria-label={`Close ${target.name}`}
-                    onClick={() => {
-                        onClose();
-                        onCloseSettings();
-                    }}
-                >
-                    <X size={14} />
-                </button>
-                <button
-                    aria-label={`Minimize ${target.name}`}
-                    aria-pressed={minimized}
-                    onClick={() => setMinimized(!minimized)}
-                >
-                    <Minus size={14} />
-                </button>
-                <button
-                    aria-label={`Expand ${target.name}`}
-                    aria-pressed={expanded}
-                    onClick={() => {
-                        setMinimized(false);
-                        setExpanded(!expanded);
-                    }}
-                >
-                    <Maximize2 size={14} />
-                </button>
-            </div>
             <header className="kt-device-titlebar">
                 <button
                     className="kt-device-identity"
@@ -386,33 +365,6 @@ function DeviceTile({
                         <small>{target.runtime}</small>
                     </span>
                 </button>
-                {(
-                    [
-                        ["home", "Home", Home],
-                        ["screenshot", "Capture screen", Camera],
-                        ["rotate", "Rotate device", RotateCw],
-                    ] as const
-                ).map(
-                    ([action, label, Icon]) =>
-                        can(action) && (
-                            <button
-                                key={action}
-                                aria-label={`${label} · ${target.name}`}
-                                title={label}
-                                disabled={state.busy || !running}
-                                onClick={() =>
-                                    void perform(
-                                        action,
-                                        action === "rotate"
-                                            ? { orientation: landscape ? "portrait" : "landscape-left" }
-                                            : {}
-                                    )
-                                }
-                            >
-                                <Icon size={15} />
-                            </button>
-                        )
-                )}
                 <button aria-label={`Settings for ${target.name}`} aria-expanded={settings} onClick={onSettings}>
                     <Settings2 size={15} />
                 </button>
@@ -446,8 +398,16 @@ function DeviceTile({
                     </PhoneFrame>
                 )}
             </div>
-            {target.availabilityReason && <p role="status">{target.availabilityReason}</p>}
-            {state.error && <p role="alert">{state.error}</p>}
+            {target.availabilityReason && (
+                <p role="status" className="kt-device-workspace-message">
+                    {target.availabilityReason}
+                </p>
+            )}
+            {state.error && (
+                <p role="alert" className="kt-device-workspace-message">
+                    {state.error}
+                </p>
+            )}
             {settings && (
                 <aside
                     className="kt-device-settings"
@@ -475,6 +435,37 @@ function DeviceTile({
                     <div className="kt-device-runtime">
                         <span>Runtime</span>
                         <span>{target.runtime || "Unknown"}</span>
+                    </div>
+                    <div className="kt-device-settings-actions" role="group" aria-label="Device tile controls">
+                        <button
+                            aria-label={`Close ${target.name}`}
+                            onClick={() => {
+                                onClose();
+                                onCloseSettings();
+                            }}
+                        >
+                            <X size={16} />
+                            Close
+                        </button>
+                        <button
+                            aria-label={`Minimize ${target.name}`}
+                            aria-pressed={minimized}
+                            onClick={() => setMinimized(!minimized)}
+                        >
+                            <Minus size={16} />
+                            Minimize
+                        </button>
+                        <button
+                            aria-label={`Expand ${target.name}`}
+                            aria-pressed={expanded}
+                            onClick={() => {
+                                setMinimized(false);
+                                setExpanded(!expanded);
+                            }}
+                        >
+                            <Maximize2 size={16} />
+                            Expand
+                        </button>
                     </div>
                     <div className="kt-device-settings-actions">
                         {(

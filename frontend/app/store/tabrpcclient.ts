@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { BrowserAccountPause, BrowserAccountRequestEvent, checkBrowserAccountHandoff } from "@/app/view/webview/browser-account-handoff";
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import {
     atoms,
@@ -20,6 +21,7 @@ import {
 import { controlWorkspaceSurface, getWorkspaceSurfaceModeProvider } from "@/app/tab/workspace-surface-runtime";
 import { listAgentWidgets } from "@/app/view/agent-widget-bridge";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
+import { pressMacVmKeys, typeMacVmText } from "@/app/view/linux-vms/macos-vm-input";
 import type { TermViewModel } from "@/app/view/term/term-model";
 import { hudLocationForMeta } from "@/app/workspace/hud-surface-location";
 import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
@@ -44,7 +46,6 @@ import {
     mergeBrowserObservations,
 } from "./browser-observation";
 import { sendPointerDrag } from "./pointer-drag";
-import { pressMacVmKeys, typeMacVmText } from "@/app/view/linux-vms/macos-vm-input";
 import { assessWorkspaceLayout, observeWorkspaceBlock, workspaceSurfaceElement } from "./workspace-surface-observation";
 import { RpcResponseHelper, WshClient } from "./wshclient";
 import { RpcApi } from "./wshclientapi";
@@ -428,15 +429,19 @@ export class TabClient extends WshClient {
         const root = this.widgetRoot(blockId);
         if (!root)
             throw new Error(`Widget is not mounted: ${blockId}. Focus the widget explicitly before interacting.`);
+        checkBrowserAccountHandoff(root);
         return root;
     }
 
     private async focusWidgetForAgent(blockId: string): Promise<HTMLElement> {
         const mounted = this.widgetRoot(blockId);
+        checkBrowserAccountHandoff(mounted);
         const hud = kronTermHudController.getSnapshot();
         const nativeIsland = new URLSearchParams(window.location.search).get("nativeSurface") === "island";
         if (mounted && (nativeIsland || (hud.active && !hud.keepWorkspaceVisible))) {
-            const target = mounted.querySelector<HTMLElement>("webview") ?? mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
+            const target =
+                mounted.querySelector<HTMLElement>("webview") ??
+                mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
             target?.focus({ preventScroll: true });
             return mounted;
         }
@@ -446,7 +451,9 @@ export class TabClient extends WshClient {
         }
         const node = layoutModel.getNodeByBlockId(blockId);
         if (!node && mounted) {
-            const target = mounted.querySelector<HTMLElement>("webview") ?? mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
+            const target =
+                mounted.querySelector<HTMLElement>("webview") ??
+                mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
             target?.focus({ preventScroll: true });
             return mounted;
         }
@@ -469,6 +476,7 @@ export class TabClient extends WshClient {
         if (!root) {
             throw new Error(`Widget is not mounted after focus: ${blockId}`);
         }
+        checkBrowserAccountHandoff(root);
         root.scrollIntoView({ block: "nearest", inline: "nearest" });
         const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (webview) {
@@ -994,6 +1002,7 @@ export class TabClient extends WshClient {
 
     async captureBlockScreenshot(blockId: string, passive = false): Promise<string> {
         const root = passive ? this.widgetRoot(blockId) : await this.focusWidgetForAgent(blockId);
+        checkBrowserAccountHandoff(root);
         const guest = root?.querySelector("webview") as Electron.WebviewTag | null;
         // Browser pointer coordinates and observations use the guest viewport, without workspace chrome.
         if (guest) return (await getApi().captureBrowserPage({ guestId: guest.getWebContentsId() })).dataUrl;
@@ -1095,7 +1104,7 @@ export class TabClient extends WshClient {
         const presentation = this.getWorkspacePresentation();
         const tabId = globalStore.get(atoms.staticTabId);
         if (data.action === "hud.launch") {
-            if (!kronTermHudController.getSnapshot().active) throw new Error("KronTerm HUD mode is not active");
+            if (!kronTermHudController.getSnapshot().active) throw new Error("KronOS HUD mode is not active");
             const options = data.text ? JSON.parse(data.text) : {};
             const blockId = await launchKronTermHudIsland(data.view as KronTermHudApp, { ...options, forceNew: true });
             return JSON.stringify({ success: true, blockId, snapshot: this.makeWorkspaceSurfaceSnapshot() });
@@ -1162,6 +1171,11 @@ export class TabClient extends WshClient {
                 message: `Workspace presentation changed to ${nextPresentation}.`,
                 presentation: nextPresentation,
             });
+        }
+        if (presentation !== "os" && (data.action.startsWith("os.") || data.action.startsWith("spatial."))) {
+            throw new Error(
+                `${data.action} requires OS presentation (current: ${presentation}). Use workspace_set_presentation with presentation="os", then refresh workspace_snapshot.`
+            );
         }
         if (presentation === "canvas" || presentation === "os") {
             const result = await controlWorkspaceSurface(tabId, {
@@ -1470,6 +1484,7 @@ export class TabClient extends WshClient {
                     "fit",
                     "arrange",
                     "add_note",
+                    "add_file",
                     "update_object",
                     "delete_object",
                     "connect_objects",
@@ -1484,6 +1499,7 @@ export class TabClient extends WshClient {
                     "arrange",
                     "connect_objects",
                     "add_note",
+                    "add_file",
                     "update_object",
                     "delete_object",
                     "spatial.dock",
@@ -2064,6 +2080,15 @@ export class TabClient extends WshClient {
         if (!webview) {
             const elements = this.rendererElements(root, 50);
             return { blockid: data.blockid, elements, count: elements.length, timestamp: Date.now() };
+        }
+        const accountApi = getApi()?.browserAccount;
+        if (accountApi) {
+            const page = webview.getURL?.();
+            const state = await accountApi({ guestId: webview.getWebContentsId(), action: "inspect" }).catch(() => null);
+            if (state?.status === "required" && page === webview.getURL()) {
+                webview.dispatchEvent(new CustomEvent(BrowserAccountRequestEvent, { detail: { page, state } }));
+                throw new Error(BrowserAccountPause);
+            }
         }
         try {
             const domElements = await webview.executeJavaScript(browserObservationScript(250));
@@ -2656,13 +2681,9 @@ export class TabClient extends WshClient {
         rh: RpcResponseHelper,
         data: CommandWidgetClipboardGetData
     ): Promise<WidgetClipboardGetRtnData> {
-        try {
-            await this.focusWidgetForAgent(data.blockid);
-            const text = await getApi().readClipboard();
-            return { blockid: data.blockid, text };
-        } catch (e) {
-            return { blockid: data.blockid, text: "" };
-        }
+        await this.focusWidgetForAgent(data.blockid);
+        const text = await getApi().readClipboard();
+        return { blockid: data.blockid, text };
     }
 
     async handle_widgetclipboardset(
@@ -2682,6 +2703,7 @@ export class TabClient extends WshClient {
         rh: RpcResponseHelper,
         data: CommandWidgetWaitConditionData
     ): Promise<WidgetWaitConditionRtnData> {
+        const signal = rh.cancellation.signal;
         const startTime = Date.now();
         const timeout = data.timeoutms || 10000;
         const condition = data.condition || "";
@@ -2691,6 +2713,7 @@ export class TabClient extends WshClient {
         const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (!webview) {
             while (Date.now() - startTime < timeout) {
+                signal.throwIfAborted();
                 if (this.rendererCondition(root, elementref, condition)) {
                     return {
                         blockid: data.blockid,
@@ -2712,9 +2735,10 @@ export class TabClient extends WshClient {
         }
 
         while (Date.now() - startTime < timeout) {
+            signal.throwIfAborted();
             try {
                 const checkResult = await webview.executeJavaScript(browserWaitConditionScript(elementref, condition));
-                if (checkResult) {
+                if (checkResult && !signal.aborted) {
                     return {
                         blockid: data.blockid,
                         condition,

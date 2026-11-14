@@ -133,11 +133,11 @@ const providerTemplates: Record<TemplateKey, TemplateConfig> = {
     },
     kronos: {
         label: "Kronos local engine",
-        description: "Keep the Kronterm chat UI and route the session through a local KronosCode server.",
+        description: "Keep the KronOS chat UI and route the session through a local KronosCode server.",
         create: (modeKey) => ({
             "display:name": "Kronos Local",
             "display:icon": "server",
-            "display:description": "KronosCode hosted inside Kronterm",
+            "display:description": "KronosCode hosted inside KronOS",
             "ai:provider": "kronos",
             "ai:apitype": "kronos-session",
             "ai:model": "anthropic/claude-sonnet-4-5",
@@ -602,7 +602,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                             className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-primary cursor-pointer"
                                         >
                                             <option value="custom">Custom</option>
-                                            <option value="kronos">KronTerm Agent</option>
+                                            <option value="kronos">KronOS Agent</option>
                                             <option value="openai">OpenAI</option>
                                             <option value="google">Google Gemini</option>
                                             <option value="openrouter">OpenRouter</option>
@@ -713,7 +713,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                             </div>
                                             <div className="text-sm text-muted mt-1">
                                                 These settings control the local Kronos engine that sits behind
-                                                Kronterm.
+                                                KronOS.
                                             </div>
                                         </div>
                                         <div className="rounded-lg border border-border bg-panel px-4 py-4 space-y-4">
@@ -723,7 +723,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                                         Server snapshot
                                                     </div>
                                                     <div className="text-sm text-muted mt-1">
-                                                        Kronterm asks KronosCode to inspect the configured Kronos server
+                                                        KronOS asks KronosCode to inspect the configured Kronos server
                                                         and list the providers, models, and native tools it can see.
                                                     </div>
                                                 </div>
@@ -921,7 +921,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                             <div>
                                                 <FieldLabel
                                                     title="Tool routing"
-                                                    hint="Hybrid keeps Kronos native tools and the Kronterm widget bridge together."
+                                                    hint="Hybrid keeps Kronos native tools and the KronOS widget bridge together."
                                                 />
                                                 <select
                                                     value={selectedMode["ai:kronostoolrouting"] ?? "wave-only"}
@@ -934,8 +934,8 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                                     className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-primary cursor-pointer"
                                                 >
                                                     <option value="hybrid">Hybrid</option>
-                                                    <option value="wave-only">Kronterm tools first</option>
-                                                    <option value="kronos-only">KronTerm Agent only</option>
+                                                    <option value="wave-only">KronOS tools first</option>
+                                                    <option value="kronos-only">KronOS Agent only</option>
                                                 </select>
                                             </div>
                                             <div className="md:col-span-2">
@@ -965,7 +965,7 @@ export const WaveAIVisualContent = memo(({ model }: WaveAIVisualContentProps) =>
                                 <div className="rounded-lg border border-border bg-background px-4 py-4">
                                     <div className="text-sm font-semibold text-primary">Capabilities</div>
                                     <div className="text-sm text-muted mt-1 mb-3">
-                                        Turn on tools if you want KronosCode to expose the Kronterm widget bridge while
+                                        Turn on tools if you want KronosCode to expose the KronOS widget bridge while
                                         this mode is active.
                                     </div>
                                     <div className="flex items-center gap-3">

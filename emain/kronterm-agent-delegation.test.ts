@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/app/store/services", () => ({ WorkspaceService: {} }));
 vi.mock("./emain-window", () => ({}));
 vi.mock("./emain-hud", () => ({}));
-vi.mock("./emain-pet", () => ({ notifyDesktopPetActivity: vi.fn() }));
+vi.mock("./emain-pet", () => ({ notifyDesktopPetActivity: vi.fn(), notifyDesktopPetSurfaceActivity: vi.fn() }));
 vi.mock("./emain-wsh", () => ({ ElectronWshClient: { wshRpcCall: vi.fn() } }));
 vi.mock("./acp/acp-connector", () => ({ detectInstalledAgents: mocks.detect }));
 vi.mock("./kronoscode-runtime", () => ({
@@ -37,7 +37,10 @@ vi.mock("./acp/acp-agent-manager", async () => {
             stop = mocks.stop;
             confirmTool = mocks.confirm;
             sendMessage = (request: unknown) => mocks.send(this, request);
-            constructor(public options: unknown) {
+            get hasSurfaceMcp() {
+                return Boolean(this.options.surfaceContext?.tabId && !this.options.disableBuiltInSurface);
+            }
+            constructor(public options: { surfaceContext?: { tabId?: string }; disableBuiltInSurface?: boolean }) {
                 super();
                 mocks.instances.push(this);
             }
@@ -51,7 +54,7 @@ function bridge() {
     return new KronTermNativeToolBridge(() => ({ tabId: "tab-1", blockId: "agent-1" }));
 }
 
-describe("KronTerm Agent delegation to KronosCode", () => {
+describe("KronOS Agent delegation to KronosCode", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.instances.length = 0;
@@ -116,6 +119,18 @@ describe("KronTerm Agent delegation to KronosCode", () => {
         expect(JSON.parse(await tools.acpListAgents()).preferred).toBeNull();
         await expect(tools.acpRunAgent("kronoscode", "Inspect")).rejects.toThrow("unavailable");
         expect(mocks.initialize).not.toHaveBeenCalled();
+    });
+
+    test("reports partial specialist output as incomplete when the turn limit is reached", async () => {
+        mocks.send.mockImplementationOnce(async (manager) => {
+            manager.emit("event", { type: "agent_message_chunk", data: { text: "I started the edits." } });
+            return "max_turn_requests";
+        });
+        await expect(bridge().acpRunAgent("kronoscode", "Inspect")).rejects.toThrow(
+            "Inspect the target for partial changes before retrying"
+        );
+        expect(mocks.stop).toHaveBeenCalledOnce();
+        expect(mocks.send).toHaveBeenCalledOnce();
     });
 
     test("preserves the detected OpenCode executable and ACP launch arguments", async () => {

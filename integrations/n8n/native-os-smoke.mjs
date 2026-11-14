@@ -7,7 +7,7 @@ export async function verifyNativeOSWorkflow(origin, cookie, types) {
   const api = async (route, method = "GET", body) => {
     const response = await fetch(new URL(route, origin), {
       method,
-      headers: { cookie, "content-type": "application/json" },
+      headers: { cookie, "browser-id": "component-fixture", "content-type": "application/json" },
       body: body == null ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(30000),
     });

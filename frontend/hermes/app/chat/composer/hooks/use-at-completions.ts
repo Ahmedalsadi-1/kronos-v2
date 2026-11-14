@@ -20,7 +20,7 @@ const STARTER_META: Record<string, string> = {
     image: "Attach an image reference",
     tool: "Attach a tool reference",
     git: "Attach git context",
-    widget: "Mention a live KronTerm widget",
+    widget: "Mention a live KronOS widget",
     app: "Choose an app for Kron Computer Use",
 };
 

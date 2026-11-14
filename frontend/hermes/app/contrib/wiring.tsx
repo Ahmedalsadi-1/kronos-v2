@@ -122,6 +122,8 @@ import { useSessionStateCache } from "../session/hooks/use-session-state-cache";
 import { startWorkspaceSession } from "../session/workspace-session-target";
 import {
     consumeKronTermSettingsRequest,
+    HermesSettingsSavedEvent,
+    type HermesSettingsSavedDetail,
     KronTermSettingsRequestEvent,
     makeKronTermSettingsViewId,
 } from "../settings/kronterm-settings-host";
@@ -348,6 +350,20 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         queryClient,
         requestGateway,
     });
+
+    useEffect(() => {
+        const onSettingsSaved = (event: Event) => {
+            const model = (event as CustomEvent<HermesSettingsSavedDetail | undefined>).detail;
+            if (model) {
+                applySavedMainModel(model.provider, model.model);
+            } else {
+                void refreshHermesConfig();
+            }
+            void refreshCurrentModel();
+        };
+        window.addEventListener(HermesSettingsSavedEvent, onSettingsSaved);
+        return () => window.removeEventListener(HermesSettingsSavedEvent, onSettingsSaved);
+    }, [applySavedMainModel, refreshCurrentModel, refreshHermesConfig]);
 
     const openProviderSettings = useCallback(() => navigate(`${SETTINGS_ROUTE}?tab=providers`), [navigate]);
 

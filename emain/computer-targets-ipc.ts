@@ -22,7 +22,7 @@ export function registerComputerTargetsIpc(): void {
             ) {
                 return {
                     success: false,
-                    error: { code: "untrusted-caller", message: "Only a KronTerm workspace can manage computers." },
+                    error: { code: "untrusted-caller", message: "Only a KronOS workspace can manage computers." },
                 };
             }
             if (!owners.has(event.sender.id)) {
@@ -43,6 +43,7 @@ export function registerComputerTargetsIpc(): void {
         });
     handle("computer-targets:list", () => runtime.list());
     handle("computer-targets:action", (input) => runtime.perform(input));
+    handle("computer-targets:pick", (input) => runtime.pickElement(input));
     handle("computer-targets:takeover", (input) => runtime.takeOver(input));
     handle("computer-targets:resume", (input) => {
         if (input == null || typeof input !== "object") throw new Error("Invalid resume request.");

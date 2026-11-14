@@ -111,6 +111,23 @@ describe("wsh bridge command builders", () => {
         );
     });
 
+    it("passes canvas asset paths and coordinates intact to wsh", () => {
+        const file = "/workspace/shot #1.mp4";
+        assert.deepEqual(makeWorkspaceSurfaceControlArgs({ action: "add_file", file, x: 0, y: -10 }), [
+            "workspace-surface",
+            "control",
+            "add_file",
+            "--x",
+            "0",
+            "--y",
+            "-10",
+            "--file",
+            file,
+        ]);
+        assert.throws(() => makeWorkspaceSurfaceControlArgs({ action: "add_file" }), /absolute local file path/);
+        assert.throws(() => makeWorkspaceSurfaceControlArgs({ action: "add_file", file, x: Infinity }), /finite/);
+    });
+
     it("builds typed OS docking and workspace args", () => {
         assert.deepEqual(
             makeWorkspaceSurfaceControlArgs({

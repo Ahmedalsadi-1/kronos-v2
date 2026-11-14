@@ -492,7 +492,7 @@ export function WorkflowCanvas({
                                         <strong>Connected to your workspace</strong>
                                         <p>
                                             Steps use existing tools and widgets. Credentials and approvals stay with
-                                            KronTerm.
+                                            KronOS.
                                         </p>
                                     </div>
                                 </>

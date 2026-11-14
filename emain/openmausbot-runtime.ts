@@ -9,6 +9,7 @@ import path from "node:path";
 import { BotDesktopBridge } from "./agent-bot-desktop-bridge";
 import { grantManagedRuntimeRequests, revokeManagedRuntimeRequests } from "./authkey";
 import { getKronosCodeBinaryCandidates } from "./kronoscode-runtime";
+import { ProjectRoomService, validateProjectRoomCommand } from "./project-room-service";
 
 export type OpenMausBotConnection = { origin: string; parentOrigin: string };
 const OwnerHeader = "X-OpenMausBot-Desktop-Owner";
@@ -17,6 +18,34 @@ let child: UtilityProcess;
 let connection: OpenMausBotConnection;
 let starting: Promise<OpenMausBotConnection>;
 const ownerToken = randomBytes(32).toString("base64url");
+const projectRooms = new ProjectRoomService(
+    async <T>(route: string, method = "GET", body?: Record<string, unknown>) => {
+        if (!connection) throw new Error("Agent workspace is disconnected. Reconnect to continue.");
+        const response = await fetch(`${connection.origin}${route}`, {
+            method,
+            headers: { [OwnerHeader]: ownerToken, "Content-Type": "application/json" },
+            body: body ? JSON.stringify(body) : undefined,
+            redirect: "error",
+            signal: AbortSignal.timeout(30_000),
+        });
+        const result = await response.json();
+        if (!response.ok)
+            throw new Error(
+                typeof result.error === "string" ? result.error : `Project room request failed (${response.status}).`
+            );
+        return result as T;
+    }
+);
+
+export async function projectRoomCommand(
+    sender: Electron.WebContents,
+    command: import("../frontend/types/project-room").ProjectRoomCommand
+): Promise<import("../frontend/types/project-room").ProjectRoomState> {
+    validateProjectRoomCommand(command);
+    const runtime = await openMausBotConnection(sender);
+    const room = command.action === "create" ? await projectRooms.create(command) : undefined;
+    return { ...runtime, rooms: await projectRooms.list(), ...(room ? { selectedId: room.id } : {}) };
+}
 
 function freePort(): Promise<number> {
     return new Promise((resolve, reject) => {
@@ -79,17 +108,24 @@ async function start(parentOrigin: string): Promise<OpenMausBotConnection> {
         });
         if (!response.ok) throw new Error(`Agent roster unavailable (${response.status})`);
         const state = await response.json();
-        return state.bots.map((bot: { id: string; name: string; cwd?: string }) => ({
-            id: bot.id,
-            name: bot.name,
-            cwd: bot.cwd,
-        }));
+        return state.bots.map((bot: { id: string; name: string; cwd?: string }) => {
+            const room = state.groups?.find(
+                (group: { id: string; name: string; section?: string; dm?: boolean; memberIds: string[] }) =>
+                    !group.dm && group.section?.startsWith("KronOS Project ") && group.memberIds.includes(bot.id)
+            );
+            return {
+                id: bot.id,
+                name: bot.name,
+                cwd: room?.cwd ?? bot.cwd,
+                ...(room ? { room: { id: room.id, name: room.name } } : {}),
+            };
+        });
     });
     const bridge = await desktopBridge.start();
     const running = utilityProcess.fork(entry, [], {
         cwd: root,
         stdio: "pipe",
-        serviceName: "KronTerm Agent Workspace",
+        serviceName: "KronOS Agent Workspace",
         env: {
             ...process.env,
             OMB_DATA_DIR: dataDir,
@@ -154,7 +190,7 @@ export async function openMausBotConnection(sender: Electron.WebContents): Promi
         url.protocol !== "file:" &&
         !(["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1"].includes(url.hostname))
     ) {
-        throw new Error("Agent workspace can only be opened by the KronTerm renderer.");
+        throw new Error("Agent workspace can only be opened by the KronOS renderer.");
     }
     if (!starting)
         starting = start(url.origin).catch((error) => {

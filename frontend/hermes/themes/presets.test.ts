@@ -12,7 +12,7 @@ import {
 } from "./presets";
 
 describe("built-in Hermes themes", () => {
-    it("does not inject remote font stylesheets into the KronTerm renderer", () => {
+    it("does not inject remote font stylesheets into the KronOS renderer", () => {
         expect(BUILTIN_THEME_LIST.map((theme) => theme.typography?.fontUrl).filter(Boolean)).toEqual([]);
     });
 
@@ -57,16 +57,32 @@ describe("Coucou palette parity", () => {
         }
     });
     it("validates theme requests without accepting arbitrary CSS or coerced values", () => {
-        expect(coucouAppearance("coucou-teal", true)).toEqual({
+        expect(coucouAppearance("coucou-teal", true)).toMatchObject({
             chrome: "coucou",
             theme: "coucou-teal",
             reducedMotion: true,
         });
-        expect(coucouAppearance("url(javascript:alert(1))", "yes")).toEqual({
+        expect(coucouAppearance("url(javascript:alert(1))", "yes")).toMatchObject({
             chrome: "coucou",
             theme: "coucou",
             reducedMotion: false,
         });
         expect(coucouPalette({ name: "coucou-pink" })).toBeUndefined();
+    });
+    it("shares OS materials and accessibility preferences without accepting injected material values", () => {
+        const appearance = coucouAppearance("coucou-teal", false, {
+            colorScheme: "light",
+            contrast: "high",
+            reducedTransparency: true,
+            reducedMotion: true,
+            materials: { content: "url(unsafe)" },
+        } as any);
+        expect(appearance).toMatchObject({
+            colorScheme: "light",
+            contrast: "high",
+            reducedTransparency: true,
+            reducedMotion: true,
+            materials: { content: "#f4f4f6", label: "#1d1d1f", secondary: "#1d1d1f", separator: "#1d1d1f" },
+        });
     });
 });

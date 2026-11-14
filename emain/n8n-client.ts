@@ -128,7 +128,7 @@ async function performN8nRequest(origin: string, input: N8nEditorRequest, signal
         await response.body?.cancel();
         forgetWorkflowSession(origin, cookie);
     }
-    if (response.status === 401) throw new Error("Reconnect your KronTerm account in the Workflows panel.");
+    if (response.status === 401) throw new Error("Hermes workflow session expired. Restart the workflow runtime.");
     const body = await boundedResponse(response);
     const headers = Object.fromEntries(
         ["content-type", "content-disposition", "etag", "retry-after"]

@@ -41,7 +41,7 @@ it("contains rejected chat imports while an unrelated live widget keeps its DOM 
         const draft = element.querySelector("input");
         draft.value = "unsaved widget work";
         await act(async () => rejectImport(new Error("504 Outdated Optimize Dep")));
-        expect(element.querySelector('[role="alert"]')?.textContent).toContain("KronTerm Agent could not load");
+        expect(element.querySelector('[role="alert"]')?.textContent).toContain("KronOS Agent could not load");
         expect(element.querySelector("button")?.textContent).toBe("Reload workspace");
         expect(element.querySelector("input")).toBe(draft);
         expect(draft.value).toBe("unsaved widget work");

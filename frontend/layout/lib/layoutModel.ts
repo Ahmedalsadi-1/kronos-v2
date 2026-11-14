@@ -39,10 +39,10 @@ import {
     LayoutTreeComputeMoveNodeAction,
     LayoutTreeDeleteNodeAction,
     LayoutTreeFocusNodeAction,
+    LayoutTreeFoldNodeToggleAction,
     LayoutTreeInsertNodeAction,
     LayoutTreeInsertNodeAtIndexAction,
     LayoutTreeMagnifyNodeToggleAction,
-    LayoutTreeFoldNodeToggleAction,
     LayoutTreeMoveNodeAction,
     LayoutTreeReplaceNodeAction,
     LayoutTreeResizeNodeAction,
@@ -295,7 +295,7 @@ export class LayoutModel {
                 .flatMap((props) => props.resizeHandles)
                 .filter((v) => v);
         });
-        this.resizeHandles = splitAtom(resizeHandleListAtom);
+        this.resizeHandles = splitAtom(resizeHandleListAtom, (handle) => handle.id);
         this.isContainerResizing = atom(false);
         this.isResizing = atom((get) => {
             const pendingAction = get(this.pendingTreeAction.throttledValueAtom);
@@ -831,9 +831,8 @@ export class LayoutModel {
             return resizeAction?.resizeOperations.find((op) => op.nodeId === node.id)?.size ?? node.size;
         }
 
-        const additionalProps: LayoutNodeAdditionalProps = node.id in additionalPropsMap
-            ? additionalPropsMap[node.id]
-            : { treeKey: "0" };
+        const additionalProps: LayoutNodeAdditionalProps =
+            node.id in additionalPropsMap ? additionalPropsMap[node.id] : { treeKey: "0" };
 
         const nodeRect: Dimensions = node.id === this.treeState.rootNode.id ? boundingRect : additionalProps.rect;
         const nodeIsRow = node.flexDirection === FlexDirection.Row;
@@ -862,6 +861,11 @@ export class LayoutModel {
             if (lastChildRect) {
                 const resizeHandleIndex = resizeHandles.length;
                 const halfResizeHandleSizePx = resizeHandleSizePx / 2;
+                const beforePixels = nodeIsRow ? lastChildRect.width : lastChildRect.height;
+                const pairPixels = beforePixels + (nodeIsRow ? rect.width : rect.height);
+                const beforePercentage = pairPixels > 0 ? Math.round((beforePixels * 100) / pairPixels) : 50;
+                const minPercentage =
+                    pairPixels > 0 ? Math.min(50, Math.round((MinNodeSizePx * 100) / pairPixels)) : 50;
                 const resizeHandleDimensions: Dimensions = {
                     top: nodeIsRow
                         ? lastChildRect.top
@@ -873,11 +877,14 @@ export class LayoutModel {
                     height: nodeIsRow ? lastChildRect.height : resizeHandleSizePx,
                 };
                 resizeHandles.push({
-                    id: `${node.id}-${resizeHandleIndex}`,
+                    id: `${node.id}:${node.children[i - 1].id}:${child.id}`,
                     parentNodeId: node.id,
                     parentIndex: resizeHandleIndex,
                     transform: setTransform(resizeHandleDimensions, true, false),
                     flexDirection: node.flexDirection,
+                    beforePercentage,
+                    minPercentage: Math.min(minPercentage, beforePercentage),
+                    maxPercentage: Math.max(100 - minPercentage, beforePercentage),
                     centerPx:
                         (nodeIsRow ? resizeHandleDimensions.left : resizeHandleDimensions.top) + halfResizeHandleSizePx,
                 });
@@ -1452,21 +1459,28 @@ export class LayoutModel {
      * @param x The X coordinate of the pointer device, in CSS pixels.
      * @param y The Y coordinate of the pointer device, in CSS pixels.
      */
-    onResizeMove(resizeHandle: ResizeHandleProps, x: number, y: number) {
+    onResizeMove(resizeHandle: ResizeHandleProps, x: number, y: number, clampToBounds = false) {
         const parentIsRow = resizeHandle.flexDirection === FlexDirection.Row;
 
         // If the resize context is out of date, update it and save it for future events.
         if (this.resizeContext?.handleId !== resizeHandle.id) {
             const parentNode = findNode(this.treeState.rootNode, resizeHandle.parentNodeId);
-            const beforeNode = parentNode.children![resizeHandle.parentIndex];
-            const afterNode = parentNode.children![resizeHandle.parentIndex + 1];
+            const beforeNode = parentNode?.children?.[resizeHandle.parentIndex];
+            const afterNode = parentNode?.children?.[resizeHandle.parentIndex + 1];
+            const displayContainerRect = this.displayContainerRef.current?.getBoundingClientRect();
 
             const addlProps = this.getter(this.additionalProps);
             const pixelToSizeRatio = addlProps[resizeHandle.parentNodeId]?.pixelToSizeRatio;
-            if (beforeNode && afterNode && pixelToSizeRatio) {
+            if (
+                beforeNode &&
+                afterNode &&
+                displayContainerRect &&
+                Number.isFinite(pixelToSizeRatio) &&
+                pixelToSizeRatio > 0
+            ) {
                 this.resizeContext = {
                     handleId: resizeHandle.id,
-                    displayContainerRect: this.displayContainerRef.current?.getBoundingClientRect(),
+                    displayContainerRect,
                     resizeHandleStartPx: resizeHandle.centerPx,
                     beforeNodeId: beforeNode.id,
                     afterNodeId: afterNode.id,
@@ -1487,13 +1501,14 @@ export class LayoutModel {
             : y - this.resizeContext.displayContainerRect?.top;
         const clientDiff = (this.resizeContext.resizeHandleStartPx - clientPoint) * this.resizeContext.pixelToSizeRatio;
         const minNodeSize = MinNodeSizePx * this.resizeContext.pixelToSizeRatio;
-        const beforeNodeSize = this.resizeContext.beforeNodeStartSize - clientDiff;
-        const afterNodeSize = this.resizeContext.afterNodeStartSize + clientDiff;
-
-        // If either node will be too small after this resize, don't let it happen.
-        if (beforeNodeSize < minNodeSize || afterNodeSize < minNodeSize) {
-            return;
-        }
+        const totalNodeSize = this.resizeContext.beforeNodeStartSize + this.resizeContext.afterNodeStartSize;
+        const maxNodeSize = totalNodeSize - minNodeSize;
+        if (maxNodeSize < minNodeSize) return;
+        const requestedSize = this.resizeContext.beforeNodeStartSize - clientDiff;
+        const beforeNodeSize = clampToBounds ? boundNumber(requestedSize, minNodeSize, maxNodeSize) : requestedSize;
+        if (beforeNodeSize < minNodeSize || beforeNodeSize > maxNodeSize) return;
+        if (clampToBounds && beforeNodeSize === this.resizeContext.beforeNodeStartSize) return;
+        const afterNodeSize = totalNodeSize - beforeNodeSize;
 
         const resizeAction: LayoutTreeResizeNodeAction = {
             type: LayoutTreeActionType.ResizeNode,
@@ -1517,13 +1532,23 @@ export class LayoutModel {
         this.updateTree(false);
     }
 
+    nudgeResizeHandle(resizeHandle: ResizeHandleProps, deltaPx: number) {
+        const rect = this.displayContainerRef.current?.getBoundingClientRect();
+        if (!rect || this.resizeContext) return;
+        const position = resizeHandle.centerPx + deltaPx;
+        this.onResizeMove(resizeHandle, rect.left + position, rect.top + position, true);
+        this.onResizeEnd();
+    }
+
     /**
      * Callback to end the current resize operation and commit its pending action.
      */
     onResizeEnd() {
         if (this.resizeContext) {
             this.resizeContext = undefined;
-            this.treeReducer({ type: LayoutTreeActionType.CommitPendingAction });
+            if (this.getter(this.pendingTreeAction.currentValueAtom)?.type === LayoutTreeActionType.ResizeNode) {
+                this.treeReducer({ type: LayoutTreeActionType.CommitPendingAction });
+            }
         }
     }
 

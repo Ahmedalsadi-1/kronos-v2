@@ -5,29 +5,25 @@ const WorkspacePresentationValues = ["widgets", "tabs", "canvas", "os", "web"] a
 
 type WorkspacePresentation = (typeof WorkspacePresentationValues)[number];
 
-const WorkspacePresentations = [
-    "widgets",
-    "tabs",
-    "canvas",
-    "os",
-    "web",
-] as const satisfies readonly WorkspacePresentation[];
+const WorkspacePresentations = ["widgets", "tabs", "os"] as const;
+type ActiveWorkspacePresentation = (typeof WorkspacePresentations)[number];
 
 const LayoutModeStorageKey = "kronterm:layoutmode";
+const WebReturnPresentationStorageKey = "kronterm:web-return-layout";
 const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
 
 function isWorkspacePresentation(value: unknown): value is WorkspacePresentation {
     return WorkspacePresentationValues.includes(value as WorkspacePresentation);
 }
 
-function normalizeWorkspacePresentation(value: unknown): WorkspacePresentation | undefined {
-    if (value === "browsermode") {
-        return "web";
-    }
-    return isWorkspacePresentation(value) ? value : undefined;
+function normalizeWorkspacePresentation(value: unknown): ActiveWorkspacePresentation | undefined {
+    if (value === "canvas") return "os";
+    if (value === "web" || value === "browsermode") return "tabs";
+    return WorkspacePresentations.find((presentation) => presentation === value);
 }
 
-function readWorkspacePresentation(fallback: WorkspacePresentation = "os"): WorkspacePresentation {
+function readWorkspacePresentation(value: WorkspacePresentation = "os"): ActiveWorkspacePresentation {
+    const fallback = normalizeWorkspacePresentation(value) ?? "os";
     if (typeof window === "undefined") {
         return fallback;
     }
@@ -42,7 +38,17 @@ function readWorkspacePresentation(fallback: WorkspacePresentation = "os"): Work
     }
 }
 
-function publishWorkspacePresentation(value: unknown): WorkspacePresentation {
+function readWebReturnPresentation(): Exclude<WorkspacePresentation, "web"> {
+    try {
+        const stored = normalizeWorkspacePresentation(window.localStorage.getItem(WebReturnPresentationStorageKey));
+        if (stored) return stored;
+    } catch {
+        // Keep the in-memory selection when storage is unavailable.
+    }
+    return "os";
+}
+
+function publishWorkspacePresentation(value: unknown): ActiveWorkspacePresentation {
     const presentation = normalizeWorkspacePresentation(value);
     if (!presentation) {
         throw new Error(`Unsupported workspace presentation: ${String(value)}`);
@@ -50,7 +56,7 @@ function publishWorkspacePresentation(value: unknown): WorkspacePresentation {
     if (typeof window === "undefined") {
         return presentation;
     }
-    const previous = readWorkspacePresentation(presentation);
+    const previous = readWorkspacePresentation();
     (window as any).__krontermLayoutMode = presentation;
     try {
         window.localStorage.setItem(LayoutModeStorageKey, presentation);
@@ -94,23 +100,24 @@ function subscribeWorkspacePresentation(callback: () => void): () => void {
 }
 
 function getAdjacentWorkspacePresentation(current: WorkspacePresentation, direction: -1 | 1): WorkspacePresentation {
-    const currentIndex = WorkspacePresentations.indexOf(current as (typeof WorkspacePresentations)[number]);
+    const currentIndex = WorkspacePresentations.indexOf(normalizeWorkspacePresentation(current));
     if (currentIndex === -1) {
-        return direction === 1 ? "widgets" : "web";
+        return direction === 1 ? "widgets" : "os";
     }
     const nextIndex = (currentIndex + direction + WorkspacePresentations.length) % WorkspacePresentations.length;
     return WorkspacePresentations[nextIndex];
 }
 
 export {
-    WorkspacePresentationValues,
-    WorkspacePresentations,
     LayoutModeChangedEvent,
     LayoutModeStorageKey,
+    WorkspacePresentationValues,
+    WorkspacePresentations,
     getAdjacentWorkspacePresentation,
     isWorkspacePresentation,
     normalizeWorkspacePresentation,
     publishWorkspacePresentation,
+    readWebReturnPresentation,
     readWorkspacePresentation,
     subscribeWorkspacePresentation,
 };

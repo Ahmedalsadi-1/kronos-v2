@@ -1,0 +1,33 @@
+.kronos-sign-in {
+    color-scheme: light;
+    --signin-background: #f1f3f6;
+    --signin-card: #ffffff;
+    --signin-text: #181d25;
+    --signin-muted: #515c6b;
+    --signin-field: #f3f5f8;
+    --signin-border: #c8cfd8;
+    --signin-button: #26303c;
+    --signin-button-text: #ffffff;
+    --signin-focus: #215baf;
+    --signin-success: #196342;
+    --signin-error: #a3213b;
+    background: var(--signin-background);
+    color: var(--signin-text);
+}
+
+@media (prefers-color-scheme: dark) {
+    .kronos-sign-in {
+        color-scheme: dark;
+        --signin-background: #121417;
+        --signin-card: #1d2127;
+        --signin-text: #f1f4f8;
+        --signin-muted: #b2bcc9;
+        --signin-field: #272d35;
+        --signin-border: #4b5563;
+        --signin-button: #e7edf5;
+        --signin-button-text: #171c23;
+        --signin-focus: #9ac4ff;
+        --signin-success: #9be4b8;
+        --signin-error: #ffadbd;
+    }
+}

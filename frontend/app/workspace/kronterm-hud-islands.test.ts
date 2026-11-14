@@ -46,7 +46,7 @@ vi.mock("./kronterm-hud-controller", () => ({
 
 import { launchKronTermHudIsland } from "./kronterm-hud-islands";
 
-describe("KronTerm HUD island launcher", () => {
+describe("KronOS HUD island launcher", () => {
     beforeEach(() => vi.clearAllMocks());
 
     it("opens a requested file in the existing explorer before selecting its notch preview", async () => {
@@ -76,6 +76,11 @@ describe("KronTerm HUD island launcher", () => {
         mocks.getModels.mockReturnValueOnce([{ viewModel: { viewType: "bots", blockId: "bots-existing" } }]);
         await expect(launchKronTermHudIsland("bots")).resolves.toBe("bots-existing");
         expect(mocks.selectNativeHudWidget).toHaveBeenCalledWith("bots-existing", true);
+        expect(mocks.createBlock).not.toHaveBeenCalled();
+    });
+    it("keeps singleton apps on the OS launch policy even when a new window is requested", async () => {
+        mocks.getModels.mockReturnValueOnce([{ viewModel: { viewType: "bots", blockId: "bots-existing" } }]);
+        await expect(launchKronTermHudIsland("bots", { forceNew: true })).resolves.toBe("bots-existing");
         expect(mocks.createBlock).not.toHaveBeenCalled();
     });
     it("switches an existing device widget to the phone requested by the notch", async () => {

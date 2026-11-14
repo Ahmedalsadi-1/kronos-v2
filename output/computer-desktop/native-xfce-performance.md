@@ -17,7 +17,7 @@ No custom Qt browser, Tk dock or alternative window manager is started.
 ## Verification
 
 26 targeted tests passed across provisioning, runtime, WebSocket forwarding and viewer ownership/lifecycle.
-Main/preload build and targeted lint passed. A previous full TypeScript check passed; the check for the latest latency edits is recorded separately in the task log.
+Main/preload build and targeted lint passed. The full TypeScript check passed after correcting the upgrade socket type guard.
 
 The live VM successfully booted the native chrome wallpaper and three-icon panel.
 The corrected focus parser was applied through the user-owned VM Terminal and visibly maximized Terminal within the wallpaper margins.
@@ -25,8 +25,12 @@ The corrected focus parser was applied through the user-owned VM Terminal and vi
 Host-only bridge/child-pipe echo benchmark: 200 samples after 10 warmup samples; median 0.123 ms, p95 0.281 ms, maximum 0.564 ms.
 This excludes SSH, the VM, screen capture, encoding, renderer painting and input-to-visible response. It is not an end-to-end latency claim.
 
-## Pending live validation
+## Live restart validation
 
-The user started another agent task in the VM. The VM is agent-owned, so no takeover or restart was performed during that task.
-The latest focus deduplication, native dark theme and server latency flags require a coordinated application/desktop update and VM restart.
-Measure idle guest CPU, terminal typing/scrolling and browser animation before making a responsiveness or latency guarantee.
+The user explicitly authorized restarting immediately. KronTerm was restarted with the latest main/preload build. Its stopped renderer dev server was restored on localhost:9124. The existing VM was updated and restarted through its visible controls.
+
+Cloud-init completed successfully in 33.43 seconds. The live widget showed Connected and You have control, with the static chrome wallpaper and native three-icon dark dock. Provisioning data includes the focus parser correction, duplicate-event suppression, native Greybird-dark theme and bounded panel initialization wait.
+
+One idle host process snapshot showed QEMU at 4.3% CPU. This is not a controlled before/after benchmark or an end-to-end latency measurement.
+
+The desktop-control adapter subsequently failed coordinate clicks with windowNotFoundAtPosition. AX focus and keyboard attempts did not visibly launch a guest app. Typing, scrolling, app-switch smoothness and precise input-to-visible latency remain unverified after this restart. No lag-free guarantee is made.

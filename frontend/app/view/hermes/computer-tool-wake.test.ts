@@ -22,6 +22,7 @@ describe("Computer widget automatic opening", () => {
         wake(event);
         wake(event);
         await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+        expect(open).toHaveBeenCalledWith(undefined, "bot-1");
         await new Promise((resolve) => setTimeout(resolve, 0));
         wake({ ...event, toolId: "two" });
         expect(open).toHaveBeenCalledTimes(1);

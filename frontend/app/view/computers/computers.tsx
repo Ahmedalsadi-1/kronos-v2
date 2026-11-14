@@ -2,22 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SystemButton, SystemMaterial, SystemToolbar } from "@/app/components/system-ui";
+import { ScreenSelectorToolbar, type ScreenSelectorAction } from "@/app/lib/screen-selector-toolbar";
 import { uxCloseBlock } from "@/app/store/keymodel";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
 import type { ComputerTargetSnapshot } from "@/types/computer-targets";
 import { useAtomValue } from "jotai";
-import {
-    ArrowLeft,
-    Camera,
-    ExternalLink,
-    Home,
-    Keyboard,
-    Power,
-    RefreshCw,
-    RotateCw,
-    Scan,
-    Smartphone,
-} from "lucide-react";
+import { ArrowLeft, Camera, ExternalLink, Home, Keyboard, Power, RefreshCw, RotateCw, Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { captureStillValid } from "./computer-selection";
 import { ComputerSelection } from "./computer-selection-panel";
@@ -50,7 +40,9 @@ export function ComputersPanel({
     const gestureHandled = useRef(false);
     const [text, setText] = useState("");
     const [keyboardOpen, setKeyboardOpen] = useState(false);
-    const [selection, setSelection] = useState<ComputerTargetSnapshot>(null);
+    const [selection, setSelection] = useState<{ snapshot: ComputerTargetSnapshot; action: ScreenSelectorAction }>(
+        null
+    );
     const [screenAspectRatio, setScreenAspectRatio] = useState<number>();
     const landscape = screenAspectRatio > 1;
     const readScreenSize = (event: React.SyntheticEvent<HTMLImageElement>) => {
@@ -60,9 +52,9 @@ export function ComputersPanel({
     const target = state.targets.find((item) => item.id == state.selectedId);
     const running = target?.status == "booted" || target?.status == "connected";
     const snapshot = state.snapshot?.target.id == target?.id ? state.snapshot : undefined;
-    const selectionActive = selection && captureStillValid(selection, target);
+    const selectionActive = selection && captureStillValid(selection.snapshot, target);
     useEffect(() => {
-        if (selection && !captureStillValid(selection, target)) setSelection(null);
+        if (selection && !captureStillValid(selection.snapshot, target)) setSelection(null);
     }, [selection, target?.id, target?.controlGeneration, target?.status]);
     const can = (action: string) => target?.capabilities.some((capability) => capability == action);
     useEffect(() => {
@@ -201,7 +193,11 @@ export function ComputersPanel({
             )}
             <section className="kt-computers-screen" aria-label="Device screen" aria-busy={state.loading || state.busy}>
                 {selectionActive ? (
-                    <ComputerSelection snapshot={selection} onClose={() => setSelection(null)} />
+                    <ComputerSelection
+                        snapshot={selection.snapshot}
+                        action={selection.action}
+                        onClose={() => setSelection(null)}
+                    />
                 ) : snapshot?.imageDataUrl ? (
                     <PhoneFrame
                         toolbar={
@@ -437,6 +433,21 @@ export function ComputersPanel({
                         )}
                     </div>
                 )}
+                {!selectionActive && snapshot?.imageDataUrl && running && (
+                    <ScreenSelectorToolbar
+                        title={`${target.name} element selector`}
+                        onSelect={(action) => {
+                            if (state.busy || state.connecting) return;
+                            clearTimeout(textTimer.current);
+                            clearTimeout(wheelTimer.current);
+                            textBuffer.current = "";
+                            wheelDelta.current = 0;
+                            gestureStart.current = null;
+                            setKeyboardOpen(false);
+                            setSelection({ snapshot, action });
+                        }}
+                    />
+                )}
             </section>
             {!compact && snapshot?.imageDataUrl && (
                 <div className="kt-computers-capture-label">
@@ -452,25 +463,6 @@ export function ComputersPanel({
             )}
             {target && !compact && (
                 <div className="kt-computers-controls" role="toolbar" aria-label="Simulator controls">
-                    {snapshot?.imageDataUrl && !selectionActive && (
-                        <SystemButton
-                            size="small"
-                            aria-label="Select screen region (Labs)"
-                            disabled={state.busy || !running}
-                            onClick={() => {
-                                clearTimeout(textTimer.current);
-                                clearTimeout(wheelTimer.current);
-                                textBuffer.current = "";
-                                wheelDelta.current = 0;
-                                gestureStart.current = null;
-                                setKeyboardOpen(false);
-                                setSelection({ ...snapshot, target: { ...snapshot.target } });
-                            }}
-                        >
-                            <Scan size={17} />
-                            <span>Region</span>
-                        </SystemButton>
-                    )}
                     {can("home") && (
                         <SystemButton
                             size="small"
@@ -591,6 +583,7 @@ export function ComputersView({ model, contentRef }: ViewComponentProps<Computer
     return (
         <div ref={contentRef} className="kt-computers-host">
             <DeviceWorkspace
+                blockId={model.blockId}
                 state={state}
                 controller={model.controller}
                 onCloseWidget={() => uxCloseBlock(model.blockId, () => model.nodeModel?.onClose())}

@@ -12,6 +12,7 @@ const ButtonClass = "cursor-pointer rounded border border-border px-2 py-1 text-
 
 export function BrowserResearchPanel({ controller }: { controller: BrowserGrabController }) {
     const open = useAtomValue(controller.researchOpen);
+    const selection = useAtomValue(controller.selection);
     const store = getBrowserResearchStore();
     const findings = useSyncExternalStore(store.subscribe, store.snapshot);
     const [search, setSearch] = useState("");
@@ -102,6 +103,13 @@ export function BrowserResearchPanel({ controller }: { controller: BrowserGrabCo
             <div className="mb-3 flex flex-wrap gap-2">
                 <button className={ButtonClass} onClick={() => void controller.setIntent("grab")}>
                     Capture finding
+                </button>
+                <button
+                    className={ButtonClass}
+                    disabled={!selection}
+                    onClick={() => act(() => controller.saveResearchFinding(""))}
+                >
+                    Save finding
                 </button>
                 <button className={ButtonClass} disabled={!chosen.length} onClick={() => exportFile("markdown")}>
                     Export Markdown

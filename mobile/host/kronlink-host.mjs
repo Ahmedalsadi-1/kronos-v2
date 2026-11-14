@@ -168,11 +168,9 @@ const isAuthorized = (request) => {
 
 const isLoopbackRequest = (request) => ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress);
 
-const hostCapabilities = async () => {
-  const capabilities = ["kronoscode", "browser", "sandbox", "terminal", "files", "apps"];
-  if (phoneAgent && (await phoneAgent.status()).available) {
-    capabilities.push("phone-control");
-  }
+const hostCapabilities = (agentReady, phoneAvailable) => {
+  const capabilities = agentReady ? ["kronoscode", "browser", "sandbox", "terminal", "files", "apps"] : [];
+  if (phoneAvailable) capabilities.push("phone-control");
   return capabilities;
 };
 
@@ -248,15 +246,20 @@ const proxyHttp = async (request, response, pathname) => {
 };
 
 const checkUpstream = async () => {
-  if (!upstreamOrigin) return false;
+  if (!upstreamOrigin) return "unconfigured";
   try {
-    const response = await fetch(`${upstreamOrigin}/health`, {
+    const response = await fetch(`${upstreamOrigin}/api/session`, {
       headers: upstreamHeaders({ headers: {} }, undefined),
       signal: AbortSignal.timeout(3_000),
     });
-    return response.ok;
+    if (!response.ok) {
+      return [404, 405].includes(response.status) ? "incompatible" : "unavailable";
+    }
+    const payload = await response.json().catch(() => null);
+    const sessions = [payload, payload?.sessions, payload?.data].find(Array.isArray);
+    return sessions?.every((session) => typeof session?.id === "string" && session.id) ? "ready" : "incompatible";
   } catch {
-    return false;
+    return "unavailable";
   }
 };
 
@@ -272,22 +275,28 @@ const server = createServer(async (request, response) => {
 
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
     if (request.method === "GET" && url.pathname === "/health") {
-      const [connected, phoneControl] = await Promise.all([
+      const [upstream, phoneControl] = await Promise.all([
         checkUpstream(),
         phoneAgent?.status() ?? Promise.resolve({ available: false, provider: "disabled" }),
       ]);
-      return json(response, connected || phoneControl.available ? 200 : 503, {
-        connected,
-        ready: connected,
-        engine: "KronosCode",
+      const ready = upstream === "ready";
+      const reachable = ready || upstream === "incompatible" || phoneControl.available;
+      const detail = ready
+        ? "KronosCode session API is ready"
+        : upstream === "incompatible"
+          ? "This host does not expose the iPhone session API. Connect a compatible Labs host."
+          : upstream === "unconfigured"
+            ? "Configure a compatible Labs host with --upstream to use iPhone chat."
+            : "The iPhone session API is unavailable. Check the upstream host and its credentials.";
+      return json(response, reachable ? 200 : 503, {
+        connected: ready,
+        ready,
+        engine: ready ? "KronosCode" : undefined,
         service: "KronLink Host",
         hostName: hostname(),
-        detail: connected
-          ? "KronosCode is ready"
-          : phoneControl.available
-            ? "Phone control is ready; KronosCode is unavailable"
-            : "KronosCode is unavailable",
-        capabilities: await hostCapabilities(),
+        detail,
+        error: reachable ? undefined : detail,
+        capabilities: hostCapabilities(ready, phoneControl.available),
         phoneControl,
       });
     }
@@ -314,11 +323,12 @@ const server = createServer(async (request, response) => {
       if (typeof body.code !== "string" || !safeEqual(body.code, pairingCode)) {
         return json(response, 401, { error: "Pairing code is incorrect" });
       }
+      const [upstream, phoneControl] = await Promise.all([checkUpstream(), phoneAgent?.status()]);
       return json(response, 200, {
         token: issueToken(),
         hostName: hostname(),
         expiresAt: Date.now() + TokenTtlMs,
-        capabilities: await hostCapabilities(),
+        capabilities: hostCapabilities(upstream === "ready", phoneControl?.available),
       });
     }
 

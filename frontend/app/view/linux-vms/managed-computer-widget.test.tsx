@@ -1,53 +1,43 @@
-// Copyright 2026, KronTerm.
-// SPDX-License-Identifier: Apache-2.0
 // @vitest-environment jsdom
-
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import { ManagedComputerWidget } from "./managed-computer-widget";
 
-const api = vi.hoisted(() => ({ listLinuxDesktops: vi.fn(), performLinuxDesktopAction: vi.fn() }));
-const viewer = vi.hoisted(() => vi.fn((_props: any) => <div data-viewer="" />));
-vi.mock("@/store/global", () => ({ getApi: () => api }));
-vi.mock("./managed-vnc-screen", () => ({ ManagedVncScreen: viewer }));
-let root: ReturnType<typeof createRoot>;
-afterEach(async () => {
-    if (root) await act(async () => root.unmount());
-    vi.clearAllMocks();
-});
-
-it("automatically supplies the managed VM endpoint without requiring a manual computer", async () => {
+const fixture = vi.hoisted(() => ({ props: null as any, api: null as any }));
+vi.mock("@/store/global", () => ({ getApi: () => fixture.api }));
+vi.mock("@hermes/computer/computer-widget", () => ({ ComputerWidget: () => null }));
+vi.mock("./managed-vnc-screen", () => ({
+    ManagedVncScreen: (props) => {
+        fixture.props = props;
+        return <div />;
+    },
+}));
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+it("returns to the original agent assignment without binding the VM to the focused workspace", async () => {
     const desktop = {
         id: "linux-vm:ubuntu",
-        name: "Ubuntu",
-        status: "running",
-        ready: true,
-        viewerUrl: "ws://127.0.0.1:12345/token",
+        controlOwner: "user",
+        assignedAgentId: "sandbox:original-workspace",
+        controlGeneration: 8,
     };
-    api.listLinuxDesktops.mockResolvedValue({ success: true, data: [desktop] });
-    const container = document.createElement("div");
-    root = createRoot(container);
-    await act(async () => root.render(<ManagedComputerWidget />));
-    expect(viewer.mock.calls.at(-1)[0].desktop).toEqual(desktop);
-    expect(api.performLinuxDesktopAction).not.toHaveBeenCalled();
-    expect(viewer.mock.calls.at(-1)[0].onLifecycle).toBeTypeOf("function");
-});
-
-it("starts the existing stopped VM with its current control generation", async () => {
-    const desktop = { id: "linux-vm:ubuntu", status: "stopped", imagePrepared: true, controlGeneration: 7 };
-    api.listLinuxDesktops.mockResolvedValue({ success: true, data: [desktop] });
-    api.performLinuxDesktopAction.mockResolvedValue({
-        success: true,
-        data: { desktop: { ...desktop, status: "running" } },
-    });
-    const container = document.createElement("div");
-    root = createRoot(container);
-    await act(async () => root.render(<ManagedComputerWidget />));
-    await act(async () => viewer.mock.calls.at(-1)[0].onLifecycle());
-    expect(api.performLinuxDesktopAction).toHaveBeenCalledWith({
-        desktopId: desktop.id,
-        action: "start",
-        expectedGeneration: 7,
-    });
+    fixture.api = {
+        listLinuxDesktops: vi.fn(async () => ({ success: true, data: [desktop] })),
+        resumeLinuxDesktop: vi.fn(async () => ({
+            success: true,
+            data: { ...desktop, controlOwner: "agent", controlGeneration: 9 },
+        })),
+        sandboxComputerAccess: vi.fn(),
+    };
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    try {
+        await act(async () => root.render(<ManagedComputerWidget />));
+        await act(async () => fixture.props.onReturnControl());
+        expect(fixture.api.resumeLinuxDesktop).toHaveBeenCalledWith("linux-vm:ubuntu", 8);
+        expect(fixture.api.sandboxComputerAccess).not.toHaveBeenCalled();
+        expect(fixture.props.desktop.controlOwner).toBe("agent");
+    } finally {
+        await act(async () => root.unmount());
+    }
 });

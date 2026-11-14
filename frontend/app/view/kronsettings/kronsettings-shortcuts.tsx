@@ -25,7 +25,7 @@ const SHORTCUTS: ShortcutEntry[] = [
     { label: "Kronarchy Terminal", keys: "Super + Enter", group: "Kronarchy" },
     { label: "Kronarchy Browser", keys: "Super + Shift + Enter", group: "Kronarchy" },
     { label: "Kronarchy Files", keys: "Super + Shift + F", group: "Kronarchy" },
-    { label: "KronTerm Agent", keys: "Super + Shift + A", group: "Kronarchy" },
+    { label: "KronOS Agent", keys: "Super + Shift + A", group: "Kronarchy" },
     { label: "Activity", keys: "Super + Ctrl + T", group: "Kronarchy" },
     { label: "Scratchpad", keys: "Super + S", group: "Kronarchy" },
     { label: "New Terminal", keys: "⌘⇧T", group: "Layout" },

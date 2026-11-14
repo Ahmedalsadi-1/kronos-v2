@@ -1,6 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { DeviceSelectedElement } from "./computer-targets";
+
 export interface LinuxDesktop {
     id: string;
     name: string;
@@ -26,6 +28,7 @@ export interface LinuxDesktopAction {
         | "stop"
         | "remove"
         | "screenshot"
+        | "pick-element"
         | "click"
         | "drag"
         | "type"
@@ -50,6 +53,7 @@ export interface LinuxDesktopAction {
 export interface LinuxDesktopActionResult {
     desktop: LinuxDesktop;
     imageDataUrl?: string;
+    element?: DeviceSelectedElement;
     output?: string;
 }
 
@@ -63,4 +67,17 @@ export type ComputerManagerCommand =
     | { action: "plugin"; provider: ComputerProviderId; enabled: boolean }
     | { action: "create"; provider: ComputerProviderId; name: string }
     | { action: "rename"; id: string; name: string };
-export type SandboxComputerAccess = { desktopId: string; enabled: boolean };
+export type SandboxComputerAccessRequest = {
+    desktopId?: string;
+    enabled?: boolean;
+    sessionIds?: string[];
+    mode?: "sandbox" | "hybrid";
+    separateChat?: boolean;
+    startIfStopped?: boolean;
+};
+export type SandboxComputerAccess = {
+    desktopId: string;
+    enabled: boolean;
+    mode?: "sandbox" | "hybrid";
+    separateChat?: boolean;
+};

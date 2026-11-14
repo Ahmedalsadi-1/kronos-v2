@@ -79,6 +79,8 @@ interface ComposerStatusStackProps {
    *  as the last group so it stays fused to the composer like before. */
   queue: ReactNode
   sessionId: null | string
+  storedSessionId?: null | string
+  onStopSubagents?: () => void | Promise<void>
 }
 
 /**
@@ -86,7 +88,7 @@ interface ComposerStatusStackProps {
  * every session-scoped status — subagents, background tasks, queue — grouped by
  * type and separated by light dividers. Collapses to nothing when empty.
  */
-export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackProps) {
+export function ComposerStatusStack({ queue, sessionId, storedSessionId, onStopSubagents }: ComposerStatusStackProps) {
   const { t } = useI18n()
   const navigate = useNavigate()
   // Subscribe to THIS session's slice only. Both maps churn on other
@@ -96,13 +98,32 @@ export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackPro
   // across unrelated writes, so the slice hook bails out unless OUR session's
   // items actually changed.
   const items = useSessionSlice($statusItemsBySession, sessionId)
-  const subagents = useSessionSlice($subagentsBySession, sessionId)
+  const runtimeSubagents = useSessionSlice($subagentsBySession, sessionId)
+  const storedKey = storedSessionId !== sessionId ? (storedSessionId ?? null) : null
+  const storedItems = useSessionSlice($statusItemsBySession, storedKey)
+  const storedSubagents = useSessionSlice($subagentsBySession, storedKey)
+  const storedSwarm = useMemo(() => storedSubagents.filter(agent => agent.swarm), [storedSubagents])
+  const storedSwarmIds = useMemo(() => new Set(storedSwarm.map(agent => agent.id)), [storedSwarm])
+  const subagents = useMemo(
+    () => [...runtimeSubagents.filter(agent => !agent.swarm || !storedSwarmIds.has(agent.id)), ...storedSwarm],
+    [runtimeSubagents, storedSwarm, storedSwarmIds]
+  )
+  const activeDelegatedCount = subagents.filter(
+    agent => !agent.swarm && (agent.status === 'running' || agent.status === 'queued')
+  ).length
   const [selectedSubagentId, setSelectedSubagentId] = useState<string>()
   const previews = useSessionSlice($previewStatusBySession, sessionId)
   const scrolledUp = useStore($threadScrolledUp)
   const billing = useStore($billingBlock)
 
-  const groups = useMemo(() => groupStatusItems(items), [items])
+  const groups = useMemo(
+    () =>
+      groupStatusItems([
+        ...items.filter(item => !item.swarm || !storedSwarmIds.has(item.id)),
+        ...storedItems.filter(item => item.swarm)
+      ]),
+    [items, storedItems, storedSwarmIds]
+  )
 
   // Seed from the registry on session open; event-driven refreshes (terminal /
   // process tool completions) live in use-message-stream.
@@ -163,17 +184,30 @@ export function ComposerStatusStack({ queue, sessionId }: ComposerStatusStackPro
         <StatusSection
           accessory={
             group.type === 'subagent' ? (
-              <Tip label={<TipKeybindLabel actionId="nav.agents" text={t.statusStack.agents} />}>
-                <Button
-                  className="text-muted-foreground/75 hover:text-foreground/90"
-                  onClick={openAgents}
-                  size="micro"
-                  type="button"
-                  variant="text"
-                >
-                  {t.statusStack.agents}
-                </Button>
-              </Tip>
+              <div className="flex items-center gap-1">
+                {onStopSubagents && activeDelegatedCount > 0 && (
+                  <Button
+                    aria-label={`${t.statusStack.stop} ${t.statusStack.subagents(activeDelegatedCount)}`}
+                    onClick={() => void onStopSubagents()}
+                    size="micro"
+                    type="button"
+                    variant="text"
+                  >
+                    {t.statusStack.stop}
+                  </Button>
+                )}
+                <Tip label={<TipKeybindLabel actionId="nav.agents" text={t.statusStack.agents} />}>
+                  <Button
+                    className="text-muted-foreground/75 hover:text-foreground/90"
+                    onClick={openAgents}
+                    size="micro"
+                    type="button"
+                    variant="text"
+                  >
+                    {t.statusStack.agents}
+                  </Button>
+                </Tip>
+              </div>
             ) : undefined
           }
           collapsedIndicator={

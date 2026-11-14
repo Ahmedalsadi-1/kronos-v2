@@ -1,4 +1,4 @@
-// Copyright 2026, KronTerm.
+// Copyright 2026, KronOS.
 // SPDX-License-Identifier: Apache-2.0
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,6 +15,42 @@ const WorkflowId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const Workflow = {
     workflowId: WorkflowId.optional().describe("Saved n8n workflow ID; defaults to the workflow selected in Hermes"),
 };
+const NodeName = z.string().min(1);
+const Position = z.array(z.number().finite()).length(2).describe("Canvas coordinates [x, y]");
+const Parameters = z.record(z.unknown());
+const Connector = {
+    source: NodeName.describe("Source node name"),
+    target: NodeName.describe("Destination node name"),
+    port: z.string().optional().describe("Connection type, defaults to main"),
+    output: z.number().int().min(0).max(100).optional().describe("Zero-based source output"),
+    input: z.number().int().min(0).max(100).optional().describe("Zero-based destination input"),
+};
+const GraphEdits = z
+    .array(
+        z.discriminatedUnion("action", [
+            z.object({
+                action: z.literal("add-node"),
+                node: z
+                    .object({
+                        id: z.string().min(1),
+                        name: NodeName,
+                        type: z.string().min(1).describe("Exact node type from n8n_get_node"),
+                        typeVersion: z.number().finite(),
+                        position: Position,
+                        parameters: Parameters,
+                    })
+                    .passthrough(),
+            }),
+            z.object({ action: z.literal("move-node"), name: NodeName, position: Position }),
+            z.object({ action: z.literal("remove-node"), name: NodeName }),
+            z.object({ action: z.literal("rename-node"), name: NodeName, newName: NodeName }),
+            z.object({ action: z.literal("update-node"), name: NodeName, parameters: Parameters }),
+            z.object({ action: z.literal("connect"), ...Connector }),
+            z.object({ action: z.literal("disconnect"), ...Connector }),
+        ])
+    )
+    .min(1)
+    .max(100);
 
 export function registerN8nTools(server: McpServer): void {
     const register = (
@@ -47,9 +83,9 @@ export function registerN8nTools(server: McpServer): void {
                         endpoint.search ||
                         endpoint.hash
                     )
-                        throw new Error("Connect to the local KronTerm runtime to use workflow tools.");
+                        throw new Error("Connect to the local KronOS runtime to use workflow tools.");
                     const timeout =
-                        name === "n8n_run_agent" ? (Number(args.timeoutSeconds) || 180) * 1000 + 10000 : 40000;
+                        name === "n8n_run_agent" ? (Number(args.timeoutSeconds) || 180) * 1000 + 125_000 : 125_000;
                     const response = await fetch(endpoint, {
                         method: "POST",
                         redirect: "error",
@@ -57,7 +93,6 @@ export function registerN8nTools(server: McpServer): void {
                         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
                         body: JSON.stringify({ method: "call", name, arguments: args }),
                     });
-                    if (!response.ok) throw new Error(`Workflow bridge returned ${response.status}`);
                     const reader = response.body?.getReader();
                     if (!reader) throw new Error("Workflow bridge returned an empty response.");
                     const chunks: Uint8Array[] = [];
@@ -73,7 +108,9 @@ export function registerN8nTools(server: McpServer): void {
                     } finally {
                         await reader.cancel();
                     }
-                    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as CallToolResult;
+                    const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+                    if (!response.ok) throw new Error(result.error || `Workflow bridge returned ${response.status}`);
+                    return result as CallToolResult;
                 } catch (error) {
                     return {
                         content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
@@ -84,9 +121,16 @@ export function registerN8nTools(server: McpServer): void {
         );
     };
     register(
+        "n8n_status",
+        "runtime-status",
+        "Check whether the managed n8n runtime is ready for this workspace. Does not start it or open the editor.",
+        {},
+        true
+    );
+    register(
         "n8n_search_nodes",
         "search-nodes",
-        "Search the live n8n node catalog, including configured KronTerm widget nodes and Hermes Agent. Read node details before wiring connectors.",
+        "Search the live n8n node catalog, including configured KronOS widget nodes and Hermes Agent. Read node details before wiring connectors.",
         { query: z.string().max(200).default("") },
         true
     );
@@ -95,6 +139,13 @@ export function registerN8nTools(server: McpServer): void {
         "get-node",
         "Read the complete node schema: parameters, inputs, outputs, credential types, and versions. Never invent node parameter names.",
         { nodeType: z.string().min(1).max(250) },
+        true
+    );
+    register(
+        "n8n_list_workspace_widgets",
+        "workspace-widgets",
+        "List live widgets in this workspace tab. Use the returned blockId to bind CUSTOM.kronTermWidget to a browser, sandbox, or other widget.",
+        {},
         true
     );
     register(
@@ -107,8 +158,8 @@ export function registerN8nTools(server: McpServer): void {
     register(
         "n8n_edit_workflow",
         "edit-workflow",
-        "Edit nodes and connectors in one validated batch. Supports add-node, move-node, remove-node, rename-node, update-node, connect, disconnect. A move-node edit has name and position: [x, y]. Supply expectedVersionId from the latest read. Does not execute the workflow.",
-        { ...Workflow, expectedVersionId: z.string().min(1), edits: z.array(z.record(z.unknown())).min(1).max(100) },
+        "Edit nodes and connectors in one validated batch. Supply expectedVersionId from the latest read. Saves without executing.",
+        { ...Workflow, expectedVersionId: z.string().min(1), edits: GraphEdits },
         false
     );
     register(
@@ -128,8 +179,12 @@ export function registerN8nTools(server: McpServer): void {
     register(
         "n8n_create_workflow",
         "create-workflow",
-        "Create a workflow with a manual trigger connected to the default Hermes Agent. It is saved without executing.",
-        { name: z.string().min(1).max(160), task: z.string().max(40000).optional() },
+        "Save an executable n8n graph in one call. With edits, start from a manual trigger named Start and add, configure, and connect real nodes in the same save. Without edits, create the existing Hermes Agent template. Saves without executing.",
+        {
+            name: z.string().min(1).max(160),
+            task: z.string().max(40000).optional().describe("Prompt for the Hermes Agent template. Omit when using edits."),
+            edits: GraphEdits.optional(),
+        },
         false
     );
     register(
@@ -168,11 +223,13 @@ export function registerN8nTools(server: McpServer): void {
     register(
         "n8n_run_agent",
         "run-agent",
-        "Run a bounded personalized Hermes workflow worker with KronTerm tools. The worker can inspect and edit workflows, but must not recursively delegate to itself. Returns the Hermes session and final result.",
+        "Run a bounded personalized Hermes workflow worker with KronOS tools. The worker can inspect and edit workflows, but must not recursively delegate to itself. Returns the Hermes session and final result.",
         {
             ...Workflow,
             task: z.string().min(1).max(40000),
             timeoutSeconds: z.number().int().min(15).max(600).default(180),
+            computerId: z.string().max(128).optional(),
+            computerGeneration: z.number().int().min(0).optional(),
             executionId: z.string().max(160).optional(),
             input: z.unknown().optional(),
         },

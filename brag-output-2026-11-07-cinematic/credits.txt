@@ -1,0 +1,11 @@
+Music: "Cylinder Five" by Chris Zabriskie, from Cylinders (2014).
+https://chriszabriskie.com/cylinders/
+Licensed under Creative Commons Attribution 4.0: https://creativecommons.org/licenses/by/4.0/
+https://chriszabriskie.com/use/
+Changes: excerpt at source 00:25, trimmed to 80 seconds, faded, mixed and normalized.
+
+UI sounds: Kenney UI Audio (CC0), https://kenney.nl/assets/ui-audio .
+Room tone: original deterministic noise sound design. No narration.
+Coucou geometry: MochiBotEngine, Copyright 2026 Command Line Inc., Apache-2.0; preserved from product source.
+Three.js: MIT; bundled license included. Inter: SIL OFL; license included. GSAP: local existing runtime; applicable GreenSock standard license retained by its vendor header.
+Product footage: user-supplied KronTerm recordings. Google Maps/Flights, Python documentation and GitHub remain captured third-party UI.

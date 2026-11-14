@@ -38,7 +38,7 @@ export const AIPanelHeader = memo(({ onFloatingIsland, className }: AIPanelHeade
         >
             <div className="flex items-center gap-2 min-w-0">
                 <CircuitBoard className="h-4 w-4 shrink-0 text-accent" />
-                <span className="truncate text-sm font-semibold text-primary">KronosCode</span>
+                <span className="truncate text-sm font-semibold text-primary">KronOS Agent</span>
             </div>
 
             <div className="flex items-center gap-1.5">

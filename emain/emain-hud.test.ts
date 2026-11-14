@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { WorkspaceService } from "@/app/store/services";
+import { nativeTheme } from "electron";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { parseCoucouHudEvent } from "./coucou-hud";
 
 const mocks = vi.hoisted(() => {
     type EventHandler = (...args: any[]) => void;
@@ -151,6 +153,14 @@ vi.mock("./coucou-hud", async (importOriginal) => ({
 }));
 
 vi.mock("electron", () => ({
+    nativeTheme: {
+        shouldUseDarkColors: true,
+        shouldUseHighContrastColors: false,
+        prefersReducedTransparency: false,
+        on: vi.fn(),
+        off: vi.fn(),
+    },
+    systemPreferences: { getAnimationSettings: () => ({ prefersReducedMotion: false }) },
     BrowserWindow: mocks.FakeBrowserWindow,
     webContents: { fromId: mocks.fromId },
     screen: {
@@ -186,8 +196,8 @@ import {
     getNativeHudIslandPresentation,
     listNativeHudIslands,
     nativeDesktopHudActive,
-    nativeHudWidgetRoute,
     nativeHudTaskContext,
+    nativeHudWidgetRoute,
     openNativeHudIsland,
     openNativeHudIslandForTab,
     parseNotchPetTarget,
@@ -200,7 +210,7 @@ import {
     toggleNativeHudIslandExpanded,
 } from "./emain-hud";
 
-describe("native KronTerm HUD windows", () => {
+describe("native KronOS HUD windows", () => {
     beforeEach(() => {
         setNativeHudMode(42, false);
         mocks.FakeBrowserWindow.nextId = 1;
@@ -218,7 +228,10 @@ describe("native KronTerm HUD windows", () => {
             expect(nativeHudTaskContext(42)).toMatchObject({ tabId: "tab-1", workspaceId: "workspace-1" });
             setNativeHudMode(42, true, "existing-chat");
             const hud = mocks.windows[0];
-            expect(nativeHudTaskContext(hud.webContents.id)).toMatchObject({ tabId: "different-active-tab", workspaceId: "workspace-1" });
+            expect(nativeHudTaskContext(hud.webContents.id)).toMatchObject({
+                tabId: "different-active-tab",
+                workspaceId: "workspace-1",
+            });
         } finally {
             if (previous) owner.activeTabView = previous;
             else delete owner.activeTabView;
@@ -240,7 +253,20 @@ describe("native KronTerm HUD windows", () => {
         mocks.startCoucouHud.mockReturnValue({ kill: vi.fn() });
         setNativeHudMode(42, true, "existing-chat");
         const onEvent = mocks.startCoucouHud.mock.calls[0][1];
-        onEvent({ event: "action", action: "media-toggle", route: media.id });
+        const command = parseCoucouHudEvent(
+            JSON.stringify({
+                event: "action",
+                action: "media-toggle",
+                route: media.id,
+                x: 0,
+                y: 0,
+                width: 1512,
+                height: 982,
+                inset: 32,
+            })
+        );
+        expect(command).toBeDefined();
+        onEvent(command);
         await vi.waitFor(() => expect(mocks.controlNowPlaying).toHaveBeenCalledWith(media.id, "toggle"));
         await vi.waitFor(() =>
             expect(mocks.writeCoucouState).toHaveBeenCalledWith(expect.anything(), {
@@ -322,6 +348,17 @@ describe("native KronTerm HUD windows", () => {
         expect(mocks.ownerWindow.hide).not.toHaveBeenCalled();
     });
 
+    test("showing the main workspace exits exclusive HUD instead of hiding it again", () => {
+        mocks.startCoucouHud.mockReturnValue({ kill: vi.fn() });
+        setNativeHudMode(42, true, "existing-chat");
+        const hud = mocks.windows[0];
+        mocks.ownerWindow.hide.mockClear();
+        mocks.ownerWindow.show();
+        expect(mocks.ownerWindow.hide).not.toHaveBeenCalled();
+        expect(hud.isDestroyed()).toBe(true);
+        expect(mocks.ownerTab.webContents.send).toHaveBeenCalledWith("native-hud-exit");
+    });
+
     test("keeps exclusive notch mode when the companion exits unexpectedly", () => {
         mocks.startCoucouHud.mockReturnValue({ kill: vi.fn() });
         setNativeHudMode(42, true, "existing-chat");
@@ -352,6 +389,23 @@ describe("native KronTerm HUD windows", () => {
         const onEvent = mocks.startCoucouHud.mock.calls[1][1];
         onEvent({ event: "ready", x: 0, y: 0, width: 1512, height: 982, inset: 32 });
         expect(hud.webContents.send).toHaveBeenCalledWith("native-notch-availability", true);
+    });
+
+    test("offers recovery after a collapsed companion exits and ignores its late layout", () => {
+        mocks.startCoucouHud.mockReturnValueOnce({ kill: vi.fn() });
+        setNativeHudMode(42, true, "existing-chat");
+        const hud = mocks.windows[0];
+        const [, onEvent, onExit] = mocks.startCoucouHud.mock.calls[0];
+        const geometry = { x: 0, y: 0, width: 1512, height: 982, inset: 32 };
+        onEvent({ ...geometry, event: "chat-close" });
+        expect(hud.isVisible()).toBe(false);
+        onExit();
+        expect(hud.isVisible()).toBe(true);
+        expect(hud.isDestroyed()).toBe(false);
+        expect(hud.webContents.send).toHaveBeenLastCalledWith("native-notch-availability", false);
+        hud.setBounds.mockClear();
+        onEvent({ ...geometry, event: "chat-open" });
+        expect(hud.setBounds).not.toHaveBeenCalled();
     });
 
     test("keeps recovery controls available when companion readiness times out", () => {
@@ -438,7 +492,8 @@ describe("native KronTerm HUD windows", () => {
 
         const hidesBeforeUnexpectedShow = mocks.ownerWindow.hide.mock.calls.length;
         mocks.ownerWindow.show();
-        expect(mocks.ownerWindow.hide).toHaveBeenCalledTimes(hidesBeforeUnexpectedShow + 1);
+        expect(mocks.ownerWindow.hide).toHaveBeenCalledTimes(hidesBeforeUnexpectedShow);
+        expect(hud.isDestroyed()).toBe(true);
 
         expect(setNativeHudMode(42, false)).toBe(true);
         expect(hud.close).toHaveBeenCalled();
@@ -521,6 +576,7 @@ describe("native KronTerm HUD windows", () => {
             expect(mocks.writeCoucouState).toHaveBeenCalledWith(expect.anything(), {
                 chatLayoutProtocol: 2,
                 chatExpanded: false,
+                appearance: expect.objectContaining({ colorScheme: "dark" }),
             });
             setNativeHudMode(42, false);
         } finally {
@@ -999,7 +1055,7 @@ describe("native KronTerm HUD windows", () => {
         onEvent({ ...geometry, event: "ready" });
         expect(mocks.writeCoucouState).toHaveBeenCalledWith(expect.anything(), {
             chatLayoutProtocol: 2,
-            appearance: { chrome: "coucou", theme: "coucou-teal", reducedMotion: true },
+            appearance: expect.objectContaining({ chrome: "coucou", theme: "coucou-teal", reducedMotion: true }),
         });
         hud.webContents.send.mockClear();
         onEvent({ ...geometry, event: "action", action: "theme-select", route: "unknown" });
@@ -1023,7 +1079,7 @@ describe("native KronTerm HUD windows", () => {
             },
         });
         expect(mocks.writeCoucouState).toHaveBeenCalledWith(expect.anything(), {
-            appearance: { chrome: "coucou", theme: "coucou", reducedMotion: false },
+            appearance: expect.objectContaining({ chrome: "coucou", theme: "coucou", reducedMotion: false }),
         });
         expect(mocks.writeCoucouState).toHaveBeenLastCalledWith(expect.anything(), {
             voice: {
@@ -1038,6 +1094,37 @@ describe("native KronTerm HUD windows", () => {
                 speechAvailable: false,
             },
         });
+    });
+
+    test("updates native appearance before chat connects and removes the listener on exit", () => {
+        mocks.startCoucouHud.mockReturnValue({ kill: vi.fn() });
+        setNativeHudMode(42, true);
+        const hud = mocks.windows[0];
+        const update = vi.mocked(nativeTheme.on).mock.calls.find(([event]) => event === "updated")[1] as () => void;
+        try {
+            Object.assign(nativeTheme, {
+                shouldUseDarkColors: false,
+                shouldUseHighContrastColors: true,
+                prefersReducedTransparency: true,
+            });
+            update();
+            expect(mocks.writeCoucouState).toHaveBeenLastCalledWith(expect.anything(), {
+                appearance: expect.objectContaining({
+                    colorScheme: "light",
+                    contrast: "high",
+                    reducedTransparency: true,
+                    materials: expect.objectContaining({ content: "#f4f4f6", secondary: "#1d1d1f" }),
+                }),
+            });
+            setNativeHudMode(42, false);
+            expect(nativeTheme.off).toHaveBeenCalledWith("updated", update);
+        } finally {
+            Object.assign(nativeTheme, {
+                shouldUseDarkColors: true,
+                shouldUseHighContrastColors: false,
+                prefersReducedTransparency: false,
+            });
+        }
     });
     test("refreshes stream and sandbox frames and never captures another renderer's browser guest", async () => {
         vi.useFakeTimers();

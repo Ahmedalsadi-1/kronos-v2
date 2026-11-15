@@ -1,0 +1,181 @@
+.os-mode-root.has-pen-canvas {
+    --os-frame-border: 0px;
+    --os-frame-top-border: 0px;
+    --os-frame-content-radius: 0px;
+    --os-frame-content-top: var(--os-shell-height);
+    background: var(--kt-content);
+}
+
+.os-mode-root.has-pen-canvas:has(> .os-shell[data-pen-system-controls-mounted]) {
+    --os-frame-content-top: 0px;
+}
+
+.os-mode-root.has-pen-canvas > .os-shell {
+    background: var(--kt-content);
+}
+
+.os-mode-root.has-pen-canvas > .os-shell[data-pen-system-controls-mounted] {
+    height: 0;
+    background: transparent;
+}
+
+.os-mode-root.has-pen-canvas .os-shell-right {
+    grid-column: 2;
+}
+
+.os-mode-root.has-pen-canvas::after {
+    content: none;
+}
+
+.os-mode-root.has-pen-canvas > .os-mode-viewport {
+    top: max(var(--os-frame-content-top), var(--os-workflow-top, 0px));
+    bottom: var(--os-workflow-bottom, 0px);
+    clip-path: none;
+}
+
+.os-mode-root.has-pen-canvas:not(.has-files-inspector) > .os-mode-viewport {
+    right: var(--os-workflow-right, 0px);
+}
+
+.os-mode-root.has-pen-canvas:not(.has-agent-sidebar) > .os-mode-viewport {
+    left: 0;
+}
+
+.os-mode-root.view-canvas :is(.os-agent-sidebar, .os-files-inspector):not([hidden]) {
+    --kronos-island-inset: 8px;
+    --ui-sidebar-surface-background: var(--color-black, #000);
+    margin-block: var(--kronos-island-inset);
+    border-radius: 16px;
+    background: var(--ui-sidebar-surface-background);
+}
+
+.os-mode-root.view-canvas .os-agent-sidebar {
+    margin-inline: 8px 0;
+    width: calc(var(--os-sidebar-width) - 8px);
+}
+
+.os-mode-root.view-canvas .os-files-inspector {
+    margin-inline: 0 8px;
+    width: calc(var(--os-inspector-width) - 8px);
+}
+
+.os-mode-root.view-canvas.has-compact-inspector .os-files-inspector {
+    width: calc(var(--os-inspector-compact-width) - 8px);
+}
+
+.os-mode-root.view-canvas :is(.os-agent-sidebar, .os-files-inspector)::before,
+.os-mode-root.view-canvas :is(.os-agent-sidebar, .os-files-inspector)::after {
+    content: none;
+}
+
+.os-session-sidebar-resize {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 2;
+    width: 7px;
+    touch-action: none;
+    cursor: ew-resize;
+}
+
+.os-session-sidebar-resize:is(:hover, :focus-visible, :active) {
+    border-inline-end: 2px solid var(--kt-focus-ring, currentColor);
+}
+
+.os-kronos-live-plane {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.os-kronos-live-plane[hidden] {
+    display: none;
+}
+
+.os-mode-root.kt-system-ui .os-canvas-tool-rail.is-kronos-canvas-tools {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    transform: none;
+    max-width: calc(100% - 24px);
+    max-height: min(280px, 50%);
+    flex-wrap: wrap;
+    background: var(--kt-popover);
+    color: var(--kt-label);
+    border-color: var(--kt-separator);
+}
+.os-mode-root.kt-system-ui .is-kronos-canvas-tools .os-canvas-toolbar {
+    --kt-label: inherit;
+    --kt-label-secondary: inherit;
+    justify-content: flex-start;
+}
+
+.view-kronos-v2 .os-window[data-kronos-v2-passive],
+.view-kronos-v2 .os-window[data-kronos-v2-passive] * {
+    pointer-events: none;
+}
+
+.os-mode-root.view-kronos-v2 {
+    --os-frame-content-top: 0px;
+}
+
+.os-mode-root.view-kronos-v2 > .os-shell {
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.kronos-v2-add-folder {
+    position: absolute;
+    z-index: 12;
+    right: 16px;
+    bottom: 16px;
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border: 1px solid var(--kt-separator);
+    border-radius: 8px;
+    color: var(--kt-label, CanvasText);
+    background: var(--kt-popover, Canvas);
+    cursor: pointer;
+}
+
+.kronos-v2-add-folder:hover {
+    background: var(--kt-fill-hover, Canvas);
+}
+
+.view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-focused] {
+    background: var(--kt-content, #181818);
+}
+
+.view-kronos-v2 .os-window[data-kronos-v2-frame] :is(.os-canvas-widget-label, .os-canvas-widget-drag-strip) {
+    pointer-events: none;
+}
+
+.view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-focused] .os-window-focus-exit {
+    inset: auto 4px 4px auto;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--kt-popover, #262626);
+    color: var(--kt-label, #ededed);
+}
+
+.view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-presenting]
+    :is(.os-window-lights, .os-canvas-widget-selection, .os-canvas-widget-drag-strip) {
+    visibility: hidden;
+}
+
+.view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-presenting] .os-mode-world > .os-window {
+    pointer-events: none;
+}
+
+.view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-presenting] .os-browser-navigation {
+    pointer-events: auto;
+}

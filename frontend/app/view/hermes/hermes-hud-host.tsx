@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { requestPenEditor } from "@/app/tab/os-pen-editor-bridge";
 import {
     publishWorkspaceCanvasComposerSubmit,
     type WorkspaceCanvasComposerContext,
@@ -60,9 +61,11 @@ export function HermesHudHost({
     canvasContext,
     tabId,
     placement = "floating",
+    penChat = false,
 }: {
     placement?: "floating" | "bottom" | "top" | "shell";
     autoOpen: boolean;
+    penChat?: boolean;
     canvasContext: WorkspaceCanvasComposerContext;
     tabId: string;
 }) {
@@ -71,7 +74,7 @@ export function HermesHudHost({
         hermesSurfaceController.getSnapshot,
         hermesSurfaceController.getSnapshot
     );
-    const chatActive = surface.presentation === "hud" || surface.presentation === "panel";
+    const chatActive = !penChat && (surface.presentation === "hud" || surface.presentation === "panel");
     const sidebarTarget = useStore($krontermSidebarTarget);
     const sidebarOpen = useStore($sidebarOpen);
     const inspectorTarget = useStore($krontermInspectorTarget);
@@ -80,7 +83,7 @@ export function HermesHudHost({
     const dockedChat = surface.presentation === "panel" && Boolean(inspectorTarget);
     const sidebarActive =
         (Boolean(sidebarTarget) && sidebarOpen) || (Boolean(inspectorTarget) && (inspectorOpen || inspectorHasFiles));
-    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, chatActive || sidebarActive);
+    const { ready: connectionReady, error, retry } = useHermesConnection(tabId, penChat || chatActive || sidebarActive);
     const krontermHudMode = useKrontermHudMode();
     const previousAutoOpenRef = useRef(false);
     const managedAttachmentsRef = useRef<ComposerAttachment[]>([]);
@@ -89,10 +92,17 @@ export function HermesHudHost({
     ensureShim();
 
     useEffect(() => {
-        const dock = () => hermesSurfaceController.requestOpenPanel();
+        const dock = () => {
+            if (penChat) {
+                $krontermInspectorSection.set("files");
+                void requestPenEditor(tabId, "show_chat").catch(() => {});
+                return;
+            }
+            hermesSurfaceController.requestOpenPanel();
+        };
         window.addEventListener(KrontermInspectorChatEvent, dock);
         return () => window.removeEventListener(KrontermInspectorChatEvent, dock);
-    }, []);
+    }, [penChat, tabId]);
     useEffect(() => {
         if (!dockedChat) return;
         $krontermInspectorOpen.set(true);
@@ -110,6 +120,7 @@ export function HermesHudHost({
 
     useEffect(() => {
         if (
+            !penChat &&
             autoOpen &&
             !previousAutoOpenRef.current &&
             hermesSurfaceController.getSnapshot().presentation === "closed"
@@ -117,7 +128,7 @@ export function HermesHudHost({
             requestPreferredKronosSurface();
         }
         previousAutoOpenRef.current = autoOpen;
-    }, [autoOpen, surface.presentation]);
+    }, [autoOpen, penChat, surface.presentation]);
 
     useEffect(() => {
         const onRemoved = (event: Event) => {
@@ -206,6 +217,10 @@ export function HermesHudHost({
             if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "h") {
                 event.preventDefault();
                 event.stopPropagation();
+                if (penChat) {
+                    void requestPenEditor(tabId, "show_chat").catch(() => {});
+                    return;
+                }
                 const active = kronTermHudController.toggle();
                 if (active) hermesSurfaceController.requestOpenHud();
                 else hermesSurfaceController.dismiss();
@@ -213,9 +228,9 @@ export function HermesHudHost({
         };
         window.addEventListener("keydown", toggleFromShortcut, true);
         return () => window.removeEventListener("keydown", toggleFromShortcut, true);
-    }, []);
+    }, [penChat, tabId]);
 
-    if (!chatActive && !sidebarActive) {
+    if (!penChat && !chatActive && !sidebarActive) {
         return null;
     }
 
@@ -231,19 +246,25 @@ export function HermesHudHost({
         <>
             <div id={`hermes-chat-closed-${tabId}`} hidden />
             <HermesChatMount
-                targetId={dockedChat ? KrontermInspectorChatTargetId : `hermes-chat-${surface.presentation}-${tabId}`}
+                targetId={
+                    penChat
+                        ? `hermes-chat-closed-${tabId}`
+                        : dockedChat
+                          ? KrontermInspectorChatTargetId
+                          : `hermes-chat-${surface.presentation}-${tabId}`
+                }
             >
                 {connectionReady ? (
                     <HermesLoadBoundary>
                         <Suspense
                             fallback={
                                 <>
-                                    <div className="hermes-workspace-panel-state">Loading KronOS Agent…</div>
+                                    <div className="hermes-workspace-panel-state">Loading Kron Agent…</div>
                                     {sidebarStatus(<HermesConnectionState error="" retry={retry} />)}
                                 </>
                             }
                         >
-                            <LazyHermesApp hudMode dockedChat={dockedChat} />
+                            <LazyHermesApp hudMode dockedChat={dockedChat} canvasRuntimeOnly={penChat} />
                         </Suspense>
                     </HermesLoadBoundary>
                 ) : (
@@ -253,7 +274,7 @@ export function HermesHudHost({
                     </>
                 )}
             </HermesChatMount>
-            {surface.presentation === "hud" && (
+            {!penChat && surface.presentation === "hud" && (
                 <HermesHudOverlay targetId={placement === "shell" ? `hermes-hud-shell-${tabId}` : undefined}>
                     {placement === "floating" &&
                         (krontermHudMode.active ? (

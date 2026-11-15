@@ -1,4 +1,4 @@
-import type { Unstable_TriggerAdapter, Unstable_TriggerItem } from "@assistant-ui/core";
+import type { Unstable_TriggerItem } from "@assistant-ui/core";
 import { useCallback } from "react";
 
 import { refChipLabel } from "@hermes/components/assistant-ui/directive-text";
@@ -137,7 +137,7 @@ export function useAtCompletions(options: {
     gateway: HermesGateway | null;
     sessionId: string | null;
     cwd: string | null;
-}): { adapter: Unstable_TriggerAdapter; loading: boolean } {
+}) {
     const { gateway, sessionId, cwd } = options;
     const enabled = Boolean(gateway || window.hermesDesktop?.krontermSurfaces);
 
@@ -147,7 +147,7 @@ export function useAtCompletions(options: {
     const cacheKey = useCallback((query: string) => `${cwd ?? ""}|${sessionId ?? ""}|${query}`, [cwd, sessionId]);
 
     const fetcher = useCallback(
-        async (query: string): Promise<CompletionPayload> => {
+        async (query: string, scope = { sessionId, cwd }): Promise<CompletionPayload> => {
             const starters = starterEntries(query);
             const surfaces = await window.hermesDesktop?.krontermSurfaces?.list().catch(() => []);
 
@@ -179,12 +179,12 @@ export function useAtCompletions(options: {
             const word = REF_STARTERS.has(query) ? `@${query}:` : `@${query}`;
             const params: Record<string, unknown> = { word };
 
-            if (sessionId) {
-                params.session_id = sessionId;
+            if (scope.sessionId) {
+                params.session_id = scope.sessionId;
             }
 
-            if (cwd) {
-                params.cwd = cwd;
+            if (scope.cwd) {
+                params.cwd = scope.cwd;
             }
 
             try {
@@ -193,7 +193,7 @@ export function useAtCompletions(options: {
                 // segment — and every one of those steps used to be a fresh
                 // `git ls-files` + rank on the backend (~40ms of the ~50ms round trip
                 // measured on this repo's 8k files).
-                const result = await cachedPathCompletion(cacheKey(query), () =>
+                const result = await cachedPathCompletion(`${scope.cwd ?? ""}|${scope.sessionId ?? ""}|${query}`, () =>
                     gateway.request<{ items?: CompletionEntry[] }>("complete.path", params)
                 );
 
@@ -204,7 +204,7 @@ export function useAtCompletions(options: {
                 return { items: uniqueEntries([...surfaceItems, ...starters]), query };
             }
         },
-        [cacheKey, gateway, sessionId, cwd]
+        [gateway, sessionId, cwd]
     );
 
     const toItem = useCallback((entry: CompletionEntry, index: number): Unstable_TriggerItem => {
@@ -242,7 +242,7 @@ export function useAtCompletions(options: {
         [cacheKey]
     );
 
-    return useLiveCompletionAdapter({ enabled, fetcher, isCached, toItem });
+    return { ...useLiveCompletionAdapter({ enabled, fetcher, isCached, toItem }), fetchCompletions: fetcher };
 }
 
 /** Re-export `classify` for use by the formatter (insertion side). */

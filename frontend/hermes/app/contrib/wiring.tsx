@@ -1,3 +1,10 @@
+import { useAtCompletions } from "../chat/composer/hooks/use-at-completions";
+import { useSlashCompletions } from "../chat/composer/hooks/use-slash-completions";
+import { useTheme } from "@hermes/themes";
+import { PenComposerVoice } from "./pen-composer-voice";
+import { PenHistoryTools } from "./pen-history-tools";
+import { PromptOverlays } from "@hermes/components/prompt-overlays";
+import { createPortal } from "react-dom";
 /**
  * Real-featureset wiring for the contrib (layout tree) root — the minimal
  * subset of DesktopController's hook chain that makes the REAL surfaces work:
@@ -12,7 +19,7 @@ import { useNativeNotch } from "./hooks/use-native-notch";
 
 import { useStore } from "@nanostores/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type CSSProperties, lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, type CSSProperties, lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 import { graftRefreshedTailOntoBackfill } from "@hermes/app/chat/transcript-backfill";
@@ -105,6 +112,8 @@ import {
     SETTINGS_ROUTE,
     syncWorkspaceRoute,
 } from "../routes";
+import type { PenDialogRequest } from "./pen-dialogs";
+import { PenSubagentDialog } from "./pen-dialogs";
 import { SessionPickerOverlay } from "../session-picker-overlay";
 import { SessionSwitcher } from "../session-switcher";
 import { useBackgroundQueueDrain } from "../session/hooks/use-background-queue-drain";
@@ -122,8 +131,8 @@ import { useSessionStateCache } from "../session/hooks/use-session-state-cache";
 import { startWorkspaceSession } from "../session/workspace-session-target";
 import {
     consumeKronTermSettingsRequest,
-    HermesSettingsSavedEvent,
     type HermesSettingsSavedDetail,
+    HermesSettingsSavedEvent,
     KronTermSettingsRequestEvent,
     makeKronTermSettingsViewId,
 } from "../settings/kronterm-settings-host";
@@ -172,7 +181,7 @@ const StarmapView = lazy(async () => ({ default: (await import("../starmap")).St
 // the controller that assembles them.
 export { WiredPane } from "./context";
 
-export function ContribWiring({ children }: { children: ReactNode }) {
+export function ContribWiring({ children, runtimeOnly = false }: { children: ReactNode; runtimeOnly?: boolean }) {
     const { hudMode, panelMode, webMode } = useHermesShellMode();
     const queryClient = useQueryClient();
     const location = useLocation();
@@ -311,6 +320,43 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     });
 
     const { connectionRef, gateway, gatewayRef, requestGateway } = useGatewayRequest();
+    const { availableThemes, themeName } = useTheme();
+    const { fetchCompletions: completeSlash } = useSlashCompletions({
+        gateway, activeSkin: themeName, skinThemes: availableThemes,
+    });
+    const { fetchCompletions: completeAt } = useAtCompletions({
+        gateway, sessionId: activeSessionId, cwd: currentCwd,
+    });
+    useEffect(() => {
+        if (!runtimeOnly) return;
+        const complete = (event: CustomEvent<{
+            trigger: "/" | "@";
+            query: string;
+            sessionId?: string;
+            publish: (items: { text: string; display?: string; meta?: string }[]) => void;
+        }>) => {
+            const { trigger, query, sessionId, publish } = event.detail;
+            const pending = trigger === "/" ? completeSlash(query) : completeAt(query, {
+                sessionId, cwd: sessionId && sessionId !== activeSessionId ? null : currentCwd,
+            });
+            void pending.then(({ items }) => publish(items.slice(0, 100).map(({ text, display, meta }) => ({
+                text: trigger === "@" ? text.replace(/^(@[a-z]+:)(.+)$/, (_, prefix, value) =>
+                    prefix + formatRefValue(value)
+                ) : text,
+                display: typeof display === "string" ? display : undefined,
+                meta: typeof meta === "string" ? meta : undefined,
+            }))), () => publish([]));
+        };
+        window.addEventListener("kronos:pen-composer-complete", complete);
+        return () => window.removeEventListener("kronos:pen-composer-complete", complete);
+    }, [runtimeOnly, completeSlash, completeAt, activeSessionId, currentCwd]);
+    const [penDialog, setPenDialog] = useState<PenDialogRequest>();
+    useEffect(() => {
+        if (!runtimeOnly) return;
+        const open = (event: CustomEvent<PenDialogRequest>) => setPenDialog(event.detail);
+        window.addEventListener("kronos:pen-dialog", open);
+        return () => window.removeEventListener("kronos:pen-dialog", open);
+    }, [runtimeOnly]);
     useNativeNotch(requestGateway, gatewayState, navigate);
 
     const {
@@ -706,7 +752,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     // The global-hotkey Quick Entry window's bridge: its captured text rides the
     // SAME submit machinery the normal composer uses (current chat / picked
     // session / new session), and it hears gateway truth from this window.
-    useQuickEntryBridge({ startFreshSessionDraft, submitText });
+    useQuickEntryBridge({ startFreshSessionDraft, submitText, cancelRun });
 
     // Leaving HUD mode hands this window the session back (see hud/handoff).
     useHudHandoff({ navigate, resumeSession });
@@ -1100,6 +1146,56 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     const titlebarToolsWidth =
         paneToolCount > 0 ? `calc(${systemToolsWidth} + ${titlebarToolsWidthCss(paneToolCount)})` : systemToolsWidth;
 
+    if (runtimeOnly) {
+        return (
+            <>
+                <KrontermSidebar preferred>{sidebarNode}</KrontermSidebar>
+                <PenComposerVoice transcribe={transcribeVoiceAudio} maxSeconds={voiceMaxRecordingSeconds} />
+                <PenHistoryTools onOpenSession={(id) => openSession(id, navigate)} />
+                <ModelPickerOverlay
+                    contentClassName="pen-hermes-dialog"
+                    gateway={gateway || undefined}
+                    onSelect={selectModel}
+                    onClose={() => setPenDialog(undefined)}
+                    profile={activeGatewayProfile}
+                    targetSessionId={penDialog?.kind === "command" ? penDialog.sessionId : undefined}
+                />
+                <SessionPickerOverlay
+                    contentClassName="pen-hermes-dialog"
+                    onClose={() => setPenDialog(undefined)}
+                    onResume={(id) => {
+                        if (penDialog?.kind === "command") return penDialog.resume(id);
+                        else void openSession(id, navigate);
+                    }}
+                />
+                {penDialog?.kind === "subagents" && (
+                    <PenSubagentDialog
+                        key={penDialog.workerId}
+                        request={penDialog}
+                        onClose={() => setPenDialog(undefined)}
+                    />
+                )}
+                {starmapOpen && (
+                    <Suspense fallback={null}>
+                        <StarmapView contentClassName="pen-hermes-dialog" onClose={closeOverlayToPreviousRoute} />
+                    </Suspense>
+                )}
+                <PetGenerateOverlay contentClassName="pen-hermes-dialog" />
+                <CommandPalette contentClassName="pen-hermes-dialog" />
+                <NotificationStack />
+                {createPortal(
+                    <div
+                        className="pointer-events-none fixed inset-0 z-50"
+                        style={{ "--composer-measured-height": "0px" } as CSSProperties}
+                    >
+                        <PromptOverlays sessionId={activeSessionId} />
+                    </div>,
+                    document.body
+                )}
+            </>
+        );
+    }
+
     return (
         <ContribWiringContext.Provider value={api}>
             <KrontermSidebar preferred={hudMode || panelMode}>{sidebarNode}</KrontermSidebar>
@@ -1145,7 +1241,10 @@ export function ContribWiring({ children }: { children: ReactNode }) {
                 />
             )}
             <ModelPickerOverlay gateway={gateway || undefined} onSelect={selectModel} profile={activeGatewayProfile} />
-            <SessionPickerOverlay onResume={(sessionId) => openSession(sessionId, navigate)} />
+            <SessionPickerOverlay
+                contentClassName={isKronTermWidgetHost() ? "pen-hermes-dialog" : undefined}
+                onResume={(sessionId) => openSession(sessionId, navigate)}
+            />
             <ModelVisibilityOverlay
                 gateway={gateway || undefined}
                 onOpenProviders={openProviderSettings}

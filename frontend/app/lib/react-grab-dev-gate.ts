@@ -24,6 +24,12 @@ export function initializeReactGrab(): void {
                 if (browserOwnsTool) api.deactivate();
                 api.setToolbarState({ enabled: !browserOwnsTool });
             };
+            const activate = () => {
+                if (document.documentElement.hasAttribute("data-kronterm-browser-tool-owner")) return;
+                if (!api.getToolbarState()?.enabled) api.setToolbarState({ enabled: true });
+                api.activate();
+            };
+            window.addEventListener("kronterm:workspace-picker-activate", activate);
             const deactivate = () => api.deactivate();
             window.addEventListener("kronterm:workspace-picker-deactivate", deactivate);
             syncBrowserOwner();
@@ -31,6 +37,7 @@ export function initializeReactGrab(): void {
             import.meta.hot?.dispose(() => {
                 window.removeEventListener("kronterm-browser-tool-owner", syncBrowserOwner);
                 window.removeEventListener("kronterm:workspace-picker-deactivate", deactivate);
+                window.removeEventListener("kronterm:workspace-picker-activate", activate);
                 releaseCanvasToolbar();
                 api.unregisterPlugin("kronterm-input-ownership");
                 initialized = false;

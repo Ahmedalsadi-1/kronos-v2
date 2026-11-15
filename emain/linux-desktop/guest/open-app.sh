@@ -14,7 +14,7 @@ case "${1:-}" in
     browser)
         wmctrl -xa chromium-browser && exit 0
         wmctrl -xa chromium && exit 0
-        exec chromium-browser --force-dark-mode
+        exec chromium-browser --force-dark-mode --start-maximized
         ;;
     *) exit 2 ;;
 esac

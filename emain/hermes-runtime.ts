@@ -22,9 +22,9 @@ import { prepareWorkflowProfile, runHermesWorkflowWorker } from "./n8n-hermes-wo
 import { N8nRuntime } from "./n8n-runtime";
 import type { N8nWorkspace, N8nWorkspaceCommand } from "./n8n-workspace";
 import { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
-export { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
 import type { SwarmTarget } from "./swarm-target-scope";
 export { resolveAgentWsh as resolveHermesWsh } from "./agent-runtime-paths";
+export { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
 
 const StartupTimeoutMs = 90_000;
 const HealthTimeoutMs = 10_000;
@@ -35,8 +35,6 @@ const SurfaceTokenTimeoutMs = 10_000;
 const SurfaceRefreshLeadMs = 10 * 60 * 1000;
 const ExecFile = promisify(execFile);
 const PluginPreparations = new Map<string, Promise<string>>();
-
-
 
 export type HermesSurfaceContext = {
     agentWorkspace?: string;
@@ -193,7 +191,7 @@ async function resolveHermesBinary(): Promise<string> {
     }
 
     throw new Error(
-        "KronOS Agent runtime is not installed. Reinstall KronOS or set KRONTERM_HERMES_BIN to the compatible runtime executable."
+        "Kron Agent runtime is not installed. Reinstall KronOS or set KRONTERM_HERMES_BIN to the compatible runtime executable."
     );
 }
 
@@ -267,45 +265,60 @@ async function stageHermesBundledPlugins(
     let published = false;
     let completed = false;
     try {
+        const bundledEntries = bundledRoot && fs.existsSync(bundledRoot) ? await fs.promises.readdir(bundledRoot) : [];
+        const adapterTarget = path.join(staging, "kronterm-tools");
+        const siblingAdapters = ["orgo-computer", "advanced-delegation"];
+        const localAdapters = siblingAdapters.filter((name) =>
+            fs.existsSync(path.join(path.dirname(adapterSource), name))
+        );
+        const replacedEntries = new Set([...bundledEntries, ...localAdapters, "kronterm-tools"]);
         const existing = await fs.promises.lstat(target).catch((error: NodeJS.ErrnoException) => {
             if (error.code !== "ENOENT") throw error;
             return null;
         });
         if (existing) {
-            await fs.promises.cp(target, staging, { recursive: true, force: true, verbatimSymlinks: true });
+            await fs.promises.cp(target, staging, {
+                recursive: true,
+                force: true,
+                verbatimSymlinks: true,
+                filter: (source) => path.dirname(source) !== target || !replacedEntries.has(path.basename(source)),
+            });
         }
         // Hermes must never scan an adapter while it is still being copied.
-        if (bundledRoot && fs.existsSync(bundledRoot)) {
-            for (const name of await fs.promises.readdir(bundledRoot)) {
-                if (name === "kronterm-tools") continue;
+        const bundledTasks = bundledEntries
+            .filter((name) => name !== "kronterm-tools" && !localAdapters.includes(name))
+            .map(async (name) => {
                 const destination = path.join(staging, name);
                 const source = path.resolve(bundledRoot, name);
-                await fs.promises.rm(destination, { recursive: true, force: true });
                 if ((await fs.promises.stat(source)).isDirectory()) {
                     await fs.promises.symlink(source, destination, "junction");
                 } else {
                     await fs.promises.copyFile(source, destination);
                 }
+            });
+        const adapterTask = async () => {
+            await fs.promises.cp(adapterSource, adapterTarget, { recursive: true, force: true });
+            const harnessFilename =
+                process.platform === "darwin"
+                    ? "libkronos_agent_harness.dylib"
+                    : process.platform === "win32"
+                      ? "kronos_agent_harness.dll"
+                      : "libkronos_agent_harness.so";
+            const developmentHarness = path.resolve(adapterSource, "../../harness/target/release", harnessFilename);
+            if (fs.existsSync(developmentHarness)) {
+                await fs.promises.copyFile(developmentHarness, path.join(adapterTarget, harnessFilename));
             }
-        }
-        await fs.promises.rm(path.join(staging, "kronterm-tools"), { recursive: true, force: true });
-        const adapterTarget = path.join(staging, "kronterm-tools");
-        await fs.promises.cp(adapterSource, adapterTarget, { recursive: true, force: true });
-        const harnessFilename =
-            process.platform === "darwin"
-                ? "libkronos_agent_harness.dylib"
-                : process.platform === "win32"
-                  ? "kronos_agent_harness.dll"
-                  : "libkronos_agent_harness.so";
-        const developmentHarness = path.resolve(adapterSource, "../../harness/target/release", harnessFilename);
-        if (fs.existsSync(developmentHarness)) {
-            await fs.promises.copyFile(developmentHarness, path.join(adapterTarget, harnessFilename));
-        }
-        for (const name of ["orgo-computer", "advanced-delegation"]) {
-            const source = path.join(path.dirname(adapterSource), name);
-            if (!fs.existsSync(source)) continue;
-            await fs.promises.rm(path.join(staging, name), { recursive: true, force: true });
-            await fs.promises.cp(source, path.join(staging, name), { recursive: true, force: true });
+        };
+        const siblingTasks = localAdapters.map(async (name) => {
+            const destination = path.join(staging, name);
+            await fs.promises.cp(path.join(path.dirname(adapterSource), name), destination, {
+                recursive: true,
+                force: true,
+            });
+        });
+        // A failed copy must wait for the other writers before removing the staging directory.
+        for (const result of await Promise.allSettled([...bundledTasks, adapterTask(), ...siblingTasks])) {
+            if (result.status === "rejected") throw result.reason;
         }
         assertCurrent();
         try {
@@ -329,7 +342,6 @@ async function stageHermesBundledPlugins(
         if (completed) await fs.promises.rm(backup, { recursive: true, force: true });
     }
 }
-
 
 function resolveHermesToolAdapterRoot(): string {
     const resourcesPath = (process as typeof process & { resourcesPath?: string }).resourcesPath;
@@ -411,6 +423,7 @@ export function makeHermesRuntimeEnvironment(
         HERMES_DESKTOP: "1",
         HERMES_DISABLE_LAZY_INSTALLS: "1",
         HERMES_PARENT_PID: String(process.pid),
+        KRONTERM_MANAGED_AGENT_IDENTITY: "1",
         HERMES_EPHEMERAL_SYSTEM_PROMPT: KronTermSurfaceSystemPrompt,
         ...(options.managedDir
             ? {
@@ -453,7 +466,7 @@ class ManagedHermesRuntime extends EventEmitter {
     }
 
     private ensureRuntime(automaticRestart: boolean): Promise<HermesConnectionDescriptor> {
-        if (this.connection && this.child && this.child.exitCode == null) {
+        if (this.connection && this.child && this.child.exitCode == null && this.child.signalCode == null) {
             return Promise.resolve(this.connection);
         }
         if (this.startPromise) {
@@ -700,7 +713,7 @@ class ManagedHermesRuntime extends EventEmitter {
             });
         } catch (error) {
             if (error instanceof DOMException && error.name === "TimeoutError") {
-                throw new Error(`Timed out connecting to the KronOS Agent after ${timeoutMs}ms`);
+                throw new Error(`Timed out connecting to the Kron Agent after ${timeoutMs}ms`);
             }
             throw error;
         }
@@ -851,6 +864,10 @@ class ManagedHermesRuntime extends EventEmitter {
             });
             if (!response.ok) {
                 throw new Error(`Hermes health check failed with HTTP ${response.status}.`);
+            }
+            await response.body?.cancel();
+            if (child.exitCode != null || child.signalCode != null) {
+                throw new Error("Hermes exited during its health check.");
             }
         } catch (error) {
             this.stopChild(child);

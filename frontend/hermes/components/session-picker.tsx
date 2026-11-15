@@ -13,8 +13,9 @@ interface SessionPickerDialogProps {
   /** Stored id of the session currently open, so it can be flagged in the list. */
   activeStoredSessionId?: string | null
   onOpenChange: (open: boolean) => void
-  onResume: (storedSessionId: string) => void
+  onResume: (storedSessionId: string) => void | Promise<void>
   open: boolean
+  contentClassName?: string
 }
 
 /**
@@ -24,9 +25,24 @@ interface SessionPickerDialogProps {
  * sessions only, so `/resume` feels first-class instead of falling through to
  * the headless slash worker (which can't render the picker).
  */
-export function SessionPickerDialog({ activeStoredSessionId, onOpenChange, onResume, open }: SessionPickerDialogProps) {
+export function SessionPickerDialog({ activeStoredSessionId, onOpenChange, onResume, open, contentClassName }: SessionPickerDialogProps) {
   const { t } = useI18n()
   const [search, setSearch] = useState('')
+  const [opening, setOpening] = useState(false)
+  const [error, setError] = useState('')
+  const resume = async (id: string) => {
+    if (opening) return
+    setOpening(true)
+    setError('')
+    try {
+      await onResume(id)
+      onOpenChange(false)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setOpening(false)
+    }
+  }
 
   const sessionsQuery = useQuery({
     enabled: open,
@@ -37,6 +53,7 @@ export function SessionPickerDialog({ activeStoredSessionId, onOpenChange, onRes
   useEffect(() => {
     if (!open) {
       setSearch('')
+      setError('')
     }
   }, [open])
 
@@ -48,9 +65,12 @@ export function SessionPickerDialog({ activeStoredSessionId, onOpenChange, onRes
         <DialogPrimitive.Overlay className="fixed inset-0 z-(--z-over-modal) bg-black/15 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-[14vh] z-(--z-over-modal-content) w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-bubble-background) shadow-lg duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95"
+          className={cn(contentClassName, "fixed left-1/2 top-[14vh] z-(--z-over-modal-content) w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-bubble-background) shadow-lg duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95")}
         >
           <DialogPrimitive.Title className="sr-only">{t.commandCenter.sections.sessions}</DialogPrimitive.Title>
+          {(error || opening) && (
+            <p className="px-3 py-2 text-xs" role={error ? 'alert' : 'status'}>{error || 'Opening chat…'}</p>
+          )}
           <Command className="bg-transparent" loop>
             <CommandInput onValueChange={setSearch} placeholder={t.commandCenter.searchPlaceholder} value={search} />
             <CommandList className="max-h-[min(24rem,60vh)]">
@@ -67,10 +87,8 @@ export function SessionPickerDialog({ activeStoredSessionId, onOpenChange, onRes
                     <CommandItem
                       className="gap-2.5"
                       key={session.id}
-                      onSelect={() => {
-                        onResume(session.id)
-                        onOpenChange(false)
-                      }}
+                      disabled={opening}
+                      onSelect={() => void resume(session.id)}
                       value={`${title} ${preview ?? ''} ${session.id}`}
                     >
                       <MessageCircle className="size-4 shrink-0 text-muted-foreground" />

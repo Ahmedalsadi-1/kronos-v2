@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { subscribeAgentActivityStream, type LiveAgentSurfaceActivity } from "../../types/agent-activity";
+import { KronOSV2AgentPointerEvent, type KronOSV2AgentPointerDetail } from "../tab/os-kronos-v2-agent-pointer-event";
 import { agentLabelForSource } from "../tab/os-agent-presence";
 
 interface OverlayMarker {
@@ -133,7 +134,11 @@ export function useAgentOverlays(surface?: string, blockId?: string, surfaceId?:
 
             if (activity.phase === "running" || activity.phase === "verifying") {
                 setWaterflowActive(true);
-                if (activity.point && activity.surface !== "terminal") {
+                const usePenPointer =
+                    (activity.surface === "browser" || activity.surface === "file" || activity.surface === "panel") &&
+                    ["click", "doubleClick", "scroll", "drag", "move", "type"].includes(activity.action) &&
+                    document.querySelector(".os-mode-root.view-kronos-v2") != null;
+                if (activity.point && activity.surface !== "terminal" && !usePenPointer) {
                     setCursorPoint(activity.point);
                     setCursorActive(true);
                     setCursorLabel(
@@ -184,9 +189,17 @@ export function useAgentOverlays(surface?: string, blockId?: string, surfaceId?:
                 setClickFlashCount((count) => (count ?? 0) + 1);
             }
         };
+        const penPointer = (event: Event) => {
+            if ((event as CustomEvent<KronOSV2AgentPointerDetail>).detail?.blockId !== blockId) return;
+            setCursorPoint(null);
+            setCursorActive(false);
+            setMarkers([]);
+        };
+        window.addEventListener(KronOSV2AgentPointerEvent, penPointer);
         window.addEventListener("kron-agent-pointer", pointer);
         return () => {
             clearTimeout(expiry);
+            window.removeEventListener(KronOSV2AgentPointerEvent, penPointer);
             window.removeEventListener("kron-agent-pointer", pointer);
             unsub();
         };

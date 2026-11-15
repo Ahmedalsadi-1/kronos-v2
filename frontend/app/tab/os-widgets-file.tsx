@@ -79,6 +79,7 @@ export function groupWidgetsByCategory(
 
 const OSWidgetsFileView = memo(function OSWidgetsFileView({
     blocks,
+    hidden,
     activeBlockId,
     workspaceName,
     onOpenBlock,
@@ -89,6 +90,7 @@ const OSWidgetsFileView = memo(function OSWidgetsFileView({
     onAttachResource,
 }: {
     blocks: OSWidgetsFileBlock[];
+    hidden?: boolean;
     activeBlockId: string | undefined;
     workspaceName: string;
     onOpenBlock: (blockId: string) => void;
@@ -145,6 +147,7 @@ const OSWidgetsFileView = memo(function OSWidgetsFileView({
     return (
         <main
             className="os-widgets-file"
+            hidden={hidden}
             aria-label="Current workspace sessions"
             onDragOver={(event) => {
                 if (event.dataTransfer.types.includes(OSAppDragMimeType)) {

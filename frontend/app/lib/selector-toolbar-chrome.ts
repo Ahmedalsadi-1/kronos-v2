@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export const SelectorToolbarStyles = `
+[data-react-grab-toolbar]{visibility:var(--kronos-floating-selector,visible)!important}
 [data-react-grab-toolbar-panel]{--rg-panel-bg:#000;--rg-text-primary:#fff;--rg-text-secondary:#bfbfbf;color:#fff;color-scheme:dark;padding:3px 4px!important;border-radius:7px!important;max-width:calc(100vw - 32px);box-sizing:border-box}
 [data-react-grab-toolbar-panel]>div,[data-react-grab-toolbar-panel]>button{zoom:1.09375}
 [data-react-grab-toolbar-panel],[data-react-grab-toolbar-panel]>div>div,[data-react-grab-toolbar-panel]>div>div>div{flex-direction:row!important;align-items:center}
@@ -43,6 +44,28 @@ export function installSelectorToolbarChrome(
                 observer.observe(shadow, { childList: true, subtree: true });
                 shadows.set(shadow, observer);
             }
+            if (!styles.has(shadow)) {
+                const style = document.createElement("style");
+                style.dataset.krontermCanvasToolsStyle = "";
+                style.textContent = stylesText;
+                shadow.append(style);
+                styles.set(shadow, style);
+                // Browser guests can block inline styles in the shadow root through CSP.
+                const blocked = Array.from(shadow.querySelectorAll("style")).filter((node) => node.sheet == null);
+                if (
+                    blocked.length &&
+                    shadow.adoptedStyleSheets &&
+                    typeof CSSStyleSheet.prototype.replaceSync === "function"
+                ) {
+                    const sheets = blocked.map((node) => {
+                        const sheet = new CSSStyleSheet();
+                        sheet.replaceSync(node.textContent.replace(/^\s*@import[^;]+;/, ""));
+                        return sheet;
+                    });
+                    shadow.adoptedStyleSheets = [...shadow.adoptedStyleSheets, ...sheets];
+                    fallbackSheets.set(shadow, sheets);
+                }
+            }
             const panel = shadow.querySelector("[data-react-grab-toolbar-panel]");
             const buttons = panel?.firstElementChild?.firstElementChild?.firstElementChild;
             if (buttons instanceof HTMLElement) {
@@ -58,29 +81,6 @@ export function installSelectorToolbarChrome(
             publish(null);
         }
         if (!(container instanceof HTMLElement)) return;
-        const shadow = container.getRootNode() as ShadowRoot;
-        if (!styles.has(shadow)) {
-            const style = document.createElement("style");
-            style.dataset.krontermCanvasToolsStyle = "";
-            style.textContent = stylesText;
-            shadow.append(style);
-            styles.set(shadow, style);
-            // Browser guests can block inline styles in the shadow root through CSP.
-            const blocked = Array.from(shadow.querySelectorAll("style")).filter((node) => node.sheet == null);
-            if (
-                blocked.length &&
-                shadow.adoptedStyleSheets &&
-                typeof CSSStyleSheet.prototype.replaceSync === "function"
-            ) {
-                const sheets = blocked.map((node) => {
-                    const sheet = new CSSStyleSheet();
-                    sheet.replaceSync(node.textContent.replace(/^\s*@import[^;]+;/, ""));
-                    return sheet;
-                });
-                shadow.adoptedStyleSheets = [...shadow.adoptedStyleSheets, ...sheets];
-                fallbackSheets.set(shadow, sheets);
-            }
-        }
         ownedSlot = document.createElement("div");
         ownedSlot.dataset.krontermCanvasToolsSlot = "";
         ownedSlot.setAttribute("data-react-grab-ignore-events", "");

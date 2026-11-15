@@ -292,7 +292,6 @@ const CHANGE_TINT: Record<RepoChangeKind, string> = {
 };
 
 function ProjectTreeRow({
-    dragHandle,
     node,
     onAttachFile,
     onAttachFolder,
@@ -385,7 +384,6 @@ function ProjectTreeRow({
                 );
                 event.dataTransfer.setData("text/plain", node.data.id);
             }}
-            ref={dragHandle}
             style={{
                 ...style,
                 paddingLeft: withTreeInset(style.paddingLeft),

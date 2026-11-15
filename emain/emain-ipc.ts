@@ -644,6 +644,9 @@ export function initIpcHandlers() {
                 if (input.type != "keyDown") {
                     return;
                 }
+                if (input.key === "Escape" && !input.isAutoRepeat) {
+                    parentWc.send("reinject-key", waveEvent, true);
+                }
                 for (let keyDesc of webviewKeys) {
                     if (keyutil.checkKeyPressed(waveEvent, keyDesc)) {
                         e.preventDefault();
@@ -837,6 +840,17 @@ export function initIpcHandlers() {
             return [];
         }
         return result.filePaths;
+    });
+
+    electron.ipcMain.handle("select-wallpaper", async (event): Promise<string | null> => {
+        const window = getWaveWindowByWebContentsId(event.sender.id);
+        if (window == null) return null;
+        const result = await electron.dialog.showOpenDialog(window, {
+            title: "Choose a workspace wallpaper",
+            properties: ["openFile"],
+            filters: [{ name: "Images", extensions: ["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"] }],
+        });
+        return result.canceled ? null : result.filePaths[0] ?? null;
     });
 
     electron.ipcMain.handle("search-system-items", async (_event, query: string): Promise<SystemSearchItem[]> => {

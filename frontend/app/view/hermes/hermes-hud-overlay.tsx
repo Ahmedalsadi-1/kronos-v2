@@ -54,7 +54,7 @@ export function HermesHudFrame({
     return (
         <div
             ref={frameRef}
-            aria-label="KronOS Agent HUD"
+            aria-label="Kron Agent HUD"
             className={`pointer-events-none ${shell ? "absolute" : "fixed"} z-[115] overflow-visible`}
             data-kronterm-hermes-hud=""
             data-chat-placement={detached ? "island" : placement}

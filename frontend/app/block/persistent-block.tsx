@@ -23,6 +23,7 @@ import { Block } from "./block";
 import { BlockChromeProvider, useBlockChrome, useBlockToolbarHost, type BlockChromeMode } from "./block-chrome-context";
 import type { BlockProps } from "./blocktypes";
 import { collectSurfaceOccluders, intersectSurfaceRects, makeSurfaceClipPath } from "./persistent-block-geometry";
+import "./persistent-block.css";
 
 export function makePersistentNodeModel(initial: NodeModel) {
     const binding = atom(initial) as PrimitiveAtom<NodeModel>;
@@ -40,6 +41,7 @@ export function makePersistentNodeModel(initial: NodeModel) {
 }
 
 export type PersistentBlockSurfaceInput = {
+    passThrough?: boolean;
     capturePointer?: boolean;
     onPointerDownCapture?: PointerEventHandler<HTMLDivElement>;
     onWheel?: WheelEventHandler<HTMLDivElement>;
@@ -79,11 +81,19 @@ function makeRegistry() {
 
 type Registry = ReturnType<typeof makeRegistry>;
 const RegistryContext = createContext<Registry>(null);
+const GeometrySubscribers = new Set<(root: HTMLElement) => void>();
+
+// Native canvas updates must move detached live surfaces before the same browser paint.
+export function syncPersistentBlockGeometry(root: HTMLElement) {
+    if (!root) return;
+    for (const synchronize of GeometrySubscribers) synchronize(root);
+}
 
 function LiveBlock({ entry }: { entry: Entry }) {
     const registry = useContext(RegistryContext);
     const alternate = registry.alternateSlots.get(entry.id);
     const host = useRef<HTMLDivElement>(null);
+    const passThrough = !alternate && !!entry.surfaceInput?.passThrough;
     useLayoutEffect(() => {
         let frame: number;
         let previous = "";
@@ -101,6 +111,10 @@ function LiveBlock({ entry }: { entry: Entry }) {
                 hud.active &&
                 !hud.keepWorkspaceVisible &&
                 hud.selectedBlockId === entry.id;
+            const passThrough =
+                !registry.alternateSlots.has(entry.id) && !hudPreview && !!entry.surfaceInput?.passThrough;
+            element.toggleAttribute("data-live-block-pass-through", passThrough);
+            element.toggleAttribute("inert", passThrough);
             if (!slot && !hudPreview) {
                 if (previous !== "display:none") {
                     element.style.cssText = "display:none";
@@ -137,6 +151,10 @@ function LiveBlock({ entry }: { entry: Entry }) {
             let clipPath = "none";
             const osRoot = slot?.closest(".os-mode-root");
             const ownerWindow = slot?.closest<HTMLElement>(".os-window");
+            element.toggleAttribute(
+                "data-live-canvas-widget",
+                !hudPreview && ownerWindow?.classList.contains("is-canvas-widget") === true
+            );
             const sceneRoot = osRoot ?? slot?.closest(".workspace-canvas");
             if (rect && sceneRoot) {
                 let visibleRect = intersectSurfaceRects(rect, sceneRoot.getBoundingClientRect());
@@ -169,16 +187,18 @@ function LiveBlock({ entry }: { entry: Entry }) {
             );
             // Paint in the hidden owner without moving its OS slot or replacing the live mount.
             const previewCss = `position:absolute;pointer-events:auto;overflow:hidden;left:0;top:0;width:${Math.min(previewWidth, window.innerWidth)}px;height:${Math.min(previewHeight, window.innerHeight)}px;z-index:2147483647;opacity:1;visibility:visible`;
+            const surfaceOpacity =
+                presentation === "os" || presentation === "canvas"
+                    ? `calc(${opacity} * var(--kron-live-widget-alpha, 1))`
+                    : opacity;
             const css = hudPreview
                 ? previewCss
                 : rect
-                  ? `position:absolute;pointer-events:auto;overflow:hidden;left:${rect.x - rootRect.x}px;top:${rect.y - rootRect.y}px;width:${slot.offsetWidth}px;height:${slot.offsetHeight}px;transform-origin:top left;transform:scale(${rect.width / slot.offsetWidth},${rect.height / slot.offsetHeight});z-index:${zIndex};opacity:${opacity};clip-path:${clipPath};isolation:isolate`
+                  ? `position:absolute;pointer-events:${passThrough ? "none" : "auto"};overflow:hidden;left:${rect.x - rootRect.x}px;top:${rect.y - rootRect.y}px;width:${slot.offsetWidth}px;height:${slot.offsetHeight}px;transform-origin:top left;transform:scale(${rect.width / slot.offsetWidth},${rect.height / slot.offsetHeight});z-index:${zIndex};opacity:${surfaceOpacity};clip-path:${clipPath};isolation:isolate`
                   : "display:none";
             const appearanceProperties = new Map<string, string>();
             if (slotStyle) {
                 appearanceProperties.set("color", slotStyle.color);
-                if (presentation === "os")
-                    appearanceProperties.set("background-color", "var(--kt-content, var(--main-bg-color))");
                 appearanceProperties.set("font", slotStyle.font);
                 appearanceProperties.set("border-radius", getComputedStyle(slot.parentElement).borderRadius);
                 for (let index = 0; index < slotStyle.length; index++) {
@@ -210,10 +230,16 @@ function LiveBlock({ entry }: { entry: Entry }) {
             frame = requestAnimationFrame(tick);
         };
         tick();
+        const synchronize = (root: HTMLElement) => {
+            const slot = registry.alternateSlots.get(entry.id)?.element ?? entry.slot;
+            if (slot && root.contains(slot)) position();
+        };
+        GeometrySubscribers.add(synchronize);
         const unsubscribe = kronTermHudController.subscribe(position);
         document.addEventListener("visibilitychange", position);
         return () => {
             cancelAnimationFrame(frame);
+            GeometrySubscribers.delete(synchronize);
             unsubscribe();
             document.removeEventListener("visibilitychange", position);
         };
@@ -223,12 +249,16 @@ function LiveBlock({ entry }: { entry: Entry }) {
             ref={host}
             data-live-blockid={entry.id}
             data-alternate-chrome={alternate?.chrome}
+            data-live-block-pass-through={passThrough ? "" : undefined}
+            inert={passThrough}
             className="h-full w-full"
             onPointerDownCapture={(event) => {
+                if (host.current?.hasAttribute("data-live-block-pass-through")) return;
                 if (!alternate) entry.surfaceInput?.onPointerDownCapture?.(event);
                 if (!event.defaultPrevented && !alternate) entry.binding.model.focusNode();
             }}
             onWheel={(event) => {
+                if (host.current?.hasAttribute("data-live-block-pass-through")) return;
                 if (!alternate) entry.surfaceInput?.onWheel?.(event);
                 event.stopPropagation();
             }}
@@ -240,7 +270,7 @@ function LiveBlock({ entry }: { entry: Entry }) {
                 >
                     <Block nodeModel={entry.binding.model} preview={false} />
                     {!alternate && entry.overlay}
-                    {!alternate && entry.surfaceInput?.capturePointer && (
+                    {!alternate && !passThrough && entry.surfaceInput?.capturePointer && (
                         <div
                             data-live-block-pan-capture=""
                             className="absolute inset-0 z-[2147483647] pointer-events-auto cursor-grab"

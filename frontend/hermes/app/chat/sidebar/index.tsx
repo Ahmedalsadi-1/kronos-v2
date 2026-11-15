@@ -1468,7 +1468,7 @@ export function ChatSidebar({
             )}
             collapsible="none"
         >
-            <SidebarContent className="gap-0 overflow-hidden bg-transparent px-2.5">
+            <SidebarContent className="gap-0 overflow-hidden bg-black px-2.5">
                 <SidebarGroup className="shrink-0 p-0 pb-2 pt-[calc(var(--titlebar-height)+0.375rem)]">
                     <SidebarGroupContent>
                         <SidebarMenu className="gap-px">

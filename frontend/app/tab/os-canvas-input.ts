@@ -6,7 +6,7 @@ export function osWidgetOwnsWheel(path: EventTarget[], zoomGesture: boolean, han
     return path.some(
         (target) =>
             target instanceof HTMLElement &&
-            target.matches(".os-window-content, [data-live-blockid], .os-canvas-note-editor")
+            target.matches(".os-window-content, [data-live-blockid], .os-canvas-note-editor, .canvas-text-editor")
     );
 }
 
@@ -16,7 +16,7 @@ export function osCanvasOwnsDelete(path: EventTarget[], root: HTMLElement, defau
         (target) =>
             target instanceof HTMLElement &&
             target.matches(
-                "input, textarea, select, [contenteditable='true'], [role='application'], .os-window-content, [data-workflow-native-host], [data-workflow-chrome], [data-workflow-details], [data-workflow-inspector], .os-agent-sidebar, .os-files-inspector"
+                "input, textarea, select, [contenteditable='true'], [role='application'], .os-window-content, .canvas-text-editor, [data-workflow-native-host], [data-workflow-chrome], [data-workflow-details], [data-workflow-inspector], .os-agent-sidebar, .os-files-inspector"
             )
     );
 }

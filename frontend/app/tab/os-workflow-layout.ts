@@ -7,6 +7,7 @@ import { reduceOSModeState, type OSModeState } from "./os-workspace-model";
 type Rect = { x: number; y: number; width: number; height: number };
 
 export function activateOSWorkflowCanvas(state: OSModeState): OSModeState {
+    if (state.view === "kronos-v2") return state;
     return { ...reduceOSModeState(state, { type: "spatial.freeform" }), view: "canvas" };
 }
 

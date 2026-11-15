@@ -1,6 +1,8 @@
 import type { AppendMessage } from '@assistant-ui/react'
 
 import { translateNow, type Translations } from '@hermes/i18n'
+import { sessionTitle } from '@hermes/lib/chat-runtime'
+import type { SessionInfo } from '@hermes/types/hermes'
 import type { ChatMessage } from '@hermes/lib/chat-messages'
 import { type CommandsCatalogLike, filterDesktopCommandsCatalog } from '@hermes/lib/desktop-slash-commands'
 import { isProviderSetupErrorMessage } from '@hermes/lib/provider-setup-errors'
@@ -16,6 +18,16 @@ export function isSessionIdCandidate(value: string): boolean {
   const trimmed = value.trim()
 
   return /^\d{8}_\d{6}_[A-Fa-f0-9]{6}$/.test(trimmed) || /^[A-Fa-f0-9]{32}$/.test(trimmed)
+}
+
+export function resolveSlashSessionId(sessions: SessionInfo[], query: string): string | undefined {
+  const lower = query.toLowerCase()
+  const match =
+    sessions.find(session => session.id === query) ||
+    sessions.find(session => sessionTitle(session).toLowerCase().includes(lower)) ||
+    sessions.find(session => (session.preview ?? '').toLowerCase().includes(lower))
+
+  return match?.id ?? (isSessionIdCandidate(query) ? query : undefined)
 }
 
 export function blobToDataUrl(blob: Blob): Promise<string> {

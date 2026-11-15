@@ -118,7 +118,7 @@ export function collectSurfaceOccluders(
             }
         }
     }
-    return [...candidates]
+    const occluders = [...candidates]
         .filter(
             (candidate) =>
                 candidate !== ownerWindow &&
@@ -127,4 +127,20 @@ export function collectSurfaceOccluders(
                 isSurfaceVisible(candidate)
         )
         .map((candidate) => candidate.getBoundingClientRect());
+    if (!osMode) return occluders;
+
+    // Canvas chrome can extend beyond the window's content rectangle.
+    for (const widget of [ownerWindow, ...candidates]) {
+        if (!widget?.matches(".os-window.is-canvas-widget")) continue;
+        const chrome = widget.querySelectorAll(
+            widget === ownerWindow
+                ? ".os-window-titlebar .webview-address-suggestions"
+                : ".os-canvas-widget-label, .os-canvas-widget-selection, .os-canvas-widget-resize-handle, " +
+                  ".os-window-titlebar, .os-window-titlebar .webview-address-suggestions"
+        );
+        for (const element of chrome) {
+            if (isSurfaceVisible(element)) occluders.push(element.getBoundingClientRect());
+        }
+    }
+    return occluders;
 }

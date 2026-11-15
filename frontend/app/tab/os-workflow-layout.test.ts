@@ -42,3 +42,13 @@ it("keeps selected workflow nodes below the OS toolbar while retaining horizonta
     expect(node.y * next.zoom + next.y).toBeGreaterThan(16 + 40);
     expect(keepWorkflowNodeVisible(next, node, { width: 700, height: 480 })).toBe(next);
 });
+
+it("opens workflows without changing the KronOS v2 presentation or its saved layout", async () => {
+    const { activateOSWorkflowCanvas } = await import("./os-workflow-layout");
+    const { makeInitialOSModeState } = await import("./os-workspace-model");
+    const state = {
+        ...makeInitialOSModeState({ meta: {} } as Tab, ["files"]),
+        view: "kronos-v2" as const,
+    };
+    expect(activateOSWorkflowCanvas(state)).toBe(state);
+});

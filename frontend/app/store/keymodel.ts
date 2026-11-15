@@ -20,6 +20,7 @@ import {
     replaceBlock,
     WOS,
 } from "@/app/store/global";
+import { KronOSV2AgentFollowPauseEvent } from "@/app/tab/os-kronos-v2-agent-pointer-event";
 import { getActiveTabModel } from "@/app/store/tab-model";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { toggleCommandCenter } from "@/app/workspace/command-center-events";
@@ -485,7 +486,11 @@ function registerControlShiftStateUpdateHandler() {
 }
 
 function registerElectronReinjectKeyHandler() {
-    getApi().onReinjectKey((event: WaveKeyboardEvent) => {
+    getApi().onReinjectKey((event, observedOnly) => {
+        if (observedOnly) {
+            if (event.key === "Escape") window.dispatchEvent(new Event(KronOSV2AgentFollowPauseEvent));
+            return;
+        }
         appHandleKeyDown(event);
     });
 }

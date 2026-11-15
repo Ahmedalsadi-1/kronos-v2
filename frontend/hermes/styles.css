@@ -3844,3 +3844,40 @@ html:has([data-coucou-hud]) [data-notification-stack] [data-slot="alert"] {
         display: none;
     }
 }
+
+[data-kronos-pen-chat] {
+    --pen-chat-canvas: var(--color-black, #000);
+    --pen-chat-island: color-mix(in srgb, var(--pen-chat-canvas), var(--kt-label, #ededed) 5%);
+    --pen-chat-border: color-mix(in srgb, var(--pen-chat-canvas), var(--kt-label, #ededed) 13%);
+}
+
+[data-kronos-pen-chat] [data-chat-surface] {
+    --ui-chat-surface-background: var(--pen-chat-canvas);
+    --hermes-composer-radius: 16px;
+}
+
+[data-kronos-pen-chat] [data-slot="composer-surface"] {
+    border-color: var(--pen-chat-border);
+    border-radius: var(--hermes-composer-radius) !important;
+}
+
+[data-kronos-pen-chat] [data-slot="composer-fill"] {
+    background: var(--pen-chat-island);
+    backdrop-filter: none;
+}
+
+[data-kronos-pen-chat] .composer-human-message {
+    border-color: transparent;
+    border-radius: 16px !important;
+    background: color-mix(in srgb, var(--pen-chat-island), var(--kt-label, #ededed) 6%);
+}
+
+[data-kronos-pen-chat] [data-slot="composer-surface"] :is(button, [role="button"]),
+[data-kronos-pen-chat] [data-slot="sidebar-content"] [data-sidebar="menu-button"] {
+    border-radius: 6px !important;
+}
+
+[data-kronos-pen-chat] [data-slot="sidebar-content"] {
+    --ui-sidebar-surface-background: var(--pen-chat-island);
+    --ui-control-active-background: color-mix(in srgb, var(--pen-chat-island), currentColor 10%);
+}

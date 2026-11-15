@@ -9,9 +9,12 @@
     --browser-preview-border: var(--border-color, #38383e);
     --browser-preview-text: var(--text-primary-color, #f5f5f6);
     --browser-preview-secondary: var(--text-secondary-color, #b2b2ba);
-    background: var(--browser-preview-bg);
     color: var(--browser-preview-text);
     font-family: Inter, system-ui, sans-serif;
+}
+
+.webview-shell[data-browser-preview] {
+    background: var(--browser-preview-bg);
 }
 
 .webview-browser-chrome[data-browser-preview] {
@@ -22,8 +25,8 @@
         min-height: 48px;
         gap: 4px;
         padding: 6px 8px;
-        background: var(--browser-preview-bg);
-        border-color: var(--browser-preview-border);
+        background: transparent;
+        border: 0;
 
         > button,
         .webview-toolbar-menu > button {

@@ -19,7 +19,21 @@ const PickerSources = [
     { id: "comfy-models", label: "KronRender models" },
 ] as const;
 
-export function OriginalNodePicker({ tabId, onClose }: { tabId: string; onClose: () => void }) {
+export function OriginalNodePicker({
+    tabId,
+    onClose,
+    loading,
+    error,
+    onRetry,
+    onNativeInteraction,
+}: {
+    tabId: string;
+    onClose: () => void;
+    loading?: boolean;
+    error?: string;
+    onRetry?: () => void;
+    onNativeInteraction?: () => void;
+}) {
     const target = useRef<HTMLDivElement>(null);
     const source = useStore($workflowPickerSource);
     const [canSearch, setCanSearch] = useState(false);
@@ -66,11 +80,11 @@ export function OriginalNodePicker({ tabId, onClose }: { tabId: string; onClose:
         if (next === "n8n" && !canSearch) openPicker();
     };
     useEffect(() => {
-        openPicker();
-        const root = target.current?.shadowRoot;
-        const update = () => setCanSearch(Boolean(root?.querySelector('[data-test-id="node-creator-search-bar"]')));
+        const root = target.current.shadowRoot ?? target.current.attachShadow({ mode: "open" });
+        const update = () => setCanSearch(Boolean(root.querySelector('[data-test-id="node-creator-search-bar"]')));
         const observer = new MutationObserver(update);
-        if (root) observer.observe(root, { childList: true, subtree: true });
+        observer.observe(root, { childList: true, subtree: true });
+        openPicker();
         update();
         return () => {
             observer.disconnect();
@@ -95,16 +109,27 @@ export function OriginalNodePicker({ tabId, onClose }: { tabId: string; onClose:
                         {label}
                     </SystemButton>
                 ))}
-                {!canSearch && !useComfySearch && (
-                    <SystemButton className="ml-auto" size="small" onClick={openPicker}>
-                        Show picker
-                    </SystemButton>
-                )}
             </div>
+            {!canSearch && !useComfySearch && (
+                <div className="space-y-2 px-3 py-3 text-sm text-(--kt-label)">
+                    {error ? (
+                        <p role="alert">{error}</p>
+                    ) : (
+                        <p role="status">{loading ? "Loading workflow nodes…" : "Workflow nodes are unavailable."}</p>
+                    )}
+                    {!loading && (
+                        <SystemButton size="small" onClick={error && onRetry ? onRetry : openPicker}>
+                            Retry workflow connection
+                        </SystemButton>
+                    )}
+                </div>
+            )}
             <div
                 ref={target}
                 aria-label="Workflow nodes"
                 hidden={useComfySearch}
+                onPointerDownCapture={onNativeInteraction}
+                onKeyDownCapture={onNativeInteraction}
                 className="relative min-h-0 w-full flex-1 overflow-hidden"
             />
             {useComfySearch && (

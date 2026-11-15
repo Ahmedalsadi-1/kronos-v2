@@ -124,7 +124,7 @@ function resolveBrowserElement(ref: string): Element {
     return null;
 }
 
-export function browserTargetPointScript(ref: string, scroll = true): string {
+export function browserTargetPointScript(ref: string, scroll = true, includeBounds = false): string {
     return `(() => {
         const ref = ${JSON.stringify(ref)};
         const target = ${browserElementResolverSource()}(ref);
@@ -147,7 +147,7 @@ export function browserTargetPointScript(ref: string, scroll = true): string {
                 if (!inner || inner === hit) break;
                 hit = inner;
             }
-            if (hit === target || target.contains(hit)) return {x, y};
+            if (hit === target || target.contains(hit)) return {x, y${includeBounds ? ", bounds: {x: left, y: top, width: right - left, height: bottom - top}" : ""}};
         }
         return null;
     })()`;

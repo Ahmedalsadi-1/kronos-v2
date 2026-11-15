@@ -4,7 +4,9 @@ import { SessionPickerDialog } from '@hermes/components/session-picker'
 import { $gatewayState, $selectedStoredSessionId, $sessionPickerOpen, setSessionPickerOpen } from '@hermes/store/session'
 
 interface SessionPickerOverlayProps {
-  onResume: (storedSessionId: string) => void
+  contentClassName?: string
+  onClose?: () => void
+  onResume: (storedSessionId: string) => void | Promise<void>
 }
 
 /**
@@ -12,7 +14,7 @@ interface SessionPickerOverlayProps {
  * the desktop equivalent of the TUI's sessions overlay. Resuming runs through
  * the same `resumeSession` path the sidebar uses.
  */
-export function SessionPickerOverlay({ onResume }: SessionPickerOverlayProps) {
+export function SessionPickerOverlay({ onResume, contentClassName, onClose }: SessionPickerOverlayProps) {
   const open = useStore($sessionPickerOpen)
   const gatewayOpen = useStore($gatewayState) === 'open'
   const activeStoredSessionId = useStore($selectedStoredSessionId)
@@ -23,8 +25,12 @@ export function SessionPickerOverlay({ onResume }: SessionPickerOverlayProps) {
 
   return (
     <SessionPickerDialog
+      contentClassName={contentClassName}
       activeStoredSessionId={activeStoredSessionId}
-      onOpenChange={setSessionPickerOpen}
+      onOpenChange={open => {
+        setSessionPickerOpen(open)
+        if (!open) onClose?.()
+      }}
       onResume={onResume}
       open={open}
     />

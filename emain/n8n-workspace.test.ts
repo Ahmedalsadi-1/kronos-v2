@@ -156,6 +156,13 @@ it("hands the runtime to the confirmed tab only when the current owner is unchan
     await expect(workspace.command(handoff, other)).rejects.toThrow(/Save local/);
     expect(runtime.stop).not.toHaveBeenCalled();
     dirty = false;
+    mocks.contents.push({
+        id: 57,
+        isDestroyed: () => false,
+        getType: () => "webview",
+        getURL: () => "http://127.0.0.1:5678/workflow/flow1",
+        executeJavaScript,
+    });
     await expect(workspace.command(handoff, other)).resolves.toMatchObject({ desktop: true, running: true });
     expect(runtime.stop).toHaveBeenCalledOnce();
     expect(runtime.start).toHaveBeenCalledWith(other, expect.any(Object));

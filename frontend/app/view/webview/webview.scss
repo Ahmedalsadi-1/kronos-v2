@@ -40,7 +40,7 @@
     z-index: 2;
     flex: 0 0 auto !important;
     order: 0;
-    background: rgb(from var(--surface-base-color) r g b / 0.9);
+    background: transparent;
 }
 
 .block-frame-default-inner:has(> .block-frame-header-top .webview-browser-chrome) {
@@ -96,8 +96,8 @@
     align-items: center;
     gap: 4px;
     padding: 3px 6px;
-    border-bottom: 1px solid rgb(from var(--border-color) r g b / 0.7);
-    background: rgb(from var(--surface-base-color) r g b / 0.95);
+    border: 0;
+    background: transparent;
 
     > button {
         display: grid;

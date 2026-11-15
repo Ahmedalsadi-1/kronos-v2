@@ -289,7 +289,7 @@ export function SettingsView({
                           active: getKronTermSettingsSectionId(activeView) != null,
                           children: kronTermSettingsHost.sections
                               .filter((section) =>
-                                  ["visual", "shortcuts", "sessions", "git", "github", "voice", "desktop"].includes(
+                                  ["visual", "canvas", "shortcuts", "sessions", "git", "github", "voice", "desktop"].includes(
                                       section.id
                                   )
                               )

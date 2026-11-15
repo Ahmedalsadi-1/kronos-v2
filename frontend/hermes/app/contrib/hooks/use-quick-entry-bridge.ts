@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import { isKronTermWidgetHost } from "@hermes/lib/kronterm-host";
 import {
     $composerDraft,
     addComposerAttachment,
@@ -10,6 +11,7 @@ import {
     initQuickEntryBridge,
     QUICK_TARGET_CURRENT,
     QUICK_TARGET_NEW,
+    registerCanvasChatSubmit,
     setQuickEntrySubmitHandler,
     type QuickEntrySessionOption,
 } from "@hermes/store/quick-entry";
@@ -19,8 +21,12 @@ import { isAuxiliaryWindow } from "@hermes/store/windows";
 import { deliverQuickEntryImages } from "./quick-entry-image-delivery";
 
 interface QuickEntryBridgeParams {
+    cancelRun?: () => Promise<unknown>;
     startFreshSessionDraft: () => void;
-    submitText: (text: string, options?: { attachments: ComposerAttachment[] }) => Promise<unknown> | unknown;
+    submitText: (
+        text: string,
+        options?: { attachments: ComposerAttachment[]; displayText?: string }
+    ) => Promise<unknown> | unknown;
 }
 
 // The picker is a capture aid, not a session browser — a handful of recent
@@ -57,11 +63,21 @@ function sessionOptions(): QuickEntrySessionOption[] {
  * secondary session window must not also claim the global capture channel, or
  * one keystroke would send N prompts.
  */
-export function useQuickEntryBridge({ startFreshSessionDraft, submitText }: QuickEntryBridgeParams): void {
+export function useQuickEntryBridge({ startFreshSessionDraft, submitText, cancelRun }: QuickEntryBridgeParams): void {
+    const cancelRef = useRef(cancelRun);
+    cancelRef.current = cancelRun;
     const submitTextRef = useRef(submitText);
     submitTextRef.current = submitText;
     const startFreshRef = useRef(startFreshSessionDraft);
     startFreshRef.current = startFreshSessionDraft;
+
+    useEffect(() => {
+        if (!isKronTermWidgetHost()) return;
+        return registerCanvasChatSubmit(
+            async (text, displayText) => submitTextRef.current(text, { attachments: [], displayText }),
+            async () => cancelRef.current?.()
+        );
+    }, []);
 
     useEffect(() => {
         if (isAuxiliaryWindow()) {
@@ -107,7 +123,6 @@ export function useQuickEntryBridge({ startFreshSessionDraft, submitText }: Quic
         });
 
         const dispose = initQuickEntryBridge();
-
         return () => {
             setQuickEntrySubmitHandler(null);
             dispose();

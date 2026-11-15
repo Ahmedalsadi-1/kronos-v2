@@ -5,18 +5,26 @@ import { SystemButton, useSystemAppearance } from "@/app/components/system-ui";
 import { X } from "@/app/components/system-ui/os-icons";
 import { HermesLoadBoundary } from "@/app/view/hermes/hermes-load-boundary";
 import { systemMaterialVariables } from "@/types/system-materials";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
     DesktopModalPortalContainerContext,
     DialogPortalContainerContext,
 } from "@hermes/components/ui/dialog-portal-context";
+import * as Dialog from "@radix-ui/react-dialog";
 import { lazy, Suspense, useState } from "react";
 
 const HermesSettingsContent = lazy(async () => ({
     default: (await import("./os-hermes-settings-content")).HermesSettingsContent,
 }));
 
-export function OSHermesSettings({ tabId, onClose }: { tabId: string; onClose: () => void }) {
+export function OSHermesSettings({
+    tabId,
+    onClose,
+    initialSection,
+}: {
+    tabId: string;
+    onClose: () => void;
+    initialSection?: string;
+}) {
     const appearance = useSystemAppearance();
     const [portalContainer, setPortalContainer] = useState<HTMLDivElement>(null);
 
@@ -49,8 +57,18 @@ export function OSHermesSettings({ tabId, onClose }: { tabId: string; onClose: (
                     <DesktopModalPortalContainerContext.Provider value={portalContainer}>
                         <DialogPortalContainerContext.Provider value={portalContainer}>
                             <HermesLoadBoundary>
-                                <Suspense fallback={<div role="status" className="m-auto">Loading Hermes Settings…</div>}>
-                                    <HermesSettingsContent tabId={tabId} onClose={onClose} />
+                                <Suspense
+                                    fallback={
+                                        <div role="status" className="m-auto">
+                                            Loading Hermes Settings…
+                                        </div>
+                                    }
+                                >
+                                    <HermesSettingsContent
+                                        tabId={tabId}
+                                        onClose={onClose}
+                                        initialSection={initialSection}
+                                    />
                                 </Suspense>
                             </HermesLoadBoundary>
                         </DialogPortalContainerContext.Provider>

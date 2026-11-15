@@ -1223,7 +1223,7 @@ const workspaceDirectionSchema = z.enum(["up", "right", "down", "left"]);
 
 server.tool(
     "workspace_snapshot",
-    "Read the authoritative active KronOS presentation before operating. Returns widgets/tabs/canvas/OS mode, ordered live identities, focus and visibility, on-screen and world bounds, camera, OS scene/groups, split tree, supported actions, userview, and visualassessment. Read uservisible and clipping/occlusion hints to understand the human view; use screenshots to verify appearance.",
+    "Read active workspace layout and widget IDs as JSON. Includes focus, visibility, bounds, camera and supported actions. For an image, call workspace_screenshot or widget_screenshot with a blockId from this snapshot.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_snapshot")(async () => {
@@ -1349,7 +1349,7 @@ server.tool(
 
 server.tool(
     "workspace_screenshot",
-    "Capture the complete active KronOS widgets, tabs, canvas, or OS presentation. Use with workspace_snapshot when visual appearance matters; use widget_screenshot for one widget's content.",
+    "Capture a PNG of the active KronOS workspace without the agent chat overlay. Use widget_screenshot with a blockId to capture one widget.",
     {},
     workspaceReadAnnotations,
     wrapActivity("workspace_screenshot")(async () => {
@@ -3199,12 +3199,12 @@ server.tool(
 
 server.tool(
     "widget_screenshot",
-    "Capture a screenshot of any block. Returns base64-encoded PNG data URI.",
+    "Capture a PNG of the requested widget by blockId. Use workspace_snapshot to find IDs. Browser widgets return the page viewport. Other widgets return their rendered bounds.",
     { blockId: z.string().describe("Block ID to screenshot") },
     wrapActivity("widget_screenshot")(async ({ blockId }) => {
         try {
             const result = await wsh.widgetScreenshot(blockId);
-            return { content: [{ type: "text", text: result }] };
+            return { content: screenshotContent(result, `Screenshot of widget ${blockId}.`) };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
         }

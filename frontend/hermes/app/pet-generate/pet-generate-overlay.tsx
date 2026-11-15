@@ -30,7 +30,7 @@ import {
 
 import { PetGenerateContent } from './pet-generate-content'
 
-export function PetGenerateOverlay() {
+export function PetGenerateOverlay({ contentClassName }: { contentClassName?: string } = {}) {
   const { t } = useI18n()
   const { requestGateway } = useGatewayRequest()
   const open = useStore($petGenerateOpen)
@@ -84,7 +84,7 @@ export function PetGenerateOverlay() {
         bodyClassName="gap-4 text-center"
         // Cap the width so a long banner (e.g. a provider refusal) wraps instead
         // of stretching the dialog out; the min-w floors each phase.
-        className={cn(single ? 'min-w-[17rem] max-w-[20rem]' : 'min-w-[19rem] max-w-[22rem]')}
+        className={cn(single ? 'min-w-[17rem] max-w-[20rem]' : 'min-w-[19rem] max-w-[22rem]', contentClassName)}
         fitContent
       >
         {open && <PetGenerateContent />}

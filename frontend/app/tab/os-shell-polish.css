@@ -11,9 +11,14 @@
     gap: var(--os-navigation-gap);
 }
 
+.os-shell .os-sidebar-toggle,
+.os-shell .os-view-selector > button,
+.os-shell .os-view-menu {
+    -webkit-app-region: no-drag;
+}
+
 .os-shell .os-sidebar-toggle {
     color-scheme: dark;
-    -webkit-app-region: no-drag;
 }
 
 .kt-system-ui .os-shell .os-workspaces {

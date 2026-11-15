@@ -2054,7 +2054,7 @@ const canonicalCreations = new Map()
  *  message (the gateway prunes zero-message sessions, so the chat is born
  *  with the bot introducing itself). Pins the stored id in bot meta and
  *  returns it. */
-function createCanonicalChat(name) {
+function createCanonicalChat(name, openSession = host.openSession) {
   const inflight = canonicalCreations.get(name)
 
   if (inflight) {
@@ -2081,9 +2081,9 @@ function createCanonicalChat(name) {
     // an unmounted session left the intro reply invisible until reopen.
     let opened = false
 
-    if (sid && typeof host.openSession === 'function') {
+    if (sid && typeof openSession === 'function') {
       try {
-        await host.openSession(sid, { profile: name })
+        await openSession(sid, { profile: name })
         opened = true
       } catch {
         // The stored row may not exist until the kickoff persists it. Retry
@@ -2097,8 +2097,8 @@ function createCanonicalChat(name) {
       try {
         await host.request('prompt.submit', { session_id: runtime, text: 'Hey, tell me about yourself!' })
 
-        if (!opened && sid && typeof host.openSession === 'function') {
-          await host.openSession(sid, { profile: name })
+        if (!opened && sid && typeof openSession === 'function') {
+          await openSession(sid, { profile: name })
         }
       } catch (err) {
         if (sid) {
@@ -2117,11 +2117,11 @@ function createCanonicalChat(name) {
   return run
 }
 
-async function openBotCanonicalChat(name, pinned) {
+async function openBotCanonicalChat(name, pinned, openSession = host.openSession) {
   let id = pinned
 
   if (!id) {
-    return createCanonicalChat(name)
+    return createCanonicalChat(name, openSession)
   }
 
   try {
@@ -2130,7 +2130,7 @@ async function openBotCanonicalChat(name, pinned) {
 
     if (!rows.length) {
       saveBotMeta(name, { chat: null })
-      return createCanonicalChat(name)
+      return createCanonicalChat(name, openSession)
     }
 
     if (!rows.some(session => session.id === id)) {
@@ -2142,13 +2142,13 @@ async function openBotCanonicalChat(name, pinned) {
   }
 
   try {
-    await host.openSession(id, { profile: name })
+    await openSession(id, { profile: name })
     return id
   } catch {
     // A rejected resume means the pin is unusable even if list recovery was
     // inconclusive. Clear it first so a failed replacement can be retried.
     saveBotMeta(name, { chat: null })
-    return createCanonicalChat(name)
+    return createCanonicalChat(name, openSession)
   }
 }
 
@@ -2166,6 +2166,25 @@ function displayName(bot, meta) {
 
   const raw = (bot.title || bot.name || '').replace(/[-_]+/g, ' ').trim()
   return raw.replace(/\b\w/g, ch => ch.toUpperCase())
+}
+
+export async function listBotRoster() {
+  const { profiles = [] } = await host.request('profiles.list', {})
+  mergeServerMeta(profiles)
+  const meta = $botMeta.get()
+
+  return profiles.map(bot => ({
+    id: bot.name,
+    title: displayName(bot, meta[bot.name]),
+    handle: botHandle(bot.name),
+    preview: String(bot.last_session?.preview || bot.description || '').slice(0, 160)
+  }))
+}
+
+export async function openBotConversation(name) {
+  const id = await openBotCanonicalChat(name, $botMeta.get()[name]?.chat, async () => {})
+  if (!id) throw new Error('Could not open the bot conversation.')
+  return id
 }
 
 /** Filter by the two stable identities rendered in every roster row: the

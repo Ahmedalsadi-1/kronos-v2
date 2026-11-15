@@ -5,7 +5,7 @@
 // when the Hermes app runs embedded in a KronTerm window; standalone Hermes
 // never sees them.
 
-import { getApi } from "@/app/store/global";
+import { createBlock, getApi } from "@/app/store/global";
 import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import { registry } from "@hermes/contrib/registry";
 import { isKronTermWidgetHost } from "@hermes/lib/kronterm-host";
@@ -18,6 +18,16 @@ function registerKronTermPaletteRows(): void {
     }
     registered = true;
     registry.registerMany([
+        {
+            id: "kronterm.browser-preview",
+            area: "palette",
+            data: {
+                id: "kronterm.browser-preview",
+                label: "Open Browser Preview",
+                keywords: ["web", "widget"],
+                run: () => void createBlock({ meta: { view: "web", "web:chrome": "preview" } as MetaType }),
+            },
+        },
         {
             id: "kronterm.sign-in",
             area: "palette",

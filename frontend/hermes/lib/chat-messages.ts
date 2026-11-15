@@ -726,9 +726,14 @@ function toolResult(
   prevArgs?: unknown
 ): Record<string, unknown> {
   const parsedResult = parseMaybeJsonObject(payload?.result)
+  const rawResult = payload?.result
 
   return {
     ...parsedResult,
+    ...(Array.isArray(rawResult) ? { content: rawResult } : {}),
+    ...(typeof rawResult === 'string' && rawResult.trim() && !Object.keys(parsedResult).length
+      ? { output: rawResult }
+      : {}),
     ...(payload?.inline_diff ? { inline_diff: payload.inline_diff } : {}),
     ...(payload?.summary ? { summary: payload.summary } : {}),
     ...(payload?.message ? { message: payload.message } : {}),

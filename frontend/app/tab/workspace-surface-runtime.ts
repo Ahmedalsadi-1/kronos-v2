@@ -1,10 +1,12 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { KronTermOSView } from "./os-workspace-model";
 import type { WorkspaceCanvasRect } from "./workspace-canvas-utils";
 import type { WorkspacePresentation } from "./workspace-presentation";
 
 type WorkspaceSurfaceControlAction =
+    | "os.widget.input"
     | "os.tabs.group"
     | "os.tabs.detach"
     | "os.tabs.reorder"
@@ -95,7 +97,7 @@ type WorkspaceSurfaceModeState = {
     groups?: unknown;
     tabgroups?: unknown;
     presentations?: Record<string, string>;
-    osview?: "canvas" | "file";
+    osview?: KronTermOSView;
 };
 
 type WorkspaceSurfaceModeProvider = {

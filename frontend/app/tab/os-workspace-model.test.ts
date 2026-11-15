@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
+import { getKronOSV2Widget, keepKronOSV2View, updateKronOSV2Widgets } from "./os-kronos-v2-widgets";
 import {
     arrangeOSLaunchedWindows,
     computeOSWindowLayout,
@@ -24,6 +25,48 @@ import {
 function tab(meta: Record<string, unknown> = {}): Tab {
     return { oid: "tab-1", blockids: ["browser", "hermes", "term"], meta } as Tab;
 }
+
+it("persists KronOS v2 frame edits independently of the original widget layout", () => {
+    const initial = makeInitialOSModeState(tab(), ["browser", "term"]);
+    const widget = { blockId: "browser", ...initial.windows.browser.bounds, y: -300, visible: false };
+    const kronosV2Widgets = updateKronOSV2Widgets(initial.kronosV2Widgets, [widget]);
+    const reopened = makeInitialOSModeState(tab({ "layout:os": { ...initial, kronosV2Widgets } }), ["browser", "term"]);
+    expect(reopened.kronosV2Widgets.browser).toEqual(widget);
+    expect(reopened.windows.browser).toEqual(initial.windows.browser);
+    expect(updateKronOSV2Widgets(kronosV2Widgets, [{ ...widget }])).toBe(kronosV2Widgets);
+});
+
+it("keeps widget and workflow updates in KronOS v2 unless the user uses the view selector", () => {
+    const canvas = makeInitialOSModeState(tab(), ["browser", "term"]);
+    const v2 = reduceOSModeState(canvas, { type: "os.view.set", view: "kronos-v2" });
+    const browser = getKronOSV2Widget(v2, "browser");
+    const moved = { ...browser, x: browser.x + 200 };
+    const updated = { ...canvas, kronosV2Widgets: updateKronOSV2Widgets(v2.kronosV2Widgets, [moved]) };
+    const protectedView = keepKronOSV2View(v2, updated, false);
+    expect(protectedView.view).toBe("kronos-v2");
+    expect(getKronOSV2Widget(protectedView, "browser")).toEqual(moved);
+    expect(protectedView.windows.browser).toBe(canvas.windows.browser);
+    expect(keepKronOSV2View(v2, canvas, true)).toBe(canvas);
+    expect(keepKronOSV2View(canvas, v2, false)).toBe(v2);
+});
+
+it.each(["design", "kronos-v2"] as const)("restores the saved KronOS canvas after %s", (view) => {
+    const initial = makeInitialOSModeState(tab(), ["browser", "term"]);
+    const canvas = reduceOSModeState(initial, { type: "spatial.freeform" });
+    const editor = reduceOSModeState(canvas, { type: "os.view.set", view });
+    const reopened = makeInitialOSModeState(tab({ "layout:os": editor }), ["browser", "term"]);
+    expect(reopened.view).toBe(view);
+    expect(reopened.camera).toEqual(canvas.camera);
+    expect(reopened.windows.browser.bounds).toEqual(canvas.windows.browser.bounds);
+
+    const liveCanvas = reduceOSModeState(reopened, { type: "os.view.set", view: "canvas" });
+    const expanded = reduceOSModeState(liveCanvas, { type: "os.window.maximize", blockId: "browser" });
+    expect(expanded.scene).toEqual({ kind: "focused", blockId: "browser" });
+    const restored = reduceOSModeState(expanded, { type: "os.window.restore", blockId: "browser" });
+    expect(restored.scene).toEqual({ kind: "freeform" });
+    expect(restored.windows.browser.bounds).toEqual(canvas.windows.browser.bounds);
+    expect(restored.camera).toEqual(canvas.camera);
+});
 
 it("fits Single mode to the Devices frame and keeps the full height for its toolbar", () => {
     const state = makeInitialOSModeState(tab(), ["browser"]);

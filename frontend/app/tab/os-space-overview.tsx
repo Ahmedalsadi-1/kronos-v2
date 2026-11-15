@@ -15,6 +15,10 @@ type SpaceApp = { blockId: string; title: string; icon?: string; view?: string }
 type SpacePreview = { state: OSModeState; titles: Record<string, string>; apps?: SpaceApp[]; unavailable?: boolean };
 const SpaceSnapshots = new Map<string, string>();
 
+export function getOSSpaceSnapshot(workspaceId: string) {
+    return SpaceSnapshots.get(workspaceId);
+}
+
 // Cache only visited spaces in memory; previews never mount another workspace's live widgets.
 export function useOSSpaceSnapshot(workspaceId: string, state: OSModeState, viewport: RefObject<HTMLDivElement>) {
     useEffect(() => {
@@ -234,7 +238,7 @@ export function OSSpaceOverview({
                           }
                         : previews[workspace.id];
                     const apps = preview?.apps ?? [];
-                    const snapshot = SpaceSnapshots.get(workspace.id);
+                    const snapshot = getOSSpaceSnapshot(workspace.id);
                     const windows = preview?.state?.zOrder.map((id) => preview.state.windows[id]).filter(Boolean) ?? [];
                     const left = Math.min(0, ...windows.map((window) => window.bounds.x));
                     const top = Math.min(0, ...windows.map((window) => window.bounds.y));

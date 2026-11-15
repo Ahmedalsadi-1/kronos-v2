@@ -1,3 +1,4 @@
+import type { PenWidgetGeometry } from "./os-pen-widgets";
 import { resolveBlockView } from "@/app/block/retired-chat-view";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -65,7 +66,7 @@ export type OSCanvasObjectKind =
     | "workflow-node";
 export type OSCanvasColor = "amber" | "blue" | "green" | "rose" | "slate";
 
-export type KronTermOSView = "canvas" | "file";
+export type KronTermOSView = "canvas" | "design" | "kronos-v2" | "file";
 
 export type OSCanvasObject = SpatialRect & {
     id: string;
@@ -93,6 +94,7 @@ export type OSModeState = {
     tabGroups?: OSTabGroup[];
     objects: OSCanvasObject[];
     loadedPenPaths?: string[];
+    kronosV2Widgets?: Record<string, PenWidgetGeometry>;
     scene: OSScene;
     desktopLayout?: "focused" | "freeform";
     previousScene?: Exclude<OSScene, { kind: "overview" }>;
@@ -343,14 +345,13 @@ export function migrateOSModeState(stored: Partial<OSModeState> | undefined): Pa
         view:
             stored.view === "file" || (stored as { widgetPresentation?: string }).widgetPresentation === "file"
                 ? "file"
-                : "canvas",
+                : (stored.view === "design" || stored.view === "kronos-v2")
+                  ? stored.view
+                  : "canvas",
     };
 }
 
-function filterOSGroups(
-    groups: OSModeState["groups"],
-    keep: (blockId: string) => boolean
-): OSModeState["groups"] {
+function filterOSGroups(groups: OSModeState["groups"], keep: (blockId: string) => boolean): OSModeState["groups"] {
     const next: OSModeState["groups"] = {};
     for (const group of Object.values(groups)) {
         const blockIds = group.blockIds.filter(keep);
@@ -418,6 +419,7 @@ export function makeInitialOSModeState(
             tabGroups: stored?.tabGroups ?? [],
             objects: stored?.objects ?? normalizeSeedObjects(seed.objects),
             loadedPenPaths: stored?.loadedPenPaths,
+            kronosV2Widgets: stored?.kronosV2Widgets,
             scene:
                 stored?.scene && (stored.scene.kind !== "freeform" || stored.desktopLayout === "freeform")
                     ? stored.scene
@@ -433,7 +435,9 @@ export function makeInitialOSModeState(
             view:
                 stored?.view === "file" || (stored as { widgetPresentation?: string })?.widgetPresentation === "file"
                     ? "file"
-                    : "canvas",
+                    : (stored?.view === "design" || stored?.view === "kronos-v2")
+                      ? stored.view
+                      : "canvas",
         },
         blockIds
     );
@@ -665,12 +669,8 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         const current = state.windows[action.blockId];
         if (!current) return state;
         const minimizing = action.type === "spatial.collapse" || action.type === "os.window.minimize";
-        const containingGroup = Object.values(state.groups).find(
-            (group) => group.blockIds.includes(action.blockId)
-        );
-        const groups = minimizing
-            ? filterOSGroups(state.groups, (id) => id !== action.blockId)
-            : state.groups;
+        const containingGroup = Object.values(state.groups).find((group) => group.blockIds.includes(action.blockId));
+        const groups = minimizing ? filterOSGroups(state.groups, (id) => id !== action.blockId) : state.groups;
         let scene = state.scene;
         if (
             minimizing &&
@@ -724,6 +724,8 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
         if (!current) return state;
         return {
             ...state,
+            desktopLayout:
+                state.view === "canvas" && state.scene.kind === "freeform" ? "freeform" : state.desktopLayout,
             scene: { kind: "focused", blockId: action.blockId },
             selectedEntityId: action.blockId,
             zOrder: [...state.zOrder.filter((id) => id !== action.blockId), action.blockId],
@@ -768,8 +770,7 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
                 : state.scene.kind !== "focused" || state.windows[state.scene.blockId]?.maximized)
         )
             return state;
-        const combined =
-            getOSPaneWeight(state, action.left, group) + getOSPaneWeight(state, action.right, group);
+        const combined = getOSPaneWeight(state, action.left, group) + getOSPaneWeight(state, action.right, group);
         const ratio = Math.max(0.2, Math.min(0.8, action.ratio));
         const weights = {
             ...(group ? group.weights : state.carouselWeights),
@@ -805,7 +806,7 @@ function preferredFocusBounds(
     const railWidth = viewport.width > 900 ? (viewport.rightInset ?? 96) : 0;
     const availableWidth = Math.max(1, viewport.width - margin * 2 - railWidth);
     const width = resolveBlockView(view) === "hermes" ? Math.min(1120, availableWidth) : availableWidth;
-    const height = Math.max(1, viewport.height - shellHeight - margin - 64);
+    const height = Math.max(1, viewport.height - shellHeight - 36);
     return {
         x: Math.round(margin + (availableWidth - width) / 2),
         y: shellHeight,
@@ -834,6 +835,20 @@ export function getOSCarouselNeighbor(state: OSModeState, direction: -1 | 1): st
     return index < 0 ? undefined : order[index + direction];
 }
 
+export function getOSPaneNeighbor(state: OSModeState, direction: -1 | 1): string | undefined {
+    if (state.view !== "canvas") return;
+    if (state.scene.kind === "focused") return getOSCarouselNeighbor(state, direction);
+    const group = state.scene.kind === "grouped" ? state.groups[state.scene.groupId] : undefined;
+    const order = group
+        ? group.blockIds.filter((id) => state.windows[id] && !state.windows[id].collapsed)
+        : getOSCarouselOrder(state);
+    const selected = state.scene.kind === "overview" ? state.scene.selectedBlockId : state.selectedEntityId;
+    const index = order.indexOf(selected);
+    if (index >= 0) return order[index + direction];
+    if (group) return order[order.indexOf(group.primaryBlockId) + direction];
+    return direction === 1 ? order[0] : order.at(-1);
+}
+
 export const OSPaneGap = 6;
 export const OSMinimumPaneWidth = 180;
 
@@ -844,8 +859,10 @@ export function getOSPaneWeight(state: OSModeState, id: string, group?: OSWindow
 
 export function getOSAdjacentPanes(layouts: Record<string, OSWindowLayout>, compact: ReadonlySet<string>) {
     const panes = Object.entries(layouts)
-        .filter(([, layout]) =>
-            layout.opacity > 0 && ["focused", "carousel", "docked-left", "docked-right"].includes(layout.presentation)
+        .filter(
+            ([, layout]) =>
+                layout.opacity > 0 &&
+                ["focused", "carousel", "docked-left", "docked-right"].includes(layout.presentation)
         )
         .map(([id, { bounds }]) => ({ id, bounds }))
         .sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
@@ -880,7 +897,13 @@ export function getOSPaneTakeover(
         const share = (fromLeft ? leftWeight : rightWeight) / (leftWeight + rightWeight);
         const gain = Math.min(0.28, overlap / target.width);
         const next = Math.min(0.8, Math.max(0.6, share + gain));
-        return { type: "spatial.setDivider", groupId: group?.id, left: left.id, right: right.id, ratio: fromLeft ? next : 1 - next };
+        return {
+            type: "spatial.setDivider",
+            groupId: group?.id,
+            left: left.id,
+            right: right.id,
+            ratio: fromLeft ? next : 1 - next,
+        };
     }
 }
 
@@ -915,10 +938,6 @@ function layoutOSRow(
     );
 }
 
-export function getOSGroupAdditions(state: OSModeState, group: OSWindowGroup): string[] {
-    return getOSCarouselOrder(state).filter((id) => !group.blockIds.includes(id));
-}
-
 function layoutOSGroup(
     state: OSModeState,
     group: OSWindowGroup,
@@ -929,7 +948,7 @@ function layoutOSGroup(
     const margin = viewport.width < 900 ? 12 : 20;
     const width = Math.max(1, viewport.width - margin * 2 - (viewport.rightInset ?? 0));
     const top = 76;
-    const bottom = getOSGroupAdditions(state, group).length ? 126 : 44;
+    const bottom = 36;
     const maxColumns = Math.max(1, Math.floor((width + gap) / 300));
     const rows = Math.ceil(group.blockIds.length / maxColumns);
     const rowHeight = Math.max(1, (viewport.height - top - bottom - gap * (rows - 1)) / rows);
@@ -1059,12 +1078,15 @@ function computeOSWindowLayoutBase(
         const count = Math.max(1, Math.min(order.length, Math.floor((area.width + OSPaneGap) / 360)));
         const start = Math.max(0, Math.min(primaryIndex - Math.floor((count - 1) / 2), order.length - count));
         const visible = order.slice(start, start + count);
-        if (!visible.includes(blockId) && index >= 0)
-            return { ...base, opacity: 0, presentation: "collapsed" };
+        if (!visible.includes(blockId) && index >= 0) return { ...base, opacity: 0, presentation: "collapsed" };
         const tabsInset = visible.some((id) => getOSTabGroup(state, id)) ? 36 : 0;
         const row = layoutOSRow(
             visible.includes(blockId) ? visible : [blockId],
-            { ...area, y: area.y + tabsInset, height: Math.max(1, area.height - (order.length > 1 ? 32 : 0) - tabsInset) },
+            {
+                ...area,
+                y: area.y + tabsInset,
+                height: Math.max(1, area.height - tabsInset),
+            },
             OSPaneGap,
             compactDeviceBlocks,
             (id) => getOSPaneWeight(state, id)

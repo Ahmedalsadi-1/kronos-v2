@@ -27,12 +27,14 @@ export function SubagentTheater({
     onClose,
     onStop,
     showRecovery = false,
+    contentClassName,
 }: {
     agents: SubagentProgress[];
     initialAgentId?: string;
     onClose: () => void;
     onStop?: (agent: SubagentProgress) => Promise<void>;
     showRecovery?: boolean;
+    contentClassName?: string;
 }) {
     const [selectedId, setSelectedId] = useState(initialAgentId);
     const [surface, setSurface] = useState<SubagentSurfaceSnapshot & { selectionKey?: string }>({});
@@ -128,7 +130,7 @@ export function SubagentTheater({
         >
             <Dialog.Portal>
                 <Dialog.Overlay className="subagent-theater-backdrop" />
-                <Dialog.Content className="subagent-theater" aria-describedby="subagent-theater-description">
+                <Dialog.Content className={["subagent-theater", contentClassName].filter(Boolean).join(" ")} aria-describedby="subagent-theater-description">
                     <header className="subagent-theater-header">
                         <Dialog.Title>Subagents</Dialog.Title>
                         <div className="subagent-theater-controls">

@@ -108,7 +108,7 @@ export function KrontermInspector() {
             grip.setPointerCapture?.(event.pointerId);
 
             const onMove = (moveEvent: PointerEvent) => {
-                $krontermInspectorWidth.set(Math.round(clampWidth(startWidth + (startX - moveEvent.clientX))));
+                $krontermInspectorWidth.set(Math.round(clampWidth(startWidth + startX - moveEvent.clientX)));
             };
             const onEnd = () => {
                 window.removeEventListener("pointermove", onMove);

@@ -7,7 +7,7 @@ import { ComputerSelection, type VmSelectionSnapshot } from "@/app/view/computer
 import { getApi } from "@/store/global";
 import type { LinuxDesktop } from "@/types/linux-desktops";
 import RFB from "@novnc/novnc";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useComputerActivity } from "./computer-activity";
 import "./computer-frame.css";
 
@@ -29,6 +29,8 @@ export function ManagedVncScreen({
     onUpdate?: () => void;
 }) {
     const root = useRef<HTMLDivElement>(null);
+    const screen = useRef<HTMLDivElement>(null);
+    const viewport = useRef<HTMLDivElement>(null);
     const display = useRef<HTMLDivElement>(null);
     const client = useRef<RFB>(null);
     const [phase, setPhase] = useState("Connecting…");
@@ -88,13 +90,43 @@ export function ManagedVncScreen({
     };
     const iframe = /^https?:/.test(endpoint);
     let iframeUrl = endpoint;
-    if (iframe && agentOwns) {
+    if (iframe) {
         const url = new URL(endpoint);
-        const fragment = new URLSearchParams(url.hash.slice(1));
-        fragment.set("view_only", "true");
-        url.hash = fragment.toString();
-        iframeUrl = url.href;
+        const noVncViewer = url.pathname.endsWith("/vnc.html");
+        if (noVncViewer || agentOwns) {
+            const fragment = new URLSearchParams(url.hash.slice(1));
+            if (noVncViewer) fragment.set("resize", "scale");
+            if (agentOwns) fragment.set("view_only", "true");
+            url.hash = fragment.toString();
+            iframeUrl = url.href;
+        }
     }
+
+    useLayoutEffect(() => {
+        const frame = screen.current;
+        const viewer = viewport.current;
+        if (!frame || !viewer) return;
+        const sync = () => {
+            const { width, height } = frame.getBoundingClientRect();
+            if (!width || !height || !frame.clientWidth || !frame.clientHeight) return;
+            // noVNC uses screen pixels for both fitting and input. Compensate for the canvas transform here.
+            viewer.style.width = `${width}px`;
+            viewer.style.height = `${height}px`;
+            viewer.style.transform = `scale(${frame.clientWidth / width}, ${frame.clientHeight / height})`;
+        };
+        sync();
+        const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(sync);
+        resize?.observe(frame);
+        const host = frame.closest("[data-live-blockid]");
+        const geometry = new MutationObserver(sync);
+        if (host) geometry.observe(host, { attributes: true, attributeFilter: ["style"] });
+        window.addEventListener("resize", sync);
+        return () => {
+            resize?.disconnect();
+            geometry.disconnect();
+            window.removeEventListener("resize", sync);
+        };
+    }, []);
     useEffect(() => setViewOnly(agentOwns), [agentOwns]);
     useEffect(() => {
         if (!endpoint || iframe || !display.current) return;
@@ -183,19 +215,21 @@ export function ManagedVncScreen({
               : "You have control";
     return (
         <div ref={root} className="computer-frame">
-            <div className="computer-frame-screen" data-active={active} data-approval={approval}>
-                {iframe ? (
-                    <iframe
-                        title={`${desktop.name} desktop`}
-                        src={iframeUrl}
-                        allow="clipboard-read; clipboard-write; fullscreen"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"
-                        className="h-full w-full border-0"
-                        inert={Boolean(selectionActive)}
-                    />
-                ) : (
-                    <div ref={display} className="computer-frame-display" inert={Boolean(selectionActive)} />
-                )}
+            <div ref={screen} className="computer-frame-screen" data-active={active} data-approval={approval}>
+                <div ref={viewport} className="computer-frame-viewport">
+                    {iframe ? (
+                        <iframe
+                            title={`${desktop.name} desktop`}
+                            src={iframeUrl}
+                            allow="clipboard-read; clipboard-write; fullscreen"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"
+                            className="h-full w-full border-0"
+                            inert={Boolean(selectionActive)}
+                        />
+                    ) : (
+                        <div ref={display} className="computer-frame-display" inert={Boolean(selectionActive)} />
+                    )}
+                </div>
                 {selectionActive && (
                     <ComputerSelection
                         key={selection.action}

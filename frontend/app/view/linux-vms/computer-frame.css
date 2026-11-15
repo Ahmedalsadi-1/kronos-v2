@@ -1,4 +1,5 @@
 .computer-frame {
+    position: relative;
     display: flex;
     height: 100%;
     min-height: 0;
@@ -14,14 +15,26 @@
     color-scheme: dark;
 }
 .computer-frame-footer {
+    position: absolute;
+    z-index: 1;
+    inset: auto 6px 6px;
+    pointer-events: none;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     flex: 0 0 auto;
     align-items: center;
     gap: 10px;
-    padding: 8px 14px;
-    min-height: 56px;
+    padding: 4px 8px;
+    min-height: 40px;
 }
+.computer-frame-footer > :is(button, details) {
+    pointer-events: auto;
+}
+
+.computer-frame:has(> .computer-frame-error) .computer-frame-footer {
+    position: static;
+}
+
 .computer-frame-dot {
     width: 7px;
     height: 7px;
@@ -37,10 +50,25 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    margin: 6px 6px 0;
+    margin: 6px;
     border-radius: 12px;
     background: #111514;
 }
+.computer-frame-viewport {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    transform-origin: top left;
+}
+
+.computer-frame-viewport > iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
 .computer-frame-display {
     width: 100%;
     height: 100%;

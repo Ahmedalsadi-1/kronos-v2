@@ -10,10 +10,10 @@ import { useNativeNotchPreview } from "./use-native-notch-preview";
 import { ErrorBoundary } from "@/app/element/errorboundary";
 import { CenteredDiv } from "@/app/element/quickelems";
 import { ModalsRenderer } from "@/app/modals/modalsrenderer";
-import { globalStore } from "@/app/store/jotaiStore";
 import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { activePenCanvasTabAtom } from "@/app/tab/os-pen-editor-bridge";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
 import { workspaceCanvasComposerContextAtom } from "@/app/tab/workspace-canvas-context";
@@ -34,10 +34,10 @@ import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { hudTargetSessionId } from "@hermes/app/hud/handoff";
 import { $sessionsLoading } from "@hermes/store/session";
 
-import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
-import { atoms, createBlock, getApi } from "@/store/global";
-import { ObjectService } from "@/app/store/services";
 import { resolveBlockView } from "@/app/block/retired-chat-view";
+import { ObjectService } from "@/app/store/services";
+import { useWorkspaceSurfaceOpacity, WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
+import { atoms, createBlock, getApi } from "@/store/global";
 import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
 import { atom, useAtomValue } from "jotai";
@@ -117,6 +117,8 @@ const WorkspaceElem = memo(() => {
         readWorkspacePresentation,
         readWorkspacePresentation
     );
+    const penCanvasTab = useAtomValue(activePenCanvasTabAtom);
+    const penChat = presentation === "os" && !!tabId && penCanvasTab === tabId;
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const panelBounds = useMemo(
         () => getHermesPanelWidthBounds(presentation, viewportWidth),
@@ -154,7 +156,7 @@ const WorkspaceElem = memo(() => {
     }, [panelBounds, persistedPanelWidth, ws?.oid]);
 
     useNativeHudMode(
-        hudMode.active,
+        !penChat && hudMode.active,
         hudMode.keepWorkspaceVisible,
         () => hudTargetSessionId() ?? ($sessionsLoading.get() ? undefined : "")
     );
@@ -249,13 +251,17 @@ const WorkspaceElem = memo(() => {
     }, []);
 
     const legacyAgentBlocks = useAtomValue(
-        useMemo(() => atom((get) => {
-            const tab = get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
-            return (tab?.blockids ?? []).filter((blockId) => {
-                const block = get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
-                return resolveBlockView(block?.meta?.view) === "hermes";
-            });
-        }), [tabId])
+        useMemo(
+            () =>
+                atom((get) => {
+                    const tab = get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
+                    return (tab?.blockids ?? []).filter((blockId) => {
+                        const block = get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
+                        return resolveBlockView(block?.meta?.view) === "hermes";
+                    });
+                }),
+            [tabId]
+        )
     );
     const retiringAgentBlocks = useRef(new Set<string>());
     useEffect(() => {
@@ -283,6 +289,8 @@ const WorkspaceElem = memo(() => {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [widgetsPanelVisible, workspaceLayoutModel]);
 
+    useWorkspaceSurfaceOpacity();
+
     useEffect(() => getApi().onDesktopPetResume(() => hermesSurfaceController.requestOpenChat()), []);
 
     return (
@@ -291,12 +299,12 @@ const WorkspaceElem = memo(() => {
             {!isMacOS() && presentation !== "os" && <TabBar key={ws.oid} workspace={ws} noTabs />}
             <div
                 className={cn(
-                    "workspace-surface-row workspace-reference-shell flex flex-row flex-grow overflow-hidden",
-                    hudMode.active && !hudMode.keepWorkspaceVisible && "is-kronterm-hud-mode"
+                    "workspace-surface-row workspace-reference-shell relative isolate flex flex-row flex-grow overflow-hidden",
+                    !penChat && hudMode.active && !hudMode.keepWorkspaceVisible && "is-kronterm-hud-mode"
                 )}
                 data-workspace-presentation={presentation}
             >
-                <WorkspaceWallpaper />
+                {presentation !== "os" && <WorkspaceWallpaper />}
                 <ComputerUseStreamManager />
                 <main className="workspace-reference-content min-h-0 min-w-0 flex-1">
                     <ErrorBoundary key={tabId}>
@@ -381,17 +389,20 @@ const WorkspaceElem = memo(() => {
                 )}
             </div>
             {renderHermesAuxiliarySurfaces &&
-                (surface.presentation === "panel" ||
-                    presentation === "os" || presentation === "widgets" ||
+                (penChat ||
+                    surface.presentation === "panel" ||
+                    presentation === "os" ||
+                    presentation === "widgets" ||
                     !(hudMode.active && hudMode.keepWorkspaceVisible)) && (
                     <HermesHudHost
+                        penChat={penChat}
                         autoOpen={autoOpenHud || canvasComposerContext.active || presentation === "os"}
                         placement={presentation === "os" ? "shell" : "floating"}
                         canvasContext={canvasComposerContext}
                         tabId={tabId}
                     />
                 )}
-            {hudMode.active && !hudMode.keepWorkspaceVisible && (
+            {!penChat && hudMode.active && !hudMode.keepWorkspaceVisible && (
                 <KronTermHudControls onOpenWidgetCatalog={() => workspaceLayoutModel.setWidgetsPanelVisible(true)} />
             )}
         </div>

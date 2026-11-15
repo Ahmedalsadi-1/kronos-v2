@@ -181,6 +181,21 @@ it("resizes the side panel from the tab strip grip and folds it into a compact r
         });
         expect($krontermInspectorWidth.get()).toBe(516);
 
+        host.classList.add("os-files-inspector");
+        width.value = 400;
+        await act(async () => {
+            grip.dispatchEvent(new MouseEvent("pointerdown", { clientX: 900, bubbles: true }));
+            window.dispatchEvent(new MouseEvent("pointermove", { clientX: 800 }));
+            window.dispatchEvent(new MouseEvent("pointerup", { clientX: 800 }));
+        });
+        expect($krontermInspectorWidth.get()).toBe(500);
+        width.value = 500;
+        await act(async () => {
+            grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+        });
+        expect($krontermInspectorWidth.get()).toBe(516);
+        host.classList.remove("os-files-inspector");
+
         width.value = 200;
         await act(async () => {
             grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));

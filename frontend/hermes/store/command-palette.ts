@@ -20,6 +20,11 @@ export function openCommandPalette(): void {
   $commandPaletteOpen.set(true)
 }
 
+export function openCommandPalettePopup(): void {
+  closeWorkflowPicker()
+  $commandPaletteOpen.set(true)
+}
+
 export function openCommandPalettePage(page: string): void {
   $commandPalettePage.set(page)
   openCommandPalette()

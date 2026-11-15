@@ -1,94 +1,27 @@
 .os-pen-editor {
     position: absolute;
-    inset: var(--os-frame-content-top, 56px) var(--os-frame-border, 8px) var(--os-frame-border, 8px);
-    z-index: 3800;
-    display: flex;
-    flex-direction: column;
+    inset: 0;
     overflow: hidden;
-    border-radius: var(--os-frame-content-radius, 14px);
     background: var(--kt-content, #181818);
     color: var(--kt-label, #ededed);
-    animation: pen-editor-enter 200ms cubic-bezier(0.2, 0.82, 0.2, 1);
+    pointer-events: auto;
 }
 .os-pen-editor[hidden] {
     display: none;
 }
-.has-agent-sidebar .os-pen-editor {
-    left: calc(min(260px, 80vw) + var(--os-frame-border, 8px));
-}
-.workspace-compact-chrome .has-agent-sidebar .os-pen-editor {
-    left: calc(min(220px, 80vw) + var(--os-frame-border, 8px));
-}
-.has-files-inspector .os-pen-editor {
-    right: calc(var(--os-inspector-width) + var(--os-frame-border, 8px));
-}
-.has-design-editor .os-agent-sidebar {
-    height: 40px;
-    bottom: auto;
-    overflow: hidden;
-    z-index: 3901;
-}
-.has-design-editor .os-agent-sidebar::before,
-.has-design-editor .os-agent-sidebar::after {
-    display: none;
-}
-.has-design-editor #kronterm-navigation-pane-design {
-    display: none;
-}
-.has-design-editor .os-pen-editor,
-.workspace-compact-chrome .has-design-editor .os-pen-editor {
-    left: var(--os-frame-border, 8px);
-}
-.has-design-editor.has-agent-sidebar .os-pen-editor-header {
-    padding-left: 272px;
-}
-.workspace-compact-chrome .has-design-editor.has-agent-sidebar .os-pen-editor-header {
-    padding-left: 232px;
-}
-.os-pen-editor-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    min-height: 40px;
-    padding: 0 12px 0 6px;
-    border-bottom: 1px solid var(--kt-separator, #333);
-    font-size: 13px;
-}
-.os-pen-editor-header button,
-.os-pen-editor-startup button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 32px;
-    padding: 0 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 150ms ease;
-}
-.os-pen-editor button:hover {
-    background: var(--kt-fill, #ffffff12);
-}
-.os-pen-editor button:focus-visible {
-    outline: 2px solid var(--accent-color, #8875ff);
-    outline-offset: -2px;
-}
-.os-pen-editor-status {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--kt-label-secondary, #aaa);
+.os-pen-editor[data-pen-inactive] {
+    visibility: hidden;
+    pointer-events: none;
 }
 .os-pen-editor iframe {
-    flex: 1;
+    display: block;
     width: 100%;
-    min-height: 0;
+    height: 100%;
     border: none;
 }
 .os-pen-editor-startup {
     position: absolute;
-    inset: 40px 0 0;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -106,9 +39,35 @@
     font-size: 13px;
     color: var(--kt-label-secondary, #aaa);
 }
-.os-pen-editor-startup button {
+.os-pen-editor button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 8px;
+    cursor: pointer;
     background: var(--accent-color, #7161dd);
     color: white;
+}
+.os-pen-editor button:focus-visible {
+    outline: 2px solid var(--accent-color, #8875ff);
+    outline-offset: 2px;
+}
+.os-pen-editor-alert {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: min(640px, calc(100% - 24px));
+    padding: 12px;
+    border: 1px solid var(--kt-separator, #333);
+    border-radius: 8px;
+    background: var(--kt-content, #181818);
+    font-size: 13px;
 }
 .os-pen-editor-spinner {
     animation: pen-editor-spin 1s linear infinite;
@@ -118,25 +77,51 @@
         transform: rotate(360deg);
     }
 }
-@keyframes pen-editor-enter {
-    from {
-        opacity: 0;
-        transform: translateY(4px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
 @media (prefers-reduced-motion: reduce) {
-    .os-pen-editor,
     .os-pen-editor * {
         animation: none !important;
         transition: none !important;
     }
 }
-[data-reduced-motion="true"] .os-pen-editor,
 [data-reduced-motion="true"] .os-pen-editor * {
     animation: none !important;
     transition: none !important;
+}
+
+.pen-hermes-dialog {
+    border: 1px solid var(--kt-stroke, #3b3b3f) !important;
+    border-radius: 14px !important;
+    background: var(--kt-content, #252527) !important;
+    color: var(--kt-label, #ededed);
+    box-shadow: 0 12px 40px #0006;
+}
+
+.pen-hermes-dialog.subagent-theater {
+    width: min(960px, calc(100vw - 32px));
+    height: min(680px, calc(100dvh - 64px));
+}
+
+.pen-hermes-dialog .subagent-theater-header {
+    min-height: 48px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--kt-stroke, #3b3b3f);
+    background: transparent;
+}
+
+.pen-hermes-dialog .subagent-theater-header h2 {
+    font-size: 13px;
+}
+
+.pen-hermes-dialog .subagent-theater-feed {
+    background: transparent;
+}
+
+.pen-hermes-dialog .subagent-theater-surface {
+    background: var(--kt-content, #1b1b1c);
+}
+
+.os-pen-presentation-chrome {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
 }

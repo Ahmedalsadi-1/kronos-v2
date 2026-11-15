@@ -69,7 +69,7 @@ export const en: Translations = {
             loadingSettings: "Loading KronOS settings",
             loadingSessions: "Loading recent sessions",
             startingDesktopConnection: "Starting desktop connection",
-            startingHermesDesktop: "Starting KronOS Agent…",
+            startingHermesDesktop: "Starting Kron Agent…",
         },
         errors: {
             backgroundExited: "KronOS background process exited.",
@@ -126,7 +126,7 @@ export const en: Translations = {
         backendOutOfDateMessage:
             "Your KronOS backend is older than this desktop build and may not work correctly. Update to align them.",
         installMethodUnsupportedTitle: "Unsupported install method",
-        updateHermes: "Update KronOS Agent",
+        updateHermes: "Update Kron Agent",
         updateReadyTitle: "Update ready",
         updateReadyMessage: (count) => `${count} new change${count === 1 ? "" : "s"} available.`,
         updateReadyMessageUnknown: "A new update is available.",
@@ -1402,7 +1402,7 @@ export const en: Translations = {
         hermesActiveSessions: (version, count) => `KronOS ${version} · Active sessions ${count}`,
         restartGateway: "Restart gateway",
         gatewayRestartFailed: "Gateway restart failed.",
-        updateHermes: "Update KronOS Agent",
+        updateHermes: "Update Kron Agent",
         actionRunning: "running",
         actionDone: "done",
         actionFailed: "failed",
@@ -2515,7 +2515,7 @@ export const en: Translations = {
         applyRemote: "Apply and reconnect",
         backToSetup: "Back",
         failedTitle: "Installation failed",
-        settingUpTitle: "Setting up KronOS Agent",
+        settingUpTitle: "Setting up Kron Agent",
         finishingTitle: "Finishing up",
         failedDesc:
             "One of the install steps failed. On Windows, this can happen if another KronOS CLI or desktop instance is running. Stop any running KronOS instances, then retry. Check the details below or the desktop log for the full transcript.",

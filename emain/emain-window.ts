@@ -852,8 +852,11 @@ ipcMain.on("delete-workspace", (event, workspaceId) => {
 
 export async function createNewWaveWindow() {
     log("createNewWaveWindow");
-    const clientData = await ClientService.GetClientData();
-    const fullConfig = await RpcApi.GetFullConfigCommand(ElectronWshClient);
+    const [clientData, fullConfig] = await Promise.all([
+        ClientService.GetClientData(),
+        RpcApi.GetFullConfigCommand(ElectronWshClient),
+    ]);
+    cachedClientId ??= clientData?.oid;
     let recreatedWindow = false;
     const allWindows = getAllWaveWindows();
     if (allWindows.length === 0 && clientData?.windowids?.length >= 1) {
@@ -882,7 +885,7 @@ export async function createNewWaveWindow() {
     newBrowserWindow.show();
 }
 
-export async function relaunchBrowserWindows() {
+export async function relaunchBrowserWindows(startupConfig?: FullConfigType) {
     console.log("relaunchBrowserWindows");
     setGlobalIsRelaunching(true);
     const windows = getAllWaveWindows();
@@ -895,8 +898,11 @@ export async function relaunchBrowserWindows() {
     }
     setGlobalIsRelaunching(false);
 
-    const clientData = await ClientService.GetClientData();
-    const fullConfig = await RpcApi.GetFullConfigCommand(ElectronWshClient);
+    const [clientData, fullConfig] = await Promise.all([
+        ClientService.GetClientData(),
+        startupConfig ?? RpcApi.GetFullConfigCommand(ElectronWshClient),
+    ]);
+    cachedClientId ??= clientData?.oid;
     const windowIds = clientData.windowids ?? [];
     const wins: WaveBrowserWindow[] = [];
     const isFirstRelaunch = !hasCompletedFirstRelaunch;

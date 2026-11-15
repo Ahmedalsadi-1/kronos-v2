@@ -12,9 +12,11 @@ import {
 } from "@hermes/components/ui/dropdown-menu";
 import { useEffect, useRef, useState } from "react";
 import { N8nSurfaces, type N8nSurface, type N8nWorkspaceState } from "../../../types/n8n-workspace";
+import { runN8nWorkspaceCommand as command, type N8nRuntimeState } from "./n8n-workspace-client";
 import { useWorkflowContext } from "./workflow-context";
 
-type WorkspaceState = N8nWorkspaceState & { running?: boolean; occupiedGeneration?: number };
+
+type WorkspaceState = N8nRuntimeState;
 type Workflow = NonNullable<N8nWorkspaceState["workflows"]>[number];
 const RowClass =
     "flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 text-left text-xs text-foreground/80 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-[-2px] aria-pressed:bg-white/10 aria-pressed:text-foreground";
@@ -29,14 +31,6 @@ const SurfaceIcons: Partial<Record<N8nSurface, string>> = {
     roles: "shield",
     "api-keys": "key",
 };
-function command<T>(operation: string, input: Record<string, unknown> = {}) {
-    return window.hermesDesktop.api<T>({
-        path: "/api/kronterm/n8n/command",
-        method: "POST",
-        body: { ...input, operation },
-        timeoutMs: 100000,
-    });
-}
 
 export function N8nWorkflows({ active = true }: { active?: boolean } = {}) {
     const context = useWorkflowContext();

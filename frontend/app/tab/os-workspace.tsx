@@ -1,24 +1,36 @@
-import { $workflowPickerSource } from "@hermes/store/command-palette";
-import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
-import { getCanvasToolbarSlot } from "@/app/lib/react-grab-canvas-toolbar";
-import { DesktopGrabControl } from "@/app/workspace/kronterm-hud-controls";
-import { WorkspaceService } from "@/app/store/services";
 import Logo from "@/app/asset/logo.svg?url";
+import { WorkspaceService } from "@/app/store/services";
+import { DesktopGrabControl } from "@/app/workspace/kronterm-hud-controls";
 import { Menu } from "@base-ui/react/menu";
+import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
+import { $workflowPickerSource, closeWorkflowPicker } from "@hermes/store/command-palette";
 import * as Dialog from "@radix-ui/react-dialog";
 import { createPortal } from "react-dom";
 import { OSCanvasEntity } from "./os-canvas-entity";
-import { PenDrawingTools, readPenLayerPatch, type PenDrawingTool } from "./os-pen-import";
-import { OSPenPanel } from "./os-pen-panel";
-import { OSPenEditor } from "./os-pen-editor";
-import { requestPenEditor, type PenEditorMethod } from "./os-pen-editor-bridge";
-import { loadPenProject, penProjectRoots, type PenProjectDocument } from "./os-pen-project";
-import { $currentCwd, $selectedStoredSessionId, $workspaceCwdOwner } from "@hermes/store/session";
-import { $workspaceChangeTick } from "@hermes/store/workspace-events";
-import { OSPenProperties } from "./os-pen-properties";
+import {
+    osMarqueeBounds,
+    osMarqueeSelection,
+    snapOSCanvasBounds,
+    translateOSCanvasRects,
+    type OSAlignmentGuide,
+    type OSResizeEdge,
+} from "./os-canvas-gestures";
 import { osCanvasOwnsDelete, osWidgetOwnsWheel } from "./os-canvas-input";
-import { OSOriginalWorkflow } from "./os-original-workflow";
 import { ComfyLibraries, OSComfyWorkflow, type ComfyLibrary } from "./os-comfy-workflow";
+import { OSOriginalWorkflow } from "./os-original-workflow";
+import { OSPenCanvasActions } from "./os-pen-canvas-actions";
+import { KronOSV2AgentFollowPauseEvent } from "./os-kronos-v2-agent-pointer-event";
+import { KronOSV2AgentPointer } from "./os-kronos-v2-agent-pointer";
+import { KronOSV2LayerControls } from "./os-kronos-v2-layer-controls";
+import { getKronOSV2Widget, keepKronOSV2View, updateKronOSV2Widgets } from "./os-kronos-v2-widgets";
+import { samePenCamera, type PenCamera, type PenViewport } from "./os-pen-camera";
+import { type PenLiveWidget, type PenWidgetGeometry, type PenWidgetSnapshot } from "./os-pen-widgets";
+import { OSPenEditor } from "./os-pen-editor";
+import { activePenCanvasTabAtom, requestPenEditor, savePenEditorIfReady, type PenEditorMethod } from "./os-pen-editor-bridge";
+import { readPenLayerPatch, type PenDrawingTool } from "./os-pen-import";
+import { OSPenPanel } from "./os-pen-panel";
+import { type PenProjectDocument } from "./os-pen-project";
+import "./os-pen-workspace.css";
 import {
     applyOSWorkflowSelection,
     getOSCanvasEntityBounds,
@@ -28,14 +40,17 @@ import {
 } from "./os-scene-order";
 import { resolveWorkflowCameraIntent, workflowEventMatchesTab, workflowOwnsWheel } from "./os-workflow-host";
 import { activateOSWorkflowCanvas, keepWorkflowNodeVisible } from "./os-workflow-layout";
-import { OSSpaceIdentities, OSWorkspaceSetup } from "./os-workspace-setup";
+import { OSWorkspaceSetup } from "./os-workspace-setup";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import KronTermOSWallpaper from "@/app/asset/kronterm-os-wallpaper.png";
 import { BlockChromeProvider } from "@/app/block/block-chrome-context";
 import { blockViewToName, resolveBlockIcon } from "@/app/block/blockutil";
-import { PersistentBlock as BlockView } from "@/app/block/persistent-block";
+import {
+    PersistentBlock as BlockView,
+    syncPersistentBlockGeometry,
+    type PersistentBlockSurfaceInput,
+} from "@/app/block/persistent-block";
 import { AppIcon } from "@/app/components/app-icon";
 import {
     SystemButton,
@@ -47,9 +62,6 @@ import {
     useSystemAppearance,
 } from "@/app/components/system-ui";
 import {
-    Battery,
-    BatteryCharging,
-    BatteryLow,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -68,9 +80,6 @@ import {
     Diamond as ShapeDiamond,
     Square as ShapeSquare,
     StickyNote,
-    Unlink,
-    Wifi,
-    WifiOff,
     X,
 } from "@/app/components/system-ui/os-icons";
 import { hasViewIcon, viewIconId } from "@/app/components/view-icons";
@@ -94,9 +103,10 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useAgentPresences } from "@/app/view/agent-control-indicator";
 import { AppStreamFrameSizeEvent, type AppStreamFrameSize } from "@/app/view/appstream/appstream-events";
-import { classifyMedia } from "@/app/view/medialibrary/media-library-utils";
+import { CompactDeviceBlocksAtom, getSingleDeviceWorkspaceWidth } from "@/app/view/computers/device-workspace-layout";
 import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
+import { classifyMedia } from "@/app/view/medialibrary/media-library-utils";
 import {
     comfyWorkflowOpenAtom,
     OSSessionFocusEvent,
@@ -107,8 +117,8 @@ import {
 import { kronTermHudController } from "@/app/workspace/kronterm-hud-controller";
 import { WorkspaceWallpaper } from "@/app/workspace/workspace-wallpaper";
 import type { NodeModel } from "@/layout/lib/types";
-import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
-import { CompactDeviceBlocksAtom, getSingleDeviceWorkspaceWidth } from "@/app/view/computers/device-workspace-layout";
+import { atoms, getApi, getBlockComponentModel, getSettingsKeyAtom } from "@/store/global";
+import { WebViewModel } from "@/view/webview/webview";
 import * as services from "@/store/services";
 import * as WOS from "@/store/wos";
 import { systemMaterialVariables } from "@/types/system-materials";
@@ -116,6 +126,10 @@ import { getModelPreviewFormat } from "@/util/model-preview";
 import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
 import {
+    $comfyControlsOpen,
+    $comfyLibraryTarget,
+    $comfyPropertiesAvailable,
+    $comfyPropertiesTarget,
     $krontermInspectorCompact,
     $krontermInspectorExpanded,
     $krontermInspectorOpen,
@@ -124,31 +138,20 @@ import {
     $krontermInspectorWidth,
     $krontermSidebarOwner,
     $krontermSidebarTarget,
-    $comfyControlsOpen,
-    $comfyLibraryTarget,
-    $comfyPropertiesAvailable,
-    $comfyPropertiesTarget,
-    $workspaceCanvasPanels,
     $penDesignTarget,
-    KrontermInspectorChatEvent,
+    $workspaceCanvasPanels,
     openKrontermFile,
 } from "@hermes/lib/kronterm-sidebar";
 import { $sidebarOpen, setSidebarOpen, toggleSidebarOpen } from "@hermes/store/layout";
 import { useStore } from "@nanostores/react";
 import { atom, useAtom, useAtomValue } from "jotai";
-import {
-    Bot,
-    LayoutGrid,
-    PanelBottom,
-    PanelRight as SidebarRight,
-    Search,
-    SlidersHorizontal,
-} from "lucide-react";
+import { LayoutGrid, PanelBottom, PanelRight as SidebarRight, Search, SlidersHorizontal } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import {
     memo,
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -162,10 +165,10 @@ import { assignAgentPresencesToWindows, describeAgentPresence, type OSAgentPrese
 import { OSAppDragMimeType, readOSAppDragPayload, type OSAppDragPayload } from "./os-app-stream";
 import { osDesktopInsetsForWidth, OSDesktopLayer } from "./os-desktop";
 import { OSDesktopWidgetsStorageKey, readOSDockPins, writeOSDockPins, type OSDockPin } from "./os-desktop-model";
-import { OSSpaceOverview, useOSSpaceSnapshot } from "./os-space-overview";
+import { OSHermesSettings } from "./os-hermes-settings";
+import { getOSSpaceSnapshot, OSSpaceOverview, useOSSpaceSnapshot } from "./os-space-overview";
 import { getOSNavigationTarget, placeOSCanvasObject, validateOSSurfaceControl } from "./os-surface-control";
 import { OSSystemCenterPanel } from "./os-system-centers";
-import { OSHermesSettings } from "./os-hermes-settings";
 import { getOSTabGroup } from "./os-tab-groups";
 import { OSWidgetsFileView } from "./os-widgets-file";
 import {
@@ -183,10 +186,10 @@ import {
     computeOSWindowLayout,
     findOSDockHitTarget,
     fitOSWindowToContentAspect,
-    getOSCarouselNeighbor,
-    getOSCarouselOrder,
     getOSAdjacentPanes,
-    getOSGroupAdditions,
+    getOSCarouselNeighbor,
+    getOSPaneNeighbor,
+    getOSCarouselOrder,
     getOSPaneTakeover,
     getOSPaneWeight,
     getOSSurfaceCamera,
@@ -205,19 +208,22 @@ import {
     type OSWindowGroup,
     type OSWindowLayout,
 } from "./os-workspace-model";
-import {
-    canvasFileCardSize,
-    canvasFileResource,
-    isLocalCanvasFilePath,
-    readNativeCanvasDrops,
-} from "./workspace-canvas-files";
 import "./os-workspace.scss";
+import {
+    acceptsCanvasTransfer,
+    allowCanvasDrop,
+    canvasFileResource,
+    canvasMediaUrl,
+    canvasResourceCardSize,
+    importCanvasTransfer,
+    isCanvasPasteTarget,
+    isLocalCanvasFilePath,
+} from "./workspace-canvas-files";
 
 // The shell refinements must follow the legacy compact-chrome rules.
 import "./os-shell-polish.css";
 import { registerWorkspaceSurfaceModeProvider, type WorkspaceSurfaceControlInput } from "./workspace-surface-runtime";
 
-type OSResizeEdge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 const OSResizeEdges: OSResizeEdge[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 const OSWindowMinWidth = 320;
 const OSWindowMinHeight = 220;
@@ -271,6 +277,13 @@ type BlockDescriptor = {
 };
 
 type DragBounds = { x: number; y: number; width: number; height: number };
+type CanvasPoint = Pick<DragBounds, "x" | "y">;
+
+function isOSCanvasBackground(target: EventTarget, viewport: HTMLElement): boolean {
+    return target === viewport ||
+        (target instanceof HTMLElement && target.matches(".os-mode-world, .os-desktop-layer, .os-desktop-column"));
+}
+
 type DockPreview = {
     blockId: string;
     targetBlockId: string;
@@ -412,10 +425,15 @@ function useBlockDescriptors(blockIds: string[], blockIdsKey: string): BlockDesc
     return useAtomValue(descriptorsAtom);
 }
 
+const PassivePenWidgetInput: PersistentBlockSurfaceInput = { passThrough: true };
+const ActivePenWidgetInput: PersistentBlockSurfaceInput = {};
+
 const OSBlockWindow = memo(
     ({
         descriptor,
         layout,
+        canvasWidget,
+        multiSelected,
         selected,
         docked,
         maximized,
@@ -428,13 +446,16 @@ const OSBlockWindow = memo(
         onClose,
         onCollapse,
         onToggleFocus,
-        onDock,
-        onDetach,
+        onExitFocus,
         onTitleContextMenu,
         surfaceInput,
+        penPassive,
+        penWidget,
     }: {
         descriptor: BlockDescriptor;
         layout: OSWindowLayout;
+        canvasWidget: boolean;
+        multiSelected: boolean;
         selected: boolean;
         docked: boolean;
         maximized?: boolean;
@@ -452,14 +473,11 @@ const OSBlockWindow = memo(
         onClose: (blockId: string) => void;
         onCollapse: (blockId: string) => void;
         onToggleFocus: (blockId: string) => void;
-        onDock: (blockId: string, side: "left" | "right") => void;
-        onDetach: (blockId: string) => void;
+        onExitFocus?: () => void;
         onTitleContextMenu?: (event: React.MouseEvent, blockId: string, sizeAction?: ContextMenuItem) => void;
-        surfaceInput: {
-            capturePointer: boolean;
-            onPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => void;
-            onWheel: (event: ReactWheelEvent<HTMLDivElement>) => void;
-        };
+        surfaceInput: PersistentBlockSurfaceInput;
+        penPassive?: boolean;
+        penWidget?: boolean;
     }) => {
         const blockAtom = useMemo(
             () => WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", descriptor.blockId)),
@@ -553,21 +571,79 @@ const OSBlockWindow = memo(
         const { bounds } = layout;
         const agentWorking = agentPresence != null;
         const transitionDuration = reducedMotion || interacting ? "0ms" : "240ms";
+        const showWindowMenu = useCallback(
+            (event: React.MouseEvent) => {
+                if (!onTitleContextMenu) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onFocus(descriptor.blockId);
+                onTitleContextMenu(event, descriptor.blockId, {
+                    label: maximized ? "Restore Window Size" : "Maximize Window",
+                    click: () => onToggleFocus(descriptor.blockId),
+                });
+            },
+            [descriptor.blockId, maximized, onFocus, onTitleContextMenu, onToggleFocus]
+        );
+        useEffect(() => {
+            if (!toolbarHost || !canvasWidget || descriptor.view !== "web") return;
+            // The live navigation bar is portaled from the block, so its React menu bubbles outside the window.
+            const onContextMenu = (event: MouseEvent) => {
+                if (event.target instanceof Node && toolbarHost.contains(event.target)) {
+                    showWindowMenu(event as unknown as React.MouseEvent);
+                }
+            };
+            document.addEventListener("contextmenu", onContextMenu, true);
+            return () => document.removeEventListener("contextmenu", onContextMenu, true);
+        }, [canvasWidget, descriptor.view, showWindowMenu, toolbarHost]);
+        const windowButtons = phoneWindow ? null : (
+            <div
+                className={cn(
+                    "os-window-lights",
+                    descriptor.view !== "web" && "os-window-floating-lights",
+                    !isMacOS() && "is-platform-controls"
+                )}
+                role="group"
+                aria-label="Window controls"
+                onPointerDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+            >
+                <button type="button" className="is-close" onClick={() => onClose(descriptor.blockId)} aria-label="Close">
+                    <X />
+                </button>
+                <button type="button" className="is-minimize" onClick={() => onCollapse(descriptor.blockId)} aria-label="Minimize">
+                    <Minimize2 />
+                </button>
+                <button
+                    type="button"
+                    className="is-zoom"
+                    autoFocus={maximized && !penWidget}
+                    onClick={() => onToggleFocus(descriptor.blockId)}
+                    aria-label={maximized ? "Restore window" : "Maximize window"}
+                >
+                    <Maximize2 />
+                </button>
+            </div>
+        );
         return (
             <section
                 ref={windowElement}
                 className={cn(
                     "os-window",
+                    canvasWidget && "is-canvas-widget",
                     phoneWindow && "is-phone-window",
                     "kt-system-material",
                     "is-window",
                     `is-${layout.presentation}`,
-                    selected && "is-selected",
+                    (selected || multiSelected) && "is-selected",
+                    multiSelected && "is-multi-selected",
                     docked && "is-docked",
                     agentWorking && "is-agent-working",
                     kronTermHudController.isIsland(descriptor.blockId) && "is-hud-island",
                     interacting && "is-interacting"
                 )}
+                inert={penPassive}
+                data-kronos-v2-passive={penPassive ? "" : undefined}
+                data-kronos-v2-frame={penWidget && !maximized ? "" : undefined}
                 data-block-id={descriptor.blockId}
                 data-phone-platform={phoneWindow ? String(block?.meta?.["machine:kind"]) : undefined}
                 data-view={descriptor.view}
@@ -596,6 +672,23 @@ const OSBlockWindow = memo(
                     }
                 }}
             >
+                {canvasWidget && !penWidget && (
+                    <button
+                        type="button"
+                        className="os-canvas-widget-label"
+                        data-os-window-label=""
+                        aria-label={`Expand ${descriptor.title}`}
+                        onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
+                        onClick={(event) => {
+                            if (event.detail === 0) onToggleFocus(descriptor.blockId);
+                        }}
+                        onDoubleClick={() => onToggleFocus(descriptor.blockId)}
+                        onContextMenu={showWindowMenu}
+                        title={descriptor.title}
+                    >
+                        {descriptor.title}
+                    </button>
+                )}
                 {agentWorking && ["web", "sandbox", "appstream", "phone", "devices"].includes(descriptor.view) && (
                     <div
                         className="os-agent-control-edge"
@@ -608,93 +701,40 @@ const OSBlockWindow = memo(
                         }
                     />
                 )}
+                {onExitFocus && (
+                    <button
+                        type="button"
+                        className="os-window-focus-exit"
+                        aria-label="Exit focus mode"
+                        title="Return to canvas"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={onExitFocus}
+                    >
+                        {penWidget && <Minimize2 size={15} aria-hidden="true" />}
+                    </button>
+                )}
+                {descriptor.view !== "web" && windowButtons}
                 <SystemWindowFrame
                     titlebar={
-                        phoneWindow ? null : (
-                            <header
-                                className="os-window-titlebar"
+                        descriptor.view === "web" && (
+                            <div
+                                className="os-browser-navigation"
                                 onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
                                 onDoubleClick={() => onToggleFocus(descriptor.blockId)}
-                                onContextMenu={(event) => {
-                                    if (!onTitleContextMenu) return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    onFocus(descriptor.blockId);
-                                    onTitleContextMenu(event, descriptor.blockId);
-                                }}
+                                onContextMenu={showWindowMenu}
                             >
-                                <div className="os-window-title">
-                                    <AppIcon icon={descriptor.icon} />
-                                    {descriptor.view !== "preview" && <span>{descriptor.title}</span>}
-                                </div>
                                 <div
                                     ref={setToolbarHost}
                                     className="os-window-context"
                                     onPointerDown={(event) => {
-                                        if (
-                                            (event.target as HTMLElement).closest(
-                                                "button, input, textarea, select, a, [contenteditable='true'], [role='button']"
-                                            )
-                                        )
-                                            event.stopPropagation();
+                                        if ((event.target as HTMLElement).closest(
+                                            "button, input, textarea, select, a, [contenteditable='true'], [role='button']"
+                                        )) event.stopPropagation();
                                     }}
                                     onDoubleClick={(event) => event.stopPropagation()}
                                 />
-                                <div className="os-window-controls">
-                                    {docked ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => onDetach(descriptor.blockId)}
-                                            aria-label="Detach window"
-                                        >
-                                            <Unlink />
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <button
-                                                type="button"
-                                                onClick={() => onDock(descriptor.blockId, "left")}
-                                                aria-label="Dock left"
-                                            >
-                                                <PanelLeft />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onDock(descriptor.blockId, "right")}
-                                                aria-label="Dock right"
-                                            >
-                                                <PanelRight />
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                                <div className={cn("os-window-lights", !isMacOS() && "is-platform-controls")}>
-                                    <button
-                                        type="button"
-                                        className="is-close"
-                                        onClick={() => onClose(descriptor.blockId)}
-                                        aria-label="Close"
-                                    >
-                                        <X />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="is-minimize"
-                                        onClick={() => onCollapse(descriptor.blockId)}
-                                        aria-label="Minimize"
-                                    >
-                                        <Minimize2 />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="is-zoom"
-                                        onClick={() => onToggleFocus(descriptor.blockId)}
-                                        aria-label={maximized ? "Restore window" : "Maximize window"}
-                                    >
-                                        <Maximize2 />
-                                    </button>
-                                </div>
-                            </header>
+                                {windowButtons}
+                            </div>
                         )
                     }
                 >
@@ -713,19 +753,40 @@ const OSBlockWindow = memo(
                                         Opening {descriptor.title}…
                                     </div>
                                 )}
-                                <BlockView nodeModel={nodeModel} preview={false} surfaceInput={surfaceInput} />
+                                <BlockView
+                                    nodeModel={nodeModel}
+                                    preview={false}
+                                    surfaceInput={surfaceInput}
+                                />
                             </BlockChromeProvider>
                         </div>
                     </div>
                 </SystemWindowFrame>
-                {layout.presentation === "freeform" &&
+                {canvasWidget && (selected || multiSelected) && (
+                    <>
+                        <span className="os-canvas-widget-selection" aria-hidden="true" />
+                        <span
+                            className="os-canvas-widget-drag-strip"
+                            data-os-free-drag=""
+                            role="presentation"
+                            onPointerDown={(event) => onTitlePointerDown(event, descriptor.blockId, layout)}
+                            onDoubleClick={() => onToggleFocus(descriptor.blockId)}
+                            onContextMenu={showWindowMenu}
+                        />
+                    </>
+                )}
+                {!penWidget && layout.presentation === "freeform" &&
                     OSResizeEdges.map((edge) => (
                         <span
                             key={edge}
                             className={`os-window-edge is-${edge}`}
                             role="presentation"
                             onPointerDown={(event) => onResizePointerDown(event, descriptor.blockId, layout, edge)}
-                        />
+                        >
+                            {canvasWidget && selected && !multiSelected && (
+                                <span className="os-canvas-widget-resize-handle" aria-hidden="true" />
+                            )}
+                        </span>
                     ))}
             </section>
         );
@@ -733,72 +794,9 @@ const OSBlockWindow = memo(
 );
 OSBlockWindow.displayName = "OSBlockWindow";
 
-type OSBatteryState = { level: number; charging: boolean };
-type BatteryManagerLike = OSBatteryState & EventTarget;
-
-function useOSBatteryState(): OSBatteryState | undefined {
-    const [battery, setBattery] = useState<OSBatteryState>();
-    useEffect(() => {
-        const getBattery = (navigator as Navigator & { getBattery?: () => Promise<BatteryManagerLike> }).getBattery;
-        if (getBattery == null) return;
-        let manager: BatteryManagerLike | undefined;
-        let cancelled = false;
-        const update = () => manager && setBattery({ level: manager.level, charging: manager.charging });
-        void getBattery
-            .call(navigator)
-            .then((result: BatteryManagerLike) => {
-                if (cancelled) return;
-                manager = result;
-                update();
-                manager.addEventListener("levelchange", update);
-                manager.addEventListener("chargingchange", update);
-            })
-            .catch(() => undefined);
-        return () => {
-            cancelled = true;
-            manager?.removeEventListener("levelchange", update);
-            manager?.removeEventListener("chargingchange", update);
-        };
-    }, []);
-    return battery;
-}
-
-function subscribeOnline(notify: () => void): () => void {
-    window.addEventListener("online", notify);
-    window.addEventListener("offline", notify);
-    return () => {
-        window.removeEventListener("online", notify);
-        window.removeEventListener("offline", notify);
-    };
-}
-
-const OSShellStatus = memo(() => {
-    const online = useSyncExternalStore(
-        subscribeOnline,
-        () => navigator.onLine,
-        () => true
-    );
-    const battery = useOSBatteryState();
-    const percent = battery ? Math.round(battery.level * 100) : undefined;
-    const BatteryIcon = battery?.charging ? BatteryCharging : percent != null && percent <= 20 ? BatteryLow : Battery;
-    return (
-        <div className="os-shell-status" role="group" aria-label="System status">
-            <span title={online ? "Online" : "Offline"} aria-label={online ? "Online" : "Offline"}>
-                {online ? <Wifi /> : <WifiOff />}
-            </span>
-            {percent != null && (
-                <span title={`Battery ${percent}%${battery.charging ? ", charging" : ""}`}>
-                    <BatteryIcon />
-                    <span className="os-shell-status-value">{percent}%</span>
-                </span>
-            )}
-        </div>
-    );
-});
-OSShellStatus.displayName = "OSShellStatus";
-
 export function OSModeShell({
     hasComfyPanels,
+    systemControlsSlot,
     workspaces,
     currentWorkspaceId,
     blocks,
@@ -813,10 +811,11 @@ export function OSModeShell({
     onCreateWorkspace,
     onRestore,
     onPinResource,
-    onOverview,
+    onShowApps,
     onFreeform,
 }: {
     hasComfyPanels?: boolean;
+    systemControlsSlot?: HTMLElement | null;
     workspaces: Array<{ id: string; name: string }>;
     currentWorkspaceId: string;
     blocks: BlockDescriptor[];
@@ -825,27 +824,24 @@ export function OSModeShell({
     sceneKind: OSModeState["scene"]["kind"];
     activeBlockId: string | undefined;
     osView: KronTermOSView;
-    onSetOSView: (view: KronTermOSView) => void;
+    onSetOSView: (view: KronTermOSView) => Promise<boolean>;
     onFocusApp: (blockId: string) => void;
     onWorkspace: (id: string) => void;
     onCreateWorkspace: () => void;
     onRestore: (blockId: string) => void;
     onPinResource: (resource: OSResourceReference) => void;
-    onOverview: () => void;
+    onShowApps: () => void;
     onFreeform: () => void;
 }) {
+    const designView = osView === "design" || osView === "kronos-v2";
+    const viewLabel = { canvas: "KronOS", design: "Design", "kronos-v2": "KronOS v2", file: "Files" }[osView];
     const shellTabId = useAtomValue(atoms.staticTabId);
     const isFullScreen = useAtomValue(atoms.isFullScreen);
     const shellRef = useRef<HTMLDivElement>(null);
     const appearance = useSystemAppearance();
     const [activeSystemCenter, setActiveSystemCenter] = useState<SystemCenterTarget>();
+    const [settingsSection, setSettingsSection] = useState<string>();
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
-    const hermesSurface = useSyncExternalStore(
-        hermesSurfaceController.subscribe,
-        hermesSurfaceController.getSnapshot,
-        hermesSurfaceController.getSnapshot
-    );
-
     const sidebarOpen = useStore($sidebarOpen);
     const inspectorOpen = useStore($krontermInspectorOpen);
     const hudMode = useSyncExternalStore(
@@ -853,14 +849,13 @@ export function OSModeShell({
         kronTermHudController.getSnapshot,
         kronTermHudController.getSnapshot
     );
-    const toggleHermesChat = useCallback(() => {
-        if (hermesSurface.presentation === "hud") {
-            hermesSurfaceController.dismiss();
-            return;
-        }
-        hermesSurfaceController.requestOpenHud();
-    }, [hermesSurface.presentation]);
+    const penCanvasTab = useAtomValue(activePenCanvasTabAtom);
+    const penChat = !!shellTabId && penCanvasTab === shellTabId;
+    const showPenChat = useCallback(() => {
+        void requestPenEditor(shellTabId, "show_chat").catch(() => {});
+    }, [shellTabId]);
     const toggleHudMode = useCallback(() => {
+        if (penChat) return showPenChat();
         const current = kronTermHudController.getSnapshot();
         if (current.active && current.keepWorkspaceVisible) {
             kronTermHudController.openExclusiveHud();
@@ -873,12 +868,13 @@ export function OSModeShell({
         } else {
             hermesSurfaceController.dismiss();
         }
-    }, []);
+    }, [penChat, showPenChat]);
     useEffect(() => {
         const handleSystemCenterOpen = (event: Event) => {
             const center = (event as CustomEvent<{ center?: SystemCenterTarget }>).detail?.center;
             if (center !== "activity" && center !== "control") return;
             setViewMenuOpen(false);
+            setSettingsSection((event as CustomEvent<{ section?: string }>).detail?.section);
             setActiveSystemCenter(center);
         };
         window.addEventListener(SystemCenterOpenEvent, handleSystemCenterOpen);
@@ -893,285 +889,307 @@ export function OSModeShell({
             <SystemMaterial
                 ref={shellRef}
                 material="bar"
-                data-live-block-occluder=""
+                data-live-block-occluder={systemControlsSlot ? undefined : ""}
+                data-pen-system-controls-mounted={systemControlsSlot ? "" : undefined}
                 className={cn("os-shell", isMacOS() && !isFullScreen && "has-window-controls")}
             >
-                <div className="os-shell-left">
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        className="os-shell-icon os-sidebar-toggle"
-                        selected={sidebarOpen}
-                        aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-                        aria-expanded={sidebarOpen}
-                        aria-controls="kronterm-left-sidebar"
-                        title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-                        onClick={() => {
-                            toggleSidebarOpen();
-                            if ($sidebarOpen.get() && !$krontermSidebarOwner.get() && !hasComfyPanels) {
-                                hermesSurfaceController.requestOpenHud();
-                            }
-                        }}
-                    >
-                        <img src={Logo} alt="" className="size-5" draggable={false} />
-                    </SystemButton>
-                    <nav
-                        className="os-workspaces"
-                        aria-label="Workspaces"
-                        onKeyDown={(event) => {
-                            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-                            const buttons = Array.from(
-                                event.currentTarget.querySelectorAll<HTMLButtonElement>("button")
-                            );
-                            const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-                            if (index < 0) return;
-                            event.preventDefault();
-                            const next =
-                                event.key === "Home"
-                                    ? 0
-                                    : event.key === "End"
-                                      ? buttons.length - 1
-                                      : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) %
-                                        buttons.length;
-                            buttons[next]?.focus();
-                        }}
-                    >
-                        {workspaces.map((workspace, index) => (
-                            <button
-                                type="button"
-                                key={workspace.id}
-                                className={cn(workspace.id === currentWorkspaceId && "is-active")}
-                                onClick={() => onWorkspace(workspace.id)}
-                                aria-label={`Workspace ${index + 1}: ${workspace.name}`}
-                                title={`Workspace ${index + 1}: ${workspace.name}`}
-                                aria-current={workspace.id === currentWorkspaceId ? "page" : undefined}
-                            >
-                                {index + 1}
+                {!designView && (
+                    <div className="os-shell-left">
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            className="os-shell-icon os-sidebar-toggle"
+                            selected={sidebarOpen}
+                            aria-label={sidebarOpen ? "Hide left workspace panel" : "Show left workspace panel"}
+                            aria-expanded={sidebarOpen}
+                            aria-controls="kronterm-left-sidebar"
+                            title={sidebarOpen ? "Hide left workspace panel" : "Show left workspace panel"}
+                            onClick={() => {
+                                toggleSidebarOpen();
+                                if (!penChat && $sidebarOpen.get() && !$krontermSidebarOwner.get() && !hasComfyPanels) {
+                                    hermesSurfaceController.requestOpenHud();
+                                }
+                            }}
+                        >
+                            <img src={Logo} alt="" className="size-5" draggable={false} />
+                        </SystemButton>
+                        <nav
+                            className="os-workspaces"
+                            aria-label="Workspaces"
+                            onKeyDown={(event) => {
+                                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                                const buttons = Array.from(
+                                    event.currentTarget.querySelectorAll<HTMLButtonElement>("button")
+                                );
+                                const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                                if (index < 0) return;
+                                event.preventDefault();
+                                const next =
+                                    event.key === "Home"
+                                        ? 0
+                                        : event.key === "End"
+                                          ? buttons.length - 1
+                                          : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) %
+                                            buttons.length;
+                                buttons[next]?.focus();
+                            }}
+                        >
+                            {workspaces.map((workspace, index) => (
+                                <button
+                                    type="button"
+                                    key={workspace.id}
+                                    className={cn(workspace.id === currentWorkspaceId && "is-active")}
+                                    onClick={() => onWorkspace(workspace.id)}
+                                    aria-label={`Workspace ${index + 1}: ${workspace.name}`}
+                                    title={`Workspace ${index + 1}: ${workspace.name}`}
+                                    aria-current={workspace.id === currentWorkspaceId ? "page" : undefined}
+                                >
+                                    {index + 1}
+                                </button>
+                            ))}
+                            <button type="button" onClick={onCreateWorkspace} aria-label="Create workspace">
+                                <Plus />
                             </button>
-                        ))}
-                        <button type="button" onClick={onCreateWorkspace} aria-label="Create workspace">
-                            <Plus />
-                        </button>
-                    </nav>
-                    <div id={`workflow-shell-controls-${shellTabId}`} className="flex shrink-0 items-center gap-1" />
-                    <div id={`hermes-hud-shell-${shellTabId}`} className="os-shell-chat" />
-                </div>
-                <SystemToolbar className="os-shell-right" aria-label="System controls">
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        className="os-system-entry"
-                        onClick={() => {
-                            setActiveSystemCenter(undefined);
-                            toggleCommandCenter();
-                        }}
-                        aria-label="Open Command Center"
-                        title="Command Center (Command+Shift+Space)"
+                        </nav>
+                        <div id={`workflow-shell-controls-${shellTabId}`} className="flex shrink-0 items-center gap-1" />
+                        <div id={`hermes-hud-shell-${shellTabId}`} className="os-shell-chat" />
+                    </div>
+                )}
+                {(osView !== "kronos-v2" || systemControlsSlot) && (
+                <CanvasToolsPortal target={systemControlsSlot}>
+                    <SystemToolbar
+                        className={systemControlsSlot ? undefined : "os-shell-right"}
+                        aria-label={osView === "kronos-v2" ? "Workspace controls" : "System controls"}
                     >
-                        <Search />
-                        <span className="os-command-label">Search</span>
-                        <kbd className="os-command-shortcut">{isMacOS() ? "⌘⇧Space" : "Ctrl⇧Space"}</kbd>
-                    </SystemButton>
-                    <Dialog.Trigger asChild>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            className="os-system-entry"
+                            onClick={() => {
+                                setActiveSystemCenter(undefined);
+                                toggleCommandCenter();
+                            }}
+                            aria-label="Open Command Center"
+                            title="Command Center (Command+Shift+Space)"
+                        >
+                            <Search />
+                            <span className="os-command-label">Search</span>
+                            <kbd className="os-command-shortcut">{isMacOS() ? "⌘⇧Space" : "Ctrl⇧Space"}</kbd>
+                        </SystemButton>
+                        <Dialog.Trigger asChild>
+                            <SystemButton
+                                type="button"
+                                size="small"
+                                className="os-shell-icon"
+                                selected={activeSystemCenter === "control"}
+                                aria-label="Open Hermes Settings"
+                                title="Hermes Settings"
+                            >
+                                <SlidersHorizontal aria-hidden="true" />
+                            </SystemButton>
+                        </Dialog.Trigger>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            selected={hudMode.active && !hudMode.keepWorkspaceVisible}
+                            className="os-shell-icon"
+                            onClick={toggleHudMode}
+                            aria-label={
+                                hudMode.active && !hudMode.keepWorkspaceVisible
+                                    ? "Exit KronOS HUD mode"
+                                    : "Enter KronOS HUD mode"
+                            }
+                            aria-pressed={hudMode.active && !hudMode.keepWorkspaceVisible}
+                            title="KronOS HUD mode"
+                        >
+                            <PanelBottom />
+                        </SystemButton>
+                        <SystemSegmentedControl className="os-view-selector" aria-label="Workspace view">
+                            <Menu.Root modal={false} open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
+                                <Menu.Trigger
+                                    type="button"
+                                    onDragOver={(event) => {
+                                        if (
+                                            event.dataTransfer.types.includes(OSAppDragMimeType) ||
+                                            event.dataTransfer.types.includes(OSResourceDragMimeType)
+                                        ) {
+                                            event.preventDefault();
+                                            event.dataTransfer.dropEffect = "copy";
+                                        }
+                                    }}
+                                    onDrop={(event) => {
+                                        const resource = readOSResourceDragPayload(event.dataTransfer);
+                                        if (resource != null) {
+                                            event.preventDefault();
+                                            onPinResource(resource);
+                                            setViewMenuOpen(false);
+                                            return;
+                                        }
+                                        const payload = readOSAppDragPayload(event.dataTransfer);
+                                        if (payload?.blockId == null) return;
+                                        event.preventDefault();
+                                        onRestore(payload.blockId);
+                                        if (osView !== "kronos-v2") void onSetOSView("canvas");
+                                        onFocusApp(payload.blockId);
+                                        setViewMenuOpen(false);
+                                    }}
+                                    aria-expanded={viewMenuOpen}
+                                    aria-haspopup="menu"
+                                    aria-label={`Workspace view: ${viewLabel}`}
+                                >
+                                    {osView === "file" ? <FolderOpen /> : <Grid2X2 />}
+                                    <span className="os-view-selector-label">{viewLabel}</span>
+                                    <ChevronDown />
+                                </Menu.Trigger>
+                                <Menu.Portal container={shellRef.current}>
+                                    <Menu.Positioner sideOffset={8} align="end" style={{ zIndex: 5000, pointerEvents: "auto" }}>
+                                        <Menu.Popup
+                                            className="os-view-menu"
+                                            style={{
+                                                ...systemMaterialVariables(appearance),
+                                                position: "relative",
+                                                top: "auto",
+                                                right: "auto",
+                                                background: "var(--kt-popover)",
+                                            }}
+                                        >
+                                            <Menu.RadioGroup
+                                                value={
+                                                    designView
+                                                        ? osView
+                                                        : osView === "file"
+                                                        ? "files"
+                                                        : sceneKind === "freeform"
+                                                          ? "canvas"
+                                                          : "carousel"
+                                                }
+                                            >
+                                                <Menu.RadioItem
+                                                    render={<button type="button" />}
+                                                    nativeButton
+                                                    value="carousel"
+                                                    closeOnClick
+                                                    onDragOver={(event) => {
+                                                        if (event.dataTransfer.types.includes(OSAppDragMimeType)) {
+                                                            event.preventDefault();
+                                                            event.dataTransfer.dropEffect = "move";
+                                                        }
+                                                    }}
+                                                    onDrop={(event) => {
+                                                        const payload = readOSAppDragPayload(event.dataTransfer);
+                                                        if (payload?.blockId == null) return;
+                                                        event.preventDefault();
+                                                        onRestore(payload.blockId);
+                                                        if (osView !== "kronos-v2") void onSetOSView("canvas");
+                                                        onFocusApp(payload.blockId);
+                                                        setViewMenuOpen(false);
+                                                    }}
+                                                    onClick={async () => {
+                                                        if (!(await onSetOSView("canvas"))) return;
+                                                        const blockId =
+                                                            activeBlockId ??
+                                                            blocks.find((block) => !collapsedIds.includes(block.blockId))
+                                                                ?.blockId;
+                                                        if (blockId) onFocusApp(blockId);
+                                                        setViewMenuOpen(false);
+                                                    }}
+                                                >
+                                                    <Grid2X2 />
+                                                    <span>Window carousel</span>
+                                                </Menu.RadioItem>
+                                                <Menu.RadioItem
+                                                    render={<button type="button" />}
+                                                    nativeButton
+                                                    value="canvas"
+                                                    closeOnClick
+                                                    onClick={async () => {
+                                                        if (!(await onSetOSView("canvas"))) return;
+                                                        onFreeform();
+                                                        setViewMenuOpen(false);
+                                                    }}
+                                                >
+                                                    <Grid2X2 />
+                                                    <span>KronOS</span>
+                                                </Menu.RadioItem>
+                                                <Menu.RadioItem
+                                                    render={<button type="button" />}
+                                                    nativeButton
+                                                    value="design"
+                                                    closeOnClick
+                                                    onClick={() => onSetOSView("design")}
+                                                >
+                                                    <ShapeSquare />
+                                                    <span>Design</span>
+                                                </Menu.RadioItem>
+                                                <Menu.RadioItem
+                                                    render={<button type="button" />}
+                                                    nativeButton
+                                                    value="kronos-v2"
+                                                    closeOnClick
+                                                    onClick={() => onSetOSView("kronos-v2")}
+                                                >
+                                                    <ShapeSquare />
+                                                    <span>KronOS v2</span>
+                                                </Menu.RadioItem>
+                                                <Menu.RadioItem
+                                                    render={<button type="button" />}
+                                                    nativeButton
+                                                    value="files"
+                                                    closeOnClick
+                                                    onClick={() => onSetOSView("file")}
+                                                >
+                                                    <FolderOpen />
+                                                    <span>Files</span>
+                                                </Menu.RadioItem>
+                                            </Menu.RadioGroup>
+                                        </Menu.Popup>
+                                    </Menu.Positioner>
+                                </Menu.Portal>
+                            </Menu.Root>
+                        </SystemSegmentedControl>
+                        <SystemButton
+                            type="button"
+                            size="small"
+                            className="os-shell-icon os-all-apps-button"
+                            onClick={onShowApps}
+                            aria-label="Show all apps"
+                        >
+                            <LayoutGrid />
+                        </SystemButton>
                         <SystemButton
                             type="button"
                             size="small"
                             className="os-shell-icon"
-                            selected={activeSystemCenter === "control"}
-                            aria-label="Open Hermes Settings"
-                            title="Hermes Settings"
-                        >
-                            <SlidersHorizontal aria-hidden="true" />
-                        </SystemButton>
-                    </Dialog.Trigger>
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        selected={hermesSurface.presentation === "hud"}
-                        className="os-shell-icon"
-                        onClick={toggleHermesChat}
-                        aria-label={hermesSurface.presentation === "hud" ? "Hide KronOS Agent" : "Open KronOS Agent"}
-                        aria-pressed={hermesSurface.presentation === "hud"}
-                        title="KronOS Agent chat"
-                    >
-                        <Bot />
-                    </SystemButton>
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        selected={hudMode.active && !hudMode.keepWorkspaceVisible}
-                        className="os-shell-icon"
-                        onClick={toggleHudMode}
-                        aria-label={
-                            hudMode.active && !hudMode.keepWorkspaceVisible
-                                ? "Exit KronOS HUD mode"
-                                : "Enter KronOS HUD mode"
-                        }
-                        aria-pressed={hudMode.active && !hudMode.keepWorkspaceVisible}
-                        title="KronOS HUD mode"
-                    >
-                        <PanelBottom />
-                    </SystemButton>
-                    <SystemSegmentedControl className="os-view-selector" aria-label="Workspace view">
-                        <Menu.Root open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
-                            <Menu.Trigger
-                                type="button"
-                                onDragOver={(event) => {
-                                    if (
-                                        event.dataTransfer.types.includes(OSAppDragMimeType) ||
-                                        event.dataTransfer.types.includes(OSResourceDragMimeType)
-                                    ) {
-                                        event.preventDefault();
-                                        event.dataTransfer.dropEffect = "copy";
-                                    }
-                                }}
-                                onDrop={(event) => {
-                                    const resource = readOSResourceDragPayload(event.dataTransfer);
-                                    if (resource != null) {
-                                        event.preventDefault();
-                                        onPinResource(resource);
-                                        setViewMenuOpen(false);
-                                        return;
-                                    }
-                                    const payload = readOSAppDragPayload(event.dataTransfer);
-                                    if (payload?.blockId == null) return;
-                                    event.preventDefault();
-                                    onRestore(payload.blockId);
-                                    onSetOSView("canvas");
-                                    onFocusApp(payload.blockId);
-                                    setViewMenuOpen(false);
-                                }}
-                                aria-expanded={viewMenuOpen}
-                                aria-haspopup="menu"
-                                aria-label={`KronOS view: ${osView === "file" ? "files" : sceneKind === "freeform" ? "canvas" : "carousel"}`}
-                            >
-                                {osView === "file" ? <FolderOpen /> : <Grid2X2 />}
-                                <span className="os-view-selector-label">
-                                    {osView === "file" ? "Files" : sceneKind === "freeform" ? "Canvas" : "Carousel"}
-                                </span>
-                                <ChevronDown />
-                            </Menu.Trigger>
-                            <Menu.Portal container={shellRef.current}>
-                                <Menu.Positioner sideOffset={8} align="end" style={{ zIndex: 5000 }}>
-                                    <Menu.Popup
-                                        className="os-view-menu"
-                                        style={{
-                                            ...systemMaterialVariables(appearance),
-                                            position: "relative",
-                                            top: "auto",
-                                            right: "auto",
-                                            background: "var(--kt-popover)",
-                                        }}
-                                    >
-                                        <Menu.RadioGroup
-                                            value={
-                                                osView === "file"
-                                                    ? "files"
-                                                    : sceneKind === "freeform"
-                                                      ? "canvas"
-                                                      : "carousel"
-                                            }
-                                        >
-                                            <Menu.RadioItem
-                                                render={<button type="button" />}
-                                                nativeButton
-                                                value="carousel"
-                                                closeOnClick
-                                                onDragOver={(event) => {
-                                                    if (event.dataTransfer.types.includes(OSAppDragMimeType)) {
-                                                        event.preventDefault();
-                                                        event.dataTransfer.dropEffect = "move";
-                                                    }
-                                                }}
-                                                onDrop={(event) => {
-                                                    const payload = readOSAppDragPayload(event.dataTransfer);
-                                                    if (payload?.blockId == null) return;
-                                                    event.preventDefault();
-                                                    onRestore(payload.blockId);
-                                                    onSetOSView("canvas");
-                                                    onFocusApp(payload.blockId);
-                                                    setViewMenuOpen(false);
-                                                }}
-                                                onClick={() => {
-                                                    onSetOSView("canvas");
-                                                    const blockId =
-                                                        activeBlockId ??
-                                                        blocks.find((block) => !collapsedIds.includes(block.blockId))
-                                                            ?.blockId;
-                                                    if (blockId) onFocusApp(blockId);
-                                                    setViewMenuOpen(false);
-                                                }}
-                                            >
-                                                <Grid2X2 />
-                                                <span>Window carousel</span>
-                                            </Menu.RadioItem>
-                                            <Menu.RadioItem
-                                                render={<button type="button" />}
-                                                nativeButton
-                                                value="canvas"
-                                                closeOnClick
-                                                onClick={() => {
-                                                    onSetOSView("canvas");
-                                                    onFreeform();
-                                                    setViewMenuOpen(false);
-                                                }}
-                                            >
-                                                <Grid2X2 />
-                                                <span>Freeform canvas</span>
-                                            </Menu.RadioItem>
-                                        </Menu.RadioGroup>
-                                    </Menu.Popup>
-                                </Menu.Positioner>
-                            </Menu.Portal>
-                        </Menu.Root>
-                    </SystemSegmentedControl>
-                    <OSShellStatus />
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        className="os-shell-icon os-all-apps-button"
-                        selected={sceneKind === "overview"}
-                        onClick={() => {
-                            if (sceneKind !== "overview") {
-                                onOverview();
-                                return;
+                            aria-label={
+                                (penChat || hasComfyPanels)
+                                    ? inspectorOpen
+                                        ? "Hide inspector"
+                                        : "Show inspector"
+                                    : inspectorOpen
+                                      ? "Hide files and changes"
+                                      : "Show files and changes"
                             }
-                            const blockId =
-                                activeBlockId ?? blocks.find((block) => !collapsedIds.includes(block.blockId))?.blockId;
-                            if (blockId) onFocusApp(blockId);
-                        }}
-                        aria-label={sceneKind === "overview" ? "Return to carousel" : "Show all apps"}
-                        aria-pressed={sceneKind === "overview"}
-                    >
-                        {sceneKind === "overview" ? <Focus /> : <LayoutGrid />}
-                    </SystemButton>
-                    <SystemButton
-                        type="button"
-                        size="small"
-                        className="os-shell-icon"
-                        aria-label={
-                            hasComfyPanels
-                                ? inspectorOpen ? "Hide inspector" : "Show inspector"
-                                : inspectorOpen ? "Hide files and changes" : "Show files and changes"
-                        }
-                        aria-expanded={inspectorOpen}
-                        aria-controls="kronterm-right-inspector"
-                        selected={inspectorOpen}
-                        title={hasComfyPanels ? "Workspace inspector" : "Files and changes"}
-                        onClick={() => {
-                            if (!$krontermInspectorOpen.get() && !hasComfyPanels) $krontermInspectorSection.set("files");
-                            $krontermInspectorOpen.set(!$krontermInspectorOpen.get());
-                        }}
-                    >
-                        <SidebarRight />
-                    </SystemButton>
-                </SystemToolbar>
+                            aria-expanded={inspectorOpen}
+                            aria-controls={penChat ? "kronos-pen-workspace-inspector" : "kronterm-right-inspector"}
+                            selected={inspectorOpen}
+                            title={penChat || hasComfyPanels ? "Workspace inspector" : "Files and changes"}
+                            onClick={() => {
+                                if (!$krontermInspectorOpen.get() && !hasComfyPanels)
+                                    $krontermInspectorSection.set("files");
+                                $krontermInspectorOpen.set(!$krontermInspectorOpen.get());
+                            }}
+                        >
+                            <SidebarRight />
+                        </SystemButton>
+                    </SystemToolbar>
+                </CanvasToolsPortal>
+                )}
                 {activeSystemCenter === "activity" && (
                     <OSSystemCenterPanel
                         onClose={() => setActiveSystemCenter(undefined)}
                         onPinResource={onPinResource}
                         onFocusBlock={(blockId) => {
-                            onSetOSView("canvas");
+                            if (osView !== "kronos-v2") void onSetOSView("canvas");
                             onFocusApp(blockId);
                             setActiveSystemCenter(undefined);
                         }}
@@ -1198,7 +1216,11 @@ export function OSModeShell({
                 )}
             </SystemMaterial>
             {activeSystemCenter === "control" && (
-                <OSHermesSettings tabId={shellTabId} onClose={() => setActiveSystemCenter(undefined)} />
+                <OSHermesSettings
+                    tabId={shellTabId}
+                    initialSection={settingsSection}
+                    onClose={() => setActiveSystemCenter(undefined)}
+                />
             )}
         </Dialog.Root>
     );
@@ -1274,6 +1296,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const inspectorCompact = useStore($krontermInspectorCompact);
     const inspectorWidth = useStore($krontermInspectorWidth);
     const attachInspector = useCallback((target: HTMLDivElement) => $krontermInspectorTarget.set(target), []);
+    const [sessionSidebarWidth, setSessionSidebarWidth] = useState(260);
+    const sessionSidebarDrag = useRef<{ x: number; width: number }>(null);
+    const resizeSessionSidebar = (width: number) => setSessionSidebarWidth(Math.max(200, Math.min(680, width)));
     const attachSidebar = useCallback((target: HTMLDivElement) => $krontermSidebarTarget.set(target), []);
     const hudMode = useSyncExternalStore(
         kronTermHudController.subscribe,
@@ -1292,14 +1317,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const rootRef = useRef<HTMLDivElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
     const [workflowPanelLayout, setWorkflowPanelLayout] = useState({ top: 0, right: 0, bottom: 0 });
-    const [selectorOwnsToolbar, setSelectorOwnsToolbar] = useState(() =>
-        document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-owner")
-    );
-    const [selectorToolsSlot, setSelectorToolsSlot] = useState<HTMLElement>(() => getCanvasToolbarSlot());
-    const [selectorExpanded, setSelectorExpanded] = useState(() =>
-        document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-expanded")
-    );
-    const [fallbackToolsOpen, setFallbackToolsOpen] = useState(false);
+    const [canvasToolsOpen, setCanvasToolsOpen] = useState(false);
     const [workflowFocusTarget, setWorkflowFocusTarget] = useState<HTMLDivElement>(null);
     const [workflowFocusVisible, setWorkflowFocusVisible] = useState(false);
     const [workflowConfigOpen, setWorkflowConfigOpen] = useState(false);
@@ -1307,39 +1325,141 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         setWorkflowFocusVisible(visible);
         setWorkflowConfigOpen(editing);
     }, []);
-    const canvasToolsOpen = selectorOwnsToolbar ? selectorExpanded : fallbackToolsOpen;
-    const closeCanvasTools = () => {
-        setFallbackToolsOpen(false);
-        window.dispatchEvent(new CustomEvent("kronterm:canvas-toolbar-close"));
-    };
     const [workflowToolsTarget, setWorkflowToolsTarget] = useState<HTMLDivElement>(null);
+    const [penToolsSlot, setPenToolsSlot] = useState<HTMLElement>(null);
     const [workflowWorldTarget, setWorkflowWorldTarget] = useState<HTMLDivElement>(null);
     const [comfyWorldTarget, setComfyWorldTarget] = useState<HTMLDivElement>(null);
     const [comfyWorkflowOpen, setComfyWorkflowOpen] = useAtom(comfyWorkflowOpenAtom);
-    const comfyWorkflowVisible = comfyWorkflowOpen && state.view === "canvas" && state.scene.kind === "freeform";
+    const workflowCanvasVisible = state.view === "kronos-v2" ||
+        (state.view === "canvas" && state.scene.kind === "freeform");
+    const comfyWorkflowVisible = comfyWorkflowOpen && workflowCanvasVisible;
     const [comfyReady, setComfyReady] = useState(false);
     const comfyLibrarySlot = useStore($comfyLibraryTarget);
     const comfyPropertiesTarget = useStore($comfyPropertiesTarget);
     const sidebarMode = useStore($workflowSidebarMode);
     const penDesignTarget = useStore($penDesignTarget);
     const designSelected = sidebarMode === "design";
-    const [designMode, setDesignMode] = useState<"editor" | "canvas">("editor");
-    const [designEditorMounted, setDesignEditorMounted] = useState(false);
-    const designVisible = designSelected && designMode === "canvas" && state.view === "canvas" && state.scene.kind === "freeform";
-    const designEditorVisible = designSelected && designMode === "editor" && state.view === "canvas" && state.scene.kind === "freeform";
-    useEffect(() => {
-        if (designEditorVisible) {
-            setDesignEditorMounted(true);
-            window.dispatchEvent(new CustomEvent("kronterm:canvas-toolbar-close"));
+    const kronosV2 = state.view === "kronos-v2";
+    const penCanvasVisible = state.view === "design" || kronosV2;
+    const [penRequestedCamera, setPenRequestedCamera] = useState<PenCamera>(() => state.camera);
+    const penCameraRef = useRef(penRequestedCamera);
+    const requestedPenCameraRef = useRef(penRequestedCamera);
+    requestedPenCameraRef.current = penRequestedCamera;
+    const penAgentFollowPaused = useRef(false);
+    const [penWorkflowCamera, setPenWorkflowCamera] = useState(penRequestedCamera);
+    const penLivePlaneRef = useRef<HTMLDivElement>(null);
+    const penDidFit = useRef(false);
+    const [penViewport, setPenViewport] = useState<PenViewport>();
+    const updatePenViewport = useCallback((next: PenViewport) => {
+        setPenViewport((current) =>
+            current?.x === next.x && current.y === next.y && current.width === next.width && current.height === next.height
+                ? current
+                : next
+        );
+    }, []);
+    const updatePenCamera = useCallback((camera: PenCamera) => {
+        if (camera.zoom < penCameraRef.current.zoom - 0.001 &&
+            Math.abs(camera.zoom - requestedPenCameraRef.current.zoom) > 0.001) {
+            penAgentFollowPaused.current = true;
         }
-    }, [designEditorVisible]);
-    const [designTool, setDesignTool] = useState<PenDrawingTool>();
-    const designPath = useRef<{ pointerId: number; points: Array<{ x: number; y: number }> }>(undefined);
-    const [designPathPreview, setDesignPathPreview] = useState("");
-    const [designInspector, setDesignInspector] = useState<"properties" | "chat">("properties");
-    const selectedDesignLayer = designVisible
-        ? state.objects.find((object) => object.id === state.selectedEntityId && object.pen)
-        : undefined;
+        penCameraRef.current = camera;
+        setPenWorkflowCamera((current) => (samePenCamera(current, camera) ? current : camera));
+        const plane = penLivePlaneRef.current;
+        if (!plane) return;
+        plane.style.setProperty("--pen-camera-x", `${camera.x}px`);
+        plane.style.setProperty("--pen-camera-y", `${camera.y}px`);
+        plane.style.setProperty("--pen-camera-zoom", String(camera.zoom));
+        syncPersistentBlockGeometry(viewportRef.current);
+    }, []);
+    const [penWidgetsReady, setPenWidgetsReady] = useState(false);
+    const [penOverlayOpen, setPenOverlayOpen] = useState(false);
+    const [penPresentation, setPenPresentation] = useState<{ active: boolean; blockId?: string }>({ active: false });
+    const updatePenPresentation = useCallback((active: boolean, blockId?: string) => {
+        setPenPresentation((current) =>
+            current.active === active && current.blockId === blockId ? current : { active, blockId }
+        );
+    }, []);
+    const [penActiveWidget, setPenActiveWidget] = useState<string>();
+    const penActiveWidgetRef = useRef(penActiveWidget);
+    penActiveWidgetRef.current = penActiveWidget;
+    const [penInputWidget, setPenInputWidget] = useState<string>();
+    const penInputWidgetRef = useRef(penInputWidget);
+    penInputWidgetRef.current = penInputWidget;
+    const [penLayerWidget, setPenLayerWidget] = useState<string>();
+    const [penWidgetControlsSlot, setPenWidgetControlsSlot] = useState<HTMLElement>();
+    const leavePenWidget = useCallback(() => {
+        setPenInputWidget(undefined);
+        setPenActiveWidget(undefined);
+    }, []);
+    const returnToPenCanvas = useCallback(() => {
+        penAgentFollowPaused.current = true;
+        leavePenWidget();
+        void requestPenEditor(tabId, "focus_canvas").catch(() => {});
+    }, [leavePenWidget, tabId]);
+    const interactWithPenWidget = useCallback((blockId: string | null) => {
+        if (blockId == null) {
+            penAgentFollowPaused.current = true;
+            leavePenWidget();
+        } else setPenActiveWidget(blockId);
+    }, [leavePenWidget]);
+
+    useLayoutEffect(() => {
+        if (kronosV2) return;
+        penAgentFollowPaused.current = false;
+        leavePenWidget();
+        setPenLayerWidget(undefined);
+        setPenRequestedCamera(penCameraRef.current);
+    }, [kronosV2, leavePenWidget]);
+
+    useEffect(() => {
+        if (!kronosV2) return;
+        const exit = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            penAgentFollowPaused.current = true;
+            if (!penActiveWidget || event.defaultPrevented) return;
+            if (!(event.target instanceof Element) || !event.target.closest(
+                `[data-live-blockid="${CSS.escape(penActiveWidget)}"], [data-block-id="${CSS.escape(penActiveWidget)}"]`
+            )) return;
+            event.preventDefault();
+            event.stopPropagation();
+            returnToPenCanvas();
+        };
+        const stopFollow = () => {
+            penAgentFollowPaused.current = true;
+        };
+        const pauseFollow = (event: KeyboardEvent) => {
+            if (event.key === "Escape") stopFollow();
+        };
+        window.addEventListener(KronOSV2AgentFollowPauseEvent, stopFollow);
+        window.addEventListener("keydown", pauseFollow, true);
+        window.addEventListener("keydown", exit);
+        return () => {
+            window.removeEventListener(KronOSV2AgentFollowPauseEvent, stopFollow);
+            window.removeEventListener("keydown", pauseFollow, true);
+            window.removeEventListener("keydown", exit);
+        };
+    }, [kronosV2, penActiveWidget, returnToPenCanvas]);
+    const kronOSCanvasVisible = state.view === "canvas" && state.scene.kind === "freeform";
+    const [penVisited, setPenVisited] = useState(penCanvasVisible);
+    useEffect(() => {
+        if (!penCanvasVisible) return;
+        setPenVisited(true);
+        globalStore.set(activePenCanvasTabAtom, tabId);
+        return () => {
+            if (globalStore.get(activePenCanvasTabAtom) === tabId) globalStore.set(activePenCanvasTabAtom, "");
+        };
+    }, [penCanvasVisible, tabId]);
+    useLayoutEffect(() => {
+        if (penCanvasVisible) closeWorkflowPicker();
+        syncPersistentBlockGeometry(viewportRef.current);
+    }, [penCanvasVisible]);
+    const focusedCanvasWidget =
+        state.view === "canvas" &&
+        state.desktopLayout === "freeform" &&
+        state.scene.kind === "focused" &&
+        state.windows[state.scene.blockId]?.maximized
+            ? state.scene.blockId
+            : undefined;
     const [comfyLibraryTarget, setComfyLibraryTarget] = useState<HTMLDivElement>(null);
     const [comfyLogsTarget, setComfyLogsTarget] = useState<HTMLDivElement>(null);
     const [comfyLibrary, setComfyLibrary] = useState<ComfyLibrary>("assets");
@@ -1375,7 +1495,8 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const checkpointTimerRef = useRef<number | undefined>(undefined);
     const [measuredViewport, setViewport] = useState({ width: 1440, height: 900 });
     const [desktopWidgetsEnabled, setDesktopWidgetsEnabled] = useState(() => readDesktopWidgetsEnabled());
-    const reserveMinimizedApps = desktopWidgetsEnabled && Object.values(state.windows).some((window) => window.collapsed);
+    const reserveMinimizedApps =
+        desktopWidgetsEnabled && Object.values(state.windows).some((window) => window.collapsed);
     const viewport = useMemo(
         () => ({
             ...measuredViewport,
@@ -1392,6 +1513,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const [canvasHint, setCanvasHint] = useState("");
     const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; tabId?: string }>>([]);
     const [dragBounds, setDragBounds] = useState<Record<string, DragBounds>>({});
+    const [alignmentGuides, setAlignmentGuides] = useState<OSAlignmentGuide[]>([]);
+    const [marquee, setMarquee] = useState<DragBounds>();
+    const [marqueeSelection, setMarqueeSelection] = useState<string[]>([]);
+    const [canvasPointerCaptured, setCanvasPointerCaptured] = useState(false);
+    const marqueeRef = useRef<{
+        pointerId: number;
+        start: CanvasPoint;
+        last?: DragBounds;
+    }>(undefined);
     const [dockPreview, setDockPreview] = useState<DockPreview | undefined>(undefined);
     const [paneTakeover, setPaneTakeover] = useState<ReturnType<typeof getOSPaneTakeover>>();
     const [resizingPane, setResizingPane] = useState(false);
@@ -1401,12 +1531,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const interactionRef = useRef<
         | {
               kind: "move" | "resize" | "add";
+              freeDrag: boolean;
               edge: OSResizeEdge;
               blockId: string;
               pointerId: number;
               clientX: number;
               clientY: number;
               bounds: DragBounds;
+              group?: Record<string, DragBounds>;
+              snapTargets?: DragBounds[];
               latestBounds?: DragBounds;
               dockTarget?: DockPreview;
               takeover?: ReturnType<typeof getOSPaneTakeover>;
@@ -1419,21 +1552,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     useOSSpaceSnapshot(currentWorkspace?.oid, state, viewportRef);
     const systemModel = OSSystemModel.getInstance();
     const systemLoadState = useAtomValue(systemModel.loadStateAtom);
-    const systemSpaceId = useAtomValue(systemModel.activeSpaceIdAtom);
-    const spaceProfile = useAtomValue(systemModel.profileAtom);
-    const designCwd = useStore($currentCwd);
-    const designCwdOwner = useStore($workspaceCwdOwner);
-    const designSessionId = useStore($selectedStoredSessionId);
-    const designChangeTick = useStore($workspaceChangeTick);
-    const [designLoadStatus, setDesignLoadStatus] = useState("");
-    const designRoots = useMemo(
-        () => penProjectRoots(
-            spaceProfile.roots,
-            designCwdOwner === designSessionId ? designCwd : "",
-            getApi().getHomeDir()
-        ),
-        [spaceProfile.roots, designCwd, designCwdOwner, designSessionId]
-    );
     const systemLayerEnabled = useAtomValue(getSettingsKeyAtom("feature:systemlayer" as never)) ?? true;
     stateRef.current = state;
 
@@ -1510,9 +1628,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     }, [state.scene.kind, currentWorkspace?.oid]);
 
     const persist = useCallback(
-        (nextState: OSModeState) => {
+        (nextState: OSModeState, immediate = false) => {
             if (persistTimerRef.current != null) window.clearTimeout(persistTimerRef.current);
-            persistTimerRef.current = window.setTimeout(() => {
+            const write = () => {
                 persistTimerRef.current = undefined;
                 void RpcApi.SetMetaCommand(TabRpcClient, {
                     oref: WOS.makeORef("tab", tabId),
@@ -1532,7 +1650,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         void systemModel.saveCheckpoint(currentWorkspace.oid, tabId, makeOSRecoverySnapshot(nextState));
                     }, 1_500);
                 }
-            }, OSSaveDelayMs);
+            };
+            if (immediate) write();
+            else persistTimerRef.current = window.setTimeout(write, OSSaveDelayMs);
         },
         [currentWorkspace?.oid, systemModel, tabId]
     );
@@ -1546,23 +1666,55 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
 
     const setAndPersist = useCallback(
-        (updater: (current: OSModeState) => OSModeState) => {
-            const next = updater(stateRef.current);
+        (updater: (current: OSModeState) => OSModeState, immediate = false, fromViewSelector = false) => {
+            const current = stateRef.current;
+            const next = keepKronOSV2View(current, updater(current), fromViewSelector);
+            if (next === current) return;
             stateRef.current = next;
             setState(next);
-            persist(next);
+            persist(next, immediate);
         },
         [persist]
     );
 
+    const onPenWidgets = useCallback(({ widgets, selectedBlockIds }: PenWidgetSnapshot) => {
+        setPenLayerWidget(selectedBlockIds.length === 1 ? selectedBlockIds[0] : undefined);
+        const focusedWidget = widgets.find((widget) => widget.blockId === penActiveWidget);
+        if (focusedWidget && !focusedWidget.visible) leavePenWidget();
+        setAndPersist((current) => {
+            if (current.view !== "kronos-v2" || widgets.length === 0) return current;
+            const kronosV2Widgets = updateKronOSV2Widgets(current.kronosV2Widgets, widgets);
+            return kronosV2Widgets === current.kronosV2Widgets ? current : { ...current, kronosV2Widgets };
+        });
+    }, [leavePenWidget, penActiveWidget, setAndPersist]);
+
+    const updatePenWidget = useCallback((blockId: string, patch: Partial<PenWidgetGeometry>) => {
+        setAndPersist((current) => {
+            const widget = getKronOSV2Widget(current, blockId);
+            if (current.view !== "kronos-v2" || !widget) return current;
+            const kronosV2Widgets = updateKronOSV2Widgets(current.kronosV2Widgets, [{ ...widget, ...patch }]);
+            return kronosV2Widgets === current.kronosV2Widgets ? current : { ...current, kronosV2Widgets };
+        });
+    }, [setAndPersist]);
+
+    const setPenWidgetVisible = useCallback((blockId: string, visible: boolean) => {
+        updatePenWidget(blockId, { visible });
+        if (!visible && (penActiveWidgetRef.current === blockId || penInputWidgetRef.current === blockId)) returnToPenCanvas();
+    }, [returnToPenCanvas, updatePenWidget]);
+
+    const togglePenWidgetExpansion = useCallback((blockId: string) => {
+        if (penActiveWidget === blockId) returnToPenCanvas();
+        else setPenActiveWidget(blockId);
+    }, [penActiveWidget, returnToPenCanvas]);
+
     useEffect(() => {
         if (!designSelected) {
-            setDesignTool(undefined);
-            setDesignInspector("properties");
             return;
         }
         setTool("select");
-        setAndPersist(activateOSWorkflowCanvas);
+        setAndPersist((current) =>
+            current.view === "kronos-v2" ? current : reduceOSModeState(current, { type: "os.view.set", view: "design" })
+        );
     }, [designSelected, setAndPersist]);
 
     const hasSelectedWorkflowNode = state.objects.some(
@@ -1579,6 +1731,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     const selectCanvasObject = useCallback(
         (id: string) => {
+            setMarqueeSelection([]);
             setCanvasHint("");
             if (tool !== "connector") {
                 setAndPersist((current) => selectOSSceneEntity(current, id));
@@ -1661,10 +1814,81 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     }, [tabId, selectCanvasObject, setAndPersist]);
     const dispatch = useCallback(
         (action: OSSpatialAction) => {
+            if (stateRef.current.view === "kronos-v2") {
+                switch (action.type) {
+                    case "os.view.set":
+                    case "spatial.setWidgetPresentation":
+                        return;
+                    case "spatial.focus":
+                    case "os.window.focus":
+                    case "os.window.maximize":
+                        if (!stateRef.current.windows[action.blockId]) return;
+                        updatePenWidget(action.blockId, { visible: true });
+                        setPenActiveWidget(action.blockId);
+                        return;
+                    case "spatial.collapse":
+                    case "os.window.minimize":
+                        setPenWidgetVisible(action.blockId, false);
+                        return;
+                    case "spatial.restore":
+                    case "os.window.restore":
+                        setPenWidgetVisible(action.blockId, true);
+                        if (penActiveWidgetRef.current === action.blockId) returnToPenCanvas();
+                        return;
+                    case "spatial.move":
+                    case "os.window.move":
+                        updatePenWidget(action.blockId, { x: action.x, y: action.y });
+                        return;
+                    case "spatial.resize":
+                    case "os.window.resize":
+                        updatePenWidget(action.blockId, { width: action.width, height: action.height });
+                        return;
+                    case "spatial.dock":
+                    case "os.window.snap": {
+                        const target = getKronOSV2Widget(stateRef.current, action.targetBlockId);
+                        if (!target || target.blockId === action.blockId) return;
+                        const width = target.width / 2;
+                        const sourceX = action.side === "left" ? target.x : target.x + width;
+                        const targetX = action.side === "left" ? target.x + width : target.x;
+                        updatePenWidget(action.blockId, { x: sourceX, y: target.y, width, height: target.height, visible: true });
+                        updatePenWidget(target.blockId, { x: targetX, width });
+                        leavePenWidget();
+                        return;
+                    }
+                    case "os.window.setBounds":
+                        updatePenWidget(action.blockId, { ...action.bounds, visible: true });
+                        return;
+                    case "os.window.arrangeBounds":
+                        for (const [id, bounds] of Object.entries(action.bounds)) updatePenWidget(id, bounds);
+                        return;
+                    case "spatial.showOverview":
+                    case "os.window.overview":
+                    case "spatial.restoreScene":
+                    case "spatial.freeform":
+                        returnToPenCanvas();
+                        return;
+                }
+            }
             setAndPersist((current) => reduceOSModeState(current, action));
         },
-        [setAndPersist]
+        [leavePenWidget, returnToPenCanvas, setAndPersist, setPenWidgetVisible, updatePenWidget]
     );
+
+    const setOSView = useCallback(async (view: KronTermOSView) => {
+        const previous = stateRef.current.view;
+        if (previous === view) return true;
+        if ((previous === "design" && view === "kronos-v2") || previous === "kronos-v2") {
+            try {
+                await savePenEditorIfReady(tabId);
+            } catch (error) {
+                setCanvasHint(error instanceof Error ? error.message : "Could not save the Pen canvas.");
+                return false;
+            }
+        }
+        if (stateRef.current.view !== previous) return stateRef.current.view === view;
+        setAndPersist((current) => reduceOSModeState(current, { type: "os.view.set", view }), false, true);
+        return true;
+    }, [setAndPersist, tabId]);
 
     useEffect(() => {
         const rect = viewportRef.current?.getBoundingClientRect();
@@ -1708,19 +1932,12 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         [setAndPersist, viewport]
     );
 
-    const droppedCanvasFiles = useRef(new Map<string, File>());
-    useEffect(() => {
-        const objectIds = new Set(state.objects.map((object) => object.id));
-        for (const id of droppedCanvasFiles.current.keys()) {
-            if (!objectIds.has(id)) droppedCanvasFiles.current.delete(id);
-        }
-    }, [state.objects]);
-
     const pinResource = useCallback(
-        (resource: OSResourceReference, position?: { x?: number; y?: number }) => {
-            const camera = stateRef.current.camera;
+        (resource: OSResourceReference, position?: { x?: number; y?: number }, keepPlacement = false) => {
+            const camera = stateRef.current.view === "kronos-v2" ? penCameraRef.current : stateRef.current.camera;
             const isFile = resource.kind === "file" || resource.kind === "generated-artifact";
-            const { width, height } = isFile ? canvasFileCardSize(resource.resource) : { width: 260, height: 112 };
+            const isFolder = resource.kind === "folder";
+            const { width, height } = canvasResourceCardSize(resource);
             const object: OSCanvasObject = {
                 id: `resource-${crypto.randomUUID()}`,
                 kind: resource.kind,
@@ -1734,116 +1951,172 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             };
             setAndPersist((current) => ({
                 ...current,
-                view: "canvas",
+                view: current.view === "kronos-v2" ? "kronos-v2" : "canvas",
                 scene: { kind: "freeform" },
-                objects: [...current.objects, isFile ? placeOSCanvasObject(current, object) : object],
+                objects: [
+                    ...current.objects,
+                    !keepPlacement && (isFile || isFolder) ? placeOSCanvasObject(current, object) : object,
+                ],
                 selectedEntityId: object.id,
-            }));
+            }), true);
             return object.id;
         },
         [setAndPersist, viewport]
     );
 
-    const addPenDocument = useCallback(({ path, layers }: PenProjectDocument) => {
-        if (stateRef.current.loadedPenPaths?.includes(path)) return;
-        const bounds = spatialBoundsForRects(layers);
-        setAndPersist((current) => {
-            const next = { ...current, loadedPenPaths: [...(current.loadedPenPaths ?? []), path] };
-            if (!bounds) return next;
-            const existing = spatialBoundsForRects(current.objects.filter((object) => object.pen));
-            const x = existing ? existing.x + existing.width + 96 - bounds.x : 0;
-            const y = existing ? existing.y - bounds.y : 0;
-            return {
-                ...next,
-                objects: [...current.objects, ...layers.map((layer) => ({ ...layer, x: layer.x + x, y: layer.y + y }))],
-                selectedEntityId: current.selectedEntityId ?? layers[0].id,
-                camera: existing ? current.camera : fitSpatialViewportToBounds(
-                    bounds,
-                    viewportRef.current?.getBoundingClientRect() ?? { width: 1440, height: 900 },
-                    96,
-                    1
-                ),
-            };
-        });
-    }, [setAndPersist]);
+    const importResources = useCallback((resources: OSResourceReference[], clientPoint?: CanvasPoint) => {
+        const viewportBounds = viewportRef.current?.getBoundingClientRect();
+        if (!viewportBounds) return;
+        const v2 = stateRef.current.view === "kronos-v2";
+        const bounds = (v2 && penLivePlaneRef.current?.getBoundingClientRect()) || viewportBounds;
+        const penCamera = penCameraRef.current;
+        const camera = v2 ? {
+            ...penCamera,
+            x: penCamera.x - (bounds.left - viewportBounds.left),
+            y: penCamera.y - (bounds.top - viewportBounds.top),
+        } : stateRef.current.camera;
+        const center = clientPoint
+            ? { x: clientPoint.x - bounds.left, y: clientPoint.y - bounds.top }
+            : { x: bounds.width / 2, y: bounds.height / 2 };
+        for (const [index, resource] of resources.entries()) {
+            const { width, height } = canvasResourceCardSize(resource);
+            const inset = 12;
+            const x = Math.max(inset, Math.min(
+                center.x - width * camera.zoom / 2 + index * 22,
+                bounds.width - width * camera.zoom - inset
+            ));
+            const y = Math.max(inset, Math.min(
+                center.y - height * camera.zoom / 2 + index * 22,
+                bounds.height - height * camera.zoom - inset
+            ));
+            const point = screenRectToWorld({ x, y, width: 0, height: 0 }, camera);
+            pinResource(resource, point, true);
+        }
+    }, [pinResource]);
+
+    const openCanvasFolderEntry = useCallback(
+        (folder: OSCanvasObject, path: string, name: string) => {
+            const current = stateRef.current;
+            const existing = current.objects.find((object) => object.kind === "file" && object.resource === path);
+            if (existing) {
+                setAndPersist((state) => selectOSSceneEntity(state, existing.id));
+                return;
+            }
+            const bounds = viewportRef.current?.getBoundingClientRect();
+            const resource = canvasFileResource(path, name);
+            if (!bounds) {
+                pinResource(resource);
+                return;
+            }
+            const { width, height } = canvasResourceCardSize(resource);
+            const camera = current.view === "kronos-v2" ? penCameraRef.current : current.camera;
+            const folderRight = (folder.x + folder.width) * camera.zoom + camera.x;
+            const folderLeft = folder.x * camera.zoom + camera.x;
+            const right = folderRight + width * camera.zoom + 24 <= bounds.width;
+            importResources([resource], {
+                x: bounds.left + (right ? folderRight + 24 + width * camera.zoom / 2 : folderLeft - 24 - width * camera.zoom / 2),
+                y: bounds.top + (folder.y + height / 2) * camera.zoom + camera.y,
+            });
+        },
+        [importResources, pinResource, setAndPersist]
+    );
 
     useEffect(() => {
-        if (!designVisible) {
-            setDesignLoadStatus("");
-            return;
-        }
-        if (systemSpaceId !== currentWorkspace?.oid || systemLoadState === "restoring") return;
-        if (!designRoots.length) {
-            setDesignLoadStatus("");
-            return;
-        }
-        const controller = new AbortController();
-        const { signal } = controller;
-        let scanning = false;
-        const scan = async () => {
-            if (scanning) return;
-            scanning = true;
-            if (!stateRef.current.objects.some((object) => object.pen)) setDesignLoadStatus("Finding project designs…");
-            try {
-                const { found, failed, skipped, limited } = await loadPenProject(
-                    designRoots, stateRef.current.loadedPenPaths ?? [], signal, addPenDocument
-                );
-                if (signal.aborted) return;
-                if (failed) setDesignLoadStatus("Some project designs could not be loaded.");
-                else if (limited) setDesignLoadStatus("Search reached its project scan limit.");
-                else if (skipped) setDesignLoadStatus("Some layer types are unsupported.");
-                else if (!found && !stateRef.current.objects.some((object) => object.pen))
-                    setDesignLoadStatus("");
-                else setDesignLoadStatus("");
-            } catch {
-                if (!signal.aborted) setDesignLoadStatus("Project designs could not be loaded.");
-            } finally {
-                scanning = false;
+        const onPaste = (event: ClipboardEvent) => {
+            const canvas = viewportRef.current;
+            if (!canvas || !event.clipboardData || event.defaultPrevented || !["canvas", "kronos-v2"].includes(stateRef.current.view)) return;
+            const target = event.target;
+            if (!(target instanceof Node) || !isCanvasPasteTarget(target)) return;
+            if (!canvas.contains(target) && target !== document.body && target !== document.documentElement) return;
+            if (importCanvasTransfer(
+                event.clipboardData,
+                getApi(),
+                importResources,
+                setCanvasHint,
+                true
+            )) {
+                event.preventDefault();
             }
         };
-        void scan();
-        window.addEventListener("focus", scan);
-        return () => {
-            controller.abort();
-            window.removeEventListener("focus", scan);
-        };
-    }, [addPenDocument, currentWorkspace?.oid, designChangeTick, designRoots, designVisible, systemLoadState, systemSpaceId]);
+        document.addEventListener("paste", onPaste);
+        return () => document.removeEventListener("paste", onPaste);
+    }, [importResources]);
 
-    const createPenLayer = useCallback((
-        type: PenDrawingTool,
-        patch: Partial<OSCanvasObject> = {},
-        fill?: string,
-        geometry?: string
-    ) => {
-        const id = crypto.randomUUID();
-        const { camera } = stateRef.current;
-        const width = patch.width ?? (type === "frame" ? 480 : 160);
-        const height = patch.height ?? (type === "frame" ? 320 : type === "text" ? 32 : 96);
-        const layer: OSCanvasObject = {
-            id, kind: "pen-layer", name: type[0].toUpperCase() + type.slice(1),
-            width, height,
-            x: (viewport.width / 2 - camera.x) / camera.zoom - width / 2,
-            y: (viewport.height / 2 - camera.y) / camera.zoom - height / 2,
-            text: type === "text" || type === "note" ? "Text" : undefined,
-            ...patch,
-            pen: {
-                documentId: id,
-                type,
-                fill: fill ?? (type === "note" ? "#fee484" : type === "path" ? undefined : type === "text" ? "#ffffff" : "#6466ed"),
-                geometry: type === "path" ? geometry ?? "M0 24 L12 0 L24 24" : undefined,
-                viewBox: type === "path" ? (geometry ? `0 0 ${width} ${height}` : "0 0 24 24") : undefined,
-                stroke: type === "path" ? "#6466ed" : undefined,
-                strokeWidth: type === "path" ? 2 : undefined,
-                fontSize: type === "text" || type === "note" ? 16 : undefined,
-            },
-        };
-        setAndPersist((current) => ({
-            ...activateOSWorkflowCanvas(current),
-            objects: [...current.objects, layer],
-            selectedEntityId: id,
-        }));
-        return id;
-    }, [setAndPersist, viewport]);
+    const addPenDocument = useCallback(
+        ({ path, layers }: PenProjectDocument) => {
+            if (stateRef.current.loadedPenPaths?.includes(path)) return;
+            const bounds = spatialBoundsForRects(layers);
+            setAndPersist((current) => {
+                const next = { ...current, loadedPenPaths: [...(current.loadedPenPaths ?? []), path] };
+                if (!bounds) return next;
+                const existing = spatialBoundsForRects(current.objects.filter((object) => object.pen));
+                const x = existing ? existing.x + existing.width + 96 - bounds.x : 0;
+                const y = existing ? existing.y - bounds.y : 0;
+                return {
+                    ...next,
+                    objects: [
+                        ...current.objects,
+                        ...layers.map((layer) => ({ ...layer, x: layer.x + x, y: layer.y + y })),
+                    ],
+                    selectedEntityId: current.selectedEntityId ?? layers[0].id,
+                    camera: existing
+                        ? current.camera
+                        : fitSpatialViewportToBounds(
+                              bounds,
+                              viewportRef.current?.getBoundingClientRect() ?? { width: 1440, height: 900 },
+                              96,
+                              1
+                          ),
+                };
+            });
+        },
+        [setAndPersist]
+    );
+
+    const createPenLayer = useCallback(
+        (type: PenDrawingTool, patch: Partial<OSCanvasObject> = {}, fill?: string, geometry?: string) => {
+            const id = crypto.randomUUID();
+            const { camera } = stateRef.current;
+            const width = patch.width ?? (type === "frame" ? 480 : 160);
+            const height = patch.height ?? (type === "frame" ? 320 : type === "text" ? 32 : 96);
+            const layer: OSCanvasObject = {
+                id,
+                kind: "pen-layer",
+                name: type[0].toUpperCase() + type.slice(1),
+                width,
+                height,
+                x: (viewport.width / 2 - camera.x) / camera.zoom - width / 2,
+                y: (viewport.height / 2 - camera.y) / camera.zoom - height / 2,
+                text: type === "text" || type === "note" ? "Text" : undefined,
+                ...patch,
+                pen: {
+                    documentId: id,
+                    type,
+                    fill:
+                        fill ??
+                        (type === "note"
+                            ? "#fee484"
+                            : type === "path"
+                              ? undefined
+                              : type === "text"
+                                ? "#ffffff"
+                                : "#6466ed"),
+                    geometry: type === "path" ? (geometry ?? "M0 24 L12 0 L24 24") : undefined,
+                    viewBox: type === "path" ? (geometry ? `0 0 ${width} ${height}` : "0 0 24 24") : undefined,
+                    stroke: type === "path" ? "#6466ed" : undefined,
+                    strokeWidth: type === "path" ? 2 : undefined,
+                    fontSize: type === "text" || type === "note" ? 16 : undefined,
+                },
+            };
+            setAndPersist((current) => ({
+                ...activateOSWorkflowCanvas(current),
+                objects: [...current.objects, layer],
+                selectedEntityId: id,
+            }));
+            return id;
+        },
+        [setAndPersist, viewport]
+    );
 
     const openResource = useCallback(
         (resource: OSResourceReference | OSCanvasObject) => {
@@ -1854,8 +2127,16 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             }
             if (resource.kind === "file") {
                 const path = resource.resource;
+                if (canvasMediaUrl(path)) {
+                    getApi().openExternal(path);
+                    return;
+                }
                 const media = classifyMedia({ path, mimetype: undefined, isdir: false });
-                if (!["image", "video", "audio"].includes(media) && !getModelPreviewFormat(path) && !/\.pdf$/i.test(path)) {
+                if (
+                    !["image", "video", "audio"].includes(media) &&
+                    !getModelPreviewFormat(path) &&
+                    !/\.pdf$/i.test(path)
+                ) {
                     openKrontermFile(path);
                     return;
                 }
@@ -1922,8 +2203,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 }
                 return {
                     ...current,
-                    objects: current.objects.filter((object) => ![object.id, object.fromObjectId, object.toObjectId]
-                        .some((id) => removed.has(id))),
+                    objects: current.objects.filter(
+                        (object) => ![object.id, object.fromObjectId, object.toObjectId].some((id) => removed.has(id))
+                    ),
                     selectedEntityId: removed.has(current.selectedEntityId) ? undefined : current.selectedEntityId,
                 };
             });
@@ -1940,17 +2222,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         ];
         const bounds = spatialBoundsForRects(rects);
         if (!bounds) return;
-        setAndPersist((current) => ({ ...current, camera: fitSpatialViewportToBounds(bounds, viewport, 120, 1) }));
+        const visibleViewport = viewport;
+        const padding = Math.min(120, visibleViewport.width / 4, visibleViewport.height / 4);
+        setAndPersist((current) => ({
+            ...current,
+            camera: fitSpatialViewportToBounds(bounds, visibleViewport, padding, 1),
+        }));
     }, [setAndPersist, viewport]);
 
     useEffect(() => {
-        const slot = () => setSelectorToolsSlot(getCanvasToolbarSlot());
-        window.addEventListener("kronterm:canvas-toolbar-slot", slot);
-        slot();
-        const ownership = () => {
-            setSelectorOwnsToolbar(document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-owner"));
-            setSelectorExpanded(document.documentElement.hasAttribute("data-kronterm-canvas-toolbar-expanded"));
-        };
         const action = (event: Event) => {
             const current = stateRef.current;
             const rect = rootRef.current?.getBoundingClientRect();
@@ -1994,18 +2274,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             if (button) button.click();
             else setCanvasHint("Open a workflow to use this control.");
         };
-        window.addEventListener("kronterm:canvas-toolbar-owner", ownership);
         window.addEventListener("kronterm:canvas-toolbar-action", action);
-        ownership();
         return () => {
-            window.removeEventListener("kronterm:canvas-toolbar-slot", slot);
-            window.removeEventListener("kronterm:canvas-toolbar-owner", ownership);
             window.removeEventListener("kronterm:canvas-toolbar-action", action);
         };
     }, [addObject, fitAll, tabId, workflowToolsTarget]);
 
     const focusBlock = useCallback(
         (blockId: string) => {
+            setMarqueeSelection([]);
             if (tool === "connector") {
                 selectCanvasObject(blockId);
                 return;
@@ -2120,7 +2397,8 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             if (!detail?.blockId || (detail.tabId && detail.tabId !== tabId)) return;
             pendingSessionFocus.current = undefined;
             // CreateBlock can return before the new block has an OS window.
-            if (!reveal(detail.blockId) && detail.tabId) pendingSessionFocus.current = { tabId, blockId: detail.blockId };
+            if (!reveal(detail.blockId) && detail.tabId)
+                pendingSessionFocus.current = { tabId, blockId: detail.blockId };
         };
         window.addEventListener(OSSessionFocusEvent, focusSession);
         return () => window.removeEventListener(OSSessionFocusEvent, focusSession);
@@ -2169,37 +2447,45 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             const current = stateRef.current;
             const window = current.windows[blockId];
             if (!window) return false;
-            const cameraScale = current.camera.zoom || 1;
+            const usePen = current.view === "kronos-v2" && penViewport != null;
+            const camera = usePen ? penCameraRef.current : current.camera;
+            const bounds = usePen ? getKronOSV2Widget(current, blockId) : window.bounds;
             const currentScreen = {
-                x: window.bounds.x * cameraScale + current.camera.x,
-                y: window.bounds.y * cameraScale + current.camera.y,
-                width: window.bounds.width * cameraScale,
-                height: window.bounds.height * cameraScale,
+                x: bounds.x * camera.zoom + camera.x,
+                y: bounds.y * camera.zoom + camera.y,
+                width: bounds.width * camera.zoom,
+                height: bounds.height * camera.zoom,
             };
-            const screen = computeOSPlacementBounds(placement, osWorkArea(), currentScreen);
+            const screen = computeOSPlacementBounds(placement, usePen ? penViewport : osWorkArea(), currentScreen);
             dispatch({ type: "os.view.set", view: "canvas" });
-            dispatch({ type: "os.window.setBounds", blockId, bounds: screenRectToWorld(screen, current.camera) });
+            dispatch({ type: "os.window.setBounds", blockId, bounds: screenRectToWorld(screen, camera) });
+            if (usePen) leavePenWidget();
             return true;
         },
-        [dispatch, osWorkArea]
+        [dispatch, leavePenWidget, osWorkArea, penViewport]
     );
 
     const arrangeWindows = useCallback(
         (arrangement: OSWindowArrangement) => {
             const current = stateRef.current;
-            const visible = current.zOrder.filter((id) => current.windows[id] && !current.windows[id].collapsed);
+            const usePen = current.view === "kronos-v2" && penViewport != null;
+            const camera = usePen ? penCameraRef.current : current.camera;
+            const visible = current.zOrder.filter((id) => usePen
+                ? getKronOSV2Widget(current, id)?.visible
+                : current.windows[id] && !current.windows[id].collapsed);
             if (visible.length === 0) return 0;
-            const rects = computeOSArrangement(arrangement, visible.length, osWorkArea());
+            const rects = computeOSArrangement(arrangement, visible.length, usePen ? penViewport : osWorkArea());
             dispatch({ type: "os.view.set", view: "canvas" });
             dispatch({
                 type: "os.window.arrangeBounds",
                 bounds: Object.fromEntries(
-                    visible.map((id, index) => [id, screenRectToWorld(rects[index], current.camera)])
+                    visible.map((id, index) => [id, screenRectToWorld(rects[index], camera)])
                 ),
             });
+            if (usePen) leavePenWidget();
             return visible.length;
         },
-        [dispatch, osWorkArea]
+        [dispatch, leavePenWidget, osWorkArea, penViewport]
     );
 
     const launchDockPin = useCallback(
@@ -2240,10 +2526,138 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         submitToHermes(text, "new");
     }, []);
 
+    const expandCanvasWidget = useCallback(
+        (blockId: string) => {
+            setTool("select");
+            dispatch({ type: "os.window.maximize", blockId });
+        },
+        [dispatch]
+    );
+
+    const getWidgetMenuItems = useCallback(
+        (blockId: string, sizeAction?: ContextMenuItem): ContextMenuItem[] => {
+            const model = getBlockComponentModel(blockId)?.viewModel;
+            const current = stateRef.current;
+            const otherWidgets = descriptors.filter((item) => item.blockId !== blockId);
+            const browser = model instanceof WebViewModel ? model : null;
+            const items: ContextMenuItem[] = [];
+            if (browser) {
+                const grabIntent = globalStore.get(browser.grabIntentAtom);
+                items.push({
+                    label: "Browser Tools",
+                    submenu: [
+                        {
+                            label: "Back",
+                            enabled: globalStore.get(browser.canGoBack),
+                            click: () => browser.handleBack(),
+                        },
+                        {
+                            label: "Forward",
+                            enabled: globalStore.get(browser.canGoForward),
+                            click: () => browser.handleForward(),
+                        },
+                        { label: "Reload Page", click: () => browser.handleRefresh() },
+                        { label: "Find in Page…", click: () => browser.openFind() },
+                        { label: "Copy Page URL", click: () => browser.copyUrlToClipboard() },
+                        { type: "separator" },
+                        {
+                            label: "Inspect Element",
+                            type: "checkbox",
+                            checked: grabIntent === "grab",
+                            click: () => browser.setGrabIntent(grabIntent === "grab" ? null : "grab"),
+                        },
+                        {
+                            label: "Annotate Page",
+                            type: "checkbox",
+                            checked: grabIntent === "annotate",
+                            click: () => browser.setGrabIntent(grabIntent === "annotate" ? null : "annotate"),
+                        },
+                    ],
+                });
+            }
+            if (current.view === "kronos-v2") {
+                items.push({
+                    label: "Widget Tools",
+                    submenu: [
+                        sizeAction ?? { label: "Expand Widget", click: () => togglePenWidgetExpansion(blockId) },
+                        { label: "Return to Canvas", click: returnToPenCanvas },
+                        { label: "Copy Widget ID", click: () => void navigator.clipboard.writeText(blockId) },
+                        { type: "separator" },
+                        { label: "Minimize Widget", click: () => setPenWidgetVisible(blockId, false) },
+                        { label: "Close Widget", click: () => handleClose(blockId) },
+                    ],
+                });
+                return items;
+            }
+            items.push(
+                {
+                    label: "Widget Tools",
+                    submenu: [
+                        sizeAction ?? { label: "Expand Widget", click: () => expandCanvasWidget(blockId) },
+                        {
+                            label: "Group as Tabs With",
+                            enabled: otherWidgets.length > 0,
+                            submenu: otherWidgets.map((item) => ({
+                                label: item.title,
+                                click: () => dispatch({ type: "os.tabs.group", blockId, targetBlockId: item.blockId }),
+                            })),
+                        },
+                        {
+                            label: "Detach Tab",
+                            enabled: !!getOSTabGroup(current, blockId),
+                            click: () => dispatch({ type: "os.tabs.detach", blockId }),
+                        },
+                        {
+                            label: "Dock Left",
+                            enabled: otherWidgets.length > 0,
+                            click: () => dockBlock(blockId, "left"),
+                        },
+                        {
+                            label: "Dock Right",
+                            enabled: otherWidgets.length > 0,
+                            click: () => dockBlock(blockId, "right"),
+                        },
+                        { label: "Copy Widget ID", click: () => void navigator.clipboard.writeText(blockId) },
+                        { type: "separator" },
+                        { label: "Minimize Widget", click: () => dispatch({ type: "spatial.collapse", blockId }) },
+                        { label: "Close Widget", click: () => handleClose(blockId) },
+                    ],
+                },
+                {
+                    label: "Move & Resize",
+                    submenu: [
+                        { label: "Left Half", sublabel: "⌃⌥←", click: () => placeWindow(blockId, "left") },
+                        { label: "Right Half", sublabel: "⌃⌥→", click: () => placeWindow(blockId, "right") },
+                        { label: "Top Half", click: () => placeWindow(blockId, "top") },
+                        { label: "Bottom Half", click: () => placeWindow(blockId, "bottom") },
+                        { type: "separator" },
+                        { label: "Fill Canvas", sublabel: "⌃⌥↑", click: () => placeWindow(blockId, "fill") },
+                        { label: "Center Widget", sublabel: "⌃⌥C", click: () => placeWindow(blockId, "center") },
+                        { label: "Tile All Widgets", click: () => arrangeWindows("tile") },
+                    ],
+                }
+            );
+            return items;
+        },
+        [
+            arrangeWindows, descriptors, dispatch, dockBlock, expandCanvasWidget, handleClose, placeWindow,
+            returnToPenCanvas, setPenWidgetVisible, togglePenWidgetExpansion,
+        ]
+    );
+
+    const showWindowContextMenu = useCallback(
+        (event: React.MouseEvent, blockId: string, sizeAction?: ContextMenuItem) => {
+            ContextMenuModel.getInstance().showContextMenu(getWidgetMenuItems(blockId, sizeAction), event);
+        },
+        [getWidgetMenuItems]
+    );
+
     const showDesktopContextMenu = useCallback(
         (event: React.MouseEvent) => {
             const current = stateRef.current;
             const openCount = current.zOrder.filter((id) => !current.windows[id]?.collapsed).length;
+            const onCanvas = current.view === "canvas" && current.scene.kind === "freeform";
+            const selected = current.windows[current.selectedEntityId];
             ContextMenuModel.getInstance().showContextMenu(
                 [
                     {
@@ -2255,6 +2669,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             { label: "KronOS Agent", click: () => hermesSurfaceController.requestOpenChat() },
                         ],
                     },
+                    ...(onCanvas && selected && !selected.collapsed
+                        ? [{ type: "separator" as const }, ...getWidgetMenuItems(current.selectedEntityId)]
+                        : []),
                     { type: "separator" },
                     { label: "Tile Windows", enabled: openCount > 0, click: () => arrangeWindows("tile") },
                     { label: "Cascade Windows", enabled: openCount > 0, click: () => arrangeWindows("cascade") },
@@ -2270,54 +2687,35 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         checked: desktopWidgetsEnabled,
                         click: toggleDesktopWidgets,
                     },
+                    { label: "Fit All on Canvas", visible: onCanvas, click: fitAll },
+                    {
+                        label: "Show Canvas Tools",
+                        type: "checkbox",
+                        visible: onCanvas && systemLayerEnabled,
+                        checked: canvasToolsOpen,
+                        click: () => setCanvasToolsOpen((open) => !open),
+                    },
+                    {
+                        label: "Grab Element",
+                        visible: onCanvas,
+                        click: () => window.dispatchEvent(new Event("kronterm:workspace-picker-activate")),
+                    },
                     { label: "Search…", click: () => toggleCommandCenter() },
                 ],
                 event
             );
         },
-        [arrangeWindows, desktopWidgetsEnabled, dispatch, handleCreateBlock, toggleDesktopWidgets]
-    );
-
-    const showWindowContextMenu = useCallback(
-        (event: React.MouseEvent, blockId: string, sizeAction?: ContextMenuItem) => {
-            ContextMenuModel.getInstance().showContextMenu(
-                [
-                    {
-                        label: "Group as Tabs With",
-                        submenu: descriptors
-                            .filter((item) => item.blockId !== blockId)
-                            .map((item) => ({
-                                label: item.title,
-                                click: () => dispatch({ type: "os.tabs.group", blockId, targetBlockId: item.blockId }),
-                            })),
-                    },
-                    {
-                        label: "Detach Tab",
-                        enabled: !!getOSTabGroup(stateRef.current, blockId),
-                        click: () => dispatch({ type: "os.tabs.detach", blockId }),
-                    },
-                    {
-                        label: "Move & Resize",
-                        submenu: [
-                            { label: "Left Half", sublabel: "⌃⌥←", click: () => placeWindow(blockId, "left") },
-                            { label: "Right Half", sublabel: "⌃⌥→", click: () => placeWindow(blockId, "right") },
-                            { label: "Top Half", click: () => placeWindow(blockId, "top") },
-                            { label: "Bottom Half", click: () => placeWindow(blockId, "bottom") },
-                            { type: "separator" },
-                            { label: "Fill", sublabel: "⌃⌥↑", click: () => placeWindow(blockId, "fill") },
-                            { label: "Center", sublabel: "⌃⌥C", click: () => placeWindow(blockId, "center") },
-                        ],
-                    },
-                    { label: "Tile All Windows", click: () => arrangeWindows("tile") },
-                    { type: "separator" },
-                    ...(sizeAction ? [sizeAction] : []),
-                    { label: "Minimize", click: () => dispatch({ type: "spatial.collapse", blockId }) },
-                    { label: "Close Window", click: () => handleClose(blockId) },
-                ],
-                event
-            );
-        },
-        [arrangeWindows, descriptors, dispatch, handleClose, placeWindow]
+        [
+            arrangeWindows,
+            canvasToolsOpen,
+            desktopWidgetsEnabled,
+            dispatch,
+            fitAll,
+            getWidgetMenuItems,
+            handleCreateBlock,
+            systemLayerEnabled,
+            toggleDesktopWidgets,
+        ]
     );
 
     useEffect(() => {
@@ -2339,6 +2737,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             // ⌃⌥ + arrow is the common desktop tiling chord and rarely bound by terminals or pages.
             if (!event.ctrlKey || !event.altKey || event.metaKey || event.shiftKey) return;
             const current = stateRef.current;
+            if (current.view === "kronos-v2") return;
             const target = current.selectedEntityId;
             if (!target || !current.windows[target]) return;
             const placement: OSWindowPlacement | undefined =
@@ -2393,7 +2792,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         const layoutState = paneTakeover ? reduceOSModeState(state, paneTakeover) : state;
         return Object.fromEntries(
             descriptors.map((block) => {
-                const computed = computeOSWindowLayout(layoutState, block.blockId, block.view, viewport, compactDeviceBlocks);
+                const computed = computeOSWindowLayout(
+                    layoutState,
+                    block.blockId,
+                    block.view,
+                    viewport,
+                    compactDeviceBlocks
+                );
                 const dragged = dragBounds[block.blockId];
                 if (!dragged) return [block.blockId, computed];
                 const bounds = paneTakeover
@@ -2406,17 +2811,157 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         );
     }, [compactDeviceBlocks, descriptors, dragBounds, paneTakeover, state, viewport]);
 
+    const penWidgets = useMemo<PenLiveWidget[]>(() => {
+        if (!kronosV2) return undefined;
+        return descriptors.flatMap(({ blockId, title, resolved }) => {
+            const widget = getKronOSV2Widget(state, blockId);
+            return resolved && widget ? [{ ...widget, title }] : [];
+        });
+    }, [kronosV2, descriptors, state.windows, state.kronosV2Widgets]);
+    const penWidgetsById = useMemo(() => new Map(penWidgets?.map((widget) => [widget.blockId, widget])), [penWidgets]);
+    const penFocusedWidget = !penPresentation.active && penWidgetsById.get(penActiveWidget)?.visible
+        ? penActiveWidget
+        : undefined;
+    const followPenAgentPointer = (point: { x: number; y: number }) => {
+        if (penAgentFollowPaused.current || !penViewport || penFocusedWidget || penPresentation.active || penOverlayOpen) return;
+        const canvas = viewportRef.current?.getBoundingClientRect();
+        if (!canvas) return;
+        const centerX = penViewport.x + penViewport.width / 2;
+        const centerY = penViewport.y + penViewport.height / 2;
+        const dx = centerX - (point.x - canvas.x);
+        const dy = centerY - (point.y - canvas.y);
+        if (Math.abs(dx) < penViewport.width * 0.15 && Math.abs(dy) < penViewport.height * 0.15) return;
+        const camera = penCameraRef.current;
+        setPenRequestedCamera({ x: camera.x + dx, y: camera.y + dy, zoom: camera.zoom });
+    };
+    const penSlideWidget = penPresentation.active && penWidgetsById.get(penPresentation.blockId)?.visible
+        ? penPresentation.blockId
+        : undefined;
+    const penLivePlaneVisible = !!penViewport && penWidgetsReady && !penOverlayOpen &&
+        (!penPresentation.active || !!penSlideWidget);
+    const workflowGraphVisible = workflowCanvasVisible && (!kronosV2 || (penLivePlaneVisible && !penFocusedWidget && !penPresentation.active));
+    const renderCamera = useMemo(() => {
+        if (!kronosV2 || !penViewport) return state.camera;
+        return {
+            ...penWorkflowCamera,
+            x: penWorkflowCamera.x - penViewport.x,
+            y: penWorkflowCamera.y - penViewport.y,
+        };
+    }, [kronosV2, penViewport, penWorkflowCamera, state.camera]);
+    const moveWorkflowCamera = (intent: Parameters<typeof resolveWorkflowCameraIntent>[0]) => {
+        if (kronosV2 && penViewport) {
+            const current = penCameraRef.current;
+            if (intent.fitBounds) {
+                const localCamera = { ...current, x: current.x - penViewport.x, y: current.y - penViewport.y };
+                const fitted = resolveWorkflowCameraIntent(intent, localCamera, penViewport);
+                if (fitted !== localCamera) {
+                    setPenRequestedCamera({ ...fitted, x: fitted.x + penViewport.x, y: fitted.y + penViewport.y });
+                }
+            } else {
+                setPenRequestedCamera(resolveWorkflowCameraIntent(intent, current, penViewport));
+            }
+            return;
+        }
+        setAndPersist((current) => ({
+            ...current,
+            camera: resolveWorkflowCameraIntent(intent, current.camera, viewport),
+        }));
+    };
+
+    useLayoutEffect(() => {
+        if (kronosV2) syncPersistentBlockGeometry(viewportRef.current);
+    }, [kronosV2, penViewport, penWidgets, penLivePlaneVisible, penFocusedWidget, penSlideWidget, state.objects, state.sceneOrder]);
+
+    useEffect(() => {
+        if (!kronosV2 || !penLivePlaneVisible || penDidFit.current) return;
+        const visibleWidgets = penWidgets.filter((widget) => widget.visible);
+        if (!visibleWidgets.length) return;
+        penDidFit.current = true;
+        setPenRequestedCamera(fitSpatialViewportToBounds(spatialBoundsForRects(visibleWidgets), penViewport, 48, 1));
+    }, [kronosV2, penLivePlaneVisible, penViewport, penWidgets]);
+
+    const canvasRects = useMemo(
+        () =>
+            Object.fromEntries([
+                ...Object.entries(windowLayouts)
+                    .filter(([, layout]) => layout.presentation === "freeform" && layout.opacity > 0)
+                    .map(([id, layout]) => [id, layout.bounds] as const),
+                ...state.objects
+                    .filter(({ kind }) => kind !== "connector" && kind !== "workflow-node")
+                    .map((object) => [object.id, object] as const),
+            ]),
+        [state.objects, windowLayouts]
+    );
+    const multiSelection = kronOSCanvasVisible && marqueeSelection.includes(state.selectedEntityId)
+        ? marqueeSelection.filter((id) => canvasRects[id] != null)
+        : [];
+    const highlightedSelection = marquee
+        ? osMarqueeSelection(screenRectToWorld(marquee, state.camera), canvasRects)
+        : multiSelection.length > 1
+          ? multiSelection
+          : [];
+
+    useEffect(() => {
+        if (kronOSCanvasVisible && tool === "select") return;
+        if (marqueeRef.current) setCanvasPointerCaptured(false);
+        marqueeRef.current = undefined;
+        setMarquee(undefined);
+        setMarqueeSelection([]);
+    }, [kronOSCanvasVisible, tool]);
+
+    const [penSystemControlsSlot, setPenSystemControlsSlot] = useState<HTMLElement | null>(null);
+    const [penRenderControlsSlot, setPenRenderControlsSlot] = useState<HTMLElement | null>(null);
+    const attachPenRenderControls = useCallback((slot: HTMLElement | null) => {
+        setPenRenderControlsSlot(slot);
+        if (slot) setComfyWorkflowOpen(true);
+    }, [setComfyWorkflowOpen]);
+    const penContext = useMemo(
+        () => ({
+            workspaceId: tabId,
+            workspaceName: currentWorkspace?.name ?? "Workspace",
+            spaces: workspaces.map((workspace) => ({
+                id: workspace.tabId || workspace.id,
+                title: workspace.name,
+                previewUrl: getOSSpaceSnapshot(workspace.id),
+            })),
+        }),
+        [tabId, currentWorkspace?.name, workspaces]
+    );
+
+    useEffect(() => {
+        if (!focusedCanvasWidget) return;
+        const escape = (event: KeyboardEvent) => {
+            if (event.key !== "Escape" || event.defaultPrevented) return;
+            if (document.documentElement.hasAttribute("data-kronterm-selector-active")) return;
+            const target = event.target instanceof Element ? event.target : null;
+            const liveHost = target?.closest<HTMLElement>("[data-live-blockid]");
+            if (
+                target !== document.body &&
+                !rootRef.current?.contains(target) &&
+                liveHost?.dataset.liveBlockid !== focusedCanvasWidget &&
+                liveHost?.style.display !== "none"
+            )
+                return;
+            event.preventDefault();
+            event.stopPropagation();
+            dispatch({ type: "os.window.restore", blockId: focusedCanvasWidget });
+        };
+        window.addEventListener("keydown", escape);
+        return () => window.removeEventListener("keydown", escape);
+    }, [dispatch, focusedCanvasWidget]);
+
     const beginWindowInteraction = useCallback(
         (
             event: ReactPointerEvent,
             blockId: string,
-            layout: OSWindowLayout,
+            layout: Pick<OSWindowLayout, "bounds" | "presentation">,
             kind: "move" | "resize" | "add",
             edge: OSResizeEdge = "se"
         ) => {
             if (
                 event.button !== 0 ||
                 (kind !== "add" &&
+                    !(event.target as HTMLElement).closest("[data-os-window-label]") &&
                     (event.target as HTMLElement).closest(
                         "button, input, textarea, select, a, [contenteditable='true'], [role='button']"
                     ))
@@ -2429,21 +2974,36 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             }
             event.preventDefault();
             event.stopPropagation();
-            if (kind === "resize") focusBlock(blockId);
-            const scale = stateRef.current.scene.kind === "freeform" ? stateRef.current.camera.zoom : 1;
+            const current = stateRef.current;
+            const onCanvas = current.view === "canvas" && current.scene.kind === "freeform";
+            const group = onCanvas && kind === "move" && multiSelection.length > 1 && multiSelection.includes(blockId)
+                ? Object.fromEntries(multiSelection.map((id) => [id, canvasRects[id]]))
+                : undefined;
+            if (!group && (kind === "resize" || (kind === "move" && layout.presentation === "freeform"))) {
+                focusBlock(blockId);
+            }
+            const canSnap = onCanvas && kind !== "add" && !(kind === "resize" && compactDeviceBlocks.has(blockId));
             interactionRef.current = {
                 kind,
+                freeDrag: !!group || (event.currentTarget as HTMLElement).hasAttribute("data-os-free-drag"),
                 edge,
                 blockId,
                 pointerId: event.pointerId,
                 clientX: event.clientX,
                 clientY: event.clientY,
-                bounds: layout.bounds,
-                scale,
+                bounds: group ? spatialBoundsForRects(Object.values(group)) : layout.bounds,
+                group,
+                snapTargets: canSnap
+                    ? Object.entries(canvasRects)
+                          .filter(([id]) => id !== blockId && !group?.[id])
+                          .map(([, rect]) => rect)
+                    : undefined,
+                scale: current.scene.kind === "freeform" ? current.camera.zoom : 1,
             };
             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+            if (onCanvas) setCanvasPointerCaptured(true);
         },
-        [focusBlock, tool, selectCanvasObject]
+        [canvasRects, compactDeviceBlocks, focusBlock, multiSelection, tool, selectCanvasObject]
     );
 
     const handleRootPointerMove = useCallback(
@@ -2452,14 +3012,26 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             if (interaction?.pointerId === event.pointerId) {
                 const dx = (event.clientX - interaction.clientX) / interaction.scale;
                 const dy = (event.clientY - interaction.clientY) / interaction.scale;
-                if (!interaction.latestBounds && Math.hypot(dx, dy) < 4) return;
-                const bounds =
+                if (!interaction.latestBounds && Math.hypot(dx, dy) * interaction.scale < 4) return;
+                const proposed =
                     interaction.kind !== "resize"
                         ? { ...interaction.bounds, x: interaction.bounds.x + dx, y: interaction.bounds.y + dy }
                         : resizeBoundsFromEdge(interaction.bounds, interaction.edge, dx, dy);
+                const { bounds, guides } = interaction.snapTargets && !event.altKey
+                    ? snapOSCanvasBounds(
+                          proposed,
+                          interaction.snapTargets,
+                          interaction.scale,
+                          { width: OSWindowMinWidth, height: OSWindowMinHeight },
+                          interaction.kind === "resize" ? interaction.edge : undefined
+                      )
+                    : { bounds: proposed, guides: [] };
                 interaction.latestBounds = bounds;
-                setDragBounds((current) => ({ ...current, [interaction.blockId]: bounds }));
-                if (interaction.kind !== "resize") {
+                const moved = interaction.group
+                    ? translateOSCanvasRects(interaction.group, bounds.x - interaction.bounds.x, bounds.y - interaction.bounds.y)
+                    : { [interaction.blockId]: bounds };
+                setDragBounds((current) => ({ ...current, ...moved }));
+                if (interaction.kind !== "resize" && !interaction.freeDrag) {
                     const rootBounds = viewportRef.current?.getBoundingClientRect();
                     const pointer = {
                         x: event.clientX - (rootBounds?.left ?? 0),
@@ -2488,7 +3060,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                               )
                             : undefined;
                     setPaneTakeover(interaction.takeover);
-                    const hit = interaction.takeover ? undefined : findOSDockHitTarget(interaction.blockId, pointer, layouts);
+                    const hit = interaction.takeover
+                        ? undefined
+                        : findOSDockHitTarget(interaction.blockId, pointer, layouts);
                     const target = hit && descriptors.find((descriptor) => descriptor.blockId === hit.targetBlockId);
                     interaction.dockTarget =
                         hit && target
@@ -2502,6 +3076,17 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             : undefined;
                     setDockPreview(interaction.dockTarget);
                 }
+                setAlignmentGuides(interaction.takeover || interaction.dockTarget ? [] : guides);
+                return;
+            }
+            const selecting = marqueeRef.current;
+            if (selecting?.pointerId === event.pointerId) {
+                const rect = viewportRef.current.getBoundingClientRect();
+                const cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+                const selection = osMarqueeBounds(selecting.start, cursor);
+                if (!selecting.last && Math.hypot(selection.width, selection.height) < 4) return;
+                selecting.last = selection;
+                setMarquee(selection);
                 return;
             }
             const pan = panRef.current;
@@ -2523,7 +3108,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         (event: ReactPointerEvent<HTMLDivElement>) => {
             const interaction = interactionRef.current;
             if (interaction?.pointerId === event.pointerId) {
-                const finalBounds = event.type === "pointercancel" ? undefined : interaction.latestBounds;
+                const finalBounds = event.type === "pointerup" ? interaction.latestBounds : undefined;
                 const dock = interaction.dockTarget;
                 if (finalBounds && interaction.takeover) {
                     dispatch(interaction.takeover);
@@ -2534,16 +3119,44 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         targetBlockId: dock.targetBlockId,
                         side: dock.side,
                     });
+                } else if (finalBounds && interaction.group) {
+                    const moved = translateOSCanvasRects(
+                        interaction.group,
+                        finalBounds.x - interaction.bounds.x,
+                        finalBounds.y - interaction.bounds.y
+                    );
+                    setAndPersist((current) => ({
+                        ...current,
+                        windows: Object.fromEntries(
+                            Object.entries(current.windows).map(([id, widget]) => [
+                                id,
+                                moved[id] ? {
+                                    ...widget,
+                                    provisional: undefined,
+                                    bounds: { ...widget.bounds, x: moved[id].x, y: moved[id].y },
+                                } : widget,
+                            ])
+                        ),
+                        objects: current.objects.map((object) =>
+                            moved[object.id] ? { ...object, x: moved[object.id].x, y: moved[object.id].y } : object
+                        ),
+                    }));
                 } else if (finalBounds && interaction.kind === "move") {
                     setAndPersist((current) => {
-                        const detached = reduceOSModeState(current, { type: "spatial.detach", blockId: interaction.blockId });
+                        const detached = reduceOSModeState(current, {
+                            type: "spatial.detach",
+                            blockId: interaction.blockId,
+                        });
                         const keepSplit = detached !== current && detached.scene.kind === "grouped";
                         const next = keepSplit
                             ? detached
                             : {
                                   ...selectOSSceneEntity(detached, interaction.blockId),
                                   scene: { kind: "freeform" } as const,
-                                  zOrder: [...detached.zOrder.filter((id) => id !== interaction.blockId), interaction.blockId],
+                                  zOrder: [
+                                      ...detached.zOrder.filter((id) => id !== interaction.blockId),
+                                      interaction.blockId,
+                                  ],
                               };
                         return reduceOSModeState(next, {
                             type: "spatial.move",
@@ -2567,38 +3180,85 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             y: finalBounds.y,
                         });
                     });
-                } else if (!finalBounds && event.type !== "pointercancel") {
+                } else if (!finalBounds && event.type === "pointerup") {
                     if (interaction.kind === "add") {
                         const current = stateRef.current;
                         const targetBlockId =
-                            current.scene.kind === "grouped" ? current.groups[current.scene.groupId]?.blockIds.at(-1) : undefined;
+                            current.scene.kind === "grouped"
+                                ? current.groups[current.scene.groupId]?.blockIds.at(-1)
+                                : undefined;
                         if (targetBlockId) {
-                            dispatch({ type: "spatial.dock", blockId: interaction.blockId, targetBlockId, side: "right" });
+                            dispatch({
+                                type: "spatial.dock",
+                                blockId: interaction.blockId,
+                                targetBlockId,
+                                side: "right",
+                            });
                         }
-                    } else if (interaction.kind === "move") {
+                    } else if (
+                        interaction.kind === "move" &&
+                        stateRef.current.selectedEntityId !== interaction.blockId
+                    ) {
                         focusBlock(interaction.blockId);
                     }
                 }
                 interactionRef.current = undefined;
+                setCanvasPointerCaptured(false);
+                setAlignmentGuides([]);
                 setDockPreview(undefined);
                 setPaneTakeover(undefined);
                 setDragBounds((current) => {
                     const next = { ...current };
-                    delete next[interaction.blockId];
+                    for (const id of interaction.group ? Object.keys(interaction.group) : [interaction.blockId]) {
+                        delete next[id];
+                    }
                     return next;
                 });
+            }
+            const selecting = marqueeRef.current;
+            if (selecting?.pointerId === event.pointerId) {
+                marqueeRef.current = undefined;
+                setCanvasPointerCaptured(false);
+                setMarquee(undefined);
+                if (event.type === "pointerup") {
+                    const viewportBounds = viewportRef.current.getBoundingClientRect();
+                    const end = { x: event.clientX - viewportBounds.left, y: event.clientY - viewportBounds.top };
+                    const bounds = selecting.last && osMarqueeBounds(selecting.start, end);
+                    const ids = bounds
+                        ? osMarqueeSelection(screenRectToWorld(bounds, stateRef.current.camera), canvasRects)
+                        : [];
+                    const ranks = getOSSceneZIndices(stateRef.current);
+                    const primary = ids.reduce<string>(
+                        (front, id) => (front == null || ranks[id] > ranks[front] ? id : front),
+                        undefined
+                    );
+                    setMarqueeSelection(ids);
+                    setAndPersist((current) => ({ ...current, selectedEntityId: primary }));
+                }
             }
             if (panRef.current?.pointerId === event.pointerId) {
                 panRef.current = undefined;
                 persist(stateRef.current);
             }
         },
-        [dispatch, focusBlock, persist, setAndPersist]
+        [canvasRects, dispatch, focusBlock, persist, setAndPersist]
     );
 
     const handleWheel = useCallback(
         (event: ReactWheelEvent<HTMLDivElement>) => {
-            if (event.defaultPrevented || workflowOwnsWheel(event.nativeEvent.composedPath())) return;
+            const path = event.nativeEvent.composedPath();
+            if (
+                event.defaultPrevented ||
+                workflowOwnsWheel(path) ||
+                path.some(
+                    (node) =>
+                        node instanceof Element &&
+                        node.matches(
+                            '[data-os-hermes-settings], [role="dialog"], [role="menu"], .os-files-inspector, .os-agent-sidebar, .os-space-overview'
+                        )
+                )
+            )
+                return;
             if (osWidgetOwnsWheel(event.nativeEvent.composedPath(), event.ctrlKey || event.metaKey, tool === "hand"))
                 return;
             if (stateRef.current.scene.kind === "overview") {
@@ -2610,7 +3270,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 dispatch({ type: "spatial.showOverview", selectedBlockId: next });
                 return;
             }
-            if (stateRef.current.scene.kind !== "freeform") return;
+            if (stateRef.current.view !== "canvas" || stateRef.current.scene.kind !== "freeform") return;
             event.preventDefault();
             if (event.ctrlKey || event.metaKey) {
                 const rect = viewportRef.current?.getBoundingClientRect();
@@ -2643,6 +3303,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             const viewportElement = viewportRef.current;
             if (
                 !viewportElement ||
+                current.view !== "canvas" ||
                 current.scene.kind !== "freeform" ||
                 (event.button !== 1 && (tool !== "hand" || event.button !== 0))
             )
@@ -2662,8 +3323,35 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         [tool]
     );
     const surfaceInput = useMemo(
-        () => ({ capturePointer: tool === "hand", onPointerDownCapture: captureCanvasPan, onWheel: handleWheel }),
-        [captureCanvasPan, handleWheel, tool]
+        () => ({
+            passThrough: canvasPointerCaptured,
+            capturePointer: tool === "hand",
+            onPointerDownCapture: captureCanvasPan,
+            onWheel: handleWheel,
+        }),
+        [canvasPointerCaptured, captureCanvasPan, handleWheel, tool]
+    );
+
+    const navigatePane = useCallback(
+        (id: string) => {
+            const current = stateRef.current;
+            if (current.scene.kind === "freeform") {
+                const bounds = current.windows[id]?.bounds;
+                if (!bounds) return;
+                setMarqueeSelection([]);
+                setAndPersist((state) => ({
+                    ...selectOSSceneEntity(state, id),
+                    camera: keepWorkflowNodeVisible(state.camera, bounds, measuredViewport),
+                }));
+            } else if (current.scene.kind === "grouped") {
+                setAndPersist((state) => selectOSSceneEntity(state, id));
+            } else if (current.scene.kind === "overview") {
+                dispatch({ type: "spatial.showOverview", selectedBlockId: id });
+            } else {
+                dispatch({ type: "os.window.focus", blockId: id });
+            }
+        },
+        [dispatch, measuredViewport, setAndPersist]
     );
 
     useEffect(() => {
@@ -2683,15 +3371,31 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 osCanvasOwnsDelete(event.composedPath(), rootRef.current, event.defaultPrevented)
             ) {
                 const current = stateRef.current;
-                if (
-                    current.scene.kind === "freeform" &&
-                    current.objects.some(
-                        (object) => object.id === current.selectedEntityId && object.kind !== "workflow-node"
-                    )
-                ) {
-                    event.preventDefault();
-                    deleteObject(current.selectedEntityId);
-                    return;
+                const v2 = current.view === "kronos-v2";
+                const freeform = current.view === "canvas" && current.scene.kind === "freeform";
+                if ((v2 || freeform) && current.selectedEntityId) {
+                    const boxSelected = freeform && marqueeSelection.includes(current.selectedEntityId);
+                    const ids = boxSelected ? marqueeSelection : [current.selectedEntityId];
+                    const objects = ids.filter((id) =>
+                        current.objects.some((object) =>
+                            object.id === id &&
+                            (v2 ? ["folder", "file", "generated-artifact"].includes(object.kind) : object.kind !== "workflow-node")
+                        )
+                    );
+                    const widgets = boxSelected ? ids.filter((id) => current.windows[id] != null) : [];
+                    if (objects.length || widgets.length) {
+                        event.preventDefault();
+                        setMarqueeSelection([]);
+                        for (const id of objects) deleteObject(id);
+                        if (widgets.length) {
+                            void Promise.allSettled(widgets.map((id) => handleClose(id))).then((results) => {
+                                if (results.some((result) => result.status === "rejected")) {
+                                    setCanvasHint("Could not close all selected widgets.");
+                                }
+                            });
+                        }
+                        return;
+                    }
                 }
             }
             if (workflowOwnsWheel(event.composedPath())) return;
@@ -2704,6 +3408,14 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             const target = event.target as HTMLElement;
             if (target.closest("input, textarea, select, [contenteditable='true'], [role='application']")) return;
             const current = stateRef.current;
+            if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "<" || event.key === ">")) {
+                const next = getOSPaneNeighbor(current, event.key === ">" ? 1 : -1);
+                if (next) {
+                    event.preventDefault();
+                    navigatePane(next);
+                }
+                return;
+            }
             if (current.scene.kind === "focused" && event.altKey && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
                 const next = getOSCarouselNeighbor(current, event.key === "ArrowRight" ? 1 : -1);
                 if (next) {
@@ -2746,7 +3458,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [dispatch, connectorStartId, deleteObject]);
+    }, [dispatch, connectorStartId, deleteObject, handleClose, marqueeSelection, navigatePane]);
 
     useEffect(
         () =>
@@ -2754,25 +3466,29 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 snapshot: () => ({
                     presentation: "os",
                     osview: stateRef.current.view,
-                    selectedblockid: stateRef.current.windows[stateRef.current.selectedEntityId ?? ""]
-                        ? stateRef.current.selectedEntityId
-                        : undefined,
+                    selectedblockid: stateRef.current.view === "kronos-v2"
+                        ? penActiveWidgetRef.current ?? penInputWidgetRef.current
+                        : stateRef.current.windows[stateRef.current.selectedEntityId ?? ""]
+                          ? stateRef.current.selectedEntityId
+                          : undefined,
                     selectedobjectid: stateRef.current.objects.some(
                         (object) => object.id === stateRef.current.selectedEntityId
                     )
                         ? stateRef.current.selectedEntityId
                         : undefined,
-                    camera: getOSSurfaceCamera(stateRef.current),
+                    camera: stateRef.current.view === "kronos-v2" ? penCameraRef.current : getOSSurfaceCamera(stateRef.current),
                     rects: Object.fromEntries(
                         descriptors.map((block) => [
                             block.blockId,
-                            computeOSWindowLayout(
-                                stateRef.current,
-                                block.blockId,
-                                block.view,
-                                viewport,
-                                compactDeviceBlocks
-                            ).bounds,
+                            stateRef.current.view === "kronos-v2"
+                                ? getKronOSV2Widget(stateRef.current, block.blockId)
+                                : computeOSWindowLayout(
+                                      stateRef.current,
+                                      block.blockId,
+                                      block.view,
+                                      viewport,
+                                      compactDeviceBlocks
+                                  ).bounds,
                         ])
                     ),
                     objects: stateRef.current.objects,
@@ -2782,13 +3498,19 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     presentations: Object.fromEntries(
                         descriptors.map((block) => [
                             block.blockId,
-                            computeOSWindowLayout(
-                                stateRef.current,
-                                block.blockId,
-                                block.view,
-                                viewport,
-                                compactDeviceBlocks
-                            ).presentation,
+                            stateRef.current.view === "kronos-v2"
+                                ? penActiveWidgetRef.current === block.blockId
+                                    ? "focused"
+                                    : !penActiveWidgetRef.current && getKronOSV2Widget(stateRef.current, block.blockId)?.visible
+                                      ? "freeform"
+                                      : "collapsed"
+                                : computeOSWindowLayout(
+                                      stateRef.current,
+                                      block.blockId,
+                                      block.view,
+                                      viewport,
+                                      compactDeviceBlocks
+                                  ).presentation,
                         ])
                     ),
                 }),
@@ -2796,43 +3518,109 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     const validationError = validateOSSurfaceControl(stateRef.current, rawInput);
                     if (validationError) return { success: false, message: validationError };
                     const input = resolveOSControlAction(rawInput);
+                    const inKronOSV2 = stateRef.current.view === "kronos-v2";
+                    if (inKronOSV2 && input.action === "os.widget.input") {
+                        const widget = getKronOSV2Widget(stateRef.current, input.blockid);
+                        if (!widget) return { success: false, message: "OS window not found." };
+                        setPenWidgetVisible(input.blockid, true);
+                        setPenInputWidget(input.blockid);
+                        const camera = penCameraRef.current;
+                        const x = widget.x * camera.zoom + camera.x;
+                        const y = widget.y * camera.zoom + camera.y;
+                        const outsideViewport = penViewport && (
+                            x >= penViewport.x + penViewport.width ||
+                            y >= penViewport.y + penViewport.height ||
+                            x + widget.width * camera.zoom <= penViewport.x ||
+                            y + widget.height * camera.zoom <= penViewport.y
+                        );
+                        if (penActiveWidgetRef.current || outsideViewport) setPenActiveWidget(input.blockid);
+                        return { success: true, message: "Widget ready for input on the Pen canvas." };
+                    }
+                    if (inKronOSV2 && input.action === "spatial.switchWorkspace")
+                        return { success: false, message: "Use the workspace view selector to leave KronOS v2." };
+                    if (inKronOSV2 && (input.action.startsWith("os.tabs.") || input.action === "spatial.detach"))
+                        return { success: false, message: "KronOS v2 widgets are individual Pen frames. Use Pen’s layer and layout tools to organize them." };
                     if (input.action === "os.design.editor") {
                         try {
                             const { method, params = {} } = JSON.parse(input.text ?? "{}");
-                            $workflowSidebarMode.set("design");
-                            setDesignMode("editor");
-                            setAndPersist(activateOSWorkflowCanvas);
+                            if (!inKronOSV2) dispatch({ type: "os.view.set", view: "design" });
+                            else if (["execute", "undo", "redo", "fit", "focus_canvas"].includes(method)) leavePenWidget();
                             const result = await requestPenEditor(tabId, method as PenEditorMethod, params);
                             return { success: true, message: JSON.stringify(result) ?? "null" };
                         } catch (error) {
-                            return { success: false, message: error instanceof Error ? error.message : "Design operation failed." };
+                            return {
+                                success: false,
+                                message: error instanceof Error ? error.message : "Design operation failed.",
+                            };
                         }
                     }
                     if (input.action === "os.design.create" || input.action === "os.design.update") {
                         const creating = input.action === "os.design.create";
                         try {
                             const { type, patch, fill, geometry } = readPenLayerPatch(input.text ?? "", creating);
+                            if (inKronOSV2) {
+                                const { text, ...boundsAndName } = patch;
+                                const properties = JSON.stringify({
+                                    ...boundsAndName,
+                                    content: text,
+                                    geometry,
+                                });
+                                const color = JSON.stringify(fill ?? null);
+                                const operation = creating
+                                    ? `const type = ${JSON.stringify(type)};
+                                       const props = ${properties};
+                                       const origin = FindEmptySpace({width: props.width ?? 240, height: props.height ?? 160});
+                                       const color = ${color};
+                                       const paint = color == null ? {} : type === "note" ? {color} : {fill: color};
+                                       const path = type === "path" ? {geometry: "M0 24 L12 0 L24 24"} : {};
+                                       Print(Insert(document, {type, x: origin.x, y: origin.y, ...path, ...props, ...paint}));`
+                                    : `const id = ${JSON.stringify(input.objectid ?? "")};
+                                       const node = Get(id, {depth: 0});
+                                       if (!node) throw new Error("Pen layer not found.");
+                                       if (node.metadata?.type === "kronos-live-widget") throw new Error("Use widget tools to edit a live widget frame.");
+                                       const props = ${properties};
+                                       if (props.geometry != null && node.type !== "path") throw new Error("Only path layers accept SVG path data.");
+                                       const color = ${color};
+                                       const paint = color == null ? {} : node.type === "note" ? {color} : {fill: color};
+                                       Update(id, {...props, ...paint});
+                                       Print(id);`;
+                                leavePenWidget();
+                                const result = await requestPenEditor(tabId, "execute", { code: operation }) as { isError?: boolean };
+                                return { success: result?.isError !== true, message: JSON.stringify(result) ?? "null" };
+                            }
                             if (creating) {
                                 const id = createPenLayer(type, patch, fill, geometry);
                                 return { success: true, message: `Created design layer ${id}.` };
                             }
-                            const layer = stateRef.current.objects.find((object) => object.id === input.objectid && object.pen);
-                            if (!layer) return { success: false, message: "Design layer not found in this OS workspace." };
+                            const layer = stateRef.current.objects.find(
+                                (object) => object.id === input.objectid && object.pen
+                            );
+                            if (!layer)
+                                return { success: false, message: "Design layer not found in this OS workspace." };
                             if (geometry != null && layer.pen.type !== "path")
                                 return { success: false, message: "Only path layers accept SVG path data." };
                             return updateObject(layer.id, {
                                 ...patch,
-                                pen: { ...layer.pen, fill: fill ?? layer.pen.fill, geometry: geometry ?? layer.pen.geometry },
+                                pen: {
+                                    ...layer.pen,
+                                    fill: fill ?? layer.pen.fill,
+                                    geometry: geometry ?? layer.pen.geometry,
+                                },
                             });
                         } catch (error) {
-                            return { success: false, message: error instanceof Error ? error.message : "Invalid design properties." };
+                            return {
+                                success: false,
+                                message: error instanceof Error ? error.message : "Invalid design properties.",
+                            };
                         }
                     }
                     if (input.action === "add_file") {
                         if (!input.file || !isLocalCanvasFilePath(input.file)) {
                             return { success: false, message: "An absolute local file path is required." };
                         }
-                        if ([input.x, input.y].some((coordinate) => coordinate != null && !Number.isFinite(coordinate))) {
+                        if (
+                            [input.x, input.y].some((coordinate) => coordinate != null && !Number.isFinite(coordinate))
+                        ) {
                             return { success: false, message: "File card coordinates must be finite." };
                         }
                         const id = pinResource(canvasFileResource(input.file, input.text), { x: input.x, y: input.y });
@@ -2899,8 +3687,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         return { success: true, message: `Opening ${input.appname ?? input.appid}.` };
                     }
                     if (input.action === "os.view.set" || input.action === "spatial.setWidgetPresentation") {
-                        if (input.presentation !== "canvas" && input.presentation !== "file") {
-                            return { success: false, message: "Presentation must be canvas or file." };
+                        if (stateRef.current.view === "kronos-v2")
+                            return { success: false, message: "Use the workspace view selector to leave KronOS v2." };
+                        if (
+                            input.presentation !== "canvas" &&
+                            input.presentation !== "design" &&
+                            input.presentation !== "kronos-v2" &&
+                            input.presentation !== "file"
+                        ) {
+                            return { success: false, message: "Presentation must be canvas, design, kronos-v2, or file." };
                         }
                         dispatch({ type: "os.view.set", view: input.presentation });
                         return { success: true, message: `KronOS switched to ${input.presentation}.` };
@@ -2971,15 +3766,44 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         return { success: true, message: "Showing all OS windows." };
                     }
                     if (input.action === "fit") {
-                        fitAll();
+                        if (stateRef.current.view === "kronos-v2") {
+                            leavePenWidget();
+                            await requestPenEditor(tabId, "fit");
+                        } else fitAll();
                         return { success: true, message: "OS content fitted." };
                     }
                     if (input.action === "add_note") {
+                        if (inKronOSV2) {
+                            const note = JSON.stringify({
+                                type: "note",
+                                content: input.text ?? "New note",
+                                x: input.x,
+                                y: input.y,
+                                width: input.width ?? 240,
+                                height: input.height ?? 180,
+                            });
+                            leavePenWidget();
+                            const result = await requestPenEditor(tabId, "execute", {
+                                code: `const note = ${note};
+                                       const {x, y} = FindEmptySpace({width: note.width, height: note.height});
+                                       Print(Insert(document, {x, y, ...note}));`,
+                            }) as { isError?: boolean };
+                            return { success: result?.isError !== true, message: JSON.stringify(result) ?? "null" };
+                        }
                         addObject("note", input.text, input);
                         return { success: true, message: "Created OS note." };
                     }
                     if (input.action === "navigate") {
-                        const target = getOSNavigationTarget(stateRef.current, input.direction);
+                        const state = stateRef.current;
+                        const navigationState = inKronOSV2 ? {
+                            ...state,
+                            selectedEntityId: penActiveWidgetRef.current ?? penInputWidgetRef.current ?? input.blockid,
+                            windows: Object.fromEntries(Object.entries(state.windows).map(([id, window]) => {
+                                const widget = getKronOSV2Widget(state, id);
+                                return [id, { ...window, bounds: widget, collapsed: !widget.visible }];
+                            })),
+                        } : state;
+                        const target = getOSNavigationTarget(navigationState, input.direction);
                         if (!target) return { success: false, message: "No window in that direction." };
                         dispatch({ type: "spatial.focus", blockId: target });
                         return { success: true, message: "Focused adjacent OS window." };
@@ -3042,8 +3866,11 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             dispatch,
             fitAll,
             handleClose,
+            leavePenWidget,
+            penViewport,
             pinResource,
             placeWindow,
+            setPenWidgetVisible,
             handleCreateAppStream,
             handleCreateBlock,
             tabId,
@@ -3053,7 +3880,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     );
 
     const activeGroup = state.scene.kind === "grouped" ? state.groups[state.scene.groupId] : undefined;
-    const groupAdditions = activeGroup ? getOSGroupAdditions(state, activeGroup) : [];
     const agentPresences = useAgentPresences();
     const desktopInstalledApps = useMemo(
         () =>
@@ -3114,10 +3940,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     "os-mode-root",
                     `scene-${state.scene.kind}`,
                     `view-${state.view}`,
-                    sidebarOpen && "has-agent-sidebar",
-                    ((inspectorOpen && !designEditorVisible) || designVisible) && "has-files-inspector",
-                    designVisible && "has-design-tools",
-                    designEditorVisible && "has-design-editor",
+                    sidebarOpen && !penCanvasVisible && "has-agent-sidebar",
+                    !penCanvasVisible && inspectorOpen && "has-files-inspector",
+                    penCanvasVisible && "has-pen-canvas",
                     inspectorExpanded && "has-expanded-inspector",
                     inspectorCompact && "has-compact-inspector",
                     comfyPanels.logs && "has-comfy-logs",
@@ -3125,6 +3950,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 )}
                 style={
                     {
+                        "--os-sidebar-width": `min(${sessionSidebarWidth}px, 65%)`,
                         "--os-inspector-dragged-width": inspectorWidth ? `${inspectorWidth}px` : undefined,
                         "--os-workflow-top": `${workflowPanelLayout.top}px`,
                         "--os-workflow-right": `${workflowPanelLayout.right}px`,
@@ -3136,90 +3962,116 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 onPointerMove={handleRootPointerMove}
                 onPointerUp={handleRootPointerUp}
                 onPointerCancel={handleRootPointerUp}
+                onLostPointerCapture={(event) => {
+                    if (interactionRef.current?.pointerId === event.pointerId) handleRootPointerUp(event);
+                }}
                 onWheel={handleWheel}
             >
-                <WorkspaceWallpaper />
+                {kronosV2 && <KronOSV2AgentPointer onFollow={followPenAgentPointer} />}
+                {!penCanvasVisible && <WorkspaceWallpaper />}
                 <aside
                     id="kronterm-left-sidebar"
                     data-live-block-occluder=""
                     className="os-agent-sidebar"
                     aria-label="Workspace sidebar"
-                    hidden={!sidebarOpen}
+                    hidden={penCanvasVisible || !sidebarOpen}
                 >
                     <div ref={attachSidebar} className="h-full min-h-0" />
+                    {sidebarMode === "sessions" && !penCanvasVisible && sidebarOpen && (
+                        <div
+                            className="os-session-sidebar-resize"
+                            role="separator"
+                            aria-label="Resize Sessions panel"
+                            aria-orientation="vertical"
+                            aria-valuemin={200}
+                            aria-valuemax={680}
+                            aria-valuenow={sessionSidebarWidth}
+                            tabIndex={0}
+                            onPointerDown={(event) => {
+                                if (event.button !== 0) return;
+                                event.stopPropagation();
+                                const panel = event.currentTarget.parentElement;
+                                const width = panel.getBoundingClientRect().width + (state.view === "canvas" ? 8 : 0);
+                                sessionSidebarDrag.current = { x: event.clientX, width };
+                                event.currentTarget.setPointerCapture(event.pointerId);
+                            }}
+                            onPointerMove={(event) => {
+                                const drag = sessionSidebarDrag.current;
+                                if (drag && event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                    resizeSessionSidebar(drag.width + event.clientX - drag.x);
+                                }
+                            }}
+                            onLostPointerCapture={() => { sessionSidebarDrag.current = null; }}
+                            onKeyDown={(event) => {
+                                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                resizeSessionSidebar(sessionSidebarWidth + (event.key === "ArrowRight" ? 16 : -16));
+                            }}
+                        />
+                    )}
                 </aside>
                 <aside
                     id="kronterm-right-inspector"
                     data-live-block-occluder=""
                     className="os-files-inspector"
                     aria-label="Workspace inspector"
-                    hidden={designEditorVisible || (!inspectorOpen && !designVisible)}
+                    hidden={penCanvasVisible || !inspectorOpen}
                 >
-                    <div className="flex h-full min-h-0 flex-col">
-                        {designVisible && (
-                            <SystemToolbar aria-label="Design inspector" className="shrink-0 border-b border-border p-1">
-                                <SystemButton size="small" selected={designInspector === "properties"} onClick={() => setDesignInspector("properties")}>Properties</SystemButton>
-                                <SystemButton size="small" selected={designInspector === "chat"} onClick={() => {
-                                    $krontermInspectorSection.set("chat");
-                                    $krontermInspectorOpen.set(true);
-                                    setDesignInspector("chat");
-                                    window.dispatchEvent(new Event(KrontermInspectorChatEvent));
-                                }}>Chat</SystemButton>
-                            </SystemToolbar>
-                        )}
-                        <div ref={attachInspector} className="min-h-0 flex-1" hidden={designVisible && designInspector !== "chat"} />
-                        {designVisible && designInspector === "properties" && (
-                        <section aria-label="Design properties" className="os-pen-properties min-h-0 flex-1 overflow-auto" onWheel={(event) => event.stopPropagation()}>
-                            <OSPenProperties
-                                key={selectedDesignLayer?.id ?? "empty"}
-                                layer={selectedDesignLayer}
-                                onChange={(patch) => updateObject(selectedDesignLayer.id, patch)}
-                            />
-                        </section>
-                        )}
-                    </div>
+                    <div ref={attachInspector} className="h-full min-h-0" />
                 </aside>
                 {penDesignTarget &&
                     createPortal(
                         <div className="flex h-full min-h-0 flex-col">
-                            <div className="flex shrink-0 gap-1 border-b border-border p-2" role="group" aria-label="Design workspace">
-                                <SystemButton size="small" selected={designMode === "editor"} onClick={() => setDesignMode("editor")}>Editor</SystemButton>
-                                <SystemButton size="small" selected={designMode === "canvas"} onClick={() => setDesignMode("canvas")}>Canvas layers</SystemButton>
-                            </div>
-                            {designMode === "editor" ? (
-                                <div className="flex flex-col gap-4 p-4 text-[13px]">
-                                    <div><h2 className="font-medium">Your design workspace</h2><p className="mt-2 text-foreground/65">Draw, arrange, and edit with Pen’s tools. Your document opens automatically and stays here when you switch sections.</p></div>
-                                    <div className="rounded-lg border border-border p-3"><h3 className="font-medium">Connected to KronOS Agent</h3><p className="mt-2 text-foreground/65">The agent can read the editor’s skills, inspect the document, and edit the same design.</p></div>
-                                    <p className="text-[12px] text-foreground/55">Existing OS canvas designs are under Canvas layers.</p>
-                                </div>
-                            ) : (
+                            {penCanvasVisible && <OSPenCanvasActions tabId={tabId} />}
+                            {state.objects.some((object) => object.pen) && (
                                 <OSPenPanel
-                            objects={state.objects}
-                            selectedId={state.selectedEntityId}
-                            status={designLoadStatus}
-                            onChange={updateObject}
-                            onDelete={deleteObject}
-                            onDuplicate={(id) => {
-                                setAndPersist((current) => {
-                                    const layer = current.objects.find((object) => object.id === id);
-                                    if (!layer?.pen) return current;
-                                    const copy = { ...layer, id: crypto.randomUUID(), name: `${layer.name} copy`, x: layer.x + 24, y: layer.y + 24, pen: { ...layer.pen } };
-                                    return { ...current, objects: [...current.objects, copy], selectedEntityId: copy.id };
-                                });
-                            }}
-                            onFit={(id) => {
-                                const layer = stateRef.current.objects.find((object) => object.id === id);
-                                if (layer) setAndPersist((current) => ({ ...current, camera: fitSpatialViewportToBounds(layer, viewport, 80, 1) }));
-                            }}
-                            onSelect={(id) => {
-                                setTool("select");
-                                setAndPersist((current) => {
-                                    const next = selectOSSceneEntity(activateOSWorkflowCanvas(current), id);
-                                    const layer = next.objects.find((object) => object.id === id);
-                                    return layer ? { ...next, camera: keepWorkflowNodeVisible(next.camera, layer, viewport) } : next;
-                                });
-                            }}
-                        />
+                                    objects={state.objects}
+                                    selectedId={state.selectedEntityId}
+                                    status=""
+                                    onChange={updateObject}
+                                    onDelete={deleteObject}
+                                    onDuplicate={(id) => {
+                                        setAndPersist((current) => {
+                                            const layer = current.objects.find((object) => object.id === id);
+                                            if (!layer?.pen) return current;
+                                            const copy = {
+                                                ...layer,
+                                                id: crypto.randomUUID(),
+                                                name: `${layer.name} copy`,
+                                                x: layer.x + 24,
+                                                y: layer.y + 24,
+                                                pen: { ...layer.pen },
+                                            };
+                                            return {
+                                                ...current,
+                                                objects: [...current.objects, copy],
+                                                selectedEntityId: copy.id,
+                                            };
+                                        });
+                                    }}
+                                    onFit={(id) => {
+                                        const layer = stateRef.current.objects.find((object) => object.id === id);
+                                        if (layer)
+                                            setAndPersist((current) => ({
+                                                ...current,
+                                                camera: fitSpatialViewportToBounds(layer, viewport, 80, 1),
+                                            }));
+                                    }}
+                                    onSelect={(id) => {
+                                        setTool("select");
+                                        setAndPersist((current) => {
+                                            const next = selectOSSceneEntity(current, id);
+                                            const layer = next.objects.find((object) => object.id === id);
+                                            return layer
+                                                ? {
+                                                      ...next,
+                                                      camera: keepWorkflowNodeVisible(next.camera, layer, viewport),
+                                                  }
+                                                : next;
+                                        });
+                                    }}
+                                />
                             )}
                         </div>,
                         penDesignTarget
@@ -3235,7 +4087,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                     onChange={(event) => setComfyLibrary(event.currentTarget.value as ComfyLibrary)}
                                 >
                                     {Object.entries(ComfyLibraries).map(([id, label]) => (
-                                        <option key={id} value={id}>{label}</option>
+                                        <option key={id} value={id}>
+                                            {label}
+                                        </option>
                                     ))}
                                 </select>
                             ) : (
@@ -3251,16 +4105,22 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                 </SystemButton>
                             )}
                             <div className="flex gap-1 px-2 pb-1">
-                                <SystemButton size="small" onClick={() => {
-                                    setAndPersist(activateOSWorkflowCanvas);
-                                    $workflowPickerSource.set("comfy-nodes");
-                                }}>
+                                <SystemButton
+                                    size="small"
+                                    onClick={() => {
+                                        setAndPersist(activateOSWorkflowCanvas);
+                                        $workflowPickerSource.set("comfy-nodes");
+                                    }}
+                                >
                                     Nodes
                                 </SystemButton>
-                                <SystemButton size="small" onClick={() => {
-                                    setAndPersist(activateOSWorkflowCanvas);
-                                    $workflowPickerSource.set("comfy-models");
-                                }}>
+                                <SystemButton
+                                    size="small"
+                                    onClick={() => {
+                                        setAndPersist(activateOSWorkflowCanvas);
+                                        $workflowPickerSource.set("comfy-models");
+                                    }}
+                                >
                                     Model Library
                                 </SystemButton>
                             </div>
@@ -3277,21 +4137,12 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 >
                     <header className="flex shrink-0 items-center justify-between border-b border-border px-3 py-1 text-sm">
                         <span>KronRender Logs</span>
-                        <SystemButton size="small" onClick={() => setShowComfyLogs(false)}>Close logs</SystemButton>
+                        <SystemButton size="small" onClick={() => setShowComfyLogs(false)}>
+                            Close logs
+                        </SystemButton>
                     </header>
                     <div ref={setComfyLogsTarget} className="min-h-0 flex-1 overflow-hidden" />
                 </section>
-                {OSSpaceIdentities.find((identity) => identity.id === currentWorkspace?.meta?.["os:identity"]) && (
-                    <div
-                        className="os-space-background"
-                        style={{
-                            background: OSSpaceIdentities.find(
-                                (identity) => identity.id === currentWorkspace?.meta?.["os:identity"]
-                            ).background,
-                        }}
-                        aria-hidden="true"
-                    />
-                )}
                 {workspaceSetupOpen && (
                     <OSWorkspaceSetup
                         editing={editingWorkspaceSetup}
@@ -3338,7 +4189,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         }}
                     />
                 )}
-                <img className="os-wallpaper-fallback" src={KronTermOSWallpaper} alt="" aria-hidden="true" />
                 {systemLoadState === "restoring" && (
                     <div className="os-restore-status" role="status">
                         <span className="os-restore-status-spinner" aria-hidden="true" />
@@ -3347,27 +4197,37 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 )}
                 <OSModeShell
                     hasComfyPanels={hasComfyPanels}
+                    systemControlsSlot={penCanvasVisible ? penSystemControlsSlot : null}
                     workspaces={workspaces}
                     currentWorkspaceId={currentWorkspace?.oid ?? ""}
                     blocks={descriptors}
                     collapsedIds={blockIds.filter((id) => state.windows[id]?.collapsed)}
-                    showCollapsedDock={!desktopWidgetsEnabled || viewport.width <= 900}
+                    showCollapsedDock={state.view === "canvas" && (!desktopWidgetsEnabled || viewport.width <= 900)}
                     sceneKind={state.scene.kind}
-                    onWorkspace={(workspaceId) => getApi().switchWorkspace(workspaceId)}
+                    onWorkspace={(workspaceId) => {
+                        if (stateRef.current.view !== "kronos-v2") void getApi().switchWorkspace(workspaceId);
+                    }}
                     onCreateWorkspace={() => setWorkspaceSetupOpen(true)}
                     onRestore={(blockId) => dispatch({ type: "spatial.restore", blockId })}
                     onPinResource={pinResource}
-                    onOverview={() => dispatch({ type: "spatial.showOverview" })}
+                    onShowApps={() => {
+                        if (stateRef.current.view !== "kronos-v2") {
+                            dispatch({ type: "os.view.set", view: "design" });
+                        }
+                        void requestPenEditor(tabId, "show_workspaces").catch((error: unknown) => {
+                            setCanvasHint(error instanceof Error ? error.message : "Could not open the Workspace dashboard.");
+                        });
+                    }}
                     onFreeform={() => dispatch({ type: "spatial.freeform" })}
                     activeBlockId={activeBlockId}
                     osView={state.view}
-                    onSetOSView={(view) => dispatch({ type: "os.view.set", view })}
+                    onSetOSView={setOSView}
                     onFocusApp={(blockId) => {
                         dispatch({ type: "os.view.set", view: "canvas" });
                         dispatch({ type: "spatial.focus", blockId });
                     }}
                 />
-                {state.scene.kind === "overview" && (
+                {state.view === "canvas" && state.scene.kind === "overview" && (
                     <OSSpaceOverview
                         blocks={descriptors}
                         workspaces={workspaces}
@@ -3464,125 +4324,57 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             </div>
                         </nav>
                     )}
-                {showCarouselControls && (
-                    <nav className="os-carousel-controls" aria-label="Window carousel">
-                        <button
-                            type="button"
-                            aria-label="Previous window"
-                            disabled={!getOSCarouselNeighbor(state, -1)}
-                            onClick={() =>
-                                dispatch({ type: "os.window.focus", blockId: getOSCarouselNeighbor(state, -1) })
-                            }
-                        >
-                            <ChevronLeft aria-hidden="true" />
-                        </button>
-                        <div className="os-carousel-dots" aria-label="Open windows">
-                            {carouselOrder.map((blockId) => (
-                                <button
-                                    key={blockId}
-                                    type="button"
-                                    aria-label={descriptors.find((block) => block.blockId === blockId)?.title ?? "App"}
-                                    aria-current={blockId === activeBlockId ? "true" : undefined}
-                                    onClick={() => dispatch({ type: "os.window.focus", blockId })}
-                                >
-                                    <span aria-hidden="true" />
-                                </button>
-                            ))}
-                        </div>
-                        <button
-                            type="button"
-                            aria-label="Next window"
-                            disabled={!getOSCarouselNeighbor(state, 1)}
-                            onClick={() =>
-                                dispatch({ type: "os.window.focus", blockId: getOSCarouselNeighbor(state, 1) })
-                            }
-                        >
-                            <ChevronRight aria-hidden="true" />
-                        </button>
-                    </nav>
-                )}
-                {state.view === "canvas" && groupAdditions.length > 0 && (
-                    <nav className="os-group-tray" aria-label="Add widgets to split">
-                        <span>Add to split</span>
-                        {groupAdditions.map((blockId) => {
-                            const descriptor = descriptors.find((item) => item.blockId === blockId);
-                            const layout = windowLayouts[blockId];
-                            if (!descriptor || !layout) return null;
+                {state.view === "canvas" && carouselOrder.length > 0 && (
+                    <nav className="os-carousel-controls" aria-label="Pane navigation">
+                        {([-1, 1] as const).map((direction) => {
+                            const id = getOSPaneNeighbor(state, direction);
+                            const previous = direction === -1;
+                            const Icon = previous ? ChevronLeft : ChevronRight;
                             return (
-                                <SystemButton
-                                    key={blockId}
-                                    size="small"
-                                    aria-label={`Add ${descriptor.title} to split`}
-                                    title={`Click to add ${descriptor.title}, or drag it onto a pane`}
-                                    onPointerDown={(event) => {
-                                        const viewportBounds = viewportRef.current?.getBoundingClientRect();
-                                        if (!viewportBounds) return;
-                                        beginWindowInteraction(
-                                            event,
-                                            blockId,
-                                            {
-                                                ...layout,
-                                                bounds: {
-                                                    x: event.clientX - viewportBounds.left - 100,
-                                                    y: event.clientY - viewportBounds.top - 24,
-                                                    width: Math.min(480, viewport.width - 32),
-                                                    height: Math.min(360, viewport.height - 96),
-                                                },
-                                            },
-                                            "add"
-                                        );
-                                    }}
-                                    onClick={(event) => {
-                                        if (event.detail !== 0) return;
-                                        dispatch({
-                                            type: "spatial.dock",
-                                            blockId,
-                                            targetBlockId: activeGroup.blockIds.at(-1),
-                                            side: "right",
-                                        });
-                                    }}
+                                <button
+                                    key={direction}
+                                    type="button"
+                                    aria-label={previous ? "Previous pane" : "Next pane"}
+                                    aria-keyshortcuts={previous ? "<" : ">"}
+                                    disabled={!id}
+                                    onClick={() => id && navigatePane(id)}
                                 >
-                                    <AppIcon icon={descriptor.icon} />
-                                    {descriptor.title}
-                                </SystemButton>
+                                    <Icon aria-hidden="true" />
+                                </button>
                             );
                         })}
                     </nav>
                 )}
-                {state.view === "file" && (
-                    <OSWidgetsFileView
-                        blocks={descriptors.map((descriptor) => ({
-                            ...descriptor,
-                            collapsed: state.windows[descriptor.blockId]?.collapsed,
-                        }))}
-                        activeBlockId={activeBlockId}
-                        workspaceName={
-                            workspaces.find((workspace) => workspace.id === currentWorkspace?.oid)?.name ??
-                            "Current workspace"
-                        }
-                        onOpenBlock={(blockId) => {
-                            dispatch({ type: "os.view.set", view: "canvas" });
-                            dispatch({ type: "spatial.focus", blockId });
-                        }}
-                        onToggleFiled={(blockId, filed) =>
-                            dispatch({ type: filed ? "spatial.collapse" : "spatial.restore", blockId })
-                        }
-                        onOpenResource={openResource}
-                        onPinResource={pinResource}
-                        onSaveResource={(resource) => void systemModel.pinArtifact(resource)}
-                        onAttachResource={attachOSResourceToKronos}
-                    />
-                )}
-                {designEditorMounted && (
-                    <OSPenEditor key={tabId} tabId={tabId} visible={designEditorVisible} onClose={() => setDesignMode("canvas")} />
-                )}
+                <OSWidgetsFileView
+                    hidden={state.view !== "file"}
+                    blocks={descriptors.map((descriptor) => ({
+                        ...descriptor,
+                        collapsed: state.windows[descriptor.blockId]?.collapsed,
+                    }))}
+                    activeBlockId={activeBlockId}
+                    workspaceName={
+                        workspaces.find((workspace) => workspace.id === currentWorkspace?.oid)?.name ??
+                        "Current workspace"
+                    }
+                    onOpenBlock={(blockId) => {
+                        dispatch({ type: "os.view.set", view: "canvas" });
+                        dispatch({ type: "spatial.focus", blockId });
+                    }}
+                    onToggleFiled={(blockId, filed) =>
+                        dispatch({ type: filed ? "spatial.collapse" : "spatial.restore", blockId })
+                    }
+                    onOpenResource={openResource}
+                    onPinResource={pinResource}
+                    onSaveResource={(resource) => void systemModel.pinArtifact(resource)}
+                    onAttachResource={attachOSResourceToKronos}
+                />
                 <div className="os-workflow-panels">
                     <OSOriginalWorkflow
                         onPanelLayout={setWorkflowPanelLayout}
                         tabId={tabId}
                         onChat={() => hermesSurfaceController.requestOpenChat()}
                         workspaceId={currentWorkspace?.oid}
-                        camera={state.camera}
+                        camera={kronosV2 ? penWorkflowCamera : state.camera}
                         toolsTarget={workflowToolsTarget}
                         focusTarget={workflowFocusTarget}
                         onFocusVisibility={onWorkflowFocusVisibility}
@@ -3590,13 +4382,8 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         viewportTarget={viewportRef.current}
                         objectOrder={sceneZIndices}
                         selectedObjectId={state.selectedEntityId}
-                        visible={!designEditorVisible && state.view === "canvas" && state.scene.kind === "freeform"}
-                        onCameraIntent={(intent) =>
-                            setAndPersist((current) => ({
-                                ...current,
-                                camera: resolveWorkflowCameraIntent(intent, current.camera, viewport),
-                            }))
-                        }
+                        visible={workflowGraphVisible}
+                        onCameraIntent={moveWorkflowCamera}
                         onObjects={(objects) =>
                             setState((current) => {
                                 const next = {
@@ -3622,114 +4409,76 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     className={cn("os-mode-viewport", workflowPanelLayout.top > 0 && "has-workflow-panels")}
                     ref={viewportRef}
                     onPointerDownCapture={captureCanvasPan}
+                    onLostPointerCapture={(event) => {
+                        if (event.target === event.currentTarget && marqueeRef.current?.pointerId === event.pointerId) {
+                            handleRootPointerUp(event);
+                        }
+                    }}
                     onDragOver={(event) => {
                         if (
-                            !event.defaultPrevented &&
-                            (event.dataTransfer.types.includes(OSAppDragMimeType) ||
-                                event.dataTransfer.types.includes(OSResourceDragMimeType) ||
-                                event.dataTransfer.types.includes("Files"))
+                            event.dataTransfer.types.includes(OSAppDragMimeType) ||
+                            event.dataTransfer.types.includes(OSResourceDragMimeType) ||
+                            ((!penCanvasVisible || kronosV2) && acceptsCanvasTransfer(event.dataTransfer))
                         ) {
-                            event.preventDefault();
-                            event.dataTransfer.dropEffect = "copy";
+                            allowCanvasDrop(event);
                         }
                     }}
                     onDrop={(event) => {
-                        if (event.defaultPrevented) return;
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        const camera = stateRef.current.camera;
-                        const point = screenRectToWorld(
-                            {
-                                x: event.clientX - bounds.left,
-                                y: event.clientY - bounds.top,
-                                width: 0,
-                                height: 0,
-                            },
-                            camera
-                        );
-                        const pinAtDrop = (resource: OSResourceReference, file?: File) => {
-                            const { width, height } =
-                                resource.kind === "file" || resource.kind === "generated-artifact"
-                                    ? canvasFileCardSize(resource.resource)
-                                    : { width: 260, height: 112 };
-                            const id = pinResource(resource, { x: point.x - width / 2, y: point.y - height / 2 });
-                            if (file) droppedCanvasFiles.current.set(id, file);
-                        };
+                        const clientPoint = { x: event.clientX, y: event.clientY };
                         const resource = readOSResourceDragPayload(event.dataTransfer);
                         if (resource != null) {
                             event.preventDefault();
-                            pinAtDrop(resource);
+                            importResources([resource], clientPoint);
                             return;
                         }
-                        if (event.dataTransfer.files.length) {
+                        if (
+                            (!penCanvasVisible || kronosV2) &&
+                            importCanvasTransfer(
+                                event.dataTransfer,
+                                getApi(),
+                                (files) => importResources(files, clientPoint),
+                                setCanvasHint
+                            )
+                        ) {
                             event.preventDefault();
-                            for (const { resource, file } of readNativeCanvasDrops(event.dataTransfer.files, getApi().getPathForFile)) {
-                                pinAtDrop(resource, file);
-                            }
                             return;
                         }
                         const payload = readOSAppDragPayload(event.dataTransfer);
                         if (payload == null) return;
                         event.preventDefault();
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const point = screenRectToWorld(
+                            { x: event.clientX - bounds.left, y: event.clientY - bounds.top, width: 0, height: 0 },
+                            stateRef.current.camera
+                        );
                         const worldX = Math.max(16, point.x - 260);
                         const worldY = Math.max(96, point.y - 30);
                         handleDropApp(payload, worldX, worldY);
                     }}
-                    onPointerMove={(event) => {
-                        const path = designPath.current;
-                        if (path?.pointerId !== event.pointerId || path.points.length >= 450) return;
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        const point = { x: Math.round(event.clientX - bounds.left), y: Math.round(event.clientY - bounds.top) };
-                        const previous = path.points.at(-1);
-                        if (Math.hypot(point.x - previous.x, point.y - previous.y) < 2) return;
-                        path.points.push(point);
-                        setDesignPathPreview(path.points.map(({ x, y }) => `${x},${y}`).join(" "));
-                    }}
-                    onPointerUp={(event) => {
-                        const path = designPath.current;
-                        if (path?.pointerId !== event.pointerId) return;
-                        designPath.current = undefined;
-                        setDesignPathPreview("");
-                        if (path.points.length < 2) return;
-                        const bounds = spatialBoundsForRects(path.points.map((point) => ({ ...point, width: 1, height: 1 })));
-                        const { zoom, x, y } = state.camera;
-                        const geometry = path.points.map((point, index) =>
-                            `${index ? "L" : "M"}${((point.x - bounds.x) / zoom).toFixed(2)} ${((point.y - bounds.y) / zoom).toFixed(2)}`
-                        ).join(" ");
-                        createPenLayer("path", {
-                            x: (bounds.x - x) / zoom, y: (bounds.y - y) / zoom,
-                            width: Math.max(1, bounds.width / zoom), height: Math.max(1, bounds.height / zoom),
-                        }, undefined, geometry);
-                        setDesignTool(undefined);
-                    }}
-                    onLostPointerCapture={(event) => {
-                        if (designPath.current?.pointerId !== event.pointerId) return;
-                        designPath.current = undefined;
-                        setDesignPathPreview("");
-                    }}
+                    tabIndex={state.view === "canvas" ? 0 : undefined}
                     onPointerDown={(event) => {
-                        if (designVisible && designTool && event.button === 0 && event.target === event.currentTarget) {
-                            const bounds = event.currentTarget.getBoundingClientRect();
-                            if (designTool === "path") {
-                                designPath.current = { pointerId: event.pointerId, points: [{
-                                    x: Math.round(event.clientX - bounds.left), y: Math.round(event.clientY - bounds.top),
-                                }] };
-                                event.currentTarget.setPointerCapture(event.pointerId);
-                                return;
-                            }
-                            createPenLayer(designTool, {
-                                x: (event.clientX - bounds.left - state.camera.x) / state.camera.zoom,
-                                y: (event.clientY - bounds.top - state.camera.y) / state.camera.zoom,
-                            });
-                            setDesignTool(undefined);
+                        if (state.view === "canvas" && isOSCanvasBackground(event.target, event.currentTarget)) {
+                            event.currentTarget.focus({ preventScroll: true });
+                        }
+                        if (focusedCanvasWidget && event.button === 0 && event.target === event.currentTarget) {
+                            dispatch({ type: "os.window.restore", blockId: focusedCanvasWidget });
                             return;
                         }
                         if (
-                            state.scene.kind === "freeform" &&
-                            event.target === event.currentTarget &&
+                            kronOSCanvasVisible &&
+                            isOSCanvasBackground(event.target, event.currentTarget) &&
                             tool === "select" &&
-                            event.button === 0
+                            event.button === 0 &&
+                            event.isPrimary
                         ) {
-                            setAndPersist((current) => ({ ...current, selectedEntityId: undefined }));
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            event.preventDefault();
+                            marqueeRef.current = {
+                                pointerId: event.pointerId,
+                                start: { x: event.clientX - rect.left, y: event.clientY - rect.top },
+                            };
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                            setCanvasPointerCaptured(true);
                             return;
                         }
                         if (
@@ -3748,178 +4497,240 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         event.currentTarget.setPointerCapture(event.pointerId);
                     }}
                     onContextMenu={(event) => {
-                        const target = event.target as HTMLElement;
-                        const onDesktop =
-                            target === event.currentTarget ||
-                            target.classList.contains("os-mode-world") ||
-                            target.classList.contains("os-desktop-layer") ||
-                            target.classList.contains("os-desktop-column");
-                        if (!onDesktop || state.scene.kind !== "freeform") return;
+                        if (
+                            state.scene.kind !== "freeform" ||
+                            !isOSCanvasBackground(event.target, event.currentTarget)
+                        ) return;
                         event.preventDefault();
                         showDesktopContextMenu(event);
                     }}
                 >
-                    {designPathPreview && (
-                        <svg aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1500] size-full">
-                            <polyline points={designPathPreview} fill="none" stroke="var(--accent-color)" strokeWidth="2" />
-                        </svg>
+                    {(penCanvasVisible || penVisited) && (
+                        <OSPenEditor
+                            key={kronosV2 ? `kronos-v2:${tabId}` : tabId}
+                            tabId={tabId}
+                            kronosV2={kronosV2}
+                            presenting={kronosV2 && penPresentation.active}
+                            visible={penCanvasVisible}
+                            camera={kronosV2 ? penRequestedCamera : undefined}
+                            onCamera={kronosV2 ? updatePenCamera : undefined}
+                            onViewport={kronosV2 ? updatePenViewport : undefined}
+                            widgets={penWidgets}
+                            onWidgets={kronosV2 ? onPenWidgets : undefined}
+                            onWidgetControlsSlot={kronosV2 ? setPenWidgetControlsSlot : undefined}
+                            onWidgetsReady={kronosV2 ? setPenWidgetsReady : undefined}
+                            onWidgetInteract={kronosV2 ? interactWithPenWidget : undefined}
+                            onCanvasInteraction={kronosV2 ? leavePenWidget : undefined}
+                            onOverlay={kronosV2 ? setPenOverlayOpen : undefined}
+                            onPresentation={kronosV2 ? updatePenPresentation : undefined}
+                            context={penContext}
+                            onToolsSlot={kronosV2 ? setPenToolsSlot : undefined}
+                            onSystemControlsSlot={setPenSystemControlsSlot}
+                            onRenderControlsSlot={attachPenRenderControls}
+                            onRenderLibrary={(library) => {
+                                if (library === "nodes" || library === "models") {
+                                    setAndPersist(activateOSWorkflowCanvas);
+                                    $workflowPickerSource.set(library === "nodes" ? "comfy-nodes" : "comfy-models");
+                                    return;
+                                }
+                                if (!Object.hasOwn(ComfyLibraries, library)) return;
+                                setComfyLibrary(library as ComfyLibrary);
+                                setComfyWorkflowOpen(true);
+                                $workflowSidebarMode.set("comfy");
+                                setSidebarOpen(true);
+                            }}
+                            onWorkspaceAction={(workspaceId) => {
+                                if (stateRef.current.view === "kronos-v2") return;
+                                if (!workspaceId) {
+                                    setEditingWorkspaceSetup(false);
+                                    setWorkspaceSetupOpen(true);
+                                    return;
+                                }
+                                const target = workspaces.find(
+                                    (workspace) => (workspace.tabId || workspace.id) === workspaceId
+                                );
+                                if (target) void getApi().switchWorkspace(target.id);
+                            }}
+                        />
                     )}
-                    {designVisible && (
-                        <SystemToolbar className="os-pen-toolbar" aria-label="Design tools" data-live-block-occluder="">
-                            <SystemButton size="small" selected={!designTool && tool === "select"} onClick={() => { setTool("select"); setDesignTool(undefined); }}>Move</SystemButton>
-                            <SystemButton size="small" selected={tool === "hand"} onClick={() => { setTool("hand"); setDesignTool(undefined); }}>Hand</SystemButton>
-                            {PenDrawingTools.map((name) => (
-                                <SystemButton key={name} size="small" selected={designTool === name}
-                                    onClick={() => { setTool("select"); setDesignTool(name); }}>
-                                    {name === "path" ? "Pen" : name[0].toUpperCase() + name.slice(1)}
-                                </SystemButton>
-                            ))}
-                            <SystemButton size="small" onClick={fitAll}>Fit</SystemButton>
-                        </SystemToolbar>
+                    {kronosV2 && penLivePlaneVisible && !penFocusedWidget && !penPresentation.active && (
+                        <button
+                            type="button"
+                            className="kronos-v2-add-folder"
+                            aria-label="Add folder to canvas"
+                            title="Add folder to canvas"
+                            onClick={async () => {
+                                try {
+                                    const path = await getApi().selectDirectory();
+                                    if (!path || stateRef.current.view !== "kronos-v2") return;
+                                    importResources([{ ...canvasFileResource(path), kind: "folder" }]);
+                                } catch {
+                                    setCanvasHint("Could not open the folder picker.");
+                                }
+                            }}
+                        >
+                            <FolderOpen size={17} aria-hidden="true" />
+                        </button>
                     )}
-                    {!designVisible && systemLayerEnabled && state.view === "canvas" && state.scene.kind === "freeform" && (
+                    {kronosV2 && penWidgetControlsSlot && createPortal(
+                        <KronOSV2LayerControls
+                            widgets={penWidgets}
+                            selectedBlockId={penFocusedWidget ?? penLayerWidget ?? penInputWidget}
+                            focusedBlockId={penFocusedWidget}
+                            onToggleVisibility={setPenWidgetVisible}
+                            onToggleFocus={togglePenWidgetExpansion}
+                            onClose={handleClose}
+                        />,
+                        penWidgetControlsSlot
+                    )}
+                    {kronosV2 && penToolsSlot?.isConnected && workflowGraphVisible && createPortal(
+                        <details data-kronos-v2-workflow-tools="">
+                            <summary aria-label="KronFlow tools" title="KronFlow tools">
+                                <Link2 size={16} aria-hidden="true" />
+                            </summary>
+                            <div className="kronos-v2-workflow-tool-popover">
+                                <div ref={setWorkflowToolsTarget} data-workflow-tool-rail="" data-kronos-v2-tool-rail="" />
+                            </div>
+                        </details>,
+                        penToolsSlot
+                    )}
+                    {systemLayerEnabled && kronOSCanvasVisible && (
                         <>
-                            {!selectorOwnsToolbar && (
-                                <SystemButton
-                                    className="os-canvas-tools-trigger"
-                                    aria-label="Elements selector"
-                                    aria-expanded={canvasToolsOpen}
-                                    onClick={() => setFallbackToolsOpen(!fallbackToolsOpen)}
-                                >
-                                    <MousePointer2 />
-                                </SystemButton>
-                            )}
-                            <CanvasToolsPortal target={selectorToolsSlot}>
-                                <div
-                                    role="group"
-                                    aria-label="Elements selector tools"
-                                    className={cn(
-                                        "os-canvas-tool-rail",
-                                        workflowPanelLayout.top > 0 && "has-workflow-tools",
-                                        !canvasToolsOpen && "is-closed",
-                                        selectorToolsSlot && "is-in-selector"
-                                    )}
-                                    aria-hidden={!canvasToolsOpen}
+                            <div
+                                role="group"
+                                aria-label="Canvas tools panel"
+                                className={cn(
+                                    "os-canvas-tool-rail",
+                                    workflowPanelLayout.top > 0 && "has-workflow-tools",
+                                    !canvasToolsOpen && "is-closed",
+                                    "is-kronos-canvas-tools"
+                                )}
+                                aria-hidden={!canvasToolsOpen}
+                                onWheel={(event) => event.stopPropagation()}
+                                data-live-block-occluder=""
+                                data-react-grab-ignore-events=""
+                                data-workflow-panel=""
+                            >
+                                <SystemToolbar
+                                    className="os-canvas-toolbar"
+                                    aria-label="Canvas tools"
                                     data-live-block-occluder=""
                                 >
-                                    <SystemToolbar
-                                        className="os-canvas-toolbar"
-                                        aria-label="Canvas tools"
-                                        data-live-block-occluder=""
-                                    >
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            selected={tool === "select"}
-                                            onClick={() => {
-                                                setConnectorStartId(undefined);
-                                                setCanvasHint("");
-                                                setTool("select");
-                                            }}
-                                            aria-label="Select"
-                                            title="Select"
-                                        >
-                                            <MousePointer2 />
-                                        </SystemButton>
-                                        {isMacOS() && <DesktopGrabControl compact />}
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            selected={tool === "hand"}
-                                            onClick={() => {
-                                                setConnectorStartId(undefined);
-                                                setCanvasHint("");
-                                                setTool("hand");
-                                            }}
-                                            aria-label="Pan Canvas"
-                                            title="Pan Canvas"
-                                        >
-                                            <Hand />
-                                        </SystemButton>
-                                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            onClick={() => addObject("note")}
-                                            aria-label="Add note"
-                                            title="Add note"
-                                        >
-                                            <StickyNote />
-                                        </SystemButton>
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            onClick={() => addObject("rectangle")}
-                                            aria-label="Add rectangle"
-                                            title="Add rectangle"
-                                        >
-                                            <ShapeSquare />
-                                        </SystemButton>
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            onClick={() => addObject("ellipse")}
-                                            aria-label="Add ellipse"
-                                            title="Add ellipse"
-                                        >
-                                            <ShapeCircle />
-                                        </SystemButton>
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            onClick={() => addObject("diamond")}
-                                            aria-label="Add decision"
-                                            title="Add decision"
-                                        >
-                                            <ShapeDiamond />
-                                        </SystemButton>
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            selected={tool === "connector"}
-                                            onClick={() => {
-                                                setConnectorStartId(undefined);
-                                                setCanvasHint("Select two objects to connect.");
-                                                setTool("connector");
-                                            }}
-                                            aria-label="Connect objects"
-                                            title="Connect objects"
-                                        >
-                                            <Link2 />
-                                        </SystemButton>
-                                        <span className="os-canvas-toolbar-separator" aria-hidden="true" />
-                                        <SystemButton
-                                            type="button"
-                                            size="small"
-                                            onClick={fitAll}
-                                            aria-label="Fit all"
-                                            title="Fit all"
-                                        >
-                                            <Focus />
-                                        </SystemButton>
-                                    </SystemToolbar>
-                                    <div
-                                        ref={setWorkflowToolsTarget}
-                                        className="os-original-canvas-tools"
-                                        data-workflow-tool-rail=""
-                                    />
                                     <SystemButton
+                                        type="button"
                                         size="small"
-                                        aria-label="Close elements selector"
-                                        onClick={closeCanvasTools}
+                                        selected={tool === "select"}
+                                        onClick={() => {
+                                            setConnectorStartId(undefined);
+                                            setCanvasHint("");
+                                            setTool("select");
+                                        }}
+                                        aria-label="Select"
+                                        title="Select"
                                     >
-                                        <X />
+                                        <MousePointer2 />
                                     </SystemButton>
-                                </div>
-                            </CanvasToolsPortal>
-                            <CanvasToolsPortal target={document.body}>
-                                <WorkflowFocusPanel
-                                    editing={workflowConfigOpen}
-                                    visible={workflowFocusVisible}
-                                    setTarget={setWorkflowFocusTarget}
+                                    {isMacOS() && <DesktopGrabControl compact />}
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        selected={tool === "hand"}
+                                        onClick={() => {
+                                            setConnectorStartId(undefined);
+                                            setCanvasHint("");
+                                            setTool("hand");
+                                        }}
+                                        aria-label="Pan Canvas"
+                                        title="Pan Canvas"
+                                    >
+                                        <Hand />
+                                    </SystemButton>
+                                    <span className="os-canvas-toolbar-separator" aria-hidden="true" />
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        onClick={() => addObject("note")}
+                                        aria-label="Add note"
+                                        title="Add note"
+                                    >
+                                        <StickyNote />
+                                    </SystemButton>
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        onClick={() => addObject("rectangle")}
+                                        aria-label="Add rectangle"
+                                        title="Add rectangle"
+                                    >
+                                        <ShapeSquare />
+                                    </SystemButton>
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        onClick={() => addObject("ellipse")}
+                                        aria-label="Add ellipse"
+                                        title="Add ellipse"
+                                    >
+                                        <ShapeCircle />
+                                    </SystemButton>
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        onClick={() => addObject("diamond")}
+                                        aria-label="Add decision"
+                                        title="Add decision"
+                                    >
+                                        <ShapeDiamond />
+                                    </SystemButton>
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        selected={tool === "connector"}
+                                        onClick={() => {
+                                            setConnectorStartId(undefined);
+                                            setCanvasHint("Select two objects to connect.");
+                                            setTool("connector");
+                                        }}
+                                        aria-label="Connect objects"
+                                        title="Connect objects"
+                                    >
+                                        <Link2 />
+                                    </SystemButton>
+                                    <span className="os-canvas-toolbar-separator" aria-hidden="true" />
+                                    <SystemButton
+                                        type="button"
+                                        size="small"
+                                        onClick={fitAll}
+                                        aria-label="Fit all"
+                                        title="Fit all"
+                                    >
+                                        <Focus />
+                                    </SystemButton>
+                                </SystemToolbar>
+                                <div
+                                    ref={setWorkflowToolsTarget}
+                                    className="os-original-canvas-tools"
+                                    data-workflow-tool-rail=""
                                 />
-                            </CanvasToolsPortal>
+                                <SystemButton
+                                    size="small"
+                                    aria-label="Close Canvas tools"
+                                    onClick={() => setCanvasToolsOpen(false)}
+                                >
+                                    <X />
+                                </SystemButton>
+                            </div>
+
                         </>
+                    )}
+                    {(kronosV2 || (systemLayerEnabled && kronOSCanvasVisible)) && (
+                        <CanvasToolsPortal target={document.body}>
+                            <WorkflowFocusPanel
+                                editing={workflowConfigOpen}
+                                visible={workflowGraphVisible && workflowFocusVisible}
+                                setTarget={setWorkflowFocusTarget}
+                            />
+                        </CanvasToolsPortal>
                     )}
                     {desktopWidgetsEnabled && state.view === "canvas" && state.scene.kind !== "overview" && (
                         <OSDesktopLayer
@@ -3936,168 +4747,266 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             onPinsChange={updateDockPins}
                         />
                     )}
-                    <OSComfyWorkflow
-                        tabId={tabId}
-                        active={comfyWorkflowOpen}
-                        visible={comfyWorkflowVisible}
-                        camera={state.camera}
-                        order={sceneZIndices}
-                        world={comfyWorldTarget}
-                        libraryTarget={comfyLibraryTarget}
-                        propertiesTarget={comfyPropertiesTarget}
-                        logsTarget={comfyLogsTarget}
-                        panels={comfyPanels}
-                        allowCanvasPicker={tool === "select"}
-                        onActivate={() => {
-                            setComfyWorkflowOpen(true);
-                            const current = stateRef.current;
-                            if (current.view !== "canvas" || current.scene.kind !== "freeform")
-                                setAndPersist(activateOSWorkflowCanvas);
-                        }}
-                        onReady={(ready) => {
-                            setComfyReady(ready);
-                            if (ready && $sidebarOpen.get()) $workflowSidebarMode.set("comfy");
-                        }}
-                        onTogglePanel={(panel) => {
-                            if (panel === "library") {
-                                $workflowSidebarMode.set(comfyPanels.library ? "sessions" : "comfy");
-                                if (!comfyPanels.library) setSidebarOpen(true);
-                            } else if (panel === "properties") {
-                                if (comfyPanels.properties) $krontermInspectorSection.set("files");
-                                else openComfyProperties();
-                            } else setShowComfyLogs((open) => !open);
-                        }}
-                        onClosePanel={(panel) => {
-                            if (panel === "library") $workflowSidebarMode.set("sessions");
-                            else $krontermInspectorSection.set("files");
-                        }}
-                        onNodes={(nodes) => setState((current) => {
-                            const next = {
-                                ...current,
-                                objects: [...current.objects.filter((object) => !object.id.startsWith("comfy:")), ...nodes],
-                                selectedEntityId: current.selectedEntityId?.startsWith("comfy:") &&
-                                    !nodes.some((node) => node.id === current.selectedEntityId)
-                                    ? undefined
-                                    : current.selectedEntityId,
-                            };
-                            stateRef.current = next;
-                            return next;
-                        })}
-                        onSelect={selectCanvasObject}
-                        onFit={(nodes) => {
-                            if (!nodes.length) return;
-                            setAndPersist((current) => ({
-                                ...current,
-                                camera: resolveWorkflowCameraIntent(
-                                    { fitBounds: spatialBoundsForRects(nodes) },
-                                    current.camera,
-                                    viewport
-                                ),
-                            }));
-                        }}
-                        onClose={() => setComfyWorkflowOpen(false)}
-                    />
-                    <div className="os-mode-world" style={{ transform: worldTransform }}>
-                        <div
-                            ref={setComfyWorldTarget}
-                            style={{ display: comfyWorkflowVisible ? "contents" : "none" }}
-                            data-comfy-workflow-world=""
-                            data-workflow-native-host=""
+                    <div
+                        ref={penLivePlaneRef}
+                        className="os-kronos-live-plane"
+                        data-kronos-v2-focused={kronosV2 && penFocusedWidget ? "" : undefined}
+                        data-kronos-v2-presenting={kronosV2 && penSlideWidget ? "" : undefined}
+                        hidden={penCanvasVisible && (!kronosV2 || !penLivePlaneVisible)}
+                        style={kronosV2 && penViewport ? {
+                            inset: "auto",
+                            left: penViewport.x,
+                            top: penViewport.y,
+                            width: penViewport.width,
+                            height: penViewport.height,
+                            "--pen-viewport-x": `${penViewport.x}px`,
+                            "--pen-viewport-y": `${penViewport.y}px`,
+                        } as CSSProperties : undefined}
+                    >
+                        <OSComfyWorkflow
+                            tabId={tabId}
+                            controlsTarget={penCanvasVisible && inspectorOpen ? penRenderControlsSlot : null}
+                            active={comfyWorkflowOpen}
+                            visible={comfyWorkflowOpen && workflowGraphVisible}
+                            camera={renderCamera}
+                            order={sceneZIndices}
+                            world={comfyWorldTarget}
+                            libraryTarget={comfyLibraryTarget}
+                            propertiesTarget={comfyPropertiesTarget}
+                            logsTarget={comfyLogsTarget}
+                            panels={comfyPanels}
+                            allowCanvasPicker={tool === "select"}
+                            onActivate={() => {
+                                setComfyWorkflowOpen(true);
+                                const current = stateRef.current;
+                                if (current.view !== "canvas" || current.scene.kind !== "freeform")
+                                    setAndPersist(activateOSWorkflowCanvas);
+                            }}
+                            onReady={(ready) => {
+                                setComfyReady(ready);
+                                if (ready && $sidebarOpen.get()) $workflowSidebarMode.set("comfy");
+                            }}
+                            onTogglePanel={(panel) => {
+                                if (panel === "library") {
+                                    $workflowSidebarMode.set(comfyPanels.library ? "sessions" : "comfy");
+                                    if (!comfyPanels.library) setSidebarOpen(true);
+                                } else if (panel === "properties") {
+                                    if (comfyPanels.properties) $krontermInspectorSection.set("files");
+                                    else openComfyProperties();
+                                } else setShowComfyLogs((open) => !open);
+                            }}
+                            onClosePanel={(panel) => {
+                                if (panel === "library") $workflowSidebarMode.set("sessions");
+                                else $krontermInspectorSection.set("files");
+                            }}
+                            onNodes={(nodes) =>
+                                setState((current) => {
+                                    const next = {
+                                        ...current,
+                                        objects: [
+                                            ...current.objects.filter((object) => !object.id.startsWith("comfy:")),
+                                            ...nodes,
+                                        ],
+                                        selectedEntityId:
+                                            current.selectedEntityId?.startsWith("comfy:") &&
+                                            !nodes.some((node) => node.id === current.selectedEntityId)
+                                                ? undefined
+                                                : current.selectedEntityId,
+                                    };
+                                    stateRef.current = next;
+                                    return next;
+                                })
+                            }
+                            onSelect={selectCanvasObject}
+                            onFit={(nodes) => {
+                                if (!nodes.length) return;
+                                moveWorkflowCamera({ fitBounds: spatialBoundsForRects(nodes) });
+                            }}
+                            onClose={() => {
+                                setComfyWorkflowOpen(false);
+                                if (penCanvasVisible) $krontermInspectorOpen.set(false);
+                            }}
                         />
                         <div
-                            ref={setWorkflowWorldTarget}
-                            role="group"
-                            aria-label="Workflow objects on the OS canvas"
-                            data-workflow-native-host=""
-                            data-workflow-world=""
-                            hidden={state.view !== "canvas" || state.scene.kind !== "freeform"}
-                            style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-                        />
-                        {state.scene.kind === "freeform" && (
-                            <>
-                                <svg className="os-connectors" aria-hidden="true">
-                                    {connectorObjects.map((connector) => {
-                                        const from = getOSCanvasEntityBounds(state, connector.fromObjectId);
-                                        const to = getOSCanvasEntityBounds(state, connector.toObjectId);
-                                        if (!from || !to) return null;
-                                        return (
-                                            <line
-                                                key={connector.id}
-                                                x1={from.x + from.width / 2}
-                                                y1={from.y + from.height / 2}
-                                                x2={to.x + to.width / 2}
-                                                y2={to.y + to.height / 2}
+                            className="os-mode-world"
+                            style={{
+                                transform: kronosV2
+                                    ? penFocusedWidget
+                                        ? "none"
+                                        : "translate3d(calc(var(--pen-camera-x, 0px) - var(--pen-viewport-x)), calc(var(--pen-camera-y, 0px) - var(--pen-viewport-y)), 0) scale(var(--pen-camera-zoom, 1))"
+                                    : worldTransform,
+                                "--os-canvas-zoom": kronosV2
+                                    ? penFocusedWidget ? 1 : "var(--pen-camera-zoom, 1)"
+                                    : state.camera.zoom,
+                            } as CSSProperties}
+                        >
+                            <div
+                                ref={setComfyWorldTarget}
+                                style={{ display: comfyWorkflowOpen && workflowGraphVisible ? "contents" : "none" }}
+                                data-comfy-workflow-world=""
+                                data-workflow-native-host=""
+                            />
+                            <div
+                                ref={setWorkflowWorldTarget}
+                                role="group"
+                                aria-label="Workflow objects on the OS canvas"
+                                data-workflow-native-host=""
+                                data-workflow-world=""
+                                hidden={!workflowGraphVisible}
+                                style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+                            />
+                            {((!kronosV2 && state.scene.kind === "freeform") || (kronosV2 && !penFocusedWidget && !penPresentation.active)) && (
+                                <>
+                                    {!kronosV2 && <svg className="os-connectors" aria-hidden="true">
+                                        {connectorObjects.map((connector) => {
+                                            const from = dragBounds[connector.fromObjectId] ??
+                                                getOSCanvasEntityBounds(state, connector.fromObjectId);
+                                            const to = dragBounds[connector.toObjectId] ??
+                                                getOSCanvasEntityBounds(state, connector.toObjectId);
+                                            if (!from || !to) return null;
+                                            return (
+                                                <line
+                                                    key={connector.id}
+                                                    x1={from.x + from.width / 2}
+                                                    y1={from.y + from.height / 2}
+                                                    x2={to.x + to.width / 2}
+                                                    y2={to.y + to.height / 2}
+                                                />
+                                            );
+                                        })}
+                                    </svg>}
+                                    {state.objects
+                                        .filter((object) => kronosV2
+                                            ? ["file", "folder", "generated-artifact"].includes(object.kind)
+                                            : object.kind !== "workflow-node")
+                                        .map((object) => (
+                                            <OSCanvasEntity
+                                                key={object.id}
+                                                object={dragBounds[object.id] ? { ...object, ...dragBounds[object.id] } : object}
+                                                selected={(!marquee && state.selectedEntityId === object.id) ||
+                                                    highlightedSelection.includes(object.id)}
+                                                zIndex={(sceneZIndices[object.id] ?? 0) + (kronosV2 ? descriptors.length + 1 : 0)}
+                                                zoom={state.camera.zoom}
+                                                getZoom={kronosV2 ? () => penCameraRef.current.zoom : undefined}
+                                                browseFolderOnClick={kronosV2}
+                                                onSelect={selectCanvasObject}
+                                                onGroupDragStart={
+                                                    !kronosV2 && multiSelection.length > 1 && multiSelection.includes(object.id)
+                                                        ? (event) =>
+                                                              beginWindowInteraction(
+                                                                  event,
+                                                                  object.id,
+                                                                  { bounds: object, presentation: "freeform" },
+                                                                  "move"
+                                                              )
+                                                        : undefined
+                                                }
+                                                onMove={(id, x, y) => updateObject(id, { x, y })}
+                                                onResize={(id, width, height, position) =>
+                                                    updateObject(id, { ...position, width, height })
+                                                }
+                                                onDelete={deleteObject}
+                                                onTextChange={(id, text) => updateObject(id, { text })}
+                                                onOpenResource={openResource}
+                                                onOpenCanvasEntry={openCanvasFolderEntry}
                                             />
-                                        );
-                                    })}
-                                </svg>
-                                {state.objects
-                                    .filter((object) => object.kind !== "workflow-node")
-                                    .map((object) => (
-                                        <OSCanvasEntity
-                                            key={object.id}
-                                            object={object}
-                                            localFile={droppedCanvasFiles.current.get(object.id)}
-                                            selected={state.selectedEntityId === object.id}
-                                            zIndex={sceneZIndices[object.id]}
-                                            zoom={state.camera.zoom}
-                                            onSelect={selectCanvasObject}
-                                            onMove={(id, x, y) => updateObject(id, { x, y })}
-                                            onResize={(id, width, height) => updateObject(id, { width, height })}
-                                            onDelete={deleteObject}
-                                            onTextChange={(id, text) => updateObject(id, { text })}
-                                            onOpenResource={openResource}
-                                        />
-                                    ))}
-                            </>
-                        )}
-                        {descriptors.map((descriptor) => {
-                            const layout = windowLayouts[descriptor.blockId];
-                            const docked = !!activeGroup?.blockIds.includes(descriptor.blockId);
-                            return (
-                                <OSBlockWindow
-                                    key={descriptor.blockId}
-                                    descriptor={descriptor}
-                                    layout={
-                                        state.scene.kind === "freeform"
-                                            ? { ...layout, zIndex: sceneZIndices[descriptor.blockId] }
-                                            : layout
-                                    }
-                                    selected={
-                                        state.selectedEntityId === descriptor.blockId ||
-                                        (state.scene.kind === "focused" &&
-                                            state.scene.blockId === descriptor.blockId) ||
-                                        (state.scene.kind === "overview" &&
-                                            state.scene.selectedBlockId === descriptor.blockId)
-                                    }
-                                    docked={docked}
-                                    maximized={state.windows[descriptor.blockId]?.maximized}
-                                    agentPresence={agentPresenceByBlock.get(descriptor.blockId)}
-                                    reducedMotion={reducedMotion}
-                                    interacting={resizingPane || !!paneTakeover || !!dragBounds[descriptor.blockId]}
-                                    onFocus={focusBlock}
-                                    surfaceInput={surfaceInput}
-                                    onTitlePointerDown={(event, blockId, nextLayout) =>
-                                        beginWindowInteraction(event, blockId, nextLayout, "move")
-                                    }
-                                    onResizePointerDown={(event, blockId, nextLayout, edge) =>
-                                        beginWindowInteraction(event, blockId, nextLayout, "resize", edge)
-                                    }
-                                    onClose={handleClose}
-                                    onCollapse={(blockId) => dispatch({ type: "spatial.collapse", blockId })}
-                                    onToggleFocus={(blockId) =>
-                                        state.windows[blockId]?.maximized
-                                            ? dispatch({ type: "os.window.restore", blockId })
-                                            : dispatch({ type: "os.window.maximize", blockId })
-                                    }
-                                    onDock={dockBlock}
-                                    onDetach={(blockId) => dispatch({ type: "spatial.detach", blockId })}
-                                    onTitleContextMenu={showWindowContextMenu}
-                                />
-                            );
-                        })}
+                                        ))}
+                                </>
+                            )}
+                            {descriptors.map((descriptor) => {
+                                const blockId = descriptor.blockId;
+                                const widget = penWidgetsById.get(blockId);
+                                const penActive = penFocusedWidget === blockId;
+                                const penVisible = widget?.visible && (
+                                    penPresentation.active ? penSlideWidget === blockId : !penFocusedWidget || penActive
+                                );
+                                const penAcceptsInput = penVisible && penLivePlaneVisible;
+                                const nativeLayout = windowLayouts[blockId];
+                                const layout: OSWindowLayout = kronosV2 ? {
+                                    bounds: penActive && penViewport ? {
+                                        x: 8,
+                                        y: 8,
+                                        width: Math.max(1, penViewport.width - 16),
+                                        height: Math.max(1, penViewport.height - 16),
+                                    } : widget ?? nativeLayout.bounds,
+                                    presentation: penVisible ? "freeform" : "collapsed",
+                                    opacity: penVisible ? 1 : 0,
+                                    scale: 1,
+                                    rotateY: 0,
+                                    zIndex: penActive ? descriptors.length + 1 : state.zOrder.indexOf(blockId) + 1,
+                                } : nativeLayout;
+                                const docked = !!activeGroup?.blockIds.includes(descriptor.blockId);
+                                return (
+                                    <OSBlockWindow
+                                        key={descriptor.blockId}
+                                        descriptor={descriptor}
+                                        layout={
+                                            !kronosV2 && state.scene.kind === "freeform"
+                                                ? { ...layout, zIndex: sceneZIndices[descriptor.blockId] }
+                                                : layout
+                                        }
+                                        penWidget={kronosV2}
+                                        penPassive={kronosV2 && !penAcceptsInput}
+                                        canvasWidget={kronosV2 ? !!penVisible : kronOSCanvasVisible && layout.presentation === "freeform"}
+                                        multiSelected={!kronosV2 && highlightedSelection.includes(blockId)}
+                                        selected={kronosV2 ? penAcceptsInput && (penActive || penInputWidget === blockId) : (
+                                            (!marquee && state.selectedEntityId === descriptor.blockId) ||
+                                            (state.scene.kind === "focused" &&
+                                                state.scene.blockId === descriptor.blockId) ||
+                                            (state.scene.kind === "overview" &&
+                                                state.scene.selectedBlockId === descriptor.blockId)
+                                        )}
+                                        docked={!kronosV2 && docked}
+                                        maximized={kronosV2 ? penActive : state.windows[blockId]?.maximized}
+                                        agentPresence={agentPresenceByBlock.get(descriptor.blockId)}
+                                        reducedMotion={reducedMotion}
+                                        interacting={
+                                            kronosV2 || resizingPane || !!paneTakeover || !!dragBounds[blockId]
+                                        }
+                                        onFocus={kronosV2 ? setPenInputWidget : focusBlock}
+                                        surfaceInput={kronosV2 ? penAcceptsInput
+                                            ? ActivePenWidgetInput : PassivePenWidgetInput : surfaceInput}
+                                        onTitlePointerDown={(event, blockId, nextLayout) => {
+                                            if (!kronosV2) beginWindowInteraction(event, blockId, nextLayout, "move");
+                                        }}
+                                        onResizePointerDown={(event, blockId, nextLayout, edge) =>
+                                            beginWindowInteraction(event, blockId, nextLayout, "resize", edge)
+                                        }
+                                        onClose={handleClose}
+                                        onCollapse={kronosV2 ? (blockId) => setPenWidgetVisible(blockId, false)
+                                            : (blockId) => dispatch({ type: "spatial.collapse", blockId })}
+                                        onToggleFocus={kronosV2 ? togglePenWidgetExpansion : (blockId) =>
+                                            state.windows[blockId]?.maximized
+                                                ? dispatch({ type: "os.window.restore", blockId })
+                                                : expandCanvasWidget(blockId)
+                                        }
+                                        onExitFocus={kronosV2 ? penActive ? returnToPenCanvas : undefined :
+                                            state.view === "canvas" &&
+                                            state.scene.kind === "focused" &&
+                                            state.scene.blockId === descriptor.blockId
+                                                ? () => {
+                                                      if (state.windows[descriptor.blockId]?.maximized) {
+                                                          dispatch({ type: "os.window.restore", blockId: descriptor.blockId });
+                                                      }
+                                                      dispatch({ type: "spatial.freeform" });
+                                                  }
+                                                : undefined
+                                        }
+                                        onTitleContextMenu={showWindowContextMenu}
+                                    />
+                                );
+                            })}
+                        </div>
                     </div>
-                    {canvasHint && (
+                    {kronOSCanvasVisible && (marquee || alignmentGuides.length > 0) && (
+                        <CanvasGestureOverlay
+                            viewport={viewportRef.current}
+                            camera={state.camera}
+                            guides={alignmentGuides}
+                            marquee={marquee}
+                        />
+                    )}
+                    {(kronOSCanvasVisible || kronosV2) && canvasHint && (
                         <p
                             role="status"
                             className="absolute bottom-24 left-1/2 z-[1800] -translate-x-1/2 bg-background px-3 py-2 text-sm text-foreground pointer-events-none"
@@ -4105,7 +5014,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             {canvasHint}
                         </p>
                     )}
-                    {dockPreview && (
+                    {state.view === "canvas" && dockPreview && (
                         <div
                             className={cn("os-dock-preview", `is-${dockPreview.side}`)}
                             style={{
@@ -4123,7 +5032,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             </span>
                         </div>
                     )}
-                    {activeGroup && <OSGroupFrame group={activeGroup} layouts={windowLayouts} />}
+                    {state.view === "canvas" && activeGroup && <OSGroupFrame group={activeGroup} layouts={windowLayouts} />}
                     {adjacentPanes.map(({ left, right }) => {
                         const leftWeight = getOSPaneWeight(state, left.id, activeGroup);
                         const rightWeight = getOSPaneWeight(state, right.id, activeGroup);
@@ -4195,6 +5104,49 @@ function WorkflowFocusPanel({
             </div>
             <div ref={setTarget} className="os-canvas-focus-slot" />
         </section>
+    );
+}
+
+function CanvasGestureOverlay({
+    viewport,
+    camera,
+    guides,
+    marquee,
+}: {
+    viewport: HTMLElement;
+    camera: OSModeState["camera"];
+    guides: OSAlignmentGuide[];
+    marquee?: DragBounds;
+}) {
+    if (!viewport) return null;
+    const { left, top, width, height } = viewport.getBoundingClientRect();
+    const { clipPath } = getComputedStyle(viewport);
+    return createPortal(
+        <div className="os-canvas-gesture-overlay" style={{ left, top, width, height, clipPath }} aria-hidden="true">
+            {marquee && (
+                <div
+                    className="os-canvas-marquee"
+                    style={{ left: marquee.x, top: marquee.y, width: marquee.width, height: marquee.height }}
+                />
+            )}
+            {guides.map(({ axis, at, from, to }) => {
+                const offset = from * camera.zoom;
+                const length = (to - from) * camera.zoom;
+                return (
+                    <div
+                        key={axis}
+                        className="os-canvas-alignment-guide"
+                        data-axis={axis}
+                        style={
+                            axis === "x"
+                                ? { left: camera.x + at * camera.zoom, top: camera.y + offset, height: length }
+                                : { left: camera.x + offset, top: camera.y + at * camera.zoom, width: length }
+                        }
+                    />
+                );
+            })}
+        </div>,
+        document.body
     );
 }
 

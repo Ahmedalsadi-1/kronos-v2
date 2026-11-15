@@ -4,6 +4,16 @@ import { makePenFrameClient, registerPenEditor, requestPenEditor } from "./os-pe
 
 afterEach(() => vi.useRealTimers());
 
+it("reconnects an existing frame without creating a pending request", () => {
+    vi.useFakeTimers();
+    const frame = { postMessage: vi.fn() } as unknown as Window;
+    const client = makePenFrameClient(frame, "null");
+    client.connect();
+    expect(frame.postMessage).toHaveBeenCalledExactlyOnceWith({ source: "kronos-pen-host", method: "connect" }, "*");
+    expect(vi.getTimerCount()).toBe(0);
+    client.dispose();
+});
+
 it("waits for the correct workspace editor and rejects unsupported operations", async () => {
     const request = vi.fn().mockResolvedValue({ selection: [] });
     const result = requestPenEditor("design-a", "get_app_state");
@@ -59,4 +69,15 @@ it("expires unavailable workspace editors instead of routing to a different tab"
     const assertion = expect(result).rejects.toThrow("not ready");
     await vi.advanceTimersByTimeAsync(20000);
     await assertion;
+});
+
+it("routes camera updates through the workspace's registered editor", async () => {
+    const camera = { x: 28, y: -13, zoom: 0.75 };
+    const snapshot = { camera, viewport: { x: 240, y: 0, width: 900, height: 700 } };
+    const request = vi.fn().mockResolvedValue(snapshot);
+    const remove = registerPenEditor("canvas-camera", request);
+    await expect(requestPenEditor("canvas-camera", "set_camera", camera)).resolves.toEqual(snapshot);
+    expect(request).toHaveBeenCalledWith("set_camera", camera);
+    await expect(requestPenEditor("canvas-camera", "get_camera")).resolves.toEqual(snapshot);
+    remove();
 });

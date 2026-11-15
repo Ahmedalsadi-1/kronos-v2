@@ -52,6 +52,10 @@ export function HermesDirectoryPreview({ model }: { model: PreviewModel }) {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(true);
     const [revision, setRevision] = useState(0);
+    const [folderPath, setFolderPath] = useState<string | null>(null);
+    const [folderError, setFolderError] = useState("");
+    const [openingFolder, setOpeningFolder] = useState(false);
+    const folderButton = useRef<HTMLButtonElement>(null);
     const current = useRef(0);
     const inflight = useRef(new Set<string>());
 
@@ -104,6 +108,35 @@ export function HermesDirectoryPreview({ model }: { model: PreviewModel }) {
         });
     };
 
+    const openFolder = async () => {
+        const input = folderPath?.trim();
+        if (openingFolder) return;
+        if (!input) {
+            setFolderError("Enter a folder path.");
+            return;
+        }
+        setOpeningFolder(true);
+        setFolderError("");
+        const path = /^(?:[/\\]|~(?:[/\\]|$)|[a-z]:[/\\])/i.test(input)
+            ? input
+            : directory.replace(/[\\/]$/, "") + "/" + input;
+        try {
+            const target = await model.env.rpc.FileInfoCommand(TabRpcClient, {
+                info: { path: formatRemoteUri(path, "local") },
+            });
+            if (!target?.isdir || target.notfound || target.staterror) {
+                setFolderError("That path is not an accessible folder.");
+                return;
+            }
+            await model.goHistory(path);
+            setFolderPath(null);
+        } catch {
+            setFolderError("Could not open that folder.");
+        } finally {
+            setOpeningFolder(false);
+        }
+    };
+
     return (
         <section
             aria-label="KronFiles"
@@ -112,9 +145,47 @@ export function HermesDirectoryPreview({ model }: { model: PreviewModel }) {
         >
             <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1">
                 <Folder size={15} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-xs" title={directory}>
-                    {directory}
-                </span>
+                {folderPath == null ? (
+                    <button
+                        ref={folderButton}
+                        type="button"
+                        aria-label={`Edit folder path: ${directory}`}
+                        className="min-w-0 flex-1 cursor-pointer truncate rounded px-1 text-left text-xs hover:bg-black/10"
+                        title={directory}
+                        onClick={() => setFolderPath(directory)}
+                    >
+                        {directory}
+                    </button>
+                ) : (
+                    <form
+                        className="min-w-0 flex-1"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            void openFolder();
+                        }}
+                    >
+                        <input
+                            autoFocus
+                            aria-label="Folder path"
+                            aria-invalid={Boolean(folderError)}
+                            className="w-full rounded border border-border bg-panel px-1 py-1 text-xs"
+                            readOnly={openingFolder}
+                            value={folderPath}
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) => {
+                                setFolderPath(event.target.value);
+                                setFolderError("");
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key !== "Escape" || openingFolder) return;
+                                event.stopPropagation();
+                                setFolderPath(null);
+                                setFolderError("");
+                                requestAnimationFrame(() => folderButton.current?.focus());
+                            }}
+                        />
+                    </form>
+                )}
                 <button
                     type="button"
                     aria-label="Parent folder"
@@ -132,6 +203,11 @@ export function HermesDirectoryPreview({ model }: { model: PreviewModel }) {
                     <RefreshCw size={15} aria-hidden="true" />
                 </button>
             </header>
+            {folderError && (
+                <p className="px-3 py-2 text-sm" role="alert">
+                    {folderError}
+                </p>
+            )}
             {loading && (
                 <p className="px-3 py-2 text-sm" role="status">
                     Loading files…

@@ -13,7 +13,10 @@ export function getWorkflowSlotStyle(kind: WorkflowSlotKind): string {
         kind === "world" ? ".vue-flow__nodes{--canvas-node--border-color:var(--os-canvas-frame-border,#000)}" : "";
     const chrome =
         kind === "chrome"
-            ? ".kronterm-workflow-header,.kronterm-workflow-logs{border:var(--os-canvas-frame-width,8px) solid var(--os-canvas-frame-border,#000);border-radius:12px}"
+            ? `.kronterm-workflow-header,.kronterm-workflow-logs{border:var(--os-canvas-frame-width,8px) solid var(--os-canvas-frame-border,#000);border-radius:12px}
+            :host([data-kronos-v2-tool-rail]) [data-workflow-slot-root]{flex-wrap:wrap;max-width:100%;gap:6px}
+            :host([data-kronos-v2-tool-rail]) [data-workflow-controls] [role="group"]{flex-wrap:wrap}
+            :host([data-kronos-v2-tool-rail]) button{--kronterm-canvas-tool-color:var(--foreground,CanvasText)}`
             : "";
     const panelPalette =
         kind === "world"

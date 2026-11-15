@@ -18,6 +18,7 @@ import {
     readWorkspacePresentation,
     type WorkspacePresentation,
 } from "@/app/tab/workspace-presentation";
+import { KronOSV2AgentPointerEvent, type KronOSV2AgentPointerDetail } from "@/app/tab/os-kronos-v2-agent-pointer-event";
 import { controlWorkspaceSurface, getWorkspaceSurfaceModeProvider } from "@/app/tab/workspace-surface-runtime";
 import { listAgentWidgets } from "@/app/view/agent-widget-bridge";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
@@ -55,6 +56,7 @@ type BrowserInteractionAction = "click" | "hover" | "longpress" | "scroll" | "ty
 type BrowserInteractionResult = {
     success: boolean;
     message: string;
+    scrollAxis?: "x" | "y";
 };
 
 const DefaultKrontermDesktopComputerUseUrl = "http://localhost:9990/computer-use";
@@ -372,8 +374,11 @@ export function buildBrowserInteractionScript(
                 if (!(target instanceof HTMLElement)) {
                     return { success: false, message: "Scroll target not found" };
                 }
+                const before = target.getBoundingClientRect();
                 target.scrollIntoView({ block: "center", inline: "nearest" });
-                return { success: true, message: "Scrolled target into view" };
+                const after = target.getBoundingClientRect();
+                const scrollAxis = Math.abs(after.x - before.x) > Math.abs(after.y - before.y) ? "x" : "y";
+                return { success: true, message: "Scrolled target into view", scrollAxis };
             }
 
             if (action === "drag") {
@@ -445,30 +450,36 @@ export class TabClient extends WshClient {
             target?.focus({ preventScroll: true });
             return mounted;
         }
+        const tabId = globalStore.get(atoms.staticTabId);
+        const inKronOSV2 = getWorkspaceSurfaceModeProvider(tabId)?.snapshot()?.osview === "kronos-v2";
+        if (inKronOSV2) {
+            await controlWorkspaceSurface(tabId, { action: "os.widget.input", blockid: blockId });
+        }
         const layoutModel = getLayoutModelForStaticTab();
         if (!layoutModel) {
             throw new Error("Layout model not found");
         }
         const node = layoutModel.getNodeByBlockId(blockId);
-        if (!node && mounted) {
+        if (!inKronOSV2 && !node && mounted) {
             const target =
                 mounted.querySelector<HTMLElement>("webview") ??
                 mounted.querySelector<HTMLElement>('textarea, input, [contenteditable="true"]');
             target?.focus({ preventScroll: true });
             return mounted;
         }
-        if (!node) {
+        if (!inKronOSV2 && !node) {
             throw new Error(`Block not found: ${blockId}`);
         }
 
         const presentation = this.getWorkspacePresentation();
-        if (presentation === "canvas" || presentation === "os") {
-            const tabId = globalStore.get(atoms.staticTabId);
+        if (!inKronOSV2 && (presentation === "canvas" || presentation === "os")) {
             await controlWorkspaceSurface(tabId, { action: "focus", blockid: blockId });
         }
 
-        layoutModel.focusNode(node.id);
-        refocusNode(blockId);
+        if (!inKronOSV2) {
+            layoutModel.focusNode(node.id);
+            refocusNode(blockId);
+        }
         await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
         await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 
@@ -477,7 +488,7 @@ export class TabClient extends WshClient {
             throw new Error(`Widget is not mounted after focus: ${blockId}`);
         }
         checkBrowserAccountHandoff(root);
-        root.scrollIntoView({ block: "nearest", inline: "nearest" });
+        if (!inKronOSV2) root.scrollIntoView({ block: "nearest", inline: "nearest" });
         const webview = root.querySelector("webview") as Electron.WebviewTag | null;
         if (webview) {
             webview.focus();
@@ -554,12 +565,12 @@ export class TabClient extends WshClient {
         x: unknown,
         y: unknown,
         scroll = true
-    ): Promise<{ x: number; y: number } | undefined> {
+    ): Promise<{ x: number; y: number; bounds?: KronOSV2AgentPointerDetail["target"] } | undefined> {
         if (typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y)) {
             return { x: Math.round(x), y: Math.round(y) };
         }
         const ref = typeof elementRef === "string" ? elementRef : "";
-        return (await webview.executeJavaScript(browserTargetPointScript(ref, scroll))) ?? undefined;
+        return (await webview.executeJavaScript(browserTargetPointScript(ref, scroll, true))) ?? undefined;
     }
 
     private rendererTarget(
@@ -690,6 +701,64 @@ export class TabClient extends WshClient {
         return true;
     }
 
+    private isKronOSV2(): boolean {
+        return document.querySelector(".os-mode-root.view-kronos-v2") != null;
+    }
+
+    private async reportWidgetTyping(root: HTMLElement, blockId: string, duration: number, webview?: Electron.WebviewTag) {
+        if (!this.isKronOSV2()) return;
+        const status = { typingDurationMs: duration };
+        if (webview) {
+            const point = await this.webviewPoint(webview, "", undefined, undefined, false).catch(() => undefined);
+            this.reportWidgetPointer(root, blockId, point ?? { x: webview.clientWidth / 2, y: webview.clientHeight / 2 }, "type", webview, undefined, status);
+            return;
+        }
+        const active = document.activeElement;
+        const target = active instanceof HTMLElement && root.contains(active) ? active : root;
+        const rect = target.getBoundingClientRect();
+        this.reportWidgetPointer(root, blockId, { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, "type", undefined, target, status);
+    }
+
+    private reportWidgetPointer(
+        root: HTMLElement,
+        blockId: string,
+        point: { x: number; y: number; bounds?: KronOSV2AgentPointerDetail["target"] },
+        action: BrowserInteractionAction,
+        webview?: Electron.WebviewTag,
+        target?: HTMLElement,
+        status?: Pick<KronOSV2AgentPointerDetail, "scrollAxis" | "typingDurationMs" | "followDelayMs">
+    ) {
+        if (this.isKronOSV2() && action !== "press") {
+            const rect = webview?.getBoundingClientRect();
+            const scaleX = rect && webview.clientWidth ? rect.width / webview.clientWidth : 1;
+            const scaleY = rect && webview.clientHeight ? rect.height / webview.clientHeight : 1;
+            const screenPoint = rect
+                ? { x: rect.x + point.x * scaleX, y: rect.y + point.y * scaleY }
+                : { x: point.x, y: point.y };
+            const bounds = point.bounds;
+            const targetRect = bounds && rect
+                ? {
+                      x: rect.x + bounds.x * scaleX,
+                      y: rect.y + bounds.y * scaleY,
+                      width: bounds.width * scaleX,
+                      height: bounds.height * scaleY,
+                  }
+                : (target ?? webview ?? root).getBoundingClientRect();
+            window.dispatchEvent(new CustomEvent<KronOSV2AgentPointerDetail>(KronOSV2AgentPointerEvent, {
+                detail: {
+                    blockId,
+                    point: screenPoint,
+                    action,
+                    ...status,
+                    target: { x: targetRect.x, y: targetRect.y, width: targetRect.width, height: targetRect.height },
+                },
+            }));
+            return;
+        }
+        if (action !== "scroll-to" && action !== "type")
+            window.dispatchEvent(new CustomEvent("kron-agent-pointer", { detail: { blockId, point: { x: point.x, y: point.y }, action } }));
+    }
+
     private async executeRendererInteraction(
         root: HTMLElement,
         blockId: string,
@@ -700,7 +769,9 @@ export class TabClient extends WshClient {
         if (action === "type") {
             const text = String(payload.text ?? "");
             const delayMs = Math.max(0, Number(payload.delayMs ?? 0));
+            const duration = Math.max(400, delayMs * text.length);
             if (root.querySelector("[data-macos-vm]")) {
+                if (text) await this.reportWidgetTyping(root, blockId, duration);
                 await typeMacVmText(blockId, text, delayMs);
                 return { blockid: blockId, success: true, message: `Typed ${text.length} character(s) in macOS guest` };
             }
@@ -712,6 +783,7 @@ export class TabClient extends WshClient {
                         message: "No focused editable browser field; click a writable text target before typing",
                     };
                 }
+                if (text) await this.reportWidgetTyping(root, blockId, duration, webview);
                 if (delayMs === 0) {
                     await webview.insertText(text);
                 } else {
@@ -720,12 +792,15 @@ export class TabClient extends WshClient {
                         await new Promise((resolve) => window.setTimeout(resolve, delayMs));
                     }
                 }
-            } else if (delayMs === 0) {
-                await getApi().insertText(text);
             } else {
-                for (const character of text) {
-                    await getApi().insertText(character);
-                    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+                if (text) await this.reportWidgetTyping(root, blockId, duration);
+                if (delayMs === 0) {
+                    await getApi().insertText(text);
+                } else {
+                    for (const character of text) {
+                        await getApi().insertText(character);
+                        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+                    }
                 }
             }
             return { blockid: blockId, success: true, message: `Typed ${text.length} character(s)` };
@@ -743,11 +818,19 @@ export class TabClient extends WshClient {
                 const result = (await webview.executeJavaScript(
                     buildBrowserInteractionScript(action, payload)
                 )) as BrowserInteractionResult;
+                if (result.success && this.isKronOSV2()) {
+                    const point = await this.webviewPoint(webview, payload.elementref, payload.x, payload.y, false).catch(() => undefined);
+                    if (point) this.reportWidgetPointer(root, blockId, point, action, webview, undefined, { scrollAxis: result.scrollAxis });
+                }
                 return { blockid: blockId, success: result.success, message: result.message };
             }
             const point = this.rendererTarget(root, payload.elementref, payload.x, payload.y);
             if (!point) return { blockid: blockId, success: false, message: "Scroll target not found" };
+            const before = point.target.getBoundingClientRect();
             point.target.scrollIntoView({ block: "center", inline: "nearest" });
+            const rect = point.target.getBoundingClientRect();
+            const scrollAxis = Math.abs(rect.x - before.x) > Math.abs(rect.y - before.y) ? "x" : "y";
+            this.reportWidgetPointer(root, blockId, { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, action, undefined, point.target, { scrollAxis });
             return { blockid: blockId, success: true, message: "Scrolled target into view" };
         }
 
@@ -772,16 +855,14 @@ export class TabClient extends WshClient {
                 ? (payload.button as "left" | "middle" | "right")
                 : "left";
             await sendPointerDrag(send, start, end, button, (point) => {
-                window.dispatchEvent(
-                    new CustomEvent("kron-agent-pointer", {
-                        detail: { blockId, point, action },
-                    })
-                );
+                this.reportWidgetPointer(root, blockId, point, action, webview);
             });
             return { blockid: blockId, success: true, message: "Drag completed" };
         }
 
-        const domPoint = webview ? undefined : this.rendererTarget(root, payload.elementref, payload.x, payload.y);
+        const domPoint = webview
+            ? undefined
+            : this.rendererTarget(root, payload.elementref, payload.x ?? payload.originX, payload.y ?? payload.originY);
         const point = webview
             ? await this.webviewPoint(
                   webview,
@@ -796,11 +877,12 @@ export class TabClient extends WshClient {
         if (domPoint) {
             domPoint.target.focus({ preventScroll: true });
         }
-        window.dispatchEvent(
-            new CustomEvent("kron-agent-pointer", {
-                detail: { blockId, point: { x: point.x, y: point.y }, action },
-            })
-        );
+        const scrollAxis = action === "scroll" ? "y" : undefined;
+        const holdDuration = action === "longpress" ? Math.max(0, Number(payload.duration ?? 500)) : 0;
+        this.reportWidgetPointer(root, blockId, point, action, webview, domPoint?.target, {
+            scrollAxis,
+            followDelayMs: holdDuration,
+        });
         const send = (event: Electron.MouseInputEvent | Electron.MouseWheelInputEvent) =>
             webview ? webview.sendInputEvent(event) : getApi().sendInputEvent(event);
         if (action === "hover") {
@@ -827,7 +909,7 @@ export class TabClient extends WshClient {
         await send({ type: "mouseMove", x: point.x, y: point.y });
         await send({ type: "mouseDown", x: point.x, y: point.y, button, clickCount });
         if (action === "longpress") {
-            await new Promise((resolve) => window.setTimeout(resolve, Math.max(0, Number(payload.duration ?? 500))));
+            await new Promise((resolve) => window.setTimeout(resolve, holdDuration));
         }
         await send({ type: "mouseUp", x: point.x, y: point.y, button, clickCount });
         return {
@@ -1089,12 +1171,37 @@ export class TabClient extends WshClient {
             throw new Error(`Workspace ${presentation} surface is not mounted`);
         }
         const rect = container.getBoundingClientRect();
-        return getApi().captureScreenshot({
+        const capture = () => getApi().captureScreenshot({
             x: Math.round(rect.x),
             y: Math.round(rect.y),
             width: Math.max(1, Math.round(rect.width)),
             height: Math.max(1, Math.round(rect.height)),
         });
+        const styles: HTMLStyleElement[] = [];
+        const hide = (doc: Document, selector: string) => {
+            const style = doc.createElement("style");
+            style.textContent = `${selector} { visibility: hidden !important; }`;
+            doc.head.append(style);
+            styles.push(style);
+        };
+        try {
+            hide(document, "[data-kronterm-hermes-hud], [data-kronterm-hermes-hud] *, [data-hermes-overlay-layer], [data-hermes-overlay-layer] *");
+            const penHost = container.querySelector<HTMLIFrameElement>('iframe[name="kronos-pen-editor"]');
+            const penEditor = penHost?.contentDocument?.querySelector<HTMLIFrameElement>("#pen-editor");
+            const penDocument = penEditor?.contentDocument;
+            if (penDocument?.head) {
+                hide(penDocument, [
+                    "[data-agent-spotlight]",
+                    "[data-kronos-mini-chat]",
+                    "[data-kronos-chat-panel]",
+                    ":has(> [data-kronos-chat-panel])",
+                ].flatMap((selector) => [selector, `${selector} *`]).join(", "));
+            }
+            await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+            return await capture();
+        } finally {
+            for (const style of styles) style.remove();
+        }
     }
 
     async handle_workspacesurfacecontrol(
@@ -1103,6 +1210,10 @@ export class TabClient extends WshClient {
     ): Promise<string> {
         const presentation = this.getWorkspacePresentation();
         const tabId = globalStore.get(atoms.staticTabId);
+        if (data.action === "hud.mode" && data.presentation === "exclusive" &&
+            getWorkspaceSurfaceModeProvider(tabId)?.snapshot()?.osview === "kronos-v2") {
+            return JSON.stringify({ success: false, message: "Use the workspace view selector to leave KronOS v2." });
+        }
         if (data.action === "hud.launch") {
             if (!kronTermHudController.getSnapshot().active) throw new Error("KronOS HUD mode is not active");
             const options = data.text ? JSON.parse(data.text) : {};
@@ -1161,6 +1272,9 @@ export class TabClient extends WshClient {
             return JSON.stringify({ ...hudResult, snapshot: this.makeWorkspaceSurfaceSnapshot() }, null, 2);
         }
         if (data.action === "set_presentation") {
+            if (data.presentation !== "os" && getWorkspaceSurfaceModeProvider(tabId)?.snapshot()?.osview === "kronos-v2") {
+                return JSON.stringify({ success: false, message: "Use the workspace view selector to leave KronOS v2." });
+            }
             if (!isWorkspacePresentation(data.presentation)) {
                 throw new Error(`Invalid workspace presentation: ${data.presentation}`);
             }

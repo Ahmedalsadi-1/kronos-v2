@@ -1,8 +1,25 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { atom } from "jotai";
+
+export const activePenCanvasTabAtom = atom("");
+
 export const PenEditorMethods = [
     "get_app_state",
+    "get_camera",
+    "set_camera",
+    "sync_widgets",
+    "update_widget_previews",
+    "get_commands",
+    "run_command",
+    "get_settings",
+    "set_settings",
+    "set_context",
+    "agent_reply",
+    "show_chat",
+    "show_workspaces",
+    "focus_canvas",
     "get_tools",
     "execute",
     "read_skill",
@@ -14,6 +31,21 @@ export const PenEditorMethods = [
     "export",
 ] as const;
 export type PenEditorMethod = (typeof PenEditorMethods)[number];
+type PenFrameMethod =
+    | PenEditorMethod
+    | "agent_workers"
+    | "composer_voice_update"
+    | "resume_hermes_chat"
+    | "composer_completions"
+    | "composer_sandbox_update"
+    | "hermes_history_opened"
+    | "hermes_history_results"
+    | "set_bot_roster"
+    | "set_file_panel"
+    | "set_history_extras"
+    | "set_workflow_library"
+    | "set_workspace_inspector"
+    | "set_workspace_navigation";
 type EditorRequest = (method: PenEditorMethod, params?: Record<string, unknown>) => Promise<unknown>;
 const Editors = new Map<string, EditorRequest>();
 const Waiters = new Map<string, Set<(request: EditorRequest) => void>>();
@@ -25,6 +57,10 @@ export function registerPenEditor(tabId: string, request: EditorRequest) {
     return () => {
         if (Editors.get(tabId) === request) Editors.delete(tabId);
     };
+}
+
+export function savePenEditorIfReady(tabId: string) {
+    return Editors.get(tabId)?.("save");
 }
 
 export async function requestPenEditor(tabId: string, method: PenEditorMethod, params: Record<string, unknown> = {}) {
@@ -40,7 +76,7 @@ export async function requestPenEditor(tabId: string, method: PenEditorMethod, p
             const timer = setTimeout(() => {
                 waiters.delete(ready);
                 if (!waiters.size) Waiters.delete(tabId);
-                reject(new Error("The Pen editor is not ready. Open Design and check its startup status."));
+                reject(new Error("The Pen editor is not ready. Check the workspace canvas startup status."));
             }, 20000);
             waiters.add(ready);
             Waiters.set(tabId, waiters);
@@ -54,7 +90,10 @@ export function makePenFrameClient(frame: Window, origin: string) {
         { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
     >();
     return {
-        request(method: PenEditorMethod, params: Record<string, unknown> = {}) {
+        connect() {
+            frame.postMessage({ source: "kronos-pen-host", method: "connect" }, origin === "null" ? "*" : origin);
+        },
+        request(method: PenFrameMethod, params: Record<string, unknown> = {}) {
             return new Promise<unknown>((resolve, reject) => {
                 const id = crypto.randomUUID();
                 const timer = setTimeout(() => {

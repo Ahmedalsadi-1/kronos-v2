@@ -22,7 +22,7 @@ const NavigationLabels = {
     sessions: "Sessions",
     workflows: "KronFlow",
     comfy: "KronRender",
-    design: "Design",
+    design: "Canvas",
 };
 
 export function KrontermSidebar({ children, preferred = false }: { children: ReactNode; preferred?: boolean }) {
@@ -65,7 +65,7 @@ export function KrontermSidebar({ children, preferred = false }: { children: Rea
                             className="h-full min-h-0"
                             style={{ "--sidebar-width": "100%" } as CSSProperties}
                         >
-                            <div className="flex h-full min-h-0 w-full flex-col">
+                            <div className="flex h-full min-h-0 w-full flex-col bg-black">
                                 <div
                                     role="tablist"
                                     aria-label="Workspace navigation"

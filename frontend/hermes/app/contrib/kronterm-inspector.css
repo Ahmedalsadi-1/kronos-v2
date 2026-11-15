@@ -4,9 +4,10 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    background: var(--os-frame-color, var(--color-black, #000));
+    background: var(--color-black, #000);
     color: var(--ui-text-primary);
     container-type: inline-size;
+    --ui-sidebar-surface-background: var(--color-black, #000);
 }
 .kronterm-inspector-resize {
     position: absolute;
@@ -30,7 +31,7 @@
     height: 38px;
     flex-shrink: 0;
     padding: 3px 4px 3px 8px;
-    background: var(--os-frame-color, var(--color-black, #000));
+    background: var(--color-black, #000);
     border-bottom: 1px solid var(--ui-stroke-secondary);
 }
 .kronterm-inspector-tabs {

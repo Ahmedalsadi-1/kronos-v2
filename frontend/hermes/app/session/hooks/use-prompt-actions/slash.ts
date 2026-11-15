@@ -4,7 +4,7 @@ import { type MutableRefObject, useCallback, useRef } from 'react'
 import { getProfiles } from '@hermes/hermes'
 import type { Translations } from '@hermes/i18n'
 import { type ChatMessage, toChatMessages } from '@hermes/lib/chat-messages'
-import { parseCommandDispatch, parseSlashCommand, sessionTitle } from '@hermes/lib/chat-runtime'
+import { parseCommandDispatch, parseSlashCommand } from '@hermes/lib/chat-runtime'
 import {
   type CommandsCatalogLike,
   type DesktopActionId,
@@ -61,7 +61,7 @@ import type {
 import { resolveTargetSessionId } from './resolve-target-session'
 import {
   type GatewayRequest,
-  isSessionIdCandidate,
+  resolveSlashSessionId,
   isTargetSessionBusy,
   renderCommandsCatalog,
   renderRpcResult,
@@ -1063,27 +1063,14 @@ export function useSlashCommand(deps: SlashCommandDeps) {
           return
         }
 
-        const sessions = $sessions.get()
-        const lower = query.toLowerCase()
-
-        const match =
-          sessions.find(session => session.id === query) ||
-          sessions.find(session => sessionTitle(session).toLowerCase().includes(lower)) ||
-          sessions.find(session => (session.preview ?? '').toLowerCase().includes(lower))
-
-        if (!match) {
-          if (isSessionIdCandidate(query)) {
-            await resumeStoredSession(query)
-
-            return
-          }
-
+        const sessionId = resolveSlashSessionId($sessions.get(), query)
+        if (!sessionId) {
           notify({ kind: 'error', message: copy.resumeFailed })
 
           return
         }
 
-        await resumeStoredSession(match.id)
+        await resumeStoredSession(sessionId)
       }
 
       // The whole dispatcher: resolve the command's desktop surface, then act on

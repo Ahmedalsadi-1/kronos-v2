@@ -114,7 +114,7 @@ export function spatialBoundsForRects(rects: SpatialRect[]): SpatialRect | null 
 
 export function fitSpatialViewportToBounds(
     bounds: SpatialRect,
-    viewport: SpatialSize,
+    viewport: SpatialSize & Partial<SpatialPoint>,
     padding = 96,
     maxZoom = 1.15
 ): SpatialViewport {
@@ -126,8 +126,8 @@ export function fitSpatialViewportToBounds(
     );
     return {
         zoom,
-        x: Math.round(viewport.width / 2 - (bounds.x + bounds.width / 2) * zoom),
-        y: Math.round(viewport.height / 2 - (bounds.y + bounds.height / 2) * zoom),
+        x: Math.round((viewport.x ?? 0) + viewport.width / 2 - (bounds.x + bounds.width / 2) * zoom),
+        y: Math.round((viewport.y ?? 0) + viewport.height / 2 - (bounds.y + bounds.height / 2) * zoom),
     };
 }
 

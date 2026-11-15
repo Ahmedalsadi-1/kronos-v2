@@ -97,6 +97,7 @@ export function OSComfyWorkflow({
     camera,
     order,
     world,
+    controlsTarget,
     libraryTarget,
     propertiesTarget,
     logsTarget,
@@ -117,6 +118,7 @@ export function OSComfyWorkflow({
     camera: WorkflowCamera;
     order: Record<string, number>;
     world: HTMLElement;
+    controlsTarget?: HTMLElement | null;
     libraryTarget: HTMLElement;
     propertiesTarget: HTMLElement;
     logsTarget: HTMLElement;
@@ -172,9 +174,9 @@ export function OSComfyWorkflow({
     const controlsWereOpen = useRef(false);
     useEffect(() => {
         const open = active && controlsOpen;
-        if (open && !controlsWereOpen.current && !visible) onActivate();
+        if (open && !controlsWereOpen.current && !visible && !controlsTarget) onActivate();
         controlsWereOpen.current = open;
-    }, [active, controlsOpen, visible, onActivate]);
+    }, [active, controlsOpen, controlsTarget, visible, onActivate]);
     useEffect(() => {
         current.current.onNodes(visible ? objects.current : []);
     }, [visible]);
@@ -360,7 +362,7 @@ export function OSComfyWorkflow({
     const connect = useCallback(async () => {
         if (connecting.current || status !== "idle") return;
         connecting.current = true;
-        if (!visible && !(active && controlsOpen)) onActivate();
+        if (!visible && !controlsTarget && !(active && controlsOpen)) onActivate();
         setError("");
         setStatus("loading");
         setOrigin("");
@@ -376,7 +378,7 @@ export function OSComfyWorkflow({
         } finally {
             connecting.current = false;
         }
-    }, [active, address, controlsOpen, onActivate, status, visible]);
+    }, [active, address, controlsOpen, controlsTarget, onActivate, status, visible]);
 
     const connectionRequested =
         (active && controlsOpen) || (catalogOpen && (nodesOnly || modelsOnly || connectFromPicker));
@@ -500,6 +502,113 @@ export function OSComfyWorkflow({
         />
     );
 
+    const controls = (
+        <section
+            className="flex flex-wrap items-center gap-1 bg-[#191a1c] p-2 text-white"
+            aria-label="KronRender workflow controls"
+            data-workflow-chrome=""
+            onPointerDown={(event) => event.stopPropagation()}
+        >
+            {status !== "ready" ? (
+                connectionForm
+            ) : (
+                <>
+                    <button
+                        className={button}
+                        onClick={() => {
+                            $comfyControlsOpen.set(false);
+                            if (controlsTarget) onActivate();
+                            editor.current?.openPicker();
+                        }}
+                    >
+                        Add node
+                    </button>
+                    <button
+                        className={button}
+                        aria-pressed={!!panels.library}
+                        onClick={() => {
+                            if (controlsTarget) onActivate();
+                            onTogglePanel("library");
+                        }}
+                    >
+                        Libraries
+                    </button>
+                    <button
+                        className={button}
+                        aria-pressed={panels.properties}
+                        onClick={() => {
+                            if (controlsTarget) onActivate();
+                            onTogglePanel("properties");
+                        }}
+                    >
+                        Node Properties
+                    </button>
+                    <button className={button} aria-pressed={panels.logs} onClick={() => {
+                            if (controlsTarget) onActivate();
+                            onTogglePanel("logs");
+                        }}>
+                        Logs
+                    </button>
+                    <button className={button} onClick={() => {
+                            if (controlsTarget) onActivate();
+                            onFit(objects.current);
+                        }}>
+                        Fit nodes
+                    </button>
+                    <button className={button} onClick={() => fileInput.current?.click()}>
+                        Import
+                    </button>
+                    <button className={button} onClick={() => void exportWorkflow().catch(report)}>
+                        Export
+                    </button>
+                    <button className={button} onClick={() => void exportWorkflow(true).catch(report)}>
+                        Export for MCP
+                    </button>
+                    <button className={button} onClick={() => void editor.current?.run().catch(report)}>
+                        Run
+                    </button>
+                    <input
+                        ref={fileInput}
+                        hidden
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={async (event) => {
+                            const input = event.currentTarget;
+                            const file = input.files?.[0];
+                            input.value = "";
+                            if (!file) return;
+                            try {
+                                await editor.current?.importWorkflow(JSON.parse(await file.text()));
+                            } catch (reason) {
+                                report(reason);
+                            }
+                        }}
+                    />
+                </>
+            )}
+            <button
+                className={button}
+                title="Import in Hermes Capabilities → MCP"
+                onClick={() => void copyMcp()}
+            >
+                {copied ? "MCP copied" : "Copy MCP config"}
+            </button>
+            <button
+                className={button}
+                onClick={() => {
+                    $comfyControlsOpen.set(false);
+                    onClose();
+                }}
+            >
+                Hide KronRender
+            </button>
+            {error && (
+                <p className="basis-full px-1 text-xs text-red-400" role="alert">
+                    {error}
+                </p>
+            )}
+        </section>
+    );
     return (
         <>
             <div
@@ -569,106 +678,17 @@ export function OSComfyWorkflow({
                 />,
                 document.body
             )}
-            <WorkflowNodePickerPopup
-                open={active && visible && controlsOpen}
-                label="KronRender controls"
-                title="KronRender"
-                compact
-                onClose={() => $comfyControlsOpen.set(false)}
-            >
-                <section
-                    className="flex flex-wrap items-center gap-1 bg-[#191a1c] p-2 text-white"
-                    aria-label="KronRender workflow controls"
-                    data-workflow-chrome=""
-                    onPointerDown={(event) => event.stopPropagation()}
+            {controlsTarget ? createPortal(controls, controlsTarget) : (
+                <WorkflowNodePickerPopup
+                    open={active && visible && controlsOpen}
+                    label="KronRender controls"
+                    title="KronRender"
+                    compact
+                    onClose={() => $comfyControlsOpen.set(false)}
                 >
-                    {status !== "ready" ? (
-                        connectionForm
-                    ) : (
-                        <>
-                            <button
-                                className={button}
-                                onClick={() => {
-                                    $comfyControlsOpen.set(false);
-                                    editor.current?.openPicker();
-                                }}
-                            >
-                                Add node
-                            </button>
-                            <button
-                                className={button}
-                                aria-pressed={!!panels.library}
-                                onClick={() => onTogglePanel("library")}
-                            >
-                                Libraries
-                            </button>
-                            <button
-                                className={button}
-                                aria-pressed={panels.properties}
-                                onClick={() => onTogglePanel("properties")}
-                            >
-                                Node Properties
-                            </button>
-                            <button className={button} aria-pressed={panels.logs} onClick={() => onTogglePanel("logs")}>
-                                Logs
-                            </button>
-                            <button className={button} onClick={() => onFit(objects.current)}>
-                                Fit nodes
-                            </button>
-                            <button className={button} onClick={() => fileInput.current?.click()}>
-                                Import
-                            </button>
-                            <button className={button} onClick={() => void exportWorkflow().catch(report)}>
-                                Export
-                            </button>
-                            <button className={button} onClick={() => void exportWorkflow(true).catch(report)}>
-                                Export for MCP
-                            </button>
-                            <button className={button} onClick={() => void editor.current?.run().catch(report)}>
-                                Run
-                            </button>
-                            <input
-                                ref={fileInput}
-                                hidden
-                                type="file"
-                                accept=".json,application/json"
-                                onChange={async (event) => {
-                                    const input = event.currentTarget;
-                                    const file = input.files?.[0];
-                                    input.value = "";
-                                    if (!file) return;
-                                    try {
-                                        await editor.current?.importWorkflow(JSON.parse(await file.text()));
-                                    } catch (reason) {
-                                        report(reason);
-                                    }
-                                }}
-                            />
-                        </>
-                    )}
-                    <button
-                        className={button}
-                        title="Import in Hermes Capabilities → MCP"
-                        onClick={() => void copyMcp()}
-                    >
-                        {copied ? "MCP copied" : "Copy MCP config"}
-                    </button>
-                    <button
-                        className={button}
-                        onClick={() => {
-                            $comfyControlsOpen.set(false);
-                            onClose();
-                        }}
-                    >
-                        Hide KronRender
-                    </button>
-                    {error && (
-                        <p className="basis-full px-1 text-xs text-red-400" role="alert">
-                            {error}
-                        </p>
-                    )}
-                </section>
-            </WorkflowNodePickerPopup>
+                    {controls}
+                </WorkflowNodePickerPopup>
+            )}
         </>
     );
 }

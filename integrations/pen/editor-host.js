@@ -4,6 +4,7 @@
     if (localStorage.getItem("pencil-cookie-consent") == null)
         localStorage.setItem("pencil-cookie-consent", "declined");
     const workspace = new URLSearchParams(location.search).get("workspace") || "default";
+    const includeWidgetSlides = workspace.startsWith("kronos-v2:");
     const storageKey = `kronos.pen.document.${workspace}`;
     const fileURI = `file:///kronos/${encodeURIComponent(workspace)}/untitled.pen`;
     const frame = document.getElementById("pen-editor");
@@ -15,12 +16,222 @@
     let appearance = {};
     let latestContent;
     let persistenceError;
+    let scene;
+    const agentReplies = new Map();
+    let historyReply;
+    let historyOpen;
+    let historySerial = 0;
+    let editorReady = false;
+    let announcedScene;
+    let disposeScene;
+    let widgets;
+    let commands;
+    let settings;
+    let shell;
+    let navigationMode = "sessions";
+    let workspaceContext = { workspaceId: workspace };
+    let applyingCamera = false;
+    let lastCamera;
+    let cameraSequence = 0;
+    let presentationSlide;
     let theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const cameraSnapshot = () => {
+        if (!scene || scene.destroyed) throw new Error("The Pen canvas is still starting");
+        const camera = scene.camera;
+        const translation = camera.toScreen(0, 0);
+        const bounds = scene.containerBounds;
+        const [top, right, bottom, left] = camera.screenInsets;
+        const outer = frame.getBoundingClientRect();
+        return {
+            camera: {
+                x: translation.x + bounds.x + outer.x,
+                y: translation.y + bounds.y + outer.y,
+                zoom: camera.zoom,
+            },
+            viewport: {
+                x: bounds.x + outer.x + left,
+                y: bounds.y + outer.y + top,
+                width: Math.max(0, camera.screenWidth - left - right),
+                height: Math.max(0, camera.screenHeight - top - bottom),
+            },
+        };
+    };
+    const emitSurface = (message) => {
+        const hostFrame = window.frameElement;
+        if (hostFrame) {
+            const event = new CustomEvent("kronos-pen-surface", { detail: message, cancelable: true });
+            if (!hostFrame.dispatchEvent(event)) return;
+        }
+        emit(message);
+    };
+    const emitCamera = () => {
+        if (applyingCamera || !scene || scene.destroyed) return;
+        emitPresentation();
+        const snapshot = cameraSnapshot();
+        const serialized = JSON.stringify(snapshot);
+        if (serialized === lastCamera) return;
+        lastCamera = serialized;
+        // Deliver geometry before Pen and the live widget layer can paint different camera positions.
+        emitSurface({ type: "camera", sequence: ++cameraSequence, ...snapshot });
+    };
+    const emitPresentation = (force = false) => {
+        const slide = scene.stateManager?.state?.currentSlide;
+        if (!force && slide === presentationSlide) return;
+        presentationSlide = slide;
+        const metadata = slide?.properties?.resolved?.metadata;
+        const blockId = includeWidgetSlides && metadata?.type === "kronos-live-widget" ? metadata.blockId : undefined;
+        emitSurface({ type: "presentation", active: slide != null, blockId });
+    };
+    const announceReady = (force = false) => {
+        if (!editorReady || !scene || scene.destroyed || !widgets) return false;
+        if (!force && announcedScene === scene) return true;
+        announcedScene = scene;
+        emit({ type: "ready", workspace, engine: "pen-web-embed" });
+        lastCamera = undefined;
+        emitCamera();
+        if (presentationSlide) emitPresentation(true);
+        return true;
+    };
+    const connectScene = () => {
+        const next = frame.contentWindow?.__kronosPenScene;
+        if (!next || next === scene) return;
+        disposeScene?.();
+        scene = next;
+        frame.contentWindow.__kronosV2 = includeWidgetSlides;
+        frame.contentWindow.__kronosSubmitAgent = ({ prompt, files, conversationId, ...options }, reply) => {
+            const id = crypto.randomUUID();
+            if (files?.length) {
+                queueMicrotask(() =>
+                    reply({
+                        type: "end",
+                        content: { reason: "failed", message: "File attachments from Pen chat are not supported yet." },
+                    })
+                );
+                return;
+            }
+            agentReplies.set(id, { reply, conversationId });
+            shell?.setAgentWorkers(conversationId, []);
+            emit({ type: "agent-prompt", requestId: id, prompt, options, conversationId, hermesSessionId: conversationId?.startsWith("hermes:") ? conversationId.slice(7) : undefined });
+        };
+        frame.contentWindow.__kronosStopAgent = (conversationId) => {
+            for (const [requestId, pending] of agentReplies) {
+                if (pending.conversationId !== conversationId) continue;
+                emit({ type: "agent-stop", requestId });
+                return true;
+            }
+            return false;
+        };
+        frame.contentWindow.__kronosSearchSessions = (query, reply) => {
+            const requestId = ++historySerial;
+            historyReply = { requestId, reply };
+            emit({ type: "hermes-history-search", requestId, query });
+            return () => {
+                if (historyReply?.requestId === requestId) historyReply = undefined;
+            };
+        };
+        frame.contentWindow.__kronosOpenHistoryTool = (tool) => emit({ type: "history-tool-open", tool });
+        frame.contentWindow.__kronosOpenSession = (sessionId, reply) => {
+            const requestId = ++historySerial;
+            historyOpen = { requestId, reply };
+            emit({ type: "hermes-history-open", requestId, sessionId });
+            return () => {
+                if (historyOpen?.requestId === requestId) historyOpen = undefined;
+            };
+        };
+        widgets = window.createKronosPenWidgets(scene, emitSurface, frame.contentDocument);
+        commands = window.createKronosPenCommands?.(scene, frame.contentWindow, emit);
+        settings = window.createKronosPenSettings?.(scene, emit);
+        shell = window.createKronosPenShell?.(scene, emit, frame.contentDocument, {
+            workspaceId: workspace,
+            openTelegram(sessionId, reply) {
+                const requestId = ++historySerial;
+                historyOpen = { requestId, reply };
+                emit({ type: "history-telegram-open", requestId, sessionId });
+            },
+            openBot(botId, reply) {
+                const requestId = ++historySerial;
+                historyOpen = { requestId, reply };
+                emit({ type: "bot-roster-open", requestId, botId });
+            },
+        });
+        shell?.setContext(workspaceContext);
+        shell?.setNavigation(navigationMode);
+        const originalBackground = scene.getBackgroundColor.bind(scene);
+        scene.getBackgroundColor = () => scene.kronosBackground ?? originalBackground();
+        scene.camera.on("change", emitCamera);
+        const slides = scene.slidesManager;
+        const originalIsSlide = slides?.isSlideFrame;
+        if (includeWidgetSlides && originalIsSlide) {
+            slides.isSlideFrame = function (node) {
+                return originalIsSlide.call(this, node) || (
+                    node.type === "frame" &&
+                    node.parent === next.scenegraph.getViewportNode() &&
+                    node.properties.resolved.metadata?.type === "kronos-live-widget"
+                );
+            };
+        }
+        const onStateChange = () => emitPresentation();
+        scene.eventEmitter?.on("stateChange", onStateChange);
+        onStateChange();
+        const pointerDown = (event) => {
+            if (event.target?.closest?.("[data-kronos-pen-tools]")) return;
+            const { viewport } = cameraSnapshot();
+            const outer = frame.getBoundingClientRect();
+            const x = event.clientX + outer.x;
+            const y = event.clientY + outer.y;
+            if (
+                x >= viewport.x &&
+                y >= viewport.y &&
+                x <= viewport.x + viewport.width &&
+                y <= viewport.y + viewport.height
+            )
+                emit({ type: "canvas-interaction" });
+        };
+        frame.contentDocument.addEventListener("pointerdown", pointerDown, true);
+        disposeScene = () => {
+            if (includeWidgetSlides && originalIsSlide) slides.isSlideFrame = originalIsSlide;
+            historyReply = undefined;
+            historyOpen = undefined;
+            shell?.dispose();
+            widgets?.dispose();
+            commands?.dispose();
+            settings?.dispose();
+            next.camera.off("change", emitCamera);
+            next.eventEmitter?.off("stateChange", onStateChange);
+            next.getBackgroundColor = originalBackground;
+            frame.contentDocument?.removeEventListener("pointerdown", pointerDown, true);
+        };
+        lastCamera = undefined;
+        applyAppearance();
+        announceReady();
+        emitCamera();
+    };
+    frame.addEventListener("load", () => {
+        agentReplies.clear();
+        frame.contentWindow.addEventListener("kronos-pen-scene-ready", connectScene);
+        connectScene();
+    });
     const applyAppearance = () => {
         const root = frame.contentDocument?.documentElement;
         if (!root) return;
+        if (shell) {
+            workspaceContext = {
+                ...workspaceContext,
+                appearance: { background: appearance.background, accent: appearance.accent },
+            };
+            shell.setContext(workspaceContext);
+        }
         if (appearance.background) root.style.setProperty("--canvas-bg", appearance.background);
         if (appearance.accent) root.style.setProperty("--primary", appearance.accent);
+        if (scene && appearance.background) {
+            const canvas = document.createElement("canvas");
+            canvas.width = canvas.height = 1;
+            const context = canvas.getContext("2d", { willReadFrequently: true });
+            context.fillStyle = appearance.background;
+            context.fillRect(0, 0, 1, 1);
+            scene.kronosBackground = Array.from(context.getImageData(0, 0, 1, 1).data, (channel) => channel / 255);
+            scene.requestFrame();
+        }
         let motion = frame.contentDocument.getElementById("kronos-motion-preference");
         if (!motion) {
             motion = frame.contentDocument.createElement("style");
@@ -135,6 +346,15 @@
         if (!response.ok) throw new Error(`Pen skill not available: ${name}`);
         return response.text();
     };
+    const bundledLibrary = (path) => {
+        if (typeof path !== "string") return;
+        return /(?:^pencil:|^|\/)(shadcn|lunaris|halo|nitro)\.lib\.pen$/.exec(path)?.[1];
+    };
+    const readBundledLibrary = async (name) => {
+        const response = await fetch(`../libraries/${name}.lib.pen`);
+        if (!response.ok) throw new Error("The bundled design library could not be loaded.");
+        return new Uint8Array(await response.arrayBuffer());
+    };
     const handleStorage = async (method, payload) => {
         switch (method) {
             case "storage-load":
@@ -155,22 +375,31 @@
                 emit({ type: "saved", savedAt: Date.now() });
                 return 0;
             }
-            case "storage-read-asset":
-                return asset(payload.path);
+            case "find-libraries":
+                return [];
+            case "storage-read-asset": {
+                const name = bundledLibrary(payload.path);
+                return (await asset(payload.path)) ?? (name ? readBundledLibrary(name) : undefined);
+            }
             case "storage-write-asset":
                 await asset(payload.path, payload.data, true);
                 return;
             case "storage-has-asset":
-                return (await asset(payload.path)) != null;
+                return (await asset(payload.path)) != null || !!bundledLibrary(payload.path);
             case "documents-save-preview":
                 return;
-            default:
+            default: {
+                const result = await shell?.handleRequest(method, payload);
+                if (result !== undefined) return result;
                 throw new Error(`Unsupported embed storage request: ${method}`);
+            }
         }
     };
     window.addEventListener("message", async (event) => {
         if (event.origin !== origin) return;
         if (event.source === frame.contentWindow && event.data?.type === "pen:ready") {
+            editorReady = false;
+            announcedScene = undefined;
             const channel = new MessageChannel();
             port?.close();
             port = channel.port1;
@@ -182,11 +411,10 @@
                     clearTimeout(item.timeout);
                     data.error ? item.reject(new Error(data.error.message)) : item.resolve(data.payload);
                 } else if (data.kind === "ready") {
+                    editorReady = true;
+                    connectScene();
                     applyAppearance();
-                    const sidebar = frame.contentDocument?.querySelector("[data-left-sidebar]");
-                    if (sidebar && sidebar.getBoundingClientRect().right <= 8)
-                        frame.contentDocument.querySelector('button[aria-label="Sidebar"]')?.click();
-                    emit({ type: "ready", workspace, engine: "pen-web-embed" });
+                    announceReady();
                 } else if (data.kind === "notification") {
                     emit({ type: "changed", method: data.method, payload: data.payload });
                 } else if (data.kind === "request") {
@@ -212,7 +440,7 @@
                     type: "pen:connect",
                     fileURI,
                     theme,
-                    clientName: "KronOS Agent",
+                    clientName: "Kron Agent",
                     embedder: { name: "KronOS", version: "0.14.3", analyticsConsent: "declined" },
                     capabilities: [],
                 },
@@ -226,6 +454,183 @@
         try {
             let result;
             switch (method) {
+                case "connect":
+                    result = { ready: announceReady(true) };
+                    break;
+                case "show_workspaces": {
+                    const editor = frame.contentWindow;
+                    const deadline = Date.now() + 5000;
+                    while (!editor.__kronosOpenWorkspaces && Date.now() < deadline) {
+                        await new Promise((resolve) => setTimeout(resolve, 50));
+                    }
+                    if (!editor.__kronosOpenWorkspaces) throw new Error("The Pen dashboard is still starting.");
+                    editor.__kronosOpenWorkspaces();
+                    result = { success: true };
+                    break;
+                }
+                case "show_chat": {
+                    const button = frame.contentDocument.querySelector('button[aria-label="Chat"]');
+                    if (!button) throw new Error("The Pen chat is still starting.");
+                    if (button.getAttribute("aria-pressed") !== "true") button.click();
+                    frame.contentDocument.querySelector('[contenteditable="true"][role="textbox"]')?.focus();
+                    result = { success: true };
+                    break;
+                }
+                case "resume_hermes_chat": {
+                    if (params.error) throw new Error(params.error);
+                    const slot = [...frame.contentDocument.querySelectorAll("[data-kronos-pen-composer-controls]")]
+                        .find((element) => element.dataset.kronosPenComposerControls === params.conversationId);
+                    if (!slot?.kronosControls?.resume) throw new Error("The Pen chat has closed.");
+                    slot.kronosControls.resume(params);
+                    result = { success: true };
+                    break;
+                }
+                case "hermes_history_opened": {
+                    if (historyOpen?.requestId === params.requestId) {
+                        const { reply } = historyOpen;
+                        historyOpen = undefined;
+                        reply(params);
+                    }
+                    break;
+                }
+                case "hermes_history_results": {
+                    if (historyReply?.requestId === params.requestId) {
+                        const { reply } = historyReply;
+                        historyReply = undefined;
+                        reply(params.rows, params.error);
+                    }
+                    break;
+                }
+                case "agent_workers": {
+                    const pending = agentReplies.get(params.requestId);
+                    if (pending) shell?.setAgentWorkers(pending.conversationId, params.rows);
+                    result = { success: true };
+                    break;
+                }
+                case "agent_reply": {
+                    const pending = agentReplies.get(params.requestId);
+                    if (!pending) break;
+                    for (const update of params.updates ?? [params]) {
+                        if (update.tool) {
+                            const { id, name, done, failed, input, output } = update.tool;
+                            pending.reply(done
+                                ? { type: "tool-result", id, output, success: !failed }
+                                : { type: "tool-use", id, name, input });
+                            continue;
+                        }
+                        if (update.done) agentReplies.delete(params.requestId);
+                        pending.reply(
+                            update.done
+                                ? {
+                                      type: "end",
+                                      content: update.error
+                                          ? { reason: "failed", message: update.error }
+                                          : { reason: "finished", response: update.text },
+                                  }
+                                : { type: update.start ? "message-start" : "message", source: "assistant", text: update.text }
+                        );
+                        if (update.done) break;
+                    }
+                    result = { success: true };
+                    break;
+                }
+                case "composer_voice_update":
+                    result = shell?.updateComposerVoice(params);
+                    break;
+                case "composer_completions":
+                    shell?.setComposerCompletions(params);
+                    result = { success: true };
+                    break;
+                case "composer_sandbox_update":
+                    shell?.setComposerSandbox(params);
+                    result = { success: true };
+                    break;
+                case "set_workspace_inspector":
+                    shell?.setWorkspaceInspector(params.open === true);
+                    result = { success: true };
+                    break;
+                case "set_file_panel":
+                    shell?.setFilePanel(params);
+                    result = { success: true };
+                    break;
+                case "set_history_extras":
+                    shell?.setHistoryExtras(params);
+                    result = { success: true };
+                    break;
+                case "set_bot_roster":
+                    shell?.setBotRoster(params);
+                    result = { success: true };
+                    break;
+                case "set_workflow_library":
+                    shell?.setWorkflowLibrary(params);
+                    result = { success: true };
+                    break;
+                case "set_workspace_navigation":
+                    navigationMode = params.mode;
+                    shell?.setNavigation(navigationMode);
+                    result = { success: true };
+                    break;
+                case "set_context":
+                    workspaceContext = { ...workspaceContext, ...params, workspaceId: workspace };
+                    shell?.setContext(workspaceContext);
+                    result = { success: true };
+                    break;
+                case "get_commands":
+                    result = commands.get();
+                    break;
+                case "run_command":
+                    result = commands.run(params);
+                    break;
+                case "get_settings":
+                    result = settings.read();
+                    break;
+                case "set_settings":
+                    result = settings.update(params.patch);
+                    break;
+                case "update_widget_previews":
+                    result = await widgets.updatePreviews(params);
+                    break;
+                case "sync_widgets":
+                    if (!widgets) throw new Error("The Pen canvas is still starting");
+                    result = widgets.sync(params);
+                    break;
+                case "focus_canvas": {
+                    frame.contentWindow.focus();
+                    const canvas = frame.contentDocument.querySelector("canvas");
+                    if (canvas) {
+                        canvas.tabIndex = -1;
+                        canvas.focus({ preventScroll: true });
+                    }
+                    result = { success: true };
+                    break;
+                }
+                case "get_camera":
+                    result = { ...cameraSnapshot(), sequence: ++cameraSequence };
+                    break;
+                case "set_camera": {
+                    const { x, y, zoom } = params;
+                    if (![x, y, zoom].every(Number.isFinite) || zoom < 0.02 || zoom > 256)
+                        throw new Error("Invalid canvas camera");
+                    cameraSnapshot();
+                    const bounds = scene.containerBounds;
+                    const outer = frame.getBoundingClientRect();
+                    const camera = scene.camera;
+                    applyingCamera = true;
+                    try {
+                        camera.endAnimation();
+                        camera.setView(
+                            (bounds.x + outer.x - x) / zoom + camera.centerOffsetX(zoom),
+                            (bounds.y + outer.y - y) / zoom + camera.centerOffsetY(zoom),
+                            zoom
+                        );
+                        const snapshot = cameraSnapshot();
+                        lastCamera = JSON.stringify(snapshot);
+                        result = { ...snapshot, sequence: ++cameraSequence };
+                    } finally {
+                        applyingCamera = false;
+                    }
+                    break;
+                }
                 case "get_app_state":
                     result = await request("mcp-tool-call", { name: "get_app_state", arguments: params });
                     break;
@@ -294,7 +699,7 @@
                 default:
                     throw new Error(`Unsupported Pen method: ${method}`);
             }
-            emit({ id, result });
+            if (id != null) emit({ id, result });
         } catch (error) {
             emit({ id, error: error.message });
         }

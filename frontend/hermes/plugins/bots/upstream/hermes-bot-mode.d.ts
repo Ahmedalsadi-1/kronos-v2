@@ -5,3 +5,6 @@ export default HermesBotMode;
 
 export function BotsPane(): import("react").ReactNode;
 export function sendToGroupChat(group: string, members: { name: string; title?: string }[], text: string): void;
+
+export function listBotRoster(): Promise<{ id: string; title: string; handle: string; preview: string }[]>;
+export function openBotConversation(name: string): Promise<string>;

@@ -4,9 +4,10 @@
 import { getApi, getSettingsKeyAtom } from "@/store/global";
 import { RpcApi } from "@/store/wshclientapi";
 import { TabRpcClient } from "@/store/wshrpcutil";
+import { getWebServerEndpoint } from "@/util/endpoints";
 import { ListRow } from "@hermes/app/settings/primitives";
 import { useAtomValue } from "jotai";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 
 const MinSurfaceOpacity = 0;
 const MaxSurfaceOpacity = 100;
@@ -16,47 +17,70 @@ function isVideoWallpaper(value: string): boolean {
 }
 
 function normalizeWallpaperSource(value: string): string {
-    if (/^(https?|file|data):/i.test(value)) {
+    if (/^(https?|data):/i.test(value)) {
         return value;
     }
-    return "file://" + value;
+    let localPath = value;
+    if (/^file:/i.test(value)) {
+        try {
+            const url = new URL(value);
+            localPath = (url.hostname ? `//${url.hostname}` : "") + decodeURIComponent(url.pathname);
+        } catch {
+            return undefined;
+        }
+    }
+    const path = /^\/[a-z]:\//i.test(localPath) ? localPath.slice(1) : localPath;
+    return `${getWebServerEndpoint()}/wave/stream-local-file?${new URLSearchParams({ path })}`;
 }
 
-// Publishes the surface-transparency setting as a CSS variable consumed by
-// blocks, the launcher rail, and web mode. Kept beside the wallpaper so both
-// appearance settings apply/remove together.
-function useSurfaceAlphaEffect(): void {
-    const surfaceOpacity = useAtomValue(getSettingsKeyAtom("window:surfaceopacity" as never));
+function clampSurfaceOpacity(value: number): number {
+    return Math.min(MaxSurfaceOpacity, Math.max(MinSurfaceOpacity, value));
+}
+
+export function useWorkspaceSurfaceOpacity(): void {
+    const surfaceOpacity = useAtomValue(getSettingsKeyAtom("window:surfaceopacity"));
     useEffect(() => {
-        if (surfaceOpacity == null) {
-            document.documentElement.style.removeProperty("--kron-surface-alpha");
-            return;
-        }
-        const clamped = Math.min(MaxSurfaceOpacity, Math.max(MinSurfaceOpacity, Number(surfaceOpacity) || 0));
-        document.documentElement.style.setProperty("--kron-surface-alpha", String(clamped / 100));
+        if (surfaceOpacity == null) return;
+        const opacity = clampSurfaceOpacity(surfaceOpacity);
+        const style = document.documentElement.style;
+        style.setProperty("--kron-surface-alpha", String(opacity / 100));
+        style.setProperty("--kron-live-widget-alpha", String(opacity / 100));
+        style.setProperty("--kron-widget-opacity", `${opacity}%`);
+        return () => {
+            style.removeProperty("--kron-surface-alpha");
+            style.removeProperty("--kron-widget-opacity");
+            style.removeProperty("--kron-live-widget-alpha");
+        };
     }, [surfaceOpacity]);
 }
 
 const WorkspaceWallpaper = memo(() => {
-    useSurfaceAlphaEffect();
-    const wallpaper = useAtomValue(getSettingsKeyAtom("window:wallpaper" as never));
+    const wallpaper = useAtomValue(getSettingsKeyAtom("window:wallpaper"));
 
     if (wallpaper == null || wallpaper === "") {
         return null;
     }
 
     const source = normalizeWallpaperSource(wallpaper);
+    if (source == null) return null;
 
-    // pointer-events none keeps the layer purely visual; the subtle dim overlay
-    // preserves widget legibility at high transparency.
     return (
-        <div className="workspace-wallpaper" aria-hidden="true">
-            {isVideoWallpaper(source) ? (
-                <video className="workspace-wallpaper-media" src={source} autoPlay muted loop playsInline />
+        <div
+            className="workspace-wallpaper pointer-events-none absolute inset-0 -z-1 overflow-hidden"
+            aria-hidden="true"
+        >
+            {isVideoWallpaper(wallpaper) ? (
+                <video
+                    className="workspace-wallpaper-media h-full w-full object-cover"
+                    src={source}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                />
             ) : (
-                <img className="workspace-wallpaper-media" src={source} alt="" />
+                <img className="workspace-wallpaper-media h-full w-full object-cover" src={source} alt="" />
             )}
-            <div className="workspace-wallpaper-dim" />
         </div>
     );
 });
@@ -64,18 +88,15 @@ WorkspaceWallpaper.displayName = "WorkspaceWallpaper";
 
 export function WorkspaceWallpaperSettings() {
     const wallpaper = useAtomValue(getSettingsKeyAtom("window:wallpaper"));
+    const fileInput = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
-    const change = async (clear: boolean) => {
+    const change = async (file: File | null) => {
         setBusy(true);
         setError("");
         try {
-            const value = clear ? "" : (await getApi().selectFiles())[0];
-            if (value == null) return;
-            if (!clear && !/\.(avif|gif|jpe?g|png|webp|bmp|svg|heic)$/i.test(value)) {
-                setError("Choose an image file for your workspace background.");
-                return;
-            }
+            const value = file == null ? "" : getApi().getPathForFile(file);
+            if (file != null && !value) throw new Error("Wallpaper file path unavailable");
             await RpcApi.SetConfigCommand(TabRpcClient, { "window:wallpaper": value });
         } catch {
             setError("Could not update the workspace background.");
@@ -84,9 +105,81 @@ export function WorkspaceWallpaperSettings() {
         }
     };
     return (
+        <>
+            <ListRow
+                title="Workspace wallpaper"
+                description={wallpaper ? wallpaper.split(/[\\/]/).pop() : "No wallpaper selected"}
+                below={
+                    error && (
+                        <p role="alert" className="mt-1 text-xs text-error">
+                            {error}
+                        </p>
+                    )
+                }
+                action={
+                    <div className="flex flex-wrap gap-2">
+                        <input
+                            ref={fileInput}
+                            type="file"
+                            accept="image/avif,image/bmp,image/gif,image/jpeg,image/png,image/svg+xml,image/webp"
+                            hidden
+                            onChange={(event) => {
+                                const file = event.currentTarget.files?.[0];
+                                event.currentTarget.value = "";
+                                if (file) void change(file);
+                            }}
+                        />
+                        <button
+                            type="button"
+                            className="kron-button kron-button-secondary cursor-pointer rounded px-2 py-1 text-xs"
+                            disabled={busy}
+                            onClick={() => fileInput.current?.click()}
+                        >
+                            Choose image…
+                        </button>
+                        {wallpaper && (
+                            <button
+                                type="button"
+                                className="kron-button kron-button-ghost cursor-pointer rounded px-2 py-1 text-xs"
+                                disabled={busy}
+                                onClick={() => void change(null)}
+                            >
+                                Remove wallpaper
+                            </button>
+                        )}
+                    </div>
+                }
+            />
+            <WidgetTransparencySettings />
+        </>
+    );
+}
+
+function WidgetTransparencySettings() {
+    const sliderId = useId();
+    const savedOpacity = useAtomValue(getSettingsKeyAtom("window:surfaceopacity")) ?? MaxSurfaceOpacity;
+    const savedTransparency = MaxSurfaceOpacity - clampSurfaceOpacity(savedOpacity);
+    const [draft, setDraft] = useState<number>();
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+    const transparency = draft ?? savedTransparency;
+
+    const save = async () => {
+        setSaving(true);
+        setError("");
+        try {
+            await RpcApi.SetConfigCommand(TabRpcClient, { "window:surfaceopacity": MaxSurfaceOpacity - transparency });
+        } catch {
+            setError("Could not save widget transparency.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
         <ListRow
-            title="Workspace background"
-            description={wallpaper ? "Custom background" : "Default background"}
+            title={<label htmlFor={sliderId}>Widget transparency</label>}
+            description="Adjust how much of the workspace shows through widgets."
             below={
                 error && (
                     <p role="alert" className="mt-1 text-xs text-error">
@@ -95,25 +188,29 @@ export function WorkspaceWallpaperSettings() {
                 )
             }
             action={
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <input
+                        id={sliderId}
+                        className="w-28 cursor-pointer"
+                        type="range"
+                        min={MinSurfaceOpacity}
+                        max={MaxSurfaceOpacity}
+                        value={transparency}
+                        aria-valuetext={`${transparency}% transparent`}
+                        disabled={saving}
+                        onChange={(event) => setDraft(event.currentTarget.valueAsNumber)}
+                    />
+                    <output htmlFor={sliderId} className="w-10 text-xs tabular-nums">
+                        {transparency}%
+                    </output>
                     <button
                         type="button"
                         className="kron-button kron-button-secondary cursor-pointer rounded px-2 py-1 text-xs"
-                        disabled={busy}
-                        onClick={() => void change(false)}
+                        disabled={saving || transparency === savedTransparency}
+                        onClick={() => void save()}
                     >
-                        Choose image…
+                        Apply
                     </button>
-                    {wallpaper && (
-                        <button
-                            type="button"
-                            className="kron-button kron-button-ghost cursor-pointer rounded px-2 py-1 text-xs"
-                            disabled={busy}
-                            onClick={() => void change(true)}
-                        >
-                            Reset background
-                        </button>
-                    )}
                 </div>
             }
         />

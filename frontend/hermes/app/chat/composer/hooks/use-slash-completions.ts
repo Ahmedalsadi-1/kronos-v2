@@ -68,6 +68,7 @@ export function useSlashCompletions(options: {
 }): {
   adapter: Unstable_TriggerAdapter
   loading: boolean
+  fetchCompletions: (query: string) => Promise<CompletionPayload>
 } {
   const { gateway, skinThemes, activeSkin } = options
   const enabled = Boolean(gateway)
@@ -296,5 +297,5 @@ export function useSlashCompletions(options: {
     [skinThemes]
   )
 
-  return useLiveCompletionAdapter({ enabled, epoch, fetcher, isCached, toItem })
+  return { ...useLiveCompletionAdapter({ enabled, epoch, fetcher, isCached, toItem }), fetchCompletions: fetcher }
 }

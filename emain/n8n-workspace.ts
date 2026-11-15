@@ -234,10 +234,7 @@ export class N8nWorkspace {
         };
         const { starting } = this.runtime.status().running
             ? await this.withEditorLease(owner, undefined, async () => {
-                  if ((await this.savedCanvases(owner, undefined, false)).length)
-                      throw new Error(
-                          "Save and close the workflow canvas in the other tab before switching the connection."
-                      );
+                  await this.savedCanvases(owner, undefined, false);
                   return release();
               })
             : release();

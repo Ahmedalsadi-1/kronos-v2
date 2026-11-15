@@ -3,7 +3,10 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { TabClient } from "./tabrpcclient";
 
 const surface = vi.hoisted(() => ({ control: vi.fn(async () => ({ success: true, message: "Applied" })) }));
-vi.mock("@/app/tab/workspace-surface-runtime", () => ({ controlWorkspaceSurface: surface.control }));
+vi.mock("@/app/tab/workspace-surface-runtime", () => ({
+    controlWorkspaceSurface: surface.control,
+    getWorkspaceSurfaceModeProvider: () => undefined,
+}));
 vi.mock("@/app/store/global", async (importOriginal) => {
     const original = await importOriginal<typeof import("@/app/store/global")>();
     const { atom } = await import("jotai");
@@ -118,6 +121,33 @@ it("captures the browser viewport so screenshot and pointer coordinates agree", 
         );
         expect(captureBrowserPage).toHaveBeenCalledWith({ guestId: 42 });
         expect(captureScreenshot).not.toHaveBeenCalled();
+    } finally {
+        delete window["api"];
+    }
+});
+
+it("excludes Pen chat during workspace capture and restores it after a failed capture", async () => {
+    const root = document.createElement("div");
+    root.className = "os-mode-root";
+    const host = document.createElement("iframe");
+    host.name = "kronos-pen-editor";
+    root.append(host);
+    document.body.append(root);
+    const editor = host.contentDocument.createElement("iframe");
+    editor.id = "pen-editor";
+    host.contentDocument.body.append(editor);
+    const pen = editor.contentDocument;
+    const chat = pen.createElement("div");
+    chat.dataset.agentSpotlight = "";
+    pen.body.append(chat);
+    window["api"] = { captureScreenshot: vi.fn(async () => {
+        expect(pen.defaultView.getComputedStyle(chat).visibility).toBe("hidden");
+        throw new Error("Capture failed");
+    }) };
+    try {
+        const client = { getWorkspacePresentation: () => "os" };
+        await expect(TabClient.prototype.handle_workspacesurfacescreenshot.call(client)).rejects.toThrow("Capture failed");
+        expect(pen.defaultView.getComputedStyle(chat).visibility).toBe("visible");
     } finally {
         delete window["api"];
     }

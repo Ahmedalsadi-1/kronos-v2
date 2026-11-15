@@ -1,5 +1,6 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import { useTabModelMaybe } from "@/app/store/tab-model";
+import { requestPenEditor } from "@/app/tab/os-pen-editor-bridge";
 import { KronTermSettingsMount } from "@/app/view/hermes/kronterm-settings-mount";
 import { KronSettingsViewModel, SETTINGS_SECTIONS } from "@/app/view/kronsettings/kronsettings-model";
 import { useReducedAgentMotion } from "@/app/view/use-reduced-agent-motion";
@@ -9,6 +10,7 @@ import { getApi } from "@/store/global";
 import App from "@hermes/app";
 import { setTerminalTakeover } from "@hermes/app/right-sidebar/store";
 import { KronTermSettingsHostProvider } from "@hermes/app/settings/kronterm-settings-host";
+import { PenCanvasSettings, type PenCanvasSettingsRequest } from "@hermes/app/settings/pen-canvas-settings";
 import { RootErrorBoundary } from "@hermes/components/error-boundary";
 import { removeTreePane, resetLayoutTree, revealTreePane } from "@hermes/components/pane-shell/tree/store";
 import { Button } from "@hermes/components/ui/button";
@@ -39,6 +41,7 @@ export interface HermesAppProps {
     panelMode?: boolean;
     webMode?: boolean;
     dockedChat?: boolean;
+    canvasRuntimeOnly?: boolean;
 }
 
 export function HermesApp({
@@ -48,6 +51,7 @@ export function HermesApp({
     panelMode = false,
     webMode = false,
     dockedChat = false,
+    canvasRuntimeOnly = false,
 }: HermesAppProps) {
     const viewportRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(HermesMaximumScale);
@@ -72,20 +76,22 @@ export function HermesApp({
         if (!blockId) return null;
         return new KronSettingsViewModel({ blockId, nodeModel: null, tabModel, waveEnv });
     }, [kronSettingsModel, hudMode, waveEnv, tabModel]);
-    const kronTermSettingsHost = useMemo(
-        () =>
-            hudSettingsModel
-                ? ({
-                      appearance: { reducedMotion },
-                      renderAppearance: () => <WorkspaceWallpaperSettings />,
-                      sections: SETTINGS_SECTIONS.map(({ id, label }) => ({ id, label })),
-                      renderSection: (sectionId: string) => (
-                          <KronTermSettingsMount model={hudSettingsModel} sectionId={sectionId} />
-                      ),
-                  } as const)
-                : null,
-        [hudSettingsModel, reducedMotion]
-    );
+    const kronTermSettingsHost = useMemo(() => {
+        if (!hudSettingsModel) return null;
+        const request: PenCanvasSettingsRequest = (method, params) =>
+            requestPenEditor(hudSettingsModel.tabModel.tabId, method, params);
+        return {
+            appearance: { reducedMotion },
+            renderAppearance: () => <WorkspaceWallpaperSettings />,
+            sections: [...SETTINGS_SECTIONS.map(({ id, label }) => ({ id, label })), { id: "canvas", label: "Canvas" }],
+            renderSection: (sectionId: string) =>
+                sectionId === "canvas" ? (
+                    <PenCanvasSettings request={request} />
+                ) : (
+                    <KronTermSettingsMount model={hudSettingsModel} sectionId={sectionId} />
+                ),
+        } as const;
+    }, [hudSettingsModel, reducedMotion]);
 
     useLayoutEffect(() => {
         const viewport = viewportRef.current;
@@ -170,6 +176,7 @@ export function HermesApp({
             ref={viewportRef}
             data-hud-mode={hudMode ? "" : undefined}
             data-hermes-app=""
+            data-kronos-pen-chat={!canvasRuntimeOnly && !webMode ? "" : undefined}
             className="relative h-full w-full overflow-hidden"
         >
             {runtimeError && (
@@ -222,7 +229,7 @@ export function HermesApp({
                                             webMode={webMode}
                                         >
                                             <HashRouter useTransitions={false}>
-                                                <App />
+                                                <App canvasRuntimeOnly={canvasRuntimeOnly} />
                                             </HashRouter>
                                         </HermesShellModeProvider>
                                     </KronTermSettingsHostProvider>

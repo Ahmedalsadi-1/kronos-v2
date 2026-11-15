@@ -14,6 +14,7 @@ import {
     PersistentBlock,
     PersistentBlockProvider,
     PersistentBlockSlot,
+    syncPersistentBlockGeometry,
 } from "./persistent-block";
 
 const counts = vi.hoisted(() => ({ mounts: 0, disposes: 0 }));
@@ -48,6 +49,62 @@ afterEach(() => {
 });
 
 describe("persistent block ownership", () => {
+    it("aligns native canvas pan and zoom synchronously without another frame or live remount", async () => {
+        vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+        const requestFrame = vi.fn(() => 1);
+        vi.stubGlobal("requestAnimationFrame", requestFrame);
+        vi.stubGlobal("cancelAnimationFrame", vi.fn());
+        const element = document.createElement("div");
+        document.body.append(element);
+        const root = createRoot(element);
+        try {
+            await act(() =>
+                root.render(
+                    <PersistentBlockProvider blockIds={["browser", "terminal"]}>
+                        <section data-world="">
+                            <PersistentBlock nodeModel={model()} preview={false} />
+                        </section>
+                        <section data-other-world="">
+                            <PersistentBlock nodeModel={model("terminal")} preview={false} />
+                        </section>
+                    </PersistentBlockProvider>
+                )
+            );
+            const world = element.querySelector<HTMLElement>("[data-world]");
+            const slot = world.querySelector<HTMLElement>("[data-block-slot]");
+            const other = element.querySelector<HTMLElement>('[data-block-slot="terminal"]');
+            const otherBounds = vi.spyOn(other, "getBoundingClientRect");
+            Object.defineProperties(slot, { offsetWidth: { value: 300 }, offsetHeight: { value: 240 } });
+            slot.getBoundingClientRect = () => new DOMRect(80, 120, 450, 360);
+            const host = element.querySelector<HTMLElement>('[data-live-blockid="browser"]');
+            const input = host.querySelector("input");
+            input.value = "unsaved live input";
+            const frameCount = requestFrame.mock.calls.length;
+            syncPersistentBlockGeometry(world);
+            expect(host.style.left).toBe("80px");
+            expect(host.style.top).toBe("120px");
+            expect(host.style.transform).toBe("scale(1.5,1.5)");
+            slot.getBoundingClientRect = () => new DOMRect(140, 200, 600, 480);
+            syncPersistentBlockGeometry(world);
+            expect(host.style.left).toBe("140px");
+            expect(host.style.top).toBe("200px");
+            expect(host.style.transform).toBe("scale(2,2)");
+            expect(requestFrame).toHaveBeenCalledTimes(frameCount);
+            expect(otherBounds).not.toHaveBeenCalled();
+            expect(host.querySelector("input")).toBe(input);
+            expect(input.value).toBe("unsaved live input");
+            expect(counts.mounts).toBe(2);
+            expect(counts.disposes).toBe(0);
+            await act(() => root.unmount());
+            const boundsAfterUnmount = vi.spyOn(slot, "getBoundingClientRect");
+            syncPersistentBlockGeometry(world);
+            expect(boundsAfterUnmount).not.toHaveBeenCalled();
+        } finally {
+            await act(() => root.unmount());
+            element.remove();
+        }
+    });
+
     it("moves a browser to an alternate slot and restores its canvas slot without remounting", async () => {
         vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
         let frame: FrameRequestCallback;
@@ -464,6 +521,100 @@ it("captures explicit Hand gestures over guest surfaces without replacing the li
         expect(counts.mounts).toBe(1);
     } finally {
         await act(() => root.unmount());
+        element.remove();
+    }
+});
+
+it("lets native canvas gestures pass through live content and restores interaction without remounting", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    let frame: FrameRequestCallback;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+        frame = callback;
+        return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    const browser = model();
+    const pointer = vi.fn();
+    const wheel = vi.fn();
+    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(300);
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(240);
+    const bounds = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockReturnValue(new DOMRect(0, 0, 300, 240));
+    const render = (passThrough: boolean, alternate = false) =>
+        act(() =>
+            root.render(
+                <PersistentBlockProvider blockIds={["browser"]}>
+                    <PersistentBlock
+                        nodeModel={browser}
+                        preview={false}
+                        surfaceInput={{
+                            passThrough,
+                            capturePointer: true,
+                            onPointerDownCapture: pointer,
+                            onWheel: wheel,
+                        }}
+                    />
+                    {alternate && <PersistentBlockSlot blockId="browser" chrome="integrated" />}
+                </PersistentBlockProvider>
+            )
+        );
+    try {
+        await render(false);
+        const input = element.querySelector("input");
+        input.value = "unsaved widget state";
+        const host = element.querySelector<HTMLElement>("[data-live-blockid]");
+        expect(host.style.pointerEvents).toBe("auto");
+        await render(true);
+        frame(0);
+        expect(host.hasAttribute("inert")).toBe(true);
+        expect(host.hasAttribute("data-live-block-pass-through")).toBe(true);
+        expect(host.style.pointerEvents).toBe("none");
+        expect(host.querySelector("[data-live-block-pan-capture]")).toBeNull();
+        input.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        input.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+        expect(pointer).not.toHaveBeenCalled();
+        expect(wheel).not.toHaveBeenCalled();
+        expect(browser.focusNode).not.toHaveBeenCalled();
+        const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+        try {
+            kronTermHudController.openExclusiveHud();
+            kronTermHudController.selectWidget("browser", true);
+            frame(8);
+            expect(host.hasAttribute("inert")).toBe(false);
+            expect(host.hasAttribute("data-live-block-pass-through")).toBe(false);
+            expect(host.style.pointerEvents).toBe("auto");
+        } finally {
+            kronTermHudController.setActive(false);
+            visibility.mockRestore();
+        }
+        await render(true, true);
+        frame(16);
+        expect(host.hasAttribute("inert")).toBe(false);
+        expect(host.hasAttribute("data-live-block-pass-through")).toBe(false);
+        expect(host.style.pointerEvents).toBe("auto");
+        await render(true);
+        frame(32);
+        expect(host.hasAttribute("inert")).toBe(true);
+        await render(false);
+        frame(48);
+        expect(host.hasAttribute("inert")).toBe(false);
+        expect(host.style.pointerEvents).toBe("auto");
+        input.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        expect(pointer).toHaveBeenCalledOnce();
+        expect(browser.focusNode).toHaveBeenCalledOnce();
+        expect(element.querySelector("input")).toBe(input);
+        expect(input.value).toBe("unsaved widget state");
+        expect(counts.mounts).toBe(1);
+        expect(counts.disposes).toBe(0);
+    } finally {
+        await act(() => root.unmount());
+        bounds.mockRestore();
+        height.mockRestore();
+        width.mockRestore();
         element.remove();
     }
 });

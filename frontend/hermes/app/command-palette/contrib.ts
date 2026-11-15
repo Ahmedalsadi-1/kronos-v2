@@ -15,6 +15,9 @@ export interface PaletteContribution {
   label: string
   /** Keybind action id — its live combo renders as the hotkey hint. */
   action?: string
+  comboHint?: string
+  disabled?: boolean
+  active?: boolean
   icon?: IconComponent
   keywords?: string[]
   run: () => void

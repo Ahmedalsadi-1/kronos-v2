@@ -56,6 +56,7 @@ import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { QuickTipsViewModel } from "../view/quicktipsview/quicktipsview";
 import { SandboxViewModel } from "../view/sandbox/sandbox-model";
 import { WaveConfigViewModel } from "../view/waveconfig/waveconfig-model";
+import { useBlockToolbarHost } from "./block-chrome-context";
 import "./block.scss";
 import { BlockEnv } from "./blockenv";
 import { BlockFrame } from "./blockframe";
@@ -185,6 +186,7 @@ const BlockSubBlock = memo(({ nodeModel, viewModel }: FullSubBlockProps) => {
 const BlockFull = memo(({ nodeModel, viewModel }: FullBlockProps) => {
     counterInc("render-BlockFull");
     const waveEnv = useWaveEnv<BlockEnv>();
+    const toolbarHost = useBlockToolbarHost();
     const focusElemRef = useRef<HTMLInputElement>(null);
     const blockRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -209,7 +211,7 @@ const BlockFull = memo(({ nodeModel, viewModel }: FullBlockProps) => {
             return;
         }
         setBlockClicked(false);
-        const focusWithin = focusedBlockId() == nodeModel.blockId;
+        const focusWithin = toolbarHost?.contains(document.activeElement) || focusedBlockId() === nodeModel.blockId;
         if (!focusWithin) {
             setFocusTarget();
         }

@@ -848,7 +848,11 @@ function NativeFileTabs({
                                     onChange={(event) => setFilter(event.target.value)}
                                     onKeyDown={(event) => {
                                         if (event.key === "Escape") setFilter("");
-                                        if (event.key === "Enter" && searchResults[0]) void open(searchResults[0].path);
+                                        if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            if (searchResults[0]) void open(searchResults[0].path);
+                                        }
                                     }}
                                 />
                                 {filter && (

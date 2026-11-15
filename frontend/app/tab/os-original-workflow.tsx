@@ -55,7 +55,7 @@ type WorkflowHost = {
     setPickerTarget?: (target: HTMLElement) => void;
     setExecutionTarget?: (target: HTMLElement) => void;
     setPanelTargets?: (targets: { tools: HTMLElement; focus: HTMLElement }) => void;
-    openPicker?: () => void;
+    openPicker?: () => void | Promise<void>;
     fitWorkflow?: () => void;
     moveNode?: (id: string, position: { x: number; y: number }) => void;
     removeNode?: (id: string) => void;
@@ -68,12 +68,12 @@ function nativeMount(target: HTMLElement, kind: WorkflowSlotKind): HTMLElement {
     let root = shadow.querySelector<HTMLElement>("[data-workflow-slot-root]");
     if (root) return root;
     target.setAttribute(`data-workflow-${kind}`, "");
-    const css = document.createElement("link");
+    const css = target.ownerDocument.createElement("link");
     css.rel = "stylesheet";
     css.href = new URL("./workflow-native/editor.css", document.baseURI).href;
-    const style = document.createElement("style");
+    const style = target.ownerDocument.createElement("style");
     style.textContent = getWorkflowSlotStyle(kind);
-    root = document.createElement("div");
+    root = target.ownerDocument.createElement("div");
     root.dataset.workflowSlotRoot = "";
     shadow.append(css, style, root);
     return root;
@@ -235,9 +235,11 @@ export function OSOriginalWorkflow({
         }
     }, [visible]);
     useEffect(() => {
-        if (pickerSource && !visible) onActivate();
+        if (pickerSource && $workflowPickerSource.get() && !visible) onActivate();
     }, [pickerSource, visible, onActivate]);
     const pickerTarget = useRef<HTMLElement>(null);
+    const pickerInteracted = useRef(false);
+    const pickerReopened = useRef(false);
     const executionTarget = useRef<HTMLElement>(null);
     const stateRef = useRef<RuntimeState>({});
     const contextRef = useRef({ tabId, workspaceId, workflowId: "", hasExecutions: false, surface: "canvas" });
@@ -245,6 +247,8 @@ export function OSOriginalWorkflow({
     const [state, setState] = useState<RuntimeState>({});
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [pickerOpening, setPickerOpening] = useState(false);
+    const pickerRequest = useRef<Promise<unknown>>(null);
     const [retry, setRetry] = useState(0);
     const [widgetConnection, setWidgetConnection] = useState<{
         widget: WorkflowWidget;
@@ -265,6 +269,20 @@ export function OSOriginalWorkflow({
         });
     const publishContext = () => {
         window.dispatchEvent(new CustomEvent("kronterm:workflow-context", { detail: contextRef.current }));
+    };
+    const openPickerEditor = () => {
+        if (pickerRequest.current) return;
+        setError("");
+        setPickerOpening(true);
+        const activation = request("open", { surface: "canvas", workflowId: stateRef.current.selectedWorkflowId });
+        pickerRequest.current = activation;
+        void activation
+            .then(() => window.dispatchEvent(new CustomEvent("kronterm:workflow-open", { detail: { tabId } })))
+            .catch((failure) => setError(String(failure)))
+            .finally(() => {
+                pickerRequest.current = null;
+                setPickerOpening(false);
+            });
     };
 
     useEffect(() => {
@@ -337,13 +355,18 @@ export function OSOriginalWorkflow({
         const picker = (event: Event) => {
             const value = (event as CustomEvent).detail;
             if (!workflowEventMatchesTab(value, tabId)) return;
+            pickerInteracted.current = false;
+            pickerReopened.current = false;
             pickerTarget.current = value?.target ?? null;
             const mount = pickerTarget.current ? nativeMount(pickerTarget.current, "inspector") : null;
             bridge.current?.setPickerTarget?.(mount);
             if (!pickerTarget.current) return;
-            bridge.current?.openPicker?.();
-            if (!bridge.current && !stateRef.current.desktop && !$workflowPickerSource.get()?.startsWith("comfy"))
-                void request("open", { surface: "canvas" }).catch((failure) => setError(String(failure)));
+            if ($workflowPickerSource.get()?.startsWith("comfy")) return;
+            if (bridge.current?.openPicker) {
+                void Promise.resolve(bridge.current.openPicker()).catch((failure) => setError(String(failure)));
+            } else if (!stateRef.current.desktop) {
+                openPickerEditor();
+            }
         };
         const showPicker = (event: Event) => {
             const detail = (event as CustomEvent).detail;
@@ -517,6 +540,8 @@ export function OSOriginalWorkflow({
                     host.setViewport?.(cameraRef.current);
                     setLoading(false);
                     window.dispatchEvent(new CustomEvent("kronterm:workflow-ready", { detail: { tabId } }));
+                    if (initialNavigationSettled && pickerTarget.current && !$workflowPickerSource.get()?.startsWith("comfy"))
+                        void Promise.resolve(host.openPicker?.()).catch((failure) => setError(String(failure)));
                 },
                 openChat: () => {
                     callbacks.current.onChat();
@@ -540,7 +565,23 @@ export function OSOriginalWorkflow({
                     publishContext();
                 },
                 onPickerClosed: () => {
-                    if (initialNavigationSettled && pickerTarget.current) closeWorkflowPicker();
+                    if (!initialNavigationSettled || !pickerTarget.current) return;
+                    if (pickerInteracted.current) {
+                        closeWorkflowPicker();
+                        return;
+                    }
+                    // The editor can reset its node creator while the initial route settles.
+                    if (pickerReopened.current) return;
+                    pickerReopened.current = true;
+                    const target = pickerTarget.current;
+                    requestAnimationFrame(() => {
+                        if (
+                            active &&
+                            pickerTarget.current === target &&
+                            !$workflowPickerSource.get()?.startsWith("comfy")
+                        )
+                            void Promise.resolve(host.openPicker?.()).catch((failure) => setError(String(failure)));
+                    });
                 },
                 request: (input: unknown) => request("editor-request", { input }),
                 cancelRequest: (requestId: string) => request("editor-cancel", { input: { requestId } }),
@@ -598,11 +639,13 @@ export function OSOriginalWorkflow({
                 const url = new URL(latest.url);
                 await host.navigate(url.pathname + url.search);
             }
-            initialNavigationSettled = true;
+            if (!active) return;
             if (pickerTarget.current) {
                 host.setPickerTarget?.(nativeMount(pickerTarget.current, "inspector"));
-                host.openPicker?.();
+                if (!$workflowPickerSource.get()?.startsWith("comfy")) await host.openPicker?.();
             }
+            if (!active) return;
+            initialNavigationSettled = true;
             if (executionTarget.current) host.setExecutionTarget?.(nativeMount(executionTarget.current, "inspector"));
         };
         void mount().catch((failure) => {
@@ -788,7 +831,18 @@ export function OSOriginalWorkflow({
     };
     return (
         <div ref={panelFrame} className="absolute inset-0 pointer-events-none">
-            {pickerSource && visible && <OriginalNodePicker tabId={tabId} onClose={closeWorkflowPicker} />}
+            {pickerSource && visible && (
+                <OriginalNodePicker
+                    tabId={tabId}
+                    loading={pickerOpening || loading}
+                    error={error}
+                    onRetry={open ? retryConnection : openPickerEditor}
+                    onNativeInteraction={() => {
+                        pickerInteracted.current = true;
+                    }}
+                    onClose={closeWorkflowPicker}
+                />
+            )}
             {widgetConnection && (
                 <WidgetConnectionDialog
                     key={widgetConnection.widget.blockId}

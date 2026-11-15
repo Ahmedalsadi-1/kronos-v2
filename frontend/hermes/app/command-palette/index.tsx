@@ -120,6 +120,7 @@ interface PaletteItem {
   action?: string
   /** Renders a trailing check: this row IS the current setting (theme, mode). */
   active?: boolean
+  disabled?: boolean
   /** Static trailing combo hint for a modifier-variant select (e.g. `mod+enter`). */
   comboHint?: string
   /** Short note beside the label — state the row acts on (a version, a count). */
@@ -346,6 +347,7 @@ const PaletteRow = memo(function PaletteRow({
     <CommandItem
       className={cn(HUD_ITEM, HUD_TEXT)}
       keywords={item.keywords}
+      disabled={item.disabled}
       onMouseDown={onSelectMods}
       onSelect={() => onSelectItem(item)}
       value={paletteValue(item)}
@@ -501,7 +503,7 @@ function themeSupportsMode(name: string, target: 'light' | 'dark'): boolean {
  * The `openCount` key remounts the body per open, which is what lets local
  * search/sub-page state reset without a close effect.
  */
-export function CommandPalette() {
+export function CommandPalette({ contentClassName }: { contentClassName?: string } = {}) {
   const open = useStore($commandPaletteOpen)
   const canvasPanels = useStore($workspaceCanvasPanels)
   const pickerTarget = useStore($workflowPickerCommandTarget)
@@ -533,7 +535,7 @@ export function CommandPalette() {
     return () => clearTimeout(timer)
   }, [open, retire])
 
-  if (canvasPanels) {
+  if (canvasPanels && !open && !mounted) {
     if (!pickerTarget) return null
     return createPortal(
       <CommandPaletteBody onExited={retire} pickerTarget={pickerTarget} preferred={pickerSource === 'commands'} />,
@@ -543,17 +545,19 @@ export function CommandPalette() {
 
   return (
     <DialogPrimitive.Root onOpenChange={setCommandPaletteOpen} open={open}>
-      {mounted && <CommandPaletteBody key={openCount} onExited={retire} />}
+      {mounted && <CommandPaletteBody key={openCount} onExited={retire} contentClassName={contentClassName} />}
     </DialogPrimitive.Root>
   )
 }
 
 function CommandPaletteBody({
   onExited,
+  contentClassName,
   pickerTarget,
   preferred,
 }: {
   onExited: () => void
+  contentClassName?: string
   pickerTarget?: WorkflowPickerTarget
   preferred?: boolean
 }) {
@@ -986,6 +990,9 @@ function CommandPaletteBody({
               heading: cc.commands,
               items: contributedItems.map((item) => ({
                 action: item.action,
+                comboHint: item.comboHint,
+                disabled: item.disabled,
+                active: item.active,
                 // Read on mount and after every select (the deps below), so a
                 // row that reports state can't show the state it just left.
                 detail: item.detail?.(),
@@ -1424,6 +1431,7 @@ function CommandPaletteBody({
   const placeholder = activePage ? activePage.placeholder : t.commandCenter.searchPlaceholder
 
   const handleSelect = (item: PaletteItem) => {
+    if (item.disabled) return
     if (item.to) {
       setPage(item.to)
       setSearch('')
@@ -1595,6 +1603,7 @@ function CommandPaletteBody({
           'top-[329px]',
           HUD_SURFACE,
           'hermes-glass-menu',
+          contentClassName,
           'z-(--z-over-modal-content) w-[323px] overflow-hidden duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95'
         )}
         // The close animation finishing is what retires this whole subtree —

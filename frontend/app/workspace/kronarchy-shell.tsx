@@ -5,7 +5,7 @@ import { launchSystemApp, makeViewAppDescriptor } from "@/app/store/app-registry
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { atoms, createBlock, globalStore, refocusNode } from "@/store/global";
 import * as WOS from "@/store/wos";
-import { openCommandPalette } from "@hermes/store/command-palette";
+import { openCommandPalettePopup } from "@hermes/store/command-palette";
 import { $krontermSidebarOwner, $workspaceCanvasPanels } from "@hermes/lib/kronterm-sidebar";
 import { useEffect } from "react";
 import { CommandCenterToggleEvent } from "./command-center-events";
@@ -58,7 +58,7 @@ const WorkspacePaletteShortcuts = () => {
             if (!$workspaceCanvasPanels.get() || !$krontermSidebarOwner.get()) {
                 hermesSurfaceController.requestOpenChat();
             }
-            openCommandPalette();
+            openCommandPalettePopup();
         };
         let openingReview: Promise<void>;
         const onReview = (event: CustomEvent<{ scopeCwd?: string }>) => {

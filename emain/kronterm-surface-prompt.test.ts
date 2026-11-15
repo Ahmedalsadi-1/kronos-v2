@@ -5,7 +5,7 @@ import { KronTermAcpSurfaceSystemPrompt, KronTermSurfaceSystemPrompt } from "./k
 describe("ACP harness context", () => {
     it("routes Hermes commands to its headless shell without promising that tool to ACP", () => {
         expect(KronTermSurfaceSystemPrompt).toContain("existing headless terminal tool");
-        expect(KronTermSurfaceSystemPrompt).toContain("require visible=true in Hermes");
+        expect(KronTermSurfaceSystemPrompt).toContain("require visible=true in Kron Agent");
         expect(KronTermSurfaceSystemPrompt).toContain("use process_manage");
         expect(KronTermSurfaceSystemPrompt).toContain("Assigned sandbox work uses sandbox_vm_exec");
         expect(KronTermSurfaceSystemPrompt).toContain("read_file, write_file, patch and search_files");

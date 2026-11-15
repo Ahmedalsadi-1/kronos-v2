@@ -1,0 +1,19 @@
+[data-live-block-pass-through],
+[data-live-block-pass-through] * {
+    pointer-events: none !important;
+}
+
+[data-live-canvas-widget] > .block.block-integrated-chrome {
+    --block-border-radius: 0px;
+    padding: 0;
+}
+
+[data-live-canvas-widget] > .block.block-integrated-chrome > .block-frame-default-inner,
+[data-live-canvas-widget] > .block.block-integrated-chrome:focus-within > .block-frame-default-inner {
+    border: 0;
+    box-shadow: none;
+}
+
+[data-live-canvas-widget] > .block.block-integrated-chrome > .block-mask {
+    border: 0 !important;
+}

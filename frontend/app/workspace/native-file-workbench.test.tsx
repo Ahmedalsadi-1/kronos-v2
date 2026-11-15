@@ -170,8 +170,12 @@ it("searches unopened folders and supports opening or dragging a local result", 
         name: "needle.ts",
         resource: "/project/src/needle.ts",
     });
-    await act(async () => result.click());
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    await act(async () => input.dispatchEvent(enter));
+    expect(enter.defaultPrevented).toBe(true);
     expect(mocks.model.goHistory).toHaveBeenCalledWith("/project/src/needle.ts");
+    expect(input.value).toBe("needle");
+    expect(container.querySelector('[aria-label="File search results"] button')).toBe(result);
 });
 
 it("copies the current unsaved file content and exposes workspace controls on demand", async () => {

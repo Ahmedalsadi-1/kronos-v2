@@ -46,6 +46,65 @@ describe("detached live surface clipping", () => {
 });
 
 describe("live surface DOM occlusion", () => {
+    it("keeps canvas labels, selection handles, and browser suggestions above the live content they cover", () => {
+        const scene = document.createElement("div");
+        scene.innerHTML = `
+            <section class="os-window is-canvas-widget" style="z-index: 2">
+                <button class="os-canvas-widget-label">Browser</button>
+                <header class="os-window-titlebar">
+                    <div class="webview-address-suggestions"></div>
+                </header>
+                <div class="slot"></div>
+            </section>
+            <section class="os-window is-canvas-widget" style="z-index: 3">
+                <button class="os-canvas-widget-label">Terminal</button>
+                <header class="os-window-titlebar" style="opacity: 0"></header>
+                <div class="slot"></div>
+                <span class="os-canvas-widget-selection"></span>
+                <span class="os-canvas-widget-resize-handle"></span>
+            </section>
+        `;
+        document.body.append(scene);
+        const [browser, terminal] = Array.from(scene.children) as HTMLElement[];
+        const [suggestions] = browser.getElementsByClassName("webview-address-suggestions");
+        const browserSlot = browser.querySelector<HTMLElement>(".slot");
+        const terminalSlot = terminal.querySelector<HTMLElement>(".slot");
+        const terminalHeader = terminal.querySelector<HTMLElement>(".os-window-titlebar");
+        const terminalChrome = terminal.querySelectorAll(
+            ".os-canvas-widget-label, .os-window-titlebar, .os-canvas-widget-selection, .os-canvas-widget-resize-handle"
+        );
+        const [windowRect, suggestionsRect, labelRect, headerRect, outlineRect, handleRect] = [
+            terminal,
+            suggestions,
+            ...terminalChrome,
+        ].map((element, index) => {
+            const rect = { x: index * 10, y: 0, width: 100, height: 20 } as DOMRect;
+            element.getBoundingClientRect = () => rect;
+            return rect;
+        });
+        try {
+            expect(collectSurfaceOccluders(scene, browserSlot, browser, true)).toEqual([
+                windowRect,
+                suggestionsRect,
+                labelRect,
+                outlineRect,
+                handleRect,
+            ]);
+            terminalHeader.style.opacity = "1";
+            expect(collectSurfaceOccluders(scene, browserSlot, browser, true)).toEqual([
+                windowRect,
+                suggestionsRect,
+                labelRect,
+                headerRect,
+                outlineRect,
+                handleRect,
+            ]);
+            expect(collectSurfaceOccluders(scene, terminalSlot, terminal, true)).toEqual([]);
+        } finally {
+            scene.remove();
+        }
+    });
+
     it("respects OS ranks and visible original shadow nodes without clipping the entire shadow host", () => {
         const scene = document.createElement("div");
         document.body.append(scene);

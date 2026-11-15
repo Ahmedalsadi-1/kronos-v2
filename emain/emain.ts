@@ -8,7 +8,7 @@ import path from "path";
 import { sprintf } from "sprintf-js";
 import * as services from "../frontend/app/store/services";
 import { initElectronWshrpc, shutdownWshrpc } from "../frontend/app/store/wshrpcutil-base";
-import { fireAndForget, sleep } from "../frontend/util/util";
+import { fireAndForget } from "../frontend/util/util";
 import { stopAllAgentManagers } from "./acp";
 import { AuthKey, configureAuthKeyRequestInjection } from "./authkey";
 import { installBackgroundLaunchPolicy } from "./background-launch";
@@ -501,11 +501,16 @@ async function appMain() {
             electron.systemPreferences.askForMediaAccess("microphone");
         }
     }
+    if (process.env.ELECTRON_RENDERER_URL) {
+        // Optimized Vite modules can keep the same URL while their generated chunk imports change.
+        await electron.session.defaultSession.clearCache().catch((error) => {
+            console.warn("Could not clear the development renderer cache", error);
+        });
+    }
     configureAuthKeyRequestInjection(electron.session.defaultSession);
     initIpcHandlers();
     void ensureKronRender().catch((error) => console.log("KronRender startup:", error.message));
 
-    await sleep(10); // wait a bit for wavesrv to be ready
     try {
         initElectronWshClient();
         initElectronWshrpc(ElectronWshClient, { authKey: AuthKey });
@@ -526,7 +531,7 @@ async function appMain() {
         confirmQuit = fullConfig.settings["app:confirmquit"];
     }
     ensureHotSpareTab(fullConfig);
-    await relaunchBrowserWindows();
+    await relaunchBrowserWindows(fullConfig);
     if (process.env.KRONOS_TEST_SIGN_IN === "1") {
         const parent = getAllWaveWindows().find((window) => window.isVisible());
         if (parent) openKronosTestSignIn(parent);
@@ -536,7 +541,6 @@ async function appMain() {
 
     makeAndSetAppMenu();
     makeDockTaskbar();
-    await configureAutoUpdater();
     setGlobalIsStarting(false);
     if (fullConfig?.settings?.["window:maxtabcachesize"] != null) {
         setMaxTabCacheSize(fullConfig.settings["window:maxtabcachesize"]);
@@ -577,6 +581,7 @@ async function appMain() {
     if (rawNotchHotKey) {
         registerNotchHotkey(rawNotchHotKey);
     }
+    void configureAutoUpdater(fullConfig.settings);
 }
 
 appMain().catch((e) => {

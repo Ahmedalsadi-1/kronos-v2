@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+import importlib
 import io
 import json
 import select
@@ -533,6 +534,22 @@ def _register_swarm_middleware(ctx, bridge_tools):
 
 def register(ctx) -> None:
     """Register every schema exported by the TypeScript bridge."""
+    if os.environ.get("KRONTERM_MANAGED_AGENT_IDENTITY") == "1":
+        # Some runtime versions bind the defaults when importing the prompt builder.
+        for module_name in ("agent.prompt_builder", "agent.system_prompt", "run_agent"):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                logger.debug("Agent identity module unavailable: %s", module_name)
+                continue
+            if hasattr(module, "DEFAULT_AGENT_IDENTITY"):
+                module.DEFAULT_AGENT_IDENTITY = (
+                    "You are Kron Agent, the built-in agent in KronOS. "
+                    "Help the user with the workspace, coding, and automation. "
+                    "Communicate clearly and verify the results of your actions."
+                )
+            if hasattr(module, "HERMES_AGENT_HELP_GUIDANCE"):
+                module.HERMES_AGENT_HELP_GUIDANCE = ""
     middleware = callable(getattr(ctx, "register_middleware", None))
     run_action = None
     if middleware:

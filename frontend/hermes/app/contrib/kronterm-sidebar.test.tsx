@@ -29,7 +29,7 @@ afterEach(() => {
     document.body.replaceChildren();
 });
 
-it("opens the Design panel only when the native OS canvas is available", async () => {
+it("opens the Canvas tools panel only when the native OS canvas is available", async () => {
     const host = document.createElement("div");
     const target = document.createElement("aside");
     document.body.append(host, target);
@@ -41,6 +41,7 @@ it("opens the Design panel only when the native OS canvas is available", async (
             root.render(<KrontermSidebar>Sessions</KrontermSidebar>);
         });
         const button = target.querySelector<HTMLButtonElement>("#kronterm-navigation-design");
+        expect(button.textContent).toBe("Canvas");
         await act(async () => button.click());
         expect(button.getAttribute("aria-selected")).toBe("true");
         expect($penDesignTarget.get()?.hidden).toBe(false);

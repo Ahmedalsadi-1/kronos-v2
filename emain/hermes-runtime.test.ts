@@ -178,7 +178,8 @@ describe("Hermes KronOS runtime environment", () => {
         });
 
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("workspace_snapshot");
-        expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("You are the KronOS Agent");
+        expect(env.KRONTERM_MANAGED_AGENT_IDENTITY).toBe("1");
+        expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("You are Kron Agent");
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("widget_snapshot");
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("hud_set_mode");
         expect(env.HERMES_EPHEMERAL_SYSTEM_PROMPT).toContain("hud_show_widget");

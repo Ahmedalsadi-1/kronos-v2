@@ -227,7 +227,7 @@ let autoUpdateLock = false;
 /**
  * Configures the auto-updater based on the user's preference
  */
-export async function configureAutoUpdater() {
+export async function configureAutoUpdater(settings: SettingsType) {
     if (isDev()) {
         console.log("skipping auto-updater in dev mode");
         return;
@@ -242,7 +242,6 @@ export async function configureAutoUpdater() {
 
     try {
         console.log("Configuring updater");
-        const settings = (await RpcApi.GetFullConfigCommand(ElectronWshClient)).settings;
         updater = new Updater(settings);
         await updater.start();
     } catch (e) {

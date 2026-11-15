@@ -91,8 +91,13 @@ import {
     workspaceCanvasViewportRect,
 } from "./workspace-canvas-drift";
 import {
+    acceptsCanvasTransfer,
+    allowCanvasDrop,
     canvasFileCardSize,
     canvasFileResource,
+    canvasMediaUrl,
+    importCanvasTransfer,
+    isCanvasPasteTarget,
     isLocalCanvasFilePath,
     readNativeCanvasFiles,
 } from "./workspace-canvas-files";
@@ -957,13 +962,13 @@ const CanvasObjectView = memo(
                             type="button"
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={open}
-                            aria-label={`Open ${name} in Files`}
-                            title="Open in Files"
+                            aria-label={`Open ${name}`}
+                            title={canvasMediaUrl(path) ? "Open in browser" : "Open in Files"}
                         >
                             <ArrowUpRight size={15} aria-hidden="true" />
                         </button>
                     </header>
-                    <OSCanvasFilePreview key={path} path={path} onOpen={open} />
+                    <OSCanvasFilePreview key={path} path={path} onOpen={open} onOpenEntry={onOpenFile} />
                     {selected && (
                         <button
                             type="button"
@@ -2011,22 +2016,20 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     );
 
     const onCanvasFileDrop = (event: ReactDragEvent<HTMLDivElement>) => {
-        if (event.defaultPrevented) return;
         const transfer = event.dataTransfer;
         const point = canvasPoint(event.clientX, event.clientY);
-        if (transfer.files.length) {
-            event.preventDefault();
-            addFiles(readNativeCanvasFiles(transfer.files, getApi().getPathForFile), point);
-            return;
-        }
         const resource = readOSResourceDragPayload(transfer);
         if (
             resource &&
-            (resource.kind === "file" || resource.kind === "generated-artifact") &&
+            (resource.kind === "file" || resource.kind === "folder" || resource.kind === "generated-artifact") &&
             isLocalCanvasFilePath(resource.resource)
         ) {
             event.preventDefault();
             addFiles([resource], point);
+            return;
+        }
+        if (importCanvasTransfer(transfer, getApi(), (files) => addFiles(files, point), setFileNotice)) {
+            event.preventDefault();
         }
     };
 
@@ -2649,6 +2652,10 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
     const openCanvasFile = useCallback(
         (path: string) => {
             setFileNotice("");
+            if (canvasMediaUrl(path)) {
+                getApi().openExternal(path);
+                return;
+            }
             void launchBlock("file-preview", { meta: { view: "preview", file: path } }).catch(() => {
                 setFileNotice("Could not open the file in Files.");
             });
@@ -3441,15 +3448,20 @@ export const WorkspaceCanvas = memo(({ tabId, tabData }: { tabId: string; tabDat
             onPointerCancel={onCanvasPointerUp}
             onDragOver={(event) => {
                 if (
-                    !event.defaultPrevented &&
-                    (event.dataTransfer.types.includes("Files") ||
-                        event.dataTransfer.types.includes(OSResourceDragMimeType))
+                    acceptsCanvasTransfer(event.dataTransfer) || event.dataTransfer.types.includes(OSResourceDragMimeType)
                 ) {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "copy";
+                    allowCanvasDrop(event);
                 }
             }}
             onDrop={onCanvasFileDrop}
+            onPaste={(event) => {
+                if (event.defaultPrevented || !isCanvasPasteTarget(event.target)) return;
+                const { width, height } = viewportSizeRef.current;
+                const point = screenPointToCanvas(cameraRef.current, { x: width / 2, y: height / 2 });
+                if (importCanvasTransfer(event.clipboardData, getApi(), (files) => addFiles(files, point), setFileNotice, true)) {
+                    event.preventDefault();
+                }
+            }}
             onWheel={onWheel}
             onContextMenu={showCanvasContextMenu}
             aria-label="Workspace canvas"

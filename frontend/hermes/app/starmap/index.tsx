@@ -15,7 +15,7 @@ import { StarMap } from './star-map'
 // the map itself lives in ./star-map. The chrome is owned by the map itself
 // (timeline scrubber + legend float over the canvas), so there's no panel
 // header here.
-export function StarmapView({ onClose }: { onClose: () => void }) {
+export function StarmapView({ onClose, contentClassName }: { onClose: () => void; contentClassName?: string }) {
   const { t } = useI18n()
   const graph = useStore($starmapGraph)
   const loading = useStore($starmapLoading)
@@ -38,7 +38,7 @@ export function StarmapView({ onClose }: { onClose: () => void }) {
   const shown = imported ?? graph
 
   return (
-    <Panel closeLabel={t.starmap.close} onClose={onClose}>
+    <Panel className={contentClassName} closeLabel={t.starmap.close} onClose={onClose}>
       {error ? (
         <PanelEmpty description={error} icon="warning" title={t.starmap.loadFailed} />
       ) : !shown && loading ? (

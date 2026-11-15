@@ -804,11 +804,13 @@ function TitlebarSlot({ area, className, style, webMode = false }: TitlebarSlotP
     );
 }
 
-export function ContribController() {
+export function ContribController({ canvasRuntimeOnly = false }: { canvasRuntimeOnly?: boolean } = {}) {
     const sidebarOpen = useStore($sidebarOpen);
     const statusbarVisible = useStore($statusbarVisible);
     const widgetHost = isKronTermWidgetHost();
     const { hudMode, panelMode, webMode, dockedChat } = useHermesShellMode();
+
+    if (canvasRuntimeOnly) return <ContribWiring runtimeOnly>{null}</ContribWiring>;
 
     if (panelMode) {
         return (

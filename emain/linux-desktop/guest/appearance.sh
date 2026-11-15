@@ -24,10 +24,10 @@ set_property xsettings /Net/ThemeName string Greybird-dark
 set_property xsettings /Gtk/ApplicationPreferDarkTheme bool true
 set_property xfwm4 /general/theme string Greybird-dark
 set_property xfwm4 /general/use_compositing bool false
-set_property xfwm4 /general/margin_top int 24
-set_property xfwm4 /general/margin_bottom int 68
-set_property xfwm4 /general/margin_left int 32
-set_property xfwm4 /general/margin_right int 32
+set_property xfwm4 /general/margin_top int 8
+set_property xfwm4 /general/margin_bottom int 40
+set_property xfwm4 /general/margin_left int 8
+set_property xfwm4 /general/margin_right int 8
 
 # Keep XFCE's native launcher panel; no additional dock process is needed.
 for attempt in $(seq 1 50); do
@@ -38,7 +38,7 @@ if xfconf-query -c xfce4-panel -l | grep -q "^/panels/panel-1/"; then
     set_property xfce4-panel /panels/panel-1/autohide-behavior int 2
 fi
 if xfconf-query -c xfce4-panel -l | grep -q "^/panels/panel-2/"; then
-    set_property xfce4-panel /panels/panel-2/size uint 42
+    set_property xfce4-panel /panels/panel-2/size uint 32
     set_property xfce4-panel /panels/panel-2/length-adjust bool true
     set_property xfce4-panel /panels/panel-2/position-locked bool true
     set_property xfce4-panel /panels/panel-2/background-style uint 1

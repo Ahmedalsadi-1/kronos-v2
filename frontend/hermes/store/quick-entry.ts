@@ -267,6 +267,50 @@ export function setQuickEntrySubmitHandler(fn: ((payload: QuickEntrySubmitPayloa
     submitHandler = fn;
 }
 
+let canvasSubmit: ((text: string, displayText: string) => Promise<unknown>) | null = null;
+let canvasCancel: (() => Promise<unknown>) | null = null;
+const canvasReady = new Set<() => void>();
+
+export function registerCanvasChatSubmit(
+    submit: (text: string, displayText: string) => Promise<unknown>,
+    cancel?: () => Promise<unknown>
+): () => void {
+    canvasSubmit = submit;
+    canvasCancel = cancel ?? null;
+    for (const notify of canvasReady) notify();
+    return () => {
+        if (canvasSubmit === submit) {
+            canvasSubmit = null;
+            canvasCancel = null;
+        }
+    };
+}
+
+export async function submitCanvasChat(text: string, displayText: string, signal: AbortSignal): Promise<void> {
+    if (!canvasSubmit && !signal.aborted) {
+        await new Promise<void>((resolve) => {
+            const done = () => {
+                clearTimeout(timeout);
+                canvasReady.delete(done);
+                signal.removeEventListener("abort", done);
+                resolve();
+            };
+            const timeout = setTimeout(done, 15000);
+            canvasReady.add(done);
+            signal.addEventListener("abort", done, { once: true });
+        });
+    }
+    signal.throwIfAborted();
+    if (!canvasSubmit) throw new Error("KronOS Agent is still connecting. Try again in a moment.");
+    if (!(await canvasSubmit(text, displayText)))
+        throw new Error("KronOS Agent could not start this run. Wait for the active turn to finish and try again.");
+}
+
+export async function cancelCanvasChat(): Promise<void> {
+    if (!canvasCancel) throw new Error("KronOS Agent is disconnected.");
+    await canvasCancel();
+}
+
 function normalizeSubmitPayload(raw: unknown): null | QuickEntrySubmitPayload {
     // Tolerate the v1 bare-string wire shape (an older quick window after a
     // partial update) by treating it as "send to the current chat".

@@ -207,3 +207,36 @@ it("shows activity only for this VM and keeps the cursor subscriber mounted thro
         await act(async () => root.unmount());
     }
 });
+
+it("lays out the VNC viewer in screen pixels inside a zoomed canvas widget", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+    const readWidth = vi.spyOn(Element.prototype, "clientWidth", "get");
+    const readHeight = vi.spyOn(Element.prototype, "clientHeight", "get");
+    rect.mockReturnValue(new DOMRect(0, 0, 600, 400));
+    readWidth.mockReturnValue(800);
+    readHeight.mockReturnValue(800);
+    try {
+        await act(async () =>
+            root.render(
+                <ManagedVncScreen
+                    desktop={{ id: "one", status: "running", viewerUrl: "ws://127.0.0.1:10001/one" } as any}
+                />
+            )
+        );
+        const viewer = container.querySelector<HTMLElement>(".computer-frame-viewport");
+        expect(viewer.style.width).toBe("600px");
+        expect(viewer.style.height).toBe("400px");
+        expect(viewer.style.transform).toBe(`scale(${800 / 600}, 2)`);
+        rect.mockReturnValue(new DOMRect(0, 0, 400, 400));
+        await act(async () => window.dispatchEvent(new Event("resize")));
+        expect(viewer.style.width).toBe("400px");
+        expect(viewer.style.transform).toBe("scale(2, 2)");
+    } finally {
+        await act(async () => root.unmount());
+        rect.mockRestore();
+        readWidth.mockRestore();
+        readHeight.mockRestore();
+    }
+});

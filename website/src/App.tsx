@@ -1406,9 +1406,10 @@ function PetNote({
 function Brand() {
     return (
         <Link className="brand" to="/" aria-label="KronOS home">
-            <span className="brand-mark">
-                <img src={assets.brandMark} alt="" />
-            </span>
+            <picture className="kronos-brand-mark">
+                <source media="(max-width: 760px)" srcSet={asset("kronos-compact.svg")} />
+                <img src={asset("kronos-expanded.svg")} alt="" />
+            </picture>
             <span>KronOS</span>
         </Link>
     );

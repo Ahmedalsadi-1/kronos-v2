@@ -6472,3 +6472,20 @@ body::before {
         transform: none;
     }
 }
+
+.kronos-brand-mark {
+    display: block;
+    flex-shrink: 0;
+    width: 88px;
+}
+
+.kronos-brand-mark img {
+    display: block;
+    width: 100%;
+}
+
+@media (max-width: 760px) {
+    .kronos-brand-mark {
+        width: 32px;
+    }
+}

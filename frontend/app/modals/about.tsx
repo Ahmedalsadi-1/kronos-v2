@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Logo from "@/app/asset/logo.svg";
+import Logo from "@/app/asset/logo-expanded.svg?url";
 import { OnboardingGradientBg } from "@/app/onboarding/onboarding-common";
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -26,7 +26,7 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
             <OnboardingGradientBg />
             <div className="flex flex-col gap-[26px] w-full relative z-10">
                 <div className="flex flex-col items-center justify-center gap-4 self-stretch w-full text-center">
-                    <Logo />
+                    <img src={Logo} alt="" width={138} height={48} />
                     <div className="text-[25px]">KronOS</div>
                     <div className="leading-5">
                         Your apps, agents, and models

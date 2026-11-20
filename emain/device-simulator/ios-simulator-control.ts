@@ -107,7 +107,13 @@ export class IosSimulatorControl {
 
     private async start(udid: string): Promise<IosSimulatorSession> {
         const previous = this.sessions.get(udid);
+        const stream = this.streams.get(udid);
+        // A recent frame proves liveness without opening a TCP probe for every input or frame request.
+        if (previous && stream?.capturedAt != null && !stream.error && Date.now() - stream.capturedAt < 2000) {
+            return previous;
+        }
         if (previous && (await this.ready(previous.streamUrl))) return previous;
+        this.sessions.delete(udid);
         this.streams.get(udid)?.stream.stop();
         this.streams.delete(udid);
         try {
@@ -175,12 +181,20 @@ export class IosSimulatorControl {
         );
     }
 
+    private invalidateFrame(udid: string) {
+        const stream = this.streams.get(udid);
+        if (stream) stream.imageDataUrl = undefined;
+    }
+
     async tap(udid: string, x: number, y: number, assertControl?: () => void): Promise<void> {
         if (![x, y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1))
             throw new Error("Tap coordinates must be between 0 and 1.");
-        await this.attach(udid);
+        const session = await this.attach(udid);
         assertControl?.();
-        await this.execute(["tap", String(x), String(y), "-d", udid]);
+        await sendEmulatorGestureSequence(session.wsUrl, [
+            { type: "begin", x, y },
+            { type: "end", x, y },
+        ]).finally(() => this.invalidateFrame(udid));
     }
 
     async gesture(udid: string, points: EmulatorGesturePoint[], assertControl?: () => void): Promise<void> {
@@ -200,7 +214,7 @@ export class IosSimulatorControl {
         }
         const session = await this.attach(udid);
         assertControl?.();
-        await sendEmulatorGestureSequence(session.wsUrl, points);
+        await sendEmulatorGestureSequence(session.wsUrl, points).finally(() => this.invalidateFrame(udid));
     }
 
     async type(udid: string, text: string, assertControl?: () => void): Promise<void> {
@@ -208,7 +222,7 @@ export class IosSimulatorControl {
             throw new Error("Simulator typing currently supports up to 4096 ASCII characters.");
         await this.attach(udid);
         assertControl?.();
-        await this.execute(["type", "-d", udid, "--", text]);
+        await this.execute(["type", "-d", udid, "--", text]).finally(() => this.invalidateFrame(udid));
     }
 
     async button(udid: string, name: string, assertControl?: () => void): Promise<void> {
@@ -216,7 +230,7 @@ export class IosSimulatorControl {
             throw new Error("Unsupported simulator button.");
         await this.attach(udid);
         assertControl?.();
-        await this.execute(["button", name, "-d", udid]);
+        await this.execute(["button", name, "-d", udid]).finally(() => this.invalidateFrame(udid));
     }
 
     async rotate(udid: string, orientation: string, assertControl?: () => void): Promise<void> {
@@ -224,7 +238,9 @@ export class IosSimulatorControl {
             throw new Error("Unsupported orientation.");
         await this.attach(udid);
         assertControl?.();
-        await this.execute(["rotate", orientation.replace(/-/g, "_"), "-d", udid]);
+        await this.execute(["rotate", orientation.replace(/-/g, "_"), "-d", udid]).finally(() =>
+            this.invalidateFrame(udid)
+        );
     }
 
     async accessibility(udid: string) {

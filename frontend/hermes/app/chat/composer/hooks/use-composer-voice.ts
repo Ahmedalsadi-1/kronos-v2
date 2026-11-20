@@ -1,4 +1,5 @@
 import { useStore } from '@nanostores/react'
+import type { ReadableAtom } from 'nanostores'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useI18n } from '@hermes/i18n'
@@ -23,6 +24,7 @@ import { useVoiceRecorder } from './use-voice-recorder'
 
 interface UseComposerVoiceArgs {
   busy: boolean
+  conversationReply?: ReadableAtom<{ id: string; pending: boolean; text: string }>
   clearDraft: () => void
   disabled: boolean
   focusInput: () => void
@@ -34,6 +36,7 @@ interface UseComposerVoiceArgs {
   onSubmit: ChatBarProps['onSubmit']
   onTranscribeAudio: ChatBarProps['onTranscribeAudio']
   sessionId: string | null | undefined
+  synthesize?: (text: string) => Promise<ArrayBuffer>
   /** This composer's focus-bus key — voice toggles targeting another
    *  composer (or the active one, when not us) are ignored. */
   target: ComposerTarget
@@ -47,6 +50,7 @@ interface UseComposerVoiceArgs {
  */
 export function useComposerVoice({
   busy,
+  conversationReply,
   clearDraft,
   disabled,
   focusInput,
@@ -56,6 +60,7 @@ export function useComposerVoice({
   onSubmit,
   onTranscribeAudio,
   sessionId,
+  synthesize,
   target
 }: UseComposerVoiceArgs) {
   const { t } = useI18n()
@@ -100,9 +105,19 @@ export function useComposerVoice({
    * in order — narration interims AND the final answer, not just whichever
    * bubble happens to be last. See `collectUnspokenTurnSpeech`.
    */
-  const pendingTurnResponse = () => collectUnspokenTurnSpeech($messages.get(), lastSpokenIdRef.current)
+  const pendingTurnResponse = () => {
+    if (conversationReply) {
+      const reply = conversationReply.get()
+      return reply?.text && reply.id !== lastSpokenIdRef.current ? reply : null
+    }
+    return collectUnspokenTurnSpeech($messages.get(), lastSpokenIdRef.current)
+  }
 
   const consumePendingResponse = () => {
+    if (conversationReply) {
+      lastSpokenIdRef.current = conversationReply.get()?.id ?? null
+      return
+    }
     const messages = $messages.get()
     const last = messages.findLast(m => m.role === 'assistant' && !m.hidden)
 
@@ -113,13 +128,13 @@ export function useComposerVoice({
 
   const submitVoiceTurn = async (text: string) => {
     if (busy) {
-      return
+      return false
     }
 
     triggerHaptic('submit')
     resetBrowseState(sessionId)
     clearDraft()
-    await onSubmit(text)
+    return onSubmit(text)
   }
 
   const wakePausedRef = useRef(false)
@@ -131,6 +146,7 @@ export function useComposerVoice({
   const wakePauseBarrierRef = useRef<Promise<void> | null>(null)
 
   const conversation = useVoiceConversation({
+    bargeIn: target !== 'pen',
     busy,
     consumePendingResponse,
     enabled: voiceConversationActive,
@@ -146,6 +162,9 @@ export function useComposerVoice({
     onStopWord: () => setVoiceConversationActive(false),
     onSubmit: submitVoiceTurn,
     onTranscribeAudio,
+    synthesize,
+    replyChanges: target === 'pen' ? conversationReply?.listen ?? $messages.listen : undefined,
+    silenceMs: target === 'pen' ? 400 : undefined,
     pendingResponse: pendingTurnResponse,
     // Before the conversation opens the mic, wait for any in-flight wake.pause
     // to finish releasing the capture device (see wakePauseBarrierRef).

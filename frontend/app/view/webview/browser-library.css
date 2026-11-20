@@ -1,0 +1,110 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+.browser-library-popup[popover] {
+    position: fixed;
+    inset: auto;
+    top: calc(anchor(bottom) + 8px);
+    left: clamp(8px, anchor(left), max(8px, calc(100vw - 408px)));
+    width: min(400px, calc(100vw - 20px));
+    max-height: min(600px, 75vh);
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #ffffff25;
+    border-radius: 16px;
+    background: #27272b;
+    color: #f1f1f3;
+    font:
+        13px -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    box-shadow: 0 16px 40px #0005;
+    overflow-y: auto;
+}
+.browser-library-popup header,
+.browser-library-popup nav,
+.browser-library-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.browser-library-popup header {
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.browser-library-popup button {
+    cursor: pointer;
+    color: inherit;
+    border-radius: 7px;
+}
+.browser-library-popup nav {
+    gap: 3px;
+    margin-bottom: 10px;
+}
+.browser-library-popup nav button {
+    flex: 1;
+    padding: 7px 4px;
+    font-size: 12px;
+}
+.browser-library-popup nav button[aria-pressed="true"],
+.browser-library-popup button:hover {
+    background: #ffffff12;
+}
+.browser-library-popup input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid #ffffff22;
+    border-radius: 8px;
+    background: #ffffff08;
+    color: inherit;
+}
+.browser-library-popup input:focus-visible,
+.browser-library-popup button:focus-visible {
+    outline: 2px solid #a998e5;
+    outline-offset: -2px;
+}
+.browser-library-popup p {
+    padding: 12px 6px;
+    color: #b7b7bf;
+}
+.browser-library-popup p[role="alert"] {
+    color: #ffb4b4;
+}
+.browser-library-results {
+    margin-top: 8px;
+}
+.browser-library-popup .browser-library-row > button:first-child {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    height: auto;
+    padding: 10px 8px;
+    text-align: left;
+}
+.browser-library-row span,
+.browser-library-row small {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.browser-library-row small {
+    color: #a6a6b0;
+    font-size: 11px;
+}
+.browser-library-popup .browser-library-reopen {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    height: auto;
+    margin-top: 8px;
+    padding: 10px 8px;
+    text-align: left;
+}
+.browser-library-reopen small {
+    font-size: 11px;
+    color: #a6a6b0;
+}

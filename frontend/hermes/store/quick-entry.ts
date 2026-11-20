@@ -267,12 +267,12 @@ export function setQuickEntrySubmitHandler(fn: ((payload: QuickEntrySubmitPayloa
     submitHandler = fn;
 }
 
-let canvasSubmit: ((text: string, displayText: string) => Promise<unknown>) | null = null;
+let canvasSubmit: ((text: string, displayText: string, attachments?: import("./composer").ComposerAttachment[], sessionId?: string, storedSessionId?: string) => Promise<unknown>) | null = null;
 let canvasCancel: (() => Promise<unknown>) | null = null;
 const canvasReady = new Set<() => void>();
 
 export function registerCanvasChatSubmit(
-    submit: (text: string, displayText: string) => Promise<unknown>,
+    submit: NonNullable<typeof canvasSubmit>,
     cancel?: () => Promise<unknown>
 ): () => void {
     canvasSubmit = submit;
@@ -286,7 +286,7 @@ export function registerCanvasChatSubmit(
     };
 }
 
-export async function submitCanvasChat(text: string, displayText: string, signal: AbortSignal): Promise<void> {
+export async function submitCanvasChat(text: string, displayText: string, signal: AbortSignal, attachments?: import("./composer").ComposerAttachment[], sessionId?: string, storedSessionId?: string): Promise<void> {
     if (!canvasSubmit && !signal.aborted) {
         await new Promise<void>((resolve) => {
             const done = () => {
@@ -302,7 +302,7 @@ export async function submitCanvasChat(text: string, displayText: string, signal
     }
     signal.throwIfAborted();
     if (!canvasSubmit) throw new Error("KronOS Agent is still connecting. Try again in a moment.");
-    if (!(await canvasSubmit(text, displayText)))
+    if (!(await canvasSubmit(text, displayText, attachments, sessionId, storedSessionId)))
         throw new Error("KronOS Agent could not start this run. Wait for the active turn to finish and try again.");
 }
 

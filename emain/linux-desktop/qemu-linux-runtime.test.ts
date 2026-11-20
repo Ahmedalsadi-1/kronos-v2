@@ -202,8 +202,7 @@ describe("QEMU guest input", () => {
     it("passes horizontal scrolling to the guest and leaves zero deltas untouched", async () => {
         const kill = vi.spyOn(process, "kill").mockReturnValue(true);
         const runner = vi.fn(async (command: string, args: string[]) => ({
-            stdout:
-                command === "ssh" && args.at(-1).includes("call scroll") ? "{}" : "",
+            stdout: command === "ssh" && args.at(-1).includes("call scroll") ? "{}" : "",
         }));
         const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
         try {
@@ -248,7 +247,9 @@ describe("VM idle shutdown and driver input", () => {
         const runner = vi.fn(async () => ({ stdout: "" }));
         const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64");
         const kill = vi.spyOn(process, "kill");
-        vi.spyOn(runtime as any, "pid").mockResolvedValueOnce(12345).mockResolvedValue(undefined);
+        vi.spyOn(runtime as any, "pid")
+            .mockResolvedValueOnce(12345)
+            .mockResolvedValue(undefined);
         try {
             const result = await runtime.perform({
                 desktopId: "linux-vm:ubuntu",
@@ -482,5 +483,48 @@ it("reuses boot readiness, probes health periodically, and invalidates it when t
         expect(commands[2][1].at(-1)).toContain("cloud-init status");
     } finally {
         clock.mockRestore();
+    }
+});
+
+it("preserves both scroll axes instead of silently discarding the smaller movement", async () => {
+    const runner = vi.fn(async () => ({ stdout: "{}" }));
+    const runtime = new QemuLinuxDesktopRuntime(runner, "darwin", "arm64", "linux-vm:diagonal");
+    vi.spyOn(runtime, "list").mockResolvedValue([{ id: "linux-vm:diagonal", ready: true } as any]);
+    await runtime.perform({
+        desktopId: "linux-vm:diagonal",
+        action: "scroll",
+        expectedGeneration: 0,
+        deltaX: 80,
+        deltaY: 240,
+    });
+    expect(runner.mock.calls).toHaveLength(2);
+    expect((runner.mock.calls[0] as any)[1].at(-1)).toContain('"direction":"right"');
+    expect((runner.mock.calls[1] as any)[1].at(-1)).toContain('"direction":"down"');
+});
+
+it("fences queued input even when checkpoint restore has an uncertain outcome", async () => {
+    const { VmHistoryStore } = await import("./vm-history");
+    const restore = vi.spyOn(VmHistoryStore.prototype, "restore").mockRejectedValue(new Error("Monitor disconnected"));
+    const runtime = new QemuLinuxDesktopRuntime(
+        vi.fn(async () => ({ stdout: "" })),
+        "darwin",
+        "arm64",
+        "linux-vm:restore-fence"
+    );
+    vi.spyOn(runtime, "list").mockResolvedValue([{ id: "linux-vm:restore-fence", ready: true } as any]);
+    try {
+        await runtime.assign("linux-vm:restore-fence", "agent", 0);
+        const assignment = { desktopId: "linux-vm:restore-fence", assignedAgentId: "agent", expectedGeneration: 1 };
+        const restoring = runtime.performAgent({
+            ...assignment,
+            action: "history",
+            historyAction: "restore",
+            checkpointId: "checkpoint",
+        });
+        const queued = runtime.performAgent({ ...assignment, action: "click", x: 1, y: 1 });
+        await expect(restoring).rejects.toThrow("Monitor disconnected");
+        await expect(queued).rejects.toThrow("Control changed");
+    } finally {
+        restore.mockRestore();
     }
 });

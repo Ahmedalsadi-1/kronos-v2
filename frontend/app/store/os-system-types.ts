@@ -9,6 +9,7 @@ export type OSResourceReference = {
     name: string;
     resource: string;
     detail?: string;
+    render?: import("@/types/comfyui").ComfyRenderRef;
 };
 
 export type ArtifactShelfItem = OSResourceReference & {

@@ -1,0 +1,84 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+.concept-chrome-background {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.concept-border-beam[data-beam] {
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    z-index: 2;
+}
+.concept-border-beam > span {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+[data-start-action="browser"] .concept-media,
+.os-chat-start-page[data-start-action="browser"] .os-chat-start-progress {
+    animation: chat-start-browser 280ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+[data-start-action="task"] .concept-thread,
+.os-chat-start-page[data-start-action="task"] .os-chat-start-progress {
+    animation: chat-start-task 260ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+[data-start-action="canvas"] .concept-media,
+.os-chat-start-page[data-start-action="canvas"] .os-chat-start-progress {
+    animation: chat-start-canvas 300ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+@keyframes chat-start-browser {
+    from {
+        opacity: 0;
+        transform: translateX(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(0);
+    }
+}
+@keyframes chat-start-task {
+    from {
+        opacity: 0;
+        transform: translateY(7px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(0);
+    }
+}
+@keyframes chat-start-canvas {
+    from {
+        opacity: 0;
+        clip-path: inset(0 45% 0 45% round 14px);
+    }
+    to {
+        opacity: 1;
+        clip-path: inset(0 round 14px);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    [data-start-action] *,
+    .concept-border-beam[data-beam],
+    .concept-border-beam[data-beam]::before,
+    .concept-border-beam[data-beam]::after,
+    .concept-border-beam [data-beam-bloom] {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+[data-reduced-motion="true"] [data-start-action] *,
+[data-reduced-motion="true"] .concept-border-beam {
+    animation: none !important;
+    transition: none !important;
+}
+.pen-chat-dock[data-start-action="browser"] .pen-chat-widget-panes {
+    animation: chat-start-browser 280ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+.concept-chrome-background {
+    opacity: 0.35;
+    background: radial-gradient(ellipse at 70% 25%, #504559, #222125 70%);
+}

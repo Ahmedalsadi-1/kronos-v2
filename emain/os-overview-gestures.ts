@@ -13,11 +13,17 @@ type GestureWindow = {
 export function installOSOverviewGestures(
     window: GestureWindow,
     target: () => GestureTarget | undefined,
-    platform = process.platform
+    platform = process.platform,
+    browserSwipe?: (direction: "left" | "right") => void
 ): () => void {
     if (platform !== "darwin") return () => {};
     const swipe = (_event: unknown, direction: string) => {
-        if (window.isDestroyed() || !window.isFocused() || !["up", "down"].includes(direction)) return;
+        if (window.isDestroyed() || !window.isFocused()) return;
+        if (direction === "left" || direction === "right") {
+            browserSwipe?.(direction);
+            return;
+        }
+        if (direction !== "up" && direction !== "down") return;
         const contents = target();
         if (!contents || contents.isDestroyed()) return;
         contents.send("os-overview-gesture", direction);

@@ -1,0 +1,46 @@
+{
+  "vm_ssh": {
+    "samples_ms": [
+      25.0,
+      9.6,
+      7.2,
+      7.7,
+      8.3
+    ],
+    "median_ms": 8.3,
+    "errors": []
+  },
+  "vm_capture": {
+    "samples_ms": [
+      111.5,
+      48.6,
+      57.2,
+      150.1,
+      50.7
+    ],
+    "median_ms": 57.2,
+    "errors": []
+  },
+  "android_capture": {
+    "samples_ms": [
+      1394.0,
+      555.1,
+      284.9,
+      286.3,
+      421.1
+    ],
+    "median_ms": 421.1,
+    "errors": []
+  },
+  "ios_capture": {
+    "samples_ms": [
+      431.7,
+      206.6,
+      204.4,
+      362.4,
+      276.3
+    ],
+    "median_ms": 276.3,
+    "errors": []
+  }
+}

@@ -5,6 +5,7 @@ import { browserNavigationSnapshot } from "../../../types/browser-navigation";
 import { reportDesktopPetActivity, type AgentWidgetActivity } from "@/app/aipanel/desktop-pet-activity";
 import { BlockNodeModel } from "@/app/block/blocktypes";
 import { Search, useSearch } from "@/app/element/search";
+import { getMobilePreviewPlatform, PenChatDockMeta } from "@/app/tab/os-pen-chat-dock-model";
 import { globalStore } from "@/app/store/jotaiStore";
 import { getSimpleControlShiftAtom } from "@/app/store/keymodel";
 import type { TabModel } from "@/app/store/tab-model";
@@ -21,7 +22,11 @@ import { reportCursorToPet } from "@/app/view/cursor-overlay";
 import { requestAgentTakeover } from "@/app/view/hermes/hermes-tool-activity";
 import { useAgentOverlays } from "@/app/view/use-agent-overlays";
 import { BrowserAddressBar, clearBrowserAddressHistory } from "@/app/view/webview/browser-address-bar";
-import { BrowserAnnotationTray } from "@/app/view/webview/browser-annotation-tray";
+import { BrowserLibraryModel, isPrivateBrowserPartition, openSavedBrowserPage } from "./browser-library";
+import { BrowserLibraryMenu, BrowserPagePin } from "./browser-library-menu";
+import { createPortal } from "react-dom";
+import { BrowserDownloadsButton, BrowserSiteSettingsPanel } from "./browser-site-settings";
+import { BrowserMigrationDialog } from "./browser-migration-dialog";
 import { BrowserMarkupEvent } from "@/app/view/webview/browser-markup-overlay";
 import {
     BrowserChromeToolbar,
@@ -37,8 +42,9 @@ import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import type { WebviewTag } from "electron";
 import { Atom, PrimitiveAtom, atom, useAtomValue, useSetAtom } from "jotai";
-import { Code2, Cookie, ExternalLink, Home, Pause } from "lucide-react";
-import { Fragment, createRef, memo, useCallback, useEffect, useRef, useState } from "react";
+import { Code2, Cookie, ExternalLink, Home, Pause, Puzzle, SquareDashedMousePointer } from "lucide-react";
+import type { BrowserGrabTarget } from "@/types/browser-grab";
+import { Fragment, createRef, memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { makeBrowserPayload, publishCrossViewEvent } from "../../../types/cross-view-bus";
 import { getBrowserAnnotationsAtom } from "./browser-annotations";
 import { BrowserGrabController, type BrowserGrabIntent } from "./browser-grab-controller";
@@ -54,9 +60,15 @@ function hasBrowserPreviewChrome(meta: MetaType): boolean {
 }
 
 export const BrowserPageToolbar = memo(
-    ({ model, islandControls }: { model: WebViewModel; islandControls?: React.ReactNode }) => {
+    ({ model, islandControls, companion, downloadsTarget }: {
+        model: WebViewModel;
+        islandControls?: React.ReactNode;
+        companion?: boolean;
+        downloadsTarget?: HTMLElement;
+    }) => {
         const block = useAtomValue(model.blockAtom);
         const preview = hasBrowserPreviewChrome(block?.meta);
+        companion ??= !preview;
         const agentPresence = useAgentPresenceForBlock(model.blockId, "web");
         const currentUrl = useAtomValue(model.url);
         const homepageUrl = useAtomValue(model.homepageUrl);
@@ -64,6 +76,7 @@ export const BrowserPageToolbar = memo(
         const canGoForward = useAtomValue(model.canGoForward);
         const isLoading = useAtomValue(model.isLoading);
         const domReady = useAtomValue(model.domReady);
+        const webContentsId = useAtomValue(model.webContentsId);
         const refreshIcon = useAtomValue(model.refreshIcon);
         const faviconUrl = useAtomValue(model.faviconUrl);
         const urlInputFocused = useAtomValue(model.urlInputFocused);
@@ -73,6 +86,7 @@ export const BrowserPageToolbar = memo(
         const grabIntent = useAtomValue(model.grabIntentAtom);
         const toolError = useAtomValue(model.browserToolErrorAtom);
         const inspectMode = grabIntent === "grab";
+        const [migrationOpen, setMigrationOpen] = useState(false);
         const [cookieDialog, setCookieDialog] = useState(false);
         const [cookiesJson, setCookiesJson] = useState("");
         const [cookieStatus, setCookieStatus] = useState("");
@@ -176,7 +190,7 @@ export const BrowserPageToolbar = memo(
         };
 
         return (
-            <BrowserChromeToolbar preview={preview}>
+            <BrowserChromeToolbar preview={preview} companion={companion}>
                 <BrowserNavigationControlRow
                     addressSlot={
                         <BrowserAddressBar
@@ -184,11 +198,24 @@ export const BrowserPageToolbar = memo(
                             url={url}
                             focused={urlInputFocused}
                             faviconUrl={faviconUrl}
+                            companion={companion}
                             previewPageUrl={preview ? pageUrl : undefined}
                         />
                     }
                     beforeAddress={
-                        preview && (
+                        companion ? (
+                            <button
+                                type="button"
+                                className="webview-companion-annotate"
+                                aria-pressed={grabIntent === "annotate"}
+                                title="Click an element or drag to select an area. Hold Space to use the page."
+                                disabled={!domReady}
+                                onClick={toggleAnnotate}
+                            >
+                                <SquareDashedMousePointer size={16} aria-hidden="true" />
+                                Annotate
+                            </button>
+                        ) : preview && (
                             <button
                                 type="button"
                                 onClick={() => model.handleHome()}
@@ -200,50 +227,79 @@ export const BrowserPageToolbar = memo(
                             </button>
                         )
                     }
+                    groupHistory={companion}
                     controls={navControls}
                     reloadIcon={refreshIcon}
                     reloadLabel={isLoading ? "Stop" : "Reload"}
                 >
+                    <BrowserPagePin page={{ url: pageUrl, title: pageTitle, partition }} />
+                    <BrowserLibraryMenu onOpen={page => openSavedBrowserPage(page, undefined, next =>
+                        model.env.rpc.SetMetaCommand(TabRpcClient, { oref: makeORef("block", model.blockId), meta: { url: next.url, "web:partition": next.partition || null } })
+                    )} />
                     {preview && (
                         <BrowserPreviewActions model={model} page={{ title: pageTitle, url: pageUrl }} ready={domReady} />
                     )}
+                    {!companion && (
+                        <>
+                            <button
+                                type="button"
+                                className="webview-toolbar-secondary"
+                                onClick={openCookieDialog}
+                                aria-label="Import session cookies"
+                                title="Import session cookies"
+                            >
+                                <Cookie size={16} />
+                            </button>
+                            <button
+                                type="button"
+                                className="webview-toolbar-secondary"
+                                onClick={() => model.openFind()}
+                                aria-label="Find in page"
+                                title="Find in page"
+                            >
+                                <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                className="webview-toolbar-secondary"
+                                onClick={() => model.toggleDevTools()}
+                                aria-label="Open browser DevTools"
+                                title="Open browser DevTools"
+                            >
+                                <Code2 size={16} aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                className="webview-toolbar-secondary"
+                                onClick={openExternal}
+                                aria-label="Open in external browser"
+                                title="Open in external browser"
+                            >
+                                <ExternalLink size={16} aria-hidden="true" />
+                            </button>
+                        </>
+                    )}
                     <button
                         type="button"
-                        className="webview-toolbar-secondary"
-                        onClick={openCookieDialog}
-                        aria-label="Import session cookies"
-                        title="Import session cookies"
+                        className="webview-extension-button"
+                        aria-label="Browser import and passwords"
+                        title="Browser import and passwords"
+                        onClick={() => setMigrationOpen(true)}
                     >
-                        <Cookie size={16} />
+                        <Puzzle size={16} aria-hidden="true" />
                     </button>
-                    <button
-                        type="button"
-                        className="webview-toolbar-secondary"
-                        onClick={() => model.openFind()}
-                        aria-label="Find in page"
-                        title="Find in page"
-                    >
-                        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        className="webview-toolbar-secondary"
-                        onClick={() => model.toggleDevTools()}
-                        aria-label="Open browser DevTools"
-                        title="Open browser DevTools"
-                    >
-                        <Code2 size={16} aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        className="webview-toolbar-secondary"
-                        onClick={openExternal}
-                        aria-label="Open in external browser"
-                        title="Open in external browser"
-                    >
-                        <ExternalLink size={16} aria-hidden="true" />
-                    </button>
+                    {!preview && (downloadsTarget
+                        ? createPortal(<BrowserDownloadsButton guestId={webContentsId} url={pageUrl} />, downloadsTarget)
+                        : <BrowserDownloadsButton guestId={webContentsId} url={pageUrl} />)}
                     <BrowserToolbarMenu
+                        companion={companion}
+                        settingsPanel={companion && webContentsId != null && (
+                            <BrowserSiteSettingsPanel
+                                guestId={webContentsId}
+                                url={url}
+                                navigate={(nextUrl) => model.loadUrl(nextUrl, "navigation-row")}
+                            />
+                        )}
                         deviceProfile={userAgentType}
                         inspectMode={inspectMode}
                         onInspect={toggleInspect}
@@ -283,6 +339,16 @@ export const BrowserPageToolbar = memo(
                     {islandControls}
                 </BrowserNavigationControlRow>
                 {preview && <BrowserPreviewLinks model={model} ready={domReady} />}
+                {migrationOpen && (
+                    <BrowserMigrationDialog
+                        api={getApi()}
+                        guestId={domReady ? webContentsId : null}
+                        profile={sessionProfile}
+                        url={url}
+                        onProfileChange={changeSession}
+                        onClose={() => setMigrationOpen(false)}
+                    />
+                )}
                 {toolError && (
                     <div className="flex items-center gap-2 bg-red-950 px-3 py-1 text-xs text-red-200" role="status">
                         {toolError}
@@ -405,6 +471,7 @@ export class WebViewModel implements ViewModel {
     canGoForward: PrimitiveAtom<boolean>;
     modifyExternalUrl?: (url: string) => string;
     domReady: PrimitiveAtom<boolean>;
+    webContentsId = atom(null) as PrimitiveAtom<number>;
     hideNav: Atom<boolean>;
     searchAtoms?: SearchAtoms;
     typeaheadOpen: PrimitiveAtom<boolean>;
@@ -459,7 +526,11 @@ export class WebViewModel implements ViewModel {
         this.urlInputRef = createRef<HTMLInputElement>();
         this.webviewRef = createRef<WebviewTag>();
         this.domReady = atom(false);
-        this.hideNav = this.env.getBlockMetaKeyAtom(blockId, "web:hidenav");
+        const hideNavMeta = this.env.getBlockMetaKeyAtom(blockId, "web:hidenav");
+        this.hideNav = atom((get) => get(hideNavMeta) || Boolean(
+            get(this.blockAtom)?.meta?.[PenChatDockMeta] &&
+            getMobilePreviewPlatform(get(this.url) || get(this.blockAtom)?.meta?.url)
+        ));
         this.typeaheadOpen = atom(false);
         this.partitionOverride = null;
         this.userAgentType = this.env.getBlockMetaKeyAtom(blockId, "web:useragenttype");
@@ -1344,7 +1415,123 @@ function WebViewFailureOverlay({ model, errorText }: { model: WebViewModel; erro
     );
 }
 
-const BrowserAnnotationTrayLazy = BrowserAnnotationTray;
+function BrowserAnnotationComposer({ controller, zoom }: { controller: BrowserGrabController; zoom: number }) {
+    const intent = useAtomValue(controller.intent);
+    const selection = useAtomValue(controller.selection);
+    if (intent !== "annotate" || !selection) return null;
+    return (
+        <BrowserAnnotationPopup
+            key={JSON.stringify([selection.target.annotationPoint, selection.target.rectViewport, selection.target.selector])}
+            target={selection.target}
+            zoom={zoom}
+            onCancel={() => globalStore.set(controller.selection, null)}
+            onSave={(comment) => controller.annotate(comment, "change")}
+        />
+    );
+}
+
+function BrowserAnnotationPopup({
+    target,
+    zoom,
+    onCancel,
+    onSave,
+}: {
+    target: BrowserGrabTarget;
+    zoom: number;
+    onCancel: () => void;
+    onSave: (comment: string) => void;
+}) {
+    const [showProperties, setShowProperties] = useState(false);
+    const [query, setQuery] = useState("");
+    const commentRef = useRef<HTMLInputElement>(null);
+    const settingsRef = useRef<HTMLButtonElement>(null);
+    const propertyId = useId();
+    const anchor = target.annotationPoint ?? {
+        x: target.rectViewport.x,
+        y: target.rectViewport.y + target.rectViewport.height,
+    };
+    const tag = target.tagName.toLowerCase();
+    const label = target.reactComponents ? `${target.reactComponents}.${tag}` : tag;
+    const properties = Object.entries(target.computedStyles ?? {})
+        .filter(([, value]) => value)
+        .map(([name, value]) => [name.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`), value])
+        .filter(([name]) => name.includes(query.trim().toLowerCase()));
+
+    return (
+        <form
+            aria-label="Add browser annotation"
+            className="browser-annotation-popup"
+            data-properties={showProperties}
+            style={{
+                left: `clamp(8px, ${anchor.x * zoom}px, 100% - min(var(--annotation-width), 100% - 16px) - 8px)`,
+                top: `clamp(8px, ${anchor.y * zoom}px, 100% - var(--annotation-reserve))`,
+            }}
+            onSubmit={(event) => {
+                event.preventDefault();
+                if (!showProperties) onSave(commentRef.current.value);
+            }}
+            onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.stopPropagation();
+                if (!showProperties) {
+                    onCancel();
+                    return;
+                }
+                setShowProperties(false);
+                settingsRef.current.focus();
+            }}
+        >
+            <div className="browser-annotation-popup-header">
+                <span title={label}>{label}</span>
+                <button
+                    ref={settingsRef}
+                    type="button"
+                    aria-label="Element settings"
+                    aria-expanded={showProperties}
+                    aria-controls={propertyId}
+                    title="Element settings"
+                    onClick={() => setShowProperties((value) => !value)}
+                >
+                    <i className="fa-solid fa-sliders" aria-hidden="true" />
+                </button>
+            </div>
+            <div className="browser-annotation-popup-comment" hidden={showProperties}>
+                <input
+                    ref={commentRef}
+                    autoFocus
+                    required={!showProperties}
+                    maxLength={2000}
+                    aria-label="Add context"
+                    placeholder="Add context"
+                />
+                <button type="submit" aria-label="Add screenshot and context to chat" title="Add to chat">
+                    <i className="fa-solid fa-arrow-up" aria-hidden="true" />
+                </button>
+            </div>
+            <div id={propertyId} hidden={!showProperties} className="browser-annotation-popup-properties">
+                {showProperties && (
+                    <input
+                        autoFocus
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        aria-label="Search properties"
+                        placeholder="Search property"
+                    />
+                )}
+                <dl>
+                    {properties.map(([name, value]) => (
+                        <div key={name}>
+                            <dt>{name}</dt>
+                            <dd title={value}>{value}</dd>
+                        </div>
+                    ))}
+                </dl>
+                {properties.length === 0 && <p>No matching properties</p>}
+            </div>
+        </form>
+    );
+}
+
 
 const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps) => {
     const env = useWaveEnv<WebViewEnv>();
@@ -1429,7 +1616,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     const [metaUrlInitial] = useState(initialSrc || metaUrl);
     const prevUserAgentTypeRef = useRef(userAgentType);
 
-    const [webContentsId, setWebContentsId] = useState(null);
+    const webContentsId = useAtomValue(model.webContentsId);
     const domReady = useAtomValue(model.domReady);
 
     const [errorText, setErrorText] = useState("");
@@ -1459,27 +1646,18 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     }
 
     useEffect(() => {
-        return () => {
-            globalStore.set(model.domReady, false);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (model.webviewRef.current == null || !model.webviewRef.current.isConnected || !domReady) {
+        const webview = model.webviewRef.current;
+        if (!webview?.isConnected || webContentsId == null) {
             return;
         }
         try {
-            const wcId = model.webviewRef.current.getWebContentsId?.();
-            if (wcId) {
-                setWebContentsId(wcId);
-                if (model.webviewRef.current.getZoomFactor() != zoomFactor) {
-                    model.webviewRef.current.setZoomFactor(zoomFactor);
-                }
+            if (webview.getZoomFactor() !== zoomFactor) {
+                webview.setZoomFactor(zoomFactor);
             }
         } catch (e) {
-            console.error("Failed to get webcontentsid / setzoomlevel (webview)", e);
+            console.error("Failed to set zoom level (webview)", e);
         }
-    }, [model.webviewRef.current, domReady, zoomFactor]);
+    }, [model, webContentsId, zoomFactor]);
 
     // Load a new URL if the block metadata is updated.
     useEffect(() => {
@@ -1519,12 +1697,13 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             return;
         }
         const historyKey = `kronterm:browser-history:v1:${model.blockId}`;
+        const privateHistory = () => isPrivateBrowserPartition(webview.getAttribute("partition"));
         let historyReady = false;
         let restored = false;
         let disposed = false;
         let historyRevision = 0;
         const rememberHistory = async () => {
-            if (!historyReady || disposed || !getApi().browserNavigationHistory) return;
+            if (!historyReady || disposed || privateHistory() || !getApi().browserNavigationHistory) return;
             const revision = ++historyRevision;
             try {
                 const snapshot = await getApi().browserNavigationHistory(webview.getWebContentsId());
@@ -1536,7 +1715,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             }
         };
         const restoreHistory = async () => {
-            if (restored || !getApi().browserNavigationHistory) return;
+            if (restored || privateHistory() || !getApi().browserNavigationHistory) return;
             restored = true;
             try {
                 const snapshot = browserNavigationSnapshot(
@@ -1561,6 +1740,10 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                 publishCrossViewEvent("browser:navigate", model.blockId, makeBrowserPayload(model.blockId, e.url));
             }
             model.updateNavState();
+            if (e.isMainFrame !== false) BrowserLibraryModel.getInstance().recordVisit({
+                url: e.url, title: globalStore.get(model.blockAtom)?.meta?.["web:title"] as string,
+                partition: webview.getAttribute("partition") ?? "",
+            });
             void rememberHistory();
         };
         const newWindowHandler = (e: any) => {
@@ -1576,6 +1759,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                 return;
             }
             model.setBrowserTitle(e.title);
+            BrowserLibraryModel.getInstance().updateTitle({ url: webview.getURL(), title: e.title, partition: webview.getAttribute("partition") ?? "" });
             publishCrossViewEvent(
                 "browser:title-change",
                 model.blockId,
@@ -1618,7 +1802,23 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             env.electron.setWebviewFocus(null);
         };
         const handleDomReady = () => {
+            if (
+                getMobilePreviewPlatform(webview.getURL()) === "iphone" &&
+                Boolean(globalStore.get(model.blockAtom)?.meta?.[PenChatDockMeta])
+            ) {
+                // serve-sim otherwise caps the phone at its saved manual width when the dock grows.
+                void webview.insertCSS(`
+                    .h-screen.bg-page {
+                        padding-inline: 12px !important;
+                    }
+                    .h-screen.bg-page > .min-w-0,
+                    .h-screen.bg-page > .min-w-0 + .max-h-full {
+                        width: min(calc(100vw - 32px), calc((100dvh - 96px) * 0.46)) !important;
+                    }
+                `).catch(() => {});
+            }
             void restoreHistory().then(() => model.updateNavState());
+            globalStore.set(model.webContentsId, webview.getWebContentsId());
             globalStore.set(model.domReady, true);
             setBgColor();
         };
@@ -1648,6 +1848,8 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         // Clean up event listeners on component unmount
         return () => {
             disposed = true;
+            globalStore.set(model.webContentsId, null);
+            globalStore.set(model.domReady, false);
             model.setGrabIntent(null);
             webview.removeEventListener("did-frame-navigate", navigateListener);
             webview.removeEventListener("did-navigate", navigateListener);
@@ -1781,7 +1983,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
                     </MockBoundary>
                     {errorText ? <WebViewFailureOverlay key={errorText} model={model} errorText={errorText} /> : null}
                     <AgentSurfaceCursor surface="browser" blockId={model.blockId} webviewRef={model.webviewRef} />
-                    <BrowserAnnotationTrayLazy blockId={model.blockId} url={metaUrl} />
+                    <BrowserAnnotationComposer controller={model.grabController} zoom={zoomFactor} />
                     <BrowserResearchPanel controller={model.grabController} />
                     <BrowserMarkupOverlay blockId={model.blockId} />
                     <BrowserAccountPanel key={webPartition ?? "default"} guestRef={model.webviewRef} ready={domReady} />

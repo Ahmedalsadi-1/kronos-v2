@@ -98,6 +98,8 @@ export function linuxVmQemuArgs(directory: string, sshPort: number): string[] {
         "none",
         "-serial",
         `file:${directory}/console.log`,
+        "-qmp",
+        `unix:${directory}/qmp.sock,server=on,wait=off`,
         "-pidfile",
         `${directory}/qemu.pid`,
         "-daemonize",

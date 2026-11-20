@@ -12,6 +12,8 @@ import {
 import * as Dialog from "@radix-ui/react-dialog";
 import { lazy, Suspense, useState } from "react";
 
+import "./os-hermes-settings-theme.css";
+
 const HermesSettingsContent = lazy(async () => ({
     default: (await import("./os-hermes-settings-content")).HermesSettingsContent,
 }));

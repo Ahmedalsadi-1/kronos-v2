@@ -162,6 +162,42 @@ describe("ComputersController", () => {
         expect(controller.state.snapshot?.imageDataUrl).toBeTruthy();
     });
 
+    it("keeps the last Android frame while a transient capture failure recovers", async () => {
+        vi.useFakeTimers();
+        const client = api();
+        const target = { ...Target, id: "android-adb:emulator-5554", kind: "android-emulator" as const };
+        vi.mocked(client.listComputerTargets).mockResolvedValue({ success: true, data: [target] });
+        client.startComputerTargetSession = vi.fn().mockResolvedValue({
+            success: true,
+            data: { id: "live", targetId: target.id, controlGeneration: 2, live: true },
+        });
+        client.stopComputerTargetSession = vi.fn().mockResolvedValue({ success: true });
+        client.readComputerTargetFrame = vi.fn()
+            .mockResolvedValueOnce({
+                success: true,
+                data: { sessionId: "live", sequence: 1, imageDataUrl: "before", capturedAt: 1 },
+            })
+            .mockRejectedValueOnce(new Error("Android returned an invalid screenshot."))
+            .mockResolvedValue({
+                success: true,
+                data: { sessionId: "live", sequence: 2, imageDataUrl: "after", capturedAt: 2 },
+            });
+        const controller = new ComputersController(client, vi.fn());
+        try {
+            await controller.refresh();
+            await controller.connect();
+            await vi.advanceTimersByTimeAsync(100);
+            expect(controller.state.snapshot.imageDataUrl).toBe("before");
+            expect(client.stopComputerTargetSession).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(250);
+            expect(controller.state.snapshot.imageDataUrl).toBe("after");
+            expect(client.startComputerTargetSession).toHaveBeenCalledTimes(1);
+        } finally {
+            controller.dispose();
+            vi.useRealTimers();
+        }
+    });
+
     it("reads live frames serially and preserves them through touch input", async () => {
         vi.useFakeTimers();
         try {

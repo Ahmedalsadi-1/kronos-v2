@@ -564,6 +564,20 @@ export function OSOriginalWorkflow({
                     contextRef.current = { ...contextRef.current, hasExecutions };
                     publishContext();
                 },
+                reproduceExecution: async (workflowId: string, executionId: string) => {
+                    if (!active || host.workflowId !== workflowId) throw new Error("The selected workflow changed.");
+                    const draft = await request("reproduce-execution", { workflowId, executionId }) as {
+                        workflowId: string;
+                        nodeId: string;
+                    };
+                    if (!active || host.workflowId !== workflowId) return;
+                    await request("select-workflow", { workflowId: draft.workflowId });
+                    await host.navigate?.(`/workflow/${encodeURIComponent(draft.workflowId)}`);
+                    if (!active) return;
+                    host.setSelection?.([draft.nodeId]);
+                    host.fitWorkflow?.();
+                    window.dispatchEvent(new CustomEvent("kronterm:workflow-executions-dock-close", { detail: { tabId } }));
+                },
                 onPickerClosed: () => {
                     if (!initialNavigationSettled || !pickerTarget.current) return;
                     if (pickerInteracted.current) {

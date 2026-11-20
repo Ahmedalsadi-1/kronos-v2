@@ -2,6 +2,9 @@ import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { IosSimulatorControl, validateIosSimulatorEndpoint } from "./ios-simulator-control";
 
+import { sendEmulatorGestureSequence } from "./orca-ios/emulator-gesture-sender";
+vi.mock("./orca-ios/emulator-gesture-sender", () => ({ sendEmulatorGestureSequence: vi.fn(async () => {}) }));
+
 const Udid = "00000000-0000-0000-0000-000000000001";
 const Session = { device: Udid, wsUrl: "ws://127.0.0.1:9000", url: "http://127.0.0.1:9001" };
 
@@ -15,14 +18,25 @@ describe("Orca iOS simulator adaptation", () => {
         });
         await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
         const port = (server.address() as { port: number }).port;
+        const ready = vi.fn(async () => true);
         const control = new IosSimulatorControl(
             async () => JSON.stringify({ ...Session, url: `http://127.0.0.1:${port}` }),
-            async () => true
+            ready
         );
         try {
             const frame = await control.frame(Udid);
             expect(frame.imageDataUrl).toBe(`data:image/jpeg;base64,${jpeg.toString("base64")}`);
             expect(frame.capturedAt).toBeGreaterThan(0);
+            await control.frame(Udid);
+            await control.tap(Udid, 0.2, 0.3);
+            expect(ready).toHaveBeenCalledTimes(1);
+            const clock = vi.spyOn(Date, "now").mockReturnValue(frame.capturedAt + 2001);
+            try {
+                await control.attach(Udid);
+                expect(ready).toHaveBeenCalledTimes(2);
+            } finally {
+                clock.mockRestore();
+            }
         } finally {
             await control.dispose();
             server.closeAllConnections();
@@ -43,7 +57,11 @@ describe("Orca iOS simulator adaptation", () => {
         expect(execute).toHaveBeenCalledTimes(1);
         expect(first.streamUrl).toBe("http://127.0.0.1:9001/stream.mjpeg");
         await control.tap(Udid, 0.2, 0.3);
-        expect(execute).toHaveBeenLastCalledWith(["tap", "0.2", "0.3", "-d", Udid]);
+        expect(sendEmulatorGestureSequence).toHaveBeenLastCalledWith("ws://127.0.0.1:9000/", [
+            { type: "begin", x: 0.2, y: 0.3 },
+            { type: "end", x: 0.2, y: 0.3 },
+        ]);
+        expect(execute).toHaveBeenCalledTimes(1);
         await expect(control.tap(Udid, 2, 0.3)).rejects.toThrow();
     });
 
@@ -88,4 +106,21 @@ describe("Orca iOS simulator adaptation", () => {
             name: "Settings",
         });
     });
+});
+
+it("requires a post-input frame instead of returning the pre-action image", async () => {
+    const execute = vi.fn(async () => JSON.stringify(Session));
+    const control = new IosSimulatorControl(execute, async () => true);
+    await control.attach(Udid);
+    const record = { stream: { stop: vi.fn() }, imageDataUrl: "before", capturedAt: Date.now() };
+    (control as any).streams.set(Udid, record);
+    await control.tap(Udid, 0.5, 0.5);
+    expect(record.imageDataUrl).toBeUndefined();
+    const pending = control.frame(Udid);
+    setTimeout(() => {
+        record.imageDataUrl = "after";
+        record.capturedAt = Date.now();
+    }, 40);
+    expect((await pending).imageDataUrl).toBe("after");
+    await control.dispose();
 });

@@ -1,0 +1,21 @@
+{
+  "bytes": 99780,
+  "before": {
+    "commandCount": 50,
+    "samples_ms": [
+      1988,
+      2031,
+      2091
+    ],
+    "sha256": "9972f54a8e85b8aa7ac6c557c218e6388d0d3a101136c135b65bc75c1556afff"
+  },
+  "after": {
+    "commandCount": 2,
+    "samples_ms": [
+      221,
+      201,
+      170
+    ],
+    "sha256": "9972f54a8e85b8aa7ac6c557c218e6388d0d3a101136c135b65bc75c1556afff"
+  }
+}

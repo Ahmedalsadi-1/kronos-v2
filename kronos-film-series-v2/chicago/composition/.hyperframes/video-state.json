@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "historyId": "59f733ec-4464-4207-97a6-4b555c98a485",
+  "currentRevision": null,
+  "pendingChanges": false,
+  "files": {
+    "index.html": {
+      "hash": "8f2a99220fd8e011c6a32f018ef5f6fb33c83b92f9042c3c0792cbbe6e97797e",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/8f/8f2a99220fd8e011c6a32f018ef5f6fb33c83b92f9042c3c0792cbbe6e97797e"
+    },
+    "media/bed.mp3": {
+      "hash": "749f3c65a1ef0de719adc85d6aecb2935cd79d82911e8c900f35409fedaa1c4a",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/74/749f3c65a1ef0de719adc85d6aecb2935cd79d82911e8c900f35409fedaa1c4a"
+    },
+    "media/chat.jpg": {
+      "hash": "2dbbbd0bf6f5eb3a12ce74216d09262a9f5becca6f343901d6277264db6f048b",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/2d/2dbbbd0bf6f5eb3a12ce74216d09262a9f5becca6f343901d6277264db6f048b"
+    },
+    "media/click.ogg": {
+      "hash": "c394b46bc6737f7f7edfbfa3031ce621b7a43d498d456d6198364eee9cd3e306",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/c3/c394b46bc6737f7f7edfbfa3031ce621b7a43d498d456d6198364eee9cd3e306"
+    },
+    "media/context.jpg": {
+      "hash": "e1912ad762b3691bf726a0cc20af871683de283f63231d4ec8faf593e63614a9",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/e1/e1912ad762b3691bf726a0cc20af871683de283f63231d4ec8faf593e63614a9"
+    },
+    "media/context.mp4": {
+      "hash": "b47ae5a98751d517e43509fff657248d8b91d5c229cbbe29a6d1378940bff0f8",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/b4/b47ae5a98751d517e43509fff657248d8b91d5c229cbbe29a6d1378940bff0f8"
+    },
+    "media/gsap.min.js": {
+      "hash": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/c1/c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280"
+    },
+    "media/inter.woff2": {
+      "hash": "8af7bd5b545567adffb3dfceb5bedb353a522d7bf1b3a2b8af7b6064156babc0",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/8a/8af7bd5b545567adffb3dfceb5bedb353a522d7bf1b3a2b8af7b6064156babc0"
+    },
+    "media/listing.jpg": {
+      "hash": "eda08fc4ab9a51608f63d80c3ef50006b9b13e7bd1294a2984ef7e0f53b75338",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/ed/eda08fc4ab9a51608f63d80c3ef50006b9b13e7bd1294a2984ef7e0f53b75338"
+    },
+    "media/logo.jpg": {
+      "hash": "cf281467dbd6454a14d48184a89967baaa7108fa29f510717f56c960bd398865",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/cf/cf281467dbd6454a14d48184a89967baaa7108fa29f510717f56c960bd398865"
+    },
+    "media/restaurant.jpg": {
+      "hash": "1c641a8a14db39e8e9677d9079b7e6e8698973c060543e2f6e0995aecdb67cd0",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/1c/1c641a8a14db39e8e9677d9079b7e6e8698973c060543e2f6e0995aecdb67cd0"
+    },
+    "media/river.jpg": {
+      "hash": "09a6d9eff316cfa97dd04412a43e63a855a5385442086fc9cd8dee11befb2ef3",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/09/09a6d9eff316cfa97dd04412a43e63a855a5385442086fc9cd8dee11befb2ef3"
+    },
+    "media/riverwalk.mp4": {
+      "hash": "c0139f678e4ea9c464d4bcbc7f110a6b4434543a7a8c8d11d623e5e858a97760",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/c0/c0139f678e4ea9c464d4bcbc7f110a6b4434543a7a8c8d11d623e5e858a97760"
+    },
+    "media/slide.ogg": {
+      "hash": "006cf9822d15d7063f8899e56041f41646df30adb6fbd8b974ee5d5420012690",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/00/006cf9822d15d7063f8899e56041f41646df30adb6fbd8b974ee5d5420012690"
+    },
+    "media/terminal.jpg": {
+      "hash": "3135c422a38bea5accd7c94a92bce1c6a8d1920899ed1a5c3b75f71ab60347c8",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/31/3135c422a38bea5accd7c94a92bce1c6a8d1920899ed1a5c3b75f71ab60347c8"
+    },
+    "media/terminal.mp4": {
+      "hash": "5091b1fef9b69978382a0425ca6b9cff903295526abd8fd2a665892622bcb364",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/59f733ec-4464-4207-97a6-4b555c98a485/blobs/50/5091b1fef9b69978382a0425ca6b9cff903295526abd8fd2a665892622bcb364"
+    }
+  },
+  "revisions": {},
+  "checks": {
+    "latest": {
+      "revision": null,
+      "id": "30322d46-da4e-4888-a46b-fbee60b734bc"
+    },
+    "revisions": {},
+    "unversioned": [
+      {
+        "id": "30322d46-da4e-4888-a46b-fbee60b734bc",
+        "scope": "project",
+        "report": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/chicago/composition/.hyperframes/artifacts/checks/30322d46-da4e-4888-a46b-fbee60b734bc.json",
+        "metadata": {
+          "ok": true,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 45000,
+            "cache": true,
+            "contrast": true,
+            "craft": true,
+            "strict": false,
+            "snapshots": false,
+            "safeZones": [
+              "tiktok",
+              "reels",
+              "shorts"
+            ],
+            "browserGpuMode": "auto",
+            "includeUnmounted": false
+          }
+        },
+        "createdAt": 1794982604704,
+        "contentHash": "2ad6200a83d33691e330b7fe4dd40162f2990a093a1bf9122b767e1d0a5c5eca",
+        "revision": null,
+        "inputFingerprint": "5f3f9e46cdc4b56f20bde8e4af99aca51212bd1c0e92a4b8c8f9c2a81596d434",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "b4a56983-0806-45e5-8610-7dd7b45fb3bc",
+      "completedAt": 1794982643363,
+      "output": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/chicago/brag.mp4",
+      "status": "completed",
+      "revision": null
+    },
+    "retainedRevisions": []
+  },
+  "pendingArtifactCleanup": []
+}

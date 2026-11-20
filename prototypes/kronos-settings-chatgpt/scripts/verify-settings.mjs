@@ -1,0 +1,30 @@
+import { build } from 'esbuild';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(path.join(dir,'package.json'));
+const bundle = await build({stdin:{contents:"export {App} from './src/App.jsx'; export {Pages,ConfigFields,SearchIndex} from './src/catalog.js';",resolveDir:dir,loader:'jsx'},bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',external:['react','react/jsx-runtime']});
+const module={exports:{}};
+new Function('require','module','exports',bundle.outputFiles[0].text)(require,module,module.exports);
+const {App,Pages,ConfigFields,SearchIndex}=module.exports;
+const {renderToStaticMarkup}=require('react-dom/server');
+const React=require('react');
+const brandingLeaks=[];
+const hiddenSettingsControls=[];
+for(const id of Object.keys(Pages)) {
+    const markup=renderToStaticMarkup(React.createElement(App,{initialPage:id}));
+    const text=markup.replace(/<[^>]*>/g,' ');
+    if (/<(?:select|details|summary)(?:\s|>)/i.test(markup)) hiddenSettingsControls.push(id);
+    const terms=text.match(/hermes|comfyui|\bcomfy\b|pen\.dev|\bn8n\b|waveai|waveterm|\bwave\b|electron|kronoscode|petdex|litegraph|tsunami|VS Code/gi);
+    if(terms)brandingLeaks.push({id,terms:[...new Set(terms)]});
+}
+const missing=ConfigFields.filter(field=>!SearchIndex.some(row=>row.key===field.key)).map(field=>field.key);
+const brokenLinks=Object.entries(Pages).flatMap(([id,page])=>page.groups.flatMap(group=>group.rows.filter(row=>row.target&&!Pages[row.target]).map(row=>({page:id,target:row.target}))));
+const go=fs.readFileSync(path.resolve(dir,'../../pkg/wconfig/settingsconfig.go'),'utf8').split('type SettingsType struct {')[1].split('\n}')[0];
+const missingDesktopFields=[...go.matchAll(/json:"([^",]+)/g)].map(match=>match[1]).filter(key=>!key.endsWith(':*')&&!ConfigFields.some(field=>field.source==='Desktop'&&field.key===key));
+const report={pages:Object.keys(Pages).length,configurationFields:ConfigFields.length,searchEntries:SearchIndex.length,missing,missingDesktopFields,brokenLinks,brandingLeaks,hiddenSettingsControls};
+fs.writeFileSync(path.join(dir,'coverage-verification.json'),JSON.stringify(report,null,4)+'\n');
+console.log(JSON.stringify(report,null,2));
+if(missing.length||missingDesktopFields.length||brokenLinks.length||brandingLeaks.length||hiddenSettingsControls.length)process.exitCode=1;

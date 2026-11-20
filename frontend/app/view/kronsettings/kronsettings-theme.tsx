@@ -12,7 +12,7 @@ import {
 } from "./kronsettings-theme-presets";
 
 interface KronSettingsThemeContentProps {
-    model: KronSettingsViewModel;
+    model?: KronSettingsViewModel;
 }
 
 const AccentPicker = memo(

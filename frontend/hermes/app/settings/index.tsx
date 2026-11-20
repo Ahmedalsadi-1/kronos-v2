@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { CompanionSettingsPage, QuickEntrySettingsPage } from "./desktop-feature-settings";
+import { IntegrationsSettings } from "./integrations-settings";
+import { makeNativeSettingsNavigation } from "./native-settings-navigation";
+import { SettingsNavigation } from "./settings-navigation";
+import { WorkspaceToolSettings } from "./workspace-tool-settings";
+import { WorkspaceTools } from "./workspace-tools";
 
 import { codiconIcon } from "@hermes/components/ui/codicon";
 import { Tip } from "@hermes/components/ui/tooltip";
@@ -18,6 +24,7 @@ import {
     Monitor,
     Network,
     Package,
+    PawPrint,
     RefreshCw,
     Settings2,
     Upload,
@@ -28,11 +35,12 @@ import { notifyError } from "@hermes/store/notifications";
 
 import { useRouteEnumParam } from "../hooks/use-route-enum-param";
 import { OverlayIconButton } from "../overlays/overlay-chrome";
-import { OverlayMain, OverlayNav, type OverlayNavGroup, OverlaySplitLayout } from "../overlays/overlay-split-layout";
+import { OverlayMain, type OverlayNavGroup, OverlaySplitLayout } from "../overlays/overlay-split-layout";
 import { OverlayView } from "../overlays/overlay-view";
 import { SKILLS_ROUTE } from "../routes";
 
 import { ComputersSettings } from "@hermes/computer/computers-settings";
+import { SkillsView } from "../skills";
 import { AboutSettings } from "./about-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { BillingSettings } from "./billing";
@@ -52,6 +60,7 @@ import { NotificationsSettings } from "./notifications-settings";
 import { PluginsSettings } from "./plugins-settings";
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from "./providers-settings";
 import { SessionsSettings } from "./sessions-settings";
+import "./settings-ios.css";
 import type { SettingsPageProps, SettingsView as SettingsViewId } from "./types";
 import { BASE_SETTINGS_VIEWS } from "./views";
 
@@ -155,6 +164,35 @@ export function SettingsView({
 
     const navGroups: OverlayNavGroup[] = useMemo(
         () => [
+            ...makeNativeSettingsNavigation(kronTermSettingsHost?.sections, activeView, setActiveView),
+            {
+                id: "integrations",
+                label: "Integrations",
+                icon: Network,
+                active: activeView === "integrations",
+                onSelect: () => setActiveView("integrations"),
+            },
+            {
+                id: "quick-entry",
+                label: "Quick entry",
+                icon: Zap,
+                active: activeView === "quick-entry",
+                onSelect: () => setActiveView("quick-entry"),
+            },
+            {
+                id: "companion",
+                label: "Desktop companion",
+                icon: PawPrint,
+                active: activeView === "companion",
+                onSelect: () => setActiveView("companion"),
+            },
+            ...WorkspaceTools.map((tool) => ({
+                active: activeView === tool.id,
+                icon: tool.icon,
+                id: tool.id,
+                label: tool.label,
+                onSelect: () => setActiveView(tool.id),
+            })),
             ...SECTIONS.map((s) => {
                 const view = `config:${s.id}` as SettingsViewId;
 
@@ -162,7 +200,7 @@ export function SettingsView({
                     active: activeView === view,
                     icon: s.icon,
                     id: view,
-                    label: t.settings.sections[s.id] ?? s.label,
+                    label: s.id === "voice" ? "KronVoice" : (t.settings.sections[s.id] ?? s.label),
                     onSelect: () => setActiveView(view),
                 };
             }),
@@ -266,7 +304,7 @@ export function SettingsView({
                 active: activeView === "computers",
                 icon: Monitor,
                 id: "computers",
-                label: "Computers",
+                label: "Virtual machines",
                 onSelect: () => setActiveView("computers"),
             },
             {
@@ -277,37 +315,19 @@ export function SettingsView({
                 onSelect: () => setActiveView("plugins"),
             },
             {
+                active: activeView === "skills",
+                icon: Zap,
+                id: "skills",
+                label: "Skills installer",
+                onSelect: () => setActiveView("skills"),
+            },
+            {
                 active: activeView === "sessions",
                 icon: Archive,
                 id: "sessions",
                 label: t.settings.nav.archivedChats,
                 onSelect: () => setActiveView("sessions"),
             },
-            ...(kronTermSettingsHost
-                ? [
-                      {
-                          active: getKronTermSettingsSectionId(activeView) != null,
-                          children: kronTermSettingsHost.sections
-                              .filter((section) =>
-                                  ["visual", "canvas", "shortcuts", "sessions", "git", "github", "voice", "desktop"].includes(
-                                      section.id
-                                  )
-                              )
-                              .map((section) => ({
-                                  active: activeView === makeKronTermSettingsViewId(section.id),
-                                  icon: Settings2,
-                                  id: makeKronTermSettingsViewId(section.id),
-                                  label: section.label,
-                                  onSelect: () => setActiveView(makeKronTermSettingsViewId(section.id)),
-                              })),
-                          gapBefore: true,
-                          icon: Monitor,
-                          id: "workspace",
-                          label: "Desktop controls",
-                          onSelect: () => setActiveView(makeKronTermSettingsViewId("visual")),
-                      },
-                  ]
-                : []),
             {
                 active: activeView === "about",
                 gapBefore: true,
@@ -323,12 +343,13 @@ export function SettingsView({
     const navFooter = (
         <>
             <Tip label={t.settings.exportConfig}>
-                <OverlayIconButton onClick={() => void exportConfig()}>
+                <OverlayIconButton aria-label={t.settings.exportConfig} onClick={() => void exportConfig()}>
                     <Download />
                 </OverlayIconButton>
             </Tip>
             <Tip label={t.settings.importConfig}>
                 <OverlayIconButton
+                    aria-label={t.settings.importConfig}
                     onClick={() => {
                         triggerHaptic("open");
                         importInputRef.current?.click();
@@ -339,6 +360,7 @@ export function SettingsView({
             </Tip>
             <Tip label={t.settings.resetToDefaults}>
                 <OverlayIconButton
+                    aria-label={t.settings.resetToDefaults}
                     className="hover:text-destructive"
                     onClick={() => {
                         triggerHaptic("warning");
@@ -352,14 +374,32 @@ export function SettingsView({
     );
 
     const content = (
-        <OverlaySplitLayout>
-            <OverlayNav footer={connectionStatus ? undefined : navFooter} groups={navGroups} />
+        <OverlaySplitLayout className="kron-settings-ios grid-cols-[16rem_minmax(0,1fr)] bg-background max-[47.5rem]:grid-cols-1">
+            <SettingsNavigation footer={connectionStatus ? undefined : navFooter} groups={navGroups} />
 
             <OverlayMain className="px-0 pb-0">
+                <header
+                    data-settings-page-header=""
+                    className="mb-6 shrink-0 border-b border-border px-8 pb-6 pt-4 max-[47.5rem]:px-5"
+                >
+                    <p className="mb-2 text-[11px] font-medium text-muted-foreground">KronOS / Settings</p>
+                    <h1 className="text-xl font-medium tracking-tight">
+                        {navGroups.find((group) => group.active)?.children?.find((child) => child.active)?.label ??
+                            navGroups.find((group) => group.active)?.label}
+                    </h1>
+                </header>
                 {getKronTermSettingsSectionId(activeView) != null && kronTermSettingsHost ? (
                     kronTermSettingsHost.renderSection(getKronTermSettingsSectionId(activeView)!)
+                ) : activeView === "kronrender" || activeView === "kronflow" ? (
+                    <WorkspaceToolSettings key={activeView} toolId={activeView} />
+                ) : activeView === "integrations" ? (
+                    <IntegrationsSettings destinations={navGroups} />
+                ) : activeView === "quick-entry" ? (
+                    <QuickEntrySettingsPage />
                 ) : connectionStatus ? (
                     connectionStatus
+                ) : activeView === "companion" ? (
+                    <CompanionSettingsPage />
                 ) : activeView === "config:appearance" ? (
                     <AppearanceSettings />
                 ) : activeView === "about" ? (
@@ -395,6 +435,8 @@ export function SettingsView({
                     <DelegationSettings />
                 ) : activeView === "computers" ? (
                     <ComputersSettings />
+                ) : activeView === "skills" ? (
+                    <SkillsView embedded />
                 ) : activeView === "plugins" ? (
                     <PluginsSettings />
                 ) : (
@@ -404,7 +446,9 @@ export function SettingsView({
         </OverlaySplitLayout>
     );
 
-    return embedded ? content : (
+    return embedded ? (
+        content
+    ) : (
         <OverlayView compact closeLabel={t.settings.closeSettings} onClose={onClose}>
             {content}
         </OverlayView>

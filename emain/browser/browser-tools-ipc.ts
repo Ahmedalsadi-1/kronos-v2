@@ -1,12 +1,23 @@
-import { clipboard, ipcMain, nativeImage, webContents, type WebContents } from "electron";
+import { clipboard, dialog, ipcMain, nativeImage, net, session, webContents, type WebContents } from "electron";
 import type { BrowserAccountCommand } from "../../frontend/types/browser-account";
 import type { BrowserGrabRect, BrowserGrabScreenshot } from "../../frontend/types/browser-grab";
 import { GRAB_BUDGET } from "../../frontend/types/browser-grab";
 import { browserNavigationSnapshot } from "../../frontend/types/browser-navigation";
+import { readBrowserSiteSettings } from "./browser-site-settings";
+import type { BrowserSiteSettingsCommand } from "../../frontend/types/browser-site-settings";
 import { browserAccount } from "./browser-account";
 import { browserAccessibilitySnapshot } from "./browser-accessibility";
 import { BrowserGrabSessionController } from "./browser-grab-session-controller";
 import { buildGuestOverlayScript } from "./grab-guest-script";
+import { MigrationBrowsers, type BrowserMigrationCommand } from "../../frontend/types/browser-migration";
+import {
+    getExtensionProfile,
+    importBrowserBookmarks,
+    importBrowserExtension,
+    listMigratedExtensions,
+    openExternalPasswordManager,
+    removeMigratedExtension,
+} from "./browser-migration";
 
 export function ownedBrowserGuest(sender: WebContents, guestId: unknown): WebContents {
     if (!Number.isInteger(guestId) || sender.isDestroyed()) throw new Error("Browser guest unavailable");
@@ -121,6 +132,81 @@ export function parseBrowserCookies(json: unknown): Electron.CookiesSetDetails[]
 }
 
 export function registerBrowserToolsIpc(isTrusted: (sender: WebContents) => boolean): void {
+    ipcMain.handle("browser-migration", async (event, command: BrowserMigrationCommand) => {
+        const sender = event.sender;
+        const frame = event.senderFrame;
+        const trusted = () => !sender.isDestroyed() && frame != null && frame === sender.mainFrame && isTrusted(sender);
+        if (!trusted()) throw new Error("Untrusted browser caller");
+        if (command?.action === "bookmarks") return { imported: await importBrowserBookmarks(command.bookmarks) };
+        if (command?.action === "password-manager") {
+            return { canceled: !(await openExternalPasswordManager(trusted)) };
+        }
+        if (command?.action !== "extensions" && command?.action !== "install" && command?.action !== "remove") {
+            throw new Error("Unknown browser migration action.");
+        }
+        const guest = ownedBrowserGuest(sender, command.guestId);
+        const profile = getExtensionProfile(guest.session);
+        if (!profile) throw new Error("Switch to the Work or Personal browser profile to use extensions.");
+        if (command.action === "install") {
+            if (typeof command.browser !== "string" || !Object.hasOwn(MigrationBrowsers, command.browser)) {
+                throw new Error("Unknown source browser.");
+            }
+            const installed = await importBrowserExtension(profile, command.browser, () =>
+                trusted() && !guest.isDestroyed() && guest.hostWebContents?.id === sender.id
+            );
+            return { installed: installed ?? undefined, canceled: installed == null, extensions: listMigratedExtensions(profile) };
+        }
+        if (command.action === "remove") {
+            if (typeof command.id !== "string" || !/^[a-p]{32}$/.test(command.id)) throw new Error("Invalid extension ID.");
+            await removeMigratedExtension(profile, command.id);
+        }
+        return { extensions: listMigratedExtensions(profile) };
+    });
+    ipcMain.handle("browser-import-extension", async (event, guestId: unknown) => {
+        if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
+        const guest = ownedBrowserGuest(event.sender, guestId);
+        const profile = guest.session;
+        if (!profile.isPersistent() || profile === session.defaultSession || profile === event.sender.session) {
+            throw new Error("Switch to the Work or Personal browser profile to import extensions.");
+        }
+        const selected = await dialog.showOpenDialog({
+            title: "Import unpacked Chrome extension",
+            buttonLabel: "Import Extension",
+            properties: ["openDirectory"],
+        });
+        if (selected.canceled || !selected.filePaths[0]) return null;
+        ownedBrowserGuest(event.sender, guestId);
+        const extension = await profile.extensions.loadExtension(selected.filePaths[0]);
+        return extension.name;
+    });
+    ipcMain.handle("browser-search-suggestions", async (event, value: unknown) => {
+        if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
+        if (typeof value !== "string" || value.length > 100) return [];
+        const query = value.trim();
+        if (query.length < 3 || /[/:@\\]/.test(query)) return [];
+        const url = new URL("https://duckduckgo.com/ac/");
+        url.searchParams.set("q", query);
+        try {
+            const response = await net.fetch(url.href, {
+                credentials: "omit",
+                redirect: "error",
+                signal: AbortSignal.timeout(2500),
+            });
+            if (!response.ok) return [];
+            const rows: unknown = await response.json();
+            if (!Array.isArray(rows)) return [];
+            return [...new Set(rows.flatMap((row) => {
+                const phrase = row?.phrase;
+                return typeof phrase === "string" && phrase.length <= 120 && phrase.trim() ? [phrase.trim()] : [];
+            }))].slice(0, 5);
+        } catch {
+            return [];
+        }
+    });
+    ipcMain.handle("browser-site-settings", (event, input: BrowserSiteSettingsCommand) => {
+        if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
+        return readBrowserSiteSettings(ownedBrowserGuest(event.sender, input?.guestId), input);
+    });
     ipcMain.handle("browser-account", (event, input: BrowserAccountCommand) => {
         if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
         return browserAccount(ownedBrowserGuest(event.sender, input?.guestId), input);

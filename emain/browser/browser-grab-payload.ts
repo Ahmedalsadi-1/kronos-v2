@@ -145,6 +145,9 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
     };
 
     const accessibility = target.accessibility as Record<string, unknown> | null | undefined;
+    const point = target.annotationPoint as Record<string, unknown> | undefined;
+    const x = safeNum(point?.x, NaN);
+    const y = safeNum(point?.y, NaN);
     const computedStyles = target.computedStyles as Record<string, unknown> | null | undefined;
 
     return {
@@ -187,6 +190,7 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
                 ariaLabel: safeNullableMetadataStr(accessibility?.ariaLabel, 500),
                 ariaLabelledBy: safeNullableMetadataStr(accessibility?.ariaLabelledBy, 500),
             },
+            ...(Number.isFinite(x) && Number.isFinite(y) ? { annotationPoint: { x, y } } : {}),
             rectViewport: safeRect(target.rectViewport),
             rectPage: safeRect(target.rectPage),
             computedStyles: {

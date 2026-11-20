@@ -7,6 +7,7 @@ import { ClientModel } from "@/app/store/client-model";
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { BrowserMigrationDialog } from "@/app/view/webview/browser-migration-dialog";
 import { getApi, WOS } from "@/store/global";
 import { ClientService } from "@/store/services";
 import { DefaultComfyOrigin } from "@/types/comfyui";
@@ -103,6 +104,7 @@ export function KronOSFirstRun({ alreadyAccepted }: { alreadyAccepted: boolean }
     const [step, setStep] = useState<"welcome" | "services">(alreadyAccepted ? "services" : "welcome");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
+    const [browserSetupOpen, setBrowserSetupOpen] = useState(false);
 
     const advance = async () => {
         setBusy(true);
@@ -161,11 +163,19 @@ export function KronOSFirstRun({ alreadyAccepted }: { alreadyAccepted: boolean }
                     {error}
                 </p>
             )}
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+                {step === "services" && (
+                    <Button className="outlined" disabled={busy} onClick={() => setBrowserSetupOpen(true)}>
+                        Browser import and passwords
+                    </Button>
+                )}
                 <Button disabled={busy} onClick={() => void advance()}>
                     {step === "welcome" ? "Continue" : "Open workspace"}
                 </Button>
             </div>
+            {browserSetupOpen && (
+                <BrowserMigrationDialog api={getApi()} onClose={() => setBrowserSetupOpen(false)} />
+            )}
         </div>
     );
 }

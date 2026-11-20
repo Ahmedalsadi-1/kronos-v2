@@ -120,12 +120,12 @@ export class ComfyUiClient {
         if (
             !input ||
             typeof input !== "object" ||
-            !["health", "submit", "refresh", "cancel", "image"].includes(input.action)
+            !["health", "submit", "refresh", "cancel", "image", "recipe"].includes(input.action)
         ) {
             throw new Error("Unknown KronRender request");
         }
         if (typeof input.origin !== "string") throw new Error("KronRender address is required");
-        if ((input.action === "cancel" || input.action === "image") && (typeof input.id !== "string" || !input.id)) {
+        if (["cancel", "image", "recipe"].includes(input.action) && (!("id" in input) || typeof input.id !== "string" || !input.id)) {
             throw new Error("Image job identity is required");
         }
         if (input.action === "image" && (!input.image || typeof input.image !== "object"))
@@ -133,6 +133,7 @@ export class ComfyUiClient {
         const origin = comfyOrigin(input.origin);
         const jobs = () =>
             this.jobs.filter((job) => job.origin === origin && (workspaceId == null || job.workspaceId === workspaceId));
+        if (input.action === "recipe") return { job: structuredClone(this.owned(origin, input.id, workspaceId)) };
         if (input.action === "health") {
             const [stats, objects] = await Promise.all([
                 this.request(origin, "/system_stats", undefined, signal).then((response) => response.json()),
@@ -162,6 +163,7 @@ export class ComfyUiClient {
             });
             this.save();
             if (workspaceId != null) return { jobs: [structuredClone(this.jobs[0])] };
+            return { job: structuredClone(this.jobs[0]), jobs: structuredClone(jobs()) };
         }
         if (input.action === "cancel") {
             const job = this.owned(origin, input.id, workspaceId);

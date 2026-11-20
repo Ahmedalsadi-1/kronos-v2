@@ -6,6 +6,7 @@ import type { LinuxDesktop, LinuxDesktopAction } from "@/types/linux-desktops";
 import { ComputerWidget } from "@hermes/computer/computer-widget";
 import { useEffect, useState } from "react";
 import { ManagedVncScreen } from "./managed-vnc-screen";
+import { VmHistoryPanel } from "./vm-history-panel";
 
 export function ManagedComputerWidget({
     settings = false,
@@ -18,6 +19,7 @@ export function ManagedComputerWidget({
     const [error, setError] = useState("");
     const [pollError, setPollError] = useState("");
     const [busy, setBusy] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
     useEffect(() => {
         let stopped = false;
         let timer: ReturnType<typeof setTimeout>;
@@ -100,6 +102,17 @@ export function ManagedComputerWidget({
             <div className="min-h-0 flex-1">
                 <ManagedVncScreen
                     desktop={desktop}
+                    onHistory={desktop?.provider === "cua-qemu" ? () => setHistoryOpen(true) : undefined}
+                    historyPanel={
+                        historyOpen && desktop?.provider === "cua-qemu" ? (
+                            <VmHistoryPanel
+                                key={desktop.id}
+                                desktop={desktop}
+                                onUpdate={setDesktop}
+                                onClose={() => setHistoryOpen(false)}
+                            />
+                        ) : undefined
+                    }
                     onTakeControl={takeControl}
                     onReturnControl={returnControl}
                     busy={busy}

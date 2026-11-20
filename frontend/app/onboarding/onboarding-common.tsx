@@ -4,7 +4,7 @@
 import { cn } from "@/util/util";
 import { type ReactNode } from "react";
 
-export const CurrentOnboardingVersion = "v0.14.3";
+export { CurrentOnboardingVersion } from "@/types/onboarding-version";
 
 export function OnboardingGradientBg() {
     return (

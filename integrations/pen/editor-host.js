@@ -92,6 +92,7 @@
         if (presentationSlide) emitPresentation(true);
         return true;
     };
+    const imageReviews = new Map();
     const connectScene = () => {
         const next = frame.contentWindow?.__kronosPenScene;
         if (!next || next === scene) return;
@@ -100,18 +101,13 @@
         frame.contentWindow.__kronosV2 = includeWidgetSlides;
         frame.contentWindow.__kronosSubmitAgent = ({ prompt, files, conversationId, ...options }, reply) => {
             const id = crypto.randomUUID();
-            if (files?.length) {
-                queueMicrotask(() =>
-                    reply({
-                        type: "end",
-                        content: { reason: "failed", message: "File attachments from Pen chat are not supported yet." },
-                    })
-                );
-                return;
-            }
-            agentReplies.set(id, { reply, conversationId });
+            const review = imageReviews.get(conversationId);
+            agentReplies.set(id, { reply, conversationId, review });
             shell?.setAgentWorkers(conversationId, []);
-            emit({ type: "agent-prompt", requestId: id, prompt, options, conversationId, hermesSessionId: conversationId?.startsWith("hermes:") ? conversationId.slice(7) : undefined });
+            const agent = [...frame.contentDocument.querySelectorAll("[data-kronos-pen-composer-controls]")]
+                .find((slot) => slot.dataset.kronosPenComposerControls === conversationId && slot.getClientRects().length)
+                ?.dataset.kronosPenAgent;
+            emit({ type: "agent-prompt", requestId: id, prompt, files, options, conversationId, agent, imageReview: review?.payload, hermesSessionId: conversationId?.startsWith("hermes:") ? conversationId.slice(7) : undefined });
         };
         frame.contentWindow.__kronosStopAgent = (conversationId) => {
             for (const [requestId, pending] of agentReplies) {
@@ -476,6 +472,81 @@
                     result = { success: true };
                     break;
                 }
+                case "show_full_chat": {
+                    const show = frame.contentWindow.__kronosShowFullChat;
+                    if (!show) throw new Error("Pen chat is still starting.");
+                    show();
+                    result = { success: true };
+                    break;
+                }
+                case "stage_chat_selection": {
+                    const doc = frame.contentDocument;
+                    const slot = [...doc.querySelectorAll("[data-kronos-pen-composer-controls]")]
+                        .find(element => element.getClientRects().length && element.kronosControls?.addFiles);
+                    if (!slot?.kronosControls?.insert) throw new Error("Open the chat before adding browser context.");
+                    if (typeof params.text !== "string" || !params.text.trim()) throw new Error("Browser context is empty.");
+                    const files = await Promise.all((params.images ?? []).map(async ({ filename, dataUrl }) => {
+                        if (typeof dataUrl !== "string" || !/^data:image\/[a-z0-9.+-]+;base64,/i.test(dataUrl))
+                            throw new Error("Invalid browser screenshot.");
+                        const blob = await (await fetch(dataUrl)).blob();
+                        return new frame.contentWindow.File([blob], filename || "browser-selection.png", { type: blob.type });
+                    }));
+                    if (!slot.isConnected) throw new Error("The chat closed while adding browser context.");
+                    if (files.length) await slot.kronosControls.addFiles(files);
+                    slot.kronosControls.insert("\n\n" + params.text);
+                    result = { success: true };
+                    break;
+                }
+                case "stage_image_review": {
+                    const doc = frame.contentDocument;
+                    const slots = [...doc.querySelectorAll("[data-kronos-pen-composer-controls]")]
+                        .filter((slot) => slot.getClientRects().length);
+                    if (slots.length !== 1) throw new Error("Open the current chat before adding image comments.");
+                    const slot = slots[0];
+                    const id = slot.dataset.kronosPenComposerControls;
+                    if (!id) throw new Error("The chat composer is still starting.");
+                    const { filename, dataUrl, comments } = params;
+                    if (typeof filename !== "string" || typeof dataUrl !== "string" ||
+                        !/^data:image\/[a-z0-9.+-]+;base64,/i.test(dataUrl) || !Array.isArray(comments))
+                        throw new Error("Invalid image review.");
+                    const existing = imageReviews.get(id);
+                    if (!comments.length && existing?.payload.dataUrl === dataUrl) {
+                        result = { success: true };
+                        break;
+                    }
+                    existing?.element.remove();
+                    const element = doc.createElement("div");
+                    element.style.cssText = "display:flex;align-items:end;gap:8px;padding:6px;color:inherit";
+                    const thumbnail = doc.createElement("img");
+                    thumbnail.src = dataUrl;
+                    thumbnail.alt = filename;
+                    thumbnail.style.cssText = "width:48px;height:48px;object-fit:cover;border-radius:8px";
+                    const chip = doc.createElement("button");
+                    chip.type = "button";
+                    chip.textContent = comments.length + (comments.length === 1 ? " comment" : " comments");
+                    chip.style.cssText = "border:1px solid #ad668c;border-radius:12px;padding:4px 8px";
+                    const preview = doc.createElement("div");
+                    preview.hidden = true;
+                    preview.style.cssText = "position:absolute;bottom:100%;left:0;width:min(280px,65vw);max-height:45vh;overflow:auto;padding:10px;border-radius:12px;background:#303030;color:#fff;z-index:10;white-space:pre-wrap;overflow-wrap:anywhere";
+                    preview.textContent = filename + "\n" + comments.map(({ number, text }) => number + ". " + text).join("\n");
+                    const chipGroup = doc.createElement("div");
+                    chipGroup.style.position = "relative";
+                    chipGroup.append(chip, preview);
+                    chipGroup.onmouseenter = chip.onfocus = () => { preview.hidden = false; };
+                    chipGroup.onmouseleave = chip.onblur = () => { preview.hidden = true; };
+                    const remove = doc.createElement("button");
+                    remove.type = "button";
+                    remove.textContent = "×";
+                    remove.setAttribute("aria-label", "Remove image review");
+                    remove.onclick = () => { imageReviews.delete(id); element.remove(); };
+                    element.append(thumbnail);
+                    if (comments.length) element.append(chipGroup);
+                    element.append(remove);
+                    slot.parentElement.before(element);
+                    imageReviews.set(id, { element, payload: { filename, dataUrl, comments } });
+                    result = { success: true };
+                    break;
+                }
                 case "resume_hermes_chat": {
                     if (params.error) throw new Error(params.error);
                     const slot = [...frame.contentDocument.querySelectorAll("[data-kronos-pen-composer-controls]")]
@@ -510,6 +581,8 @@
                 case "agent_reply": {
                     const pending = agentReplies.get(params.requestId);
                     if (!pending) break;
+                    const label = { Pi: "KronOS Side Agent (Pi)", Hermes: "Hermes", OpenCode: "OpenCode", "Codex CLI": "Codex CLI", "Local voice": "Local voice" }[params.agent];
+                    const author = (text) => label && text ? `**${label}**\n\n${text}` : text;
                     for (const update of params.updates ?? [params]) {
                         if (update.tool) {
                             const { id, name, done, failed, input, output } = update.tool;
@@ -518,22 +591,34 @@
                                 : { type: "tool-use", id, name, input });
                             continue;
                         }
-                        if (update.done) agentReplies.delete(params.requestId);
+                        if (update.done) {
+                            agentReplies.delete(params.requestId);
+                            if (!update.error && pending.review && imageReviews.get(pending.conversationId) === pending.review) {
+                                imageReviews.delete(pending.conversationId);
+                                pending.review.element.remove();
+                            }
+                        }
                         pending.reply(
                             update.done
                                 ? {
                                       type: "end",
                                       content: update.error
-                                          ? { reason: "failed", message: update.error }
-                                          : { reason: "finished", response: update.text },
+                                          ? { reason: "failed", message: label && update.error !== "Stopped." ? `${label}: ${update.error}` : update.error }
+                                          : { reason: "finished", response: author(update.text) },
                                   }
-                                : { type: update.start ? "message-start" : "message", source: "assistant", text: update.text }
+                                : { type: update.start ? "message-start" : "message", source: "assistant", text: author(update.text) }
                         );
-                        if (update.done) break;
+                        if (update.done) {
+                            shell?.advanceComparison(pending.conversationId, params.agent);
+                            break;
+                        }
                     }
                     result = { success: true };
                     break;
                 }
+                case "composer_agent_timing":
+                    shell?.updateComposerAgentTiming(params);
+                    break;
                 case "composer_voice_update":
                     result = shell?.updateComposerVoice(params);
                     break;

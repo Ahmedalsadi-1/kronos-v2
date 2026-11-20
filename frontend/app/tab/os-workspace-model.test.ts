@@ -8,18 +8,18 @@ import {
     computeOSWindowLayout,
     findOSDockHitTarget,
     fitOSWindowToContentAspect,
+    getOSAdjacentPanes,
     getOSCarouselNeighbor,
     getOSCarouselOrder,
-    getOSAdjacentPanes,
     getOSPaneTakeover,
-    OSPaneGap,
-    type OSModeState,
     makeInitialOSModeState,
     migrateOSModeState,
+    OSPaneGap,
     reconcileOSModeState,
     recoverOSWindowBounds,
     reduceOSModeState,
     resolveOSControlAction,
+    type OSModeState,
 } from "./os-workspace-model";
 
 function tab(meta: Record<string, unknown> = {}): Tab {
@@ -36,9 +36,9 @@ it("persists KronOS v2 frame edits independently of the original widget layout",
     expect(updateKronOSV2Widgets(kronosV2Widgets, [{ ...widget }])).toBe(kronosV2Widgets);
 });
 
-it("keeps widget and workflow updates in KronOS v2 unless the user uses the view selector", () => {
-    const canvas = makeInitialOSModeState(tab(), ["browser", "term"]);
-    const v2 = reduceOSModeState(canvas, { type: "os.view.set", view: "kronos-v2" });
+it("keeps widget and workflow updates in KronOS v2 when a legacy update tries to change view", () => {
+    const v2 = makeInitialOSModeState(tab(), ["browser", "term"]);
+    const canvas = { ...v2, view: "canvas" as const };
     const browser = getKronOSV2Widget(v2, "browser");
     const moved = { ...browser, x: browser.x + 200 };
     const updated = { ...canvas, kronosV2Widgets: updateKronOSV2Widgets(v2.kronosV2Widgets, [moved]) };
@@ -50,12 +50,12 @@ it("keeps widget and workflow updates in KronOS v2 unless the user uses the view
     expect(keepKronOSV2View(canvas, v2, false)).toBe(v2);
 });
 
-it.each(["design", "kronos-v2"] as const)("restores the saved KronOS canvas after %s", (view) => {
+it.each(["canvas", "design", "file", "kronos-v2"] as const)("migrates saved %s layouts to KronOS v2", (view) => {
     const initial = makeInitialOSModeState(tab(), ["browser", "term"]);
     const canvas = reduceOSModeState(initial, { type: "spatial.freeform" });
-    const editor = reduceOSModeState(canvas, { type: "os.view.set", view });
+    const editor = { ...canvas, view };
     const reopened = makeInitialOSModeState(tab({ "layout:os": editor }), ["browser", "term"]);
-    expect(reopened.view).toBe(view);
+    expect(reopened.view).toBe("kronos-v2");
     expect(reopened.camera).toEqual(canvas.camera);
     expect(reopened.windows.browser.bounds).toEqual(canvas.windows.browser.bounds);
 
@@ -114,7 +114,10 @@ it("places Carousel neighbors beside the actual width of a Single device window"
 
 it("gives a dragged Carousel pane more width than its neighbor without moving the third pane", () => {
     const ids = ["browser", "hermes", "term"];
-    const state = reduceOSModeState(makeInitialOSModeState(tab(), ids), { type: "os.window.focus", blockId: "browser" });
+    const state = reduceOSModeState(makeInitialOSModeState(tab(), ids), {
+        type: "os.window.focus",
+        blockId: "browser",
+    });
     const viewport = { width: 1440, height: 900 };
     const layouts = (current: OSModeState) =>
         Object.fromEntries(ids.map((id) => [id, computeOSWindowLayout(current, id, "web", viewport)]));
@@ -167,17 +170,10 @@ describe("OS workspace state", () => {
         expect(seeded.windows.browser.provisional).toBeUndefined();
     });
 
-    it("defaults the OS view to Canvas, restores File, and toggles idempotently", () => {
-        const defaultState = makeInitialOSModeState(tab(), ["browser"]);
-        expect(defaultState.view).toBe("canvas");
-
-        const stored = tab({ "layout:os": { widgetPresentation: "file" } });
-        const fileState = makeInitialOSModeState(stored, ["browser"]);
-        expect(fileState.view).toBe("file");
-
-        const toggled = reduceOSModeState(fileState, { type: "os.view.set", view: "canvas" });
-        expect(toggled.view).toBe("canvas");
-        expect(reduceOSModeState(toggled, { type: "os.view.set", view: "canvas" })).toBe(toggled);
+    it("keeps KronOS v2 active even after legacy view actions", () => {
+        const state = makeInitialOSModeState(tab({ "layout:os": { widgetPresentation: "file" } }), ["browser"]);
+        expect(state.view).toBe("kronos-v2");
+        expect(reduceOSModeState(state, { type: "os.view.set", view: "canvas" })).toBe(state);
     });
 
     it("migrates older OS layouts without resetting bounds, scene, or typed canvas objects", () => {
@@ -229,7 +225,10 @@ describe("OS workspace state", () => {
             side: "left",
         });
         expect(state.scene.kind).toBe("grouped");
-        expect(Object.values(state.groups)[0]).toMatchObject({ primaryBlockId: "browser", blockIds: ["hermes", "browser"] });
+        expect(Object.values(state.groups)[0]).toMatchObject({
+            primaryBlockId: "browser",
+            blockIds: ["hermes", "browser"],
+        });
         state = reduceOSModeState(state, { type: "spatial.showOverview" });
         expect(state.scene.kind).toBe("overview");
         state = reduceOSModeState(state, { type: "spatial.restoreScene" });
@@ -278,7 +277,13 @@ describe("OS workspace state", () => {
                 version: 4,
                 scene: { kind: "grouped", groupId: "legacy" },
                 groups: {
-                    legacy: { id: "legacy", primaryBlockId: "browser", sideBlockId: "term", side: "left", dividerRatio: 0.3 },
+                    legacy: {
+                        id: "legacy",
+                        primaryBlockId: "browser",
+                        sideBlockId: "term",
+                        side: "left",
+                        dividerRatio: 0.3,
+                    },
                 },
             },
         });
@@ -602,7 +607,7 @@ describe("os.window.setBounds / os.window.arrangeBounds", () => {
 
 describe("OS launch choreography", () => {
     it("centers the first app and moves it left when a second app arrives", () => {
-        const empty = makeInitialOSModeState(tab(), []);
+        const empty = { ...makeInitialOSModeState(tab(), []), view: "canvas" as const };
         const first = arrangeOSLaunchedWindows(empty, reconcileOSModeState(empty, ["browser"]), {
             width: 1440,
             height: 900,

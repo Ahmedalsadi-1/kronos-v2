@@ -162,7 +162,20 @@
             floatingChat.offset = fitChat(panel, offset, offset);
             positionChat(panel, floatingChat.offset);
         };
+        const codingComparisonPrompt = "Fix parseRetryAfter in retry-after.mjs so it accepts non-negative integer seconds and valid HTTP dates, rejects malformed or overflow values, and clamps past dates to zero. Preserve the public API. Run node --test retry-after.test.mjs in that directory. Edit only retry-after.mjs. Report the implementation and test result briefly.";
+        const comparisonAgents = ["pi", "hermes"];
+        let comparisonIndex = -1;
+        let comparisonConversation;
+        let comparisonTimer;
+        const submitComparison = () => {
+            const slot = composerSlots().find((item) => item.dataset.kronosPenComposerControls === comparisonConversation && item.kronosControls?.send);
+            if (!slot || comparisonIndex >= comparisonAgents.length) return;
+            slot.dataset.kronosPenAgent = comparisonAgents[comparisonIndex];
+            composerPanels.get(slot)?.updatePiTitle();
+            slot.kronosControls.send(codingComparisonPrompt);
+        };
         const composerPanels = new WeakMap();
+        const agentTimings = new Map();
         let completionId = 0;
         let activeCompletion;
         const readTrigger = (slot) => {
@@ -290,6 +303,64 @@
         view.__kronosCloseInspector = closeInspector;
         let voiceId;
         let voiceStatus = {};
+        let voicePanel;
+        let observedVoicePanels = new Set();
+        const fitVoicePanel = () => {
+            if (!voicePanel) return;
+            const sidebar = document.querySelector('[data-pencil-allow-canvas-clipboard][style*="var(--left-panel-width)"]');
+            const inspectorSlot = document.querySelector("[data-kronos-pen-inspector-slot]");
+            const panels = new Set([sidebar, inspectorSlot?.closest('[data-slot="card"]') ?? inspectorSlot].filter(Boolean));
+            const chat = document.querySelector("[data-chat-fullscreen]");
+            const observed = new Set(panels);
+            if (chat) observed.add(chat);
+            for (const panel of observedVoicePanels) {
+                if (!observed.has(panel)) voiceResize?.unobserve(panel);
+            }
+            for (const panel of observed) {
+                if (!observedVoicePanels.has(panel)) voiceResize?.observe(panel);
+            }
+            observedVoicePanels = observed;
+
+            let left = 0;
+            let right = view.innerWidth;
+            let top = 0;
+            let bottom = view.innerHeight;
+            // The outer widget dock covers the iframe except for Pen's live chat area.
+            const chatRect = document.documentElement.hasAttribute("data-kronos-chat-split") && chat?.getBoundingClientRect();
+            if (chatRect?.width && chatRect.height) {
+                left = Math.max(left, chatRect.left);
+                right = Math.min(right, chatRect.right);
+                top = Math.max(top, chatRect.top);
+                bottom = Math.min(bottom, chatRect.bottom);
+            } else {
+                for (const panel of panels) {
+                    const rect = panel.getBoundingClientRect();
+                    if (!rect.width || !rect.height || rect.width >= view.innerWidth ||
+                        view.getComputedStyle(panel).visibility === "hidden") continue;
+                    if (rect.left + rect.width / 2 < view.innerWidth / 2) left = Math.min(right, Math.max(left, rect.right));
+                    else right = Math.max(left, Math.min(right, rect.left));
+                }
+            }
+            const x = (left + right) / 2;
+            const y = (top + bottom) / 2;
+            voicePanel.layer.style.setProperty("--orb-center-x", `${x}px`);
+            voicePanel.layer.style.setProperty("--orb-center-y", `${y}px`);
+            voicePanel.layer.style.setProperty("--orb-room", `${right - left}px`);
+            voicePanel.layer.style.setProperty("--orb-height", `${bottom - top}px`);
+            return { x, y };
+        };
+        const voiceResize = view.ResizeObserver ? new view.ResizeObserver(fitVoicePanel) : undefined;
+        const stopTrackingVoicePanels = () => {
+            voiceResize?.disconnect();
+            observedVoicePanels.clear();
+        };
+        const voiceLabels = {
+            connecting: "Starting voice",
+            listening: "Listening",
+            thinking: "Thinking",
+            speaking: "Speaking",
+            error: "Voice unavailable",
+        };
         const composerSlots = () => [...document.querySelectorAll("[data-kronos-pen-composer-controls]")]
             .filter((slot) => slot.dataset && slot.getClientRects().length);
         const icon = (path) => {
@@ -307,7 +378,40 @@
             return svg;
         };
         const refreshVoiceButtons = () => {
-            for (const slot of composerSlots()) {
+            const slots = composerSlots();
+            const nextVoicePanel = voiceStatus.active ? composerPanels.get(
+                slots.find((slot) => slot.dataset.kronosPenComposerControls === voiceId)
+            ) : undefined;
+            if (voicePanel !== nextVoicePanel) {
+                if (voicePanel) {
+                    const wasFocused = document.activeElement === voicePanel.voiceStop;
+                    voicePanel.composer.removeAttribute("data-kronos-pen-voice-active");
+                    document.documentElement.removeAttribute("data-kronos-pen-voice-focused");
+                    voicePanel.layer.remove();
+                    stopTrackingVoicePanels();
+                    if (wasFocused) voicePanel.speech.focus?.();
+                }
+                voicePanel = nextVoicePanel;
+                if (voicePanel) {
+                    const from = voicePanel.speech.getBoundingClientRect();
+                    const center = fitVoicePanel();
+                    voicePanel.layer.style.setProperty("--orb-from-x", `${from.left + from.width / 2 - center.x}px`);
+                    voicePanel.layer.style.setProperty("--orb-from-y", `${from.top + from.height / 2 - center.y}px`);
+                    voicePanel.composer.setAttribute("data-kronos-pen-voice-active", "");
+                    document.documentElement.setAttribute("data-kronos-pen-voice-focused", "");
+                    voicePanel.layer.removeAttribute("data-docked");
+                    voicePanel.layer.style.removeProperty("--orb-drag-y");
+                    voicePanel.layer.setAttribute("data-active", "");
+                    document.body.append(voicePanel.layer);
+                    voicePanel.voiceStop.focus?.();
+                }
+            }
+            if (voicePanel) {
+                const label = voiceStatus.error ? voiceLabels.error : voiceLabels[voiceStatus.phase] ?? voiceLabels.connecting;
+                if (voicePanel.voiceLabel.textContent !== label) voicePanel.voiceLabel.textContent = label;
+                voicePanel.voiceLabel.title = voiceStatus.error || "";
+            }
+            for (const slot of slots) {
                 const panel = composerPanels.get(slot);
                 if (!panel) continue;
                 const status = slot.dataset.kronosPenComposerControls === voiceId ? voiceStatus : {};
@@ -327,7 +431,10 @@
         const mountComposerControls = (slot) => {
             const id = slot.dataset.kronosPenComposerControls;
             const voice = (action) => {
-                if (voiceId && voiceId !== id) emit({ type: "composer-voice", conversationId: voiceId, action: "cancel" });
+                if (voiceId && voiceId !== id) {
+                    emit({ type: "composer-voice", conversationId: voiceId, action: "cancel" });
+                    voiceStatus = {};
+                }
                 voiceId = id;
                 voiceStatus = { ...voiceStatus, error: "" };
                 refreshVoiceButtons();
@@ -343,6 +450,66 @@
                 return control;
             };
             const speech = button("Start voice conversation", "M2 6v4 M5 3v10 M8 5v6 M11 2v12 M14 6v4", () => voice("conversation"));
+            const composer = slot.closest(".absolute > .group > .relative") ?? slot;
+            const layer = document.createElement("div");
+            layer.dataset.kronosPenVoicePanel = "";
+            const voiceStop = document.createElement("button");
+            voiceStop.type = "button";
+            voiceStop.title = "End voice conversation";
+            voiceStop.setAttribute("aria-label", "End voice conversation");
+            voiceStop.setAttribute("aria-keyshortcuts", "Escape ArrowDown ArrowUp");
+            let drag;
+            let dragged = false;
+            const showTranscript = (show) => {
+                layer.toggleAttribute("data-docked", show);
+                document.documentElement.toggleAttribute("data-kronos-pen-voice-focused", !show);
+            };
+            voiceStop.addEventListener("pointerdown", (event) => {
+                if (event.button !== 0 || drag) return;
+                dragged = false;
+                drag = { pointerId: event.pointerId, y: event.clientY };
+                voiceStop.setPointerCapture(event.pointerId);
+            });
+            voiceStop.addEventListener("pointermove", (event) => {
+                if (drag?.pointerId !== event.pointerId) return;
+                const offset = event.clientY - drag.y;
+                if (!dragged && Math.abs(offset) < 6) return;
+                dragged = true;
+                layer.setAttribute("data-dragging", "");
+                layer.style.setProperty("--orb-drag-y", `${offset}px`);
+            });
+            const finishDrag = (event) => {
+                if (drag?.pointerId !== event.pointerId) return;
+                const offset = event.clientY - drag.y;
+                drag = undefined;
+                if (event.type === "pointerup" && dragged && Math.abs(offset) >= 48) showTranscript(offset > 0);
+                layer.removeAttribute("data-dragging");
+                layer.style.removeProperty("--orb-drag-y");
+            };
+            voiceStop.addEventListener("pointerup", finishDrag);
+            voiceStop.addEventListener("lostpointercapture", finishDrag);
+            voiceStop.addEventListener("click", (event) => {
+                if (dragged && event.detail > 0) {
+                    dragged = false;
+                    return;
+                }
+                voice("conversation");
+            });
+            voiceStop.addEventListener("keydown", (event) => {
+                if (!["Escape", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.key === "Escape") voice("conversation");
+                else showTranscript(event.key === "ArrowDown");
+            });
+            const orb = document.createElement("span");
+            orb.dataset.kronosPenVoiceOrb = id;
+            orb.setAttribute("aria-hidden", "true");
+            const voiceLabel = document.createElement("span");
+            voiceLabel.dataset.kronosPenVoiceLabel = "";
+            voiceLabel.setAttribute("role", "status");
+            voiceStop.append(orb);
+            layer.append(voiceStop, voiceLabel);
             const mic = button("Voice dictation", "M6 4a2 2 0 0 1 4 0v4a2 2 0 0 1-4 0z M4 7v1a4 4 0 0 0 8 0V7 M8 12v2", () => voice("dictation"));
             speech.setAttribute("aria-pressed", "false");
             mic.setAttribute("aria-pressed", "false");
@@ -402,11 +569,44 @@
                     { text: "@diff ", display: "Git diff" },
                 ]);
             });
+            const comparison = view.location?.port === "9124"
+                ? new URLSearchParams(view.parent.location.search) : undefined;
+            const compareAgent = comparison?.get("compareAgent");
+            if (view.location?.port === "9124") slot.dataset.kronosPenAgent ??= compareAgent === "pi" ? "pi" : "hermes";
+            const compareStart = Number(comparison?.get("compareStart"));
+            if ((compareAgent === "sequential" || compareAgent === "hermes") && compareStart > Date.now() - 15000 &&
+                !comparisonTimer && comparisonIndex === -1 && !view.sessionStorage.getItem(`pen-comparison-${compareStart}`)) {
+                comparisonConversation = id;
+                comparisonTimer = view.setTimeout(() => {
+                    view.sessionStorage.setItem(`pen-comparison-${compareStart}`, "started");
+                    comparisonIndex = compareAgent === "hermes" ? comparisonAgents.indexOf("hermes") : 0;
+                    submitComparison();
+                }, Math.max(0, compareStart - Date.now()));
+            }
+            const selectAgent = (agent) => {
+                slot.dataset.kronosPenAgent = slot.dataset.kronosPenAgent === agent ? "hermes" : agent;
+                updatePiTitle();
+            };
+            const pi = button("KronOS Side Agent (Pi)", "M2 5h12 M5 5v7 M11 5v6a1 1 0 0 0 2 0",
+                () => selectAgent("pi"));
+            const updatePiTitle = () => {
+                const active = slot.dataset.kronosPenAgent ?? "hermes";
+                const mode = { pi: "KronOS Side Agent (Pi)", hermes: "Hermes" }[active];
+                const timings = [...(agentTimings.get(id) ?? [])]
+                    .map(([agent, ms]) => `${agent} ${(ms / 1000).toFixed(2)}s to first text`);
+                pi.title = [`${mode} active`, ...timings].join(" · ");
+                pi.setAttribute("aria-pressed", String(active === "pi"));
+                tools.hidden = !pi.hidden && active !== "hermes";
+            };
+            pi.hidden = view.location?.port !== "9124";
+            updatePiTitle();
             tools.setAttribute("aria-haspopup", "dialog");
             tools.setAttribute("aria-expanded", "false");
             tools.addEventListener("mousedown", (event) => event.preventDefault());
-            slot.replaceChildren(tools, computer, mic, speech, picker, sandbox, notice);
-            composerPanels.set(slot, { id, speech, mic, computer, sandbox, notice, requestSandbox, tools, picker });
+            slot.replaceChildren(tools, ...(!pi.hidden ? [pi] : []), computer, mic, speech, picker, sandbox, notice);
+            composerPanels.get(slot)?.layer.remove();
+            composerPanels.set(slot, { id, speech, mic, computer, sandbox, notice, requestSandbox, tools, picker,
+                composer, layer, voiceStop, voiceLabel, updatePiTitle });
         };
         const refreshComposerControls = () => {
             const slots = composerSlots();
@@ -419,6 +619,7 @@
                 voiceId = undefined;
                 voiceStatus = {};
             }
+            if (voicePanel && !voicePanel.speech.isConnected) voicePanel.layer.remove();
             refreshVoiceButtons();
         };
         let systemControls;
@@ -492,28 +693,54 @@
         };
         const workerRows = new Map();
         const renderedWorkers = new WeakMap();
+        let checklistId = 0;
         const refreshWorkers = () => {
             for (const slot of document.querySelectorAll("[data-kronos-pen-workers]")) {
-                if (!slot.dataset) continue;
-                const rows = workerRows.get(slot.dataset.kronosPenWorkers);
-                if (renderedWorkers.get(slot) === rows) continue;
+                const conversationId = slot.dataset?.kronosPenWorkers;
+                if (!conversationId) continue;
+                const rows = workerRows.get(conversationId);
+                if (renderedWorkers.get(slot) === rows && slot.firstElementChild) continue;
                 renderedWorkers.set(slot, rows);
-                slot.replaceChildren();
-                for (const { id, goal, status, detail } of rows ?? []) {
-                    const card = document.createElement("button");
-                    card.type = "button";
-                    card.title = detail || "View subagent activity";
-                    card.setAttribute("aria-haspopup", "dialog");
-                    card.addEventListener("click", () => emit({
-                        type: "subagent-theater", conversationId: slot.dataset.kronosPenWorkers, workerId: id,
-                    }));
-                    const title = document.createElement("span");
-                    title.textContent = goal || "Subagent";
-                    const state = document.createElement("span");
-                    state.textContent = status;
-                    card.append(title, state);
-                    slot.append(card);
+                if (!slot.firstElementChild) {
+                    const preview = document.createElement("div");
+                    preview.dataset.kronosAgentPreview = conversationId;
+                    const progress = document.createElement("button");
+                    progress.type = "button";
+                    progress.dataset.agentProgress = "";
+                    progress.hidden = true;
+                    progress.setAttribute("aria-expanded", "false");
+                    const list = document.createElement("ol");
+                    list.dataset.agentTodos = "";
+                    list.id = `kronos-task-checklist-${++checklistId}`;
+                    list.hidden = true;
+                    progress.setAttribute("aria-controls", list.id);
+                    progress.addEventListener("click", () => {
+                        list.hidden = !list.hidden;
+                        progress.setAttribute("aria-expanded", String(!list.hidden));
+                    });
+                    slot.append(progress, list, preview);
                 }
+                const [progress, list] = slot.children;
+                const todos = rows?.find((row) => row.id === "main")?.todos ?? [];
+                progress.hidden = todos.length === 0;
+                if (!todos.length) {
+                    list.hidden = true;
+                    progress.setAttribute("aria-expanded", "false");
+                }
+                const counted = todos.filter((todo) => todo.status !== "cancelled");
+                const completed = counted.filter((todo) => todo.status === "completed").length;
+                progress.textContent = `Checklist · ${completed} / ${counted.length}`;
+                progress.setAttribute("aria-label", `Task checklist, ${completed} of ${counted.length} complete`);
+                const labels = { completed: "Done", in_progress: "In progress", pending: "Pending", cancelled: "Cancelled" };
+                list.replaceChildren(...todos.map((todo) => {
+                    const item = document.createElement("li");
+                    const text = document.createElement("span");
+                    const label = document.createElement("span");
+                    text.textContent = todo.content;
+                    label.textContent = labels[todo.status] || "";
+                    item.append(text, label);
+                    return item;
+                }));
             }
         };
         const renderLibraries = {
@@ -692,12 +919,80 @@
                 display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
                 color: var(--muted-foreground); cursor: pointer;
             }
+            [data-kronos-pen-composer-controls] > button[hidden] { display: none; }
             [data-kronos-pen-composer-controls] > button svg { width: 15px; height: 15px; }
             [data-kronos-pen-composer-controls] > button:hover,
             [data-kronos-pen-composer-controls] > button[aria-pressed="true"] {
                 color: var(--foreground); background: var(--control-hover, color-mix(in srgb, currentColor 10%, transparent));
             }
             [data-kronos-pen-composer-controls] > button:disabled { opacity: .45; cursor: default; }
+            html[data-kronos-pen-voice-focused] :is([data-kronos-pen-voice-active], [data-kronos-mini-chat], [aria-label="Chat"]) {
+                visibility: hidden !important; opacity: 0 !important; pointer-events: none !important;
+            }
+            [data-kronos-pen-voice-panel] {
+                --orb-ui-size: max(64px, min(var(--orb-size-cap, 264px), calc(var(--orb-height, 100dvh) * .42), calc(var(--orb-room, 100vw) - 32px)));
+                position: fixed; z-index: 9000; top: var(--orb-center-y, 50%); left: var(--orb-center-x, 50%); translate: -50% -50%;
+                transform: translateY(calc(var(--orb-dock-y, 0px) + var(--orb-drag-y, 0px)));
+                transition: transform 200ms cubic-bezier(.2,.8,.2,1), left 150ms ease-out, top 150ms ease-out;
+                animation: kronos-pen-orb-enter 240ms cubic-bezier(.2,.8,.2,1);
+            }
+            [data-kronos-chat-split] [data-kronos-pen-voice-panel] { --orb-size-cap: 320px; }
+            [data-kronos-pen-voice-panel][data-docked] {
+                --orb-ui-size: max(48px, min(70px, calc(var(--orb-room, 100vw) - 24px)));
+                --orb-dock-y: max(0px, calc(var(--orb-height, 100dvh) / 2 - 150px));
+            }
+            [data-kronos-pen-voice-panel][data-dragging] { transition: none; animation: none; }
+            @keyframes kronos-pen-orb-enter {
+                from { opacity: 0; transform: translate(var(--orb-from-x, 0px), var(--orb-from-y, 0px)) scale(.45); }
+            }
+            [data-kronos-pen-voice-panel] > button {
+                position: relative; display: grid; place-items: center; width: var(--orb-ui-size); height: var(--orb-ui-size);
+                border-radius: 50%; cursor: grab; color: var(--foreground); touch-action: none;
+            }
+            [data-kronos-pen-voice-panel][data-dragging] > button { cursor: grabbing; }
+            [data-kronos-pen-voice-panel] > button:focus-visible {
+                outline: 2px solid var(--ring, currentColor); outline-offset: 3px;
+            }
+            [data-kronos-pen-voice-orb] { display: grid; place-items: center; width: 100%; height: 100%; pointer-events: none; }
+            [data-kronos-pen-voice-orb] [data-orb-ui-slot="surface"] {
+                isolation: isolate; overflow: hidden;
+            }
+            [data-kronos-pen-voice-orb]:empty {
+                position: relative; width: 80%; height: 80%; border-radius: 50%; background: #686868;
+            }
+            [data-kronos-pen-voice-orb] [data-orb-ui-slot="surface"]::before,
+            [data-kronos-pen-voice-orb]:empty::before {
+                content: ""; position: absolute; inset: 0; border-radius: 50%;
+                background:
+                    radial-gradient(ellipse at 31% 21%, #fff 0%, #efefef 9%, #bbb9 29%, transparent 61%),
+                    radial-gradient(ellipse at 80% 35%, #dedede 0%, #a5a5a5 16%, transparent 54%),
+                    radial-gradient(ellipse at 55% 85%, #282828 0%, #515151 25%, transparent 60%),
+                    linear-gradient(133deg, #b7b7b7 3%, #858585 40%, transparent 72%);
+                box-shadow: inset 0 0 2px #fff9, inset -5px -8px 23px #13131380;
+            }
+            [data-kronos-pen-voice-orb] [data-orb-ui-slot="surface"]::after {
+                content: ""; position: absolute; inset: -10%; border-radius: 50%;
+                background: radial-gradient(ellipse at 42% 16%, #fff8, transparent 43%),
+                    radial-gradient(ellipse at 54% 90%, #15151590, transparent 48%);
+                animation: kronos-pen-orb-shade 11s linear infinite;
+            }
+            @keyframes kronos-pen-orb-shade {
+                to { transform: rotate(1turn); }
+            }
+            @keyframes orb-circle-connecting-pulse {
+                50% { opacity: .62; transform: scale(.95); }
+            }
+            [data-kronos-pen-voice-label] {
+                position: absolute; top: calc(100% + 5px); left: 50%; translate: -50% 0;
+                color: var(--foreground); font-size: 11px; white-space: nowrap;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                [data-kronos-pen-voice-panel] { transition: none; animation: none; }
+                [data-kronos-pen-voice-orb] [data-orb-ui-slot="surface"] {
+                    animation: none !important; transform: none !important;
+                }
+                [data-kronos-pen-voice-orb] [data-orb-ui-slot="surface"]::after { animation: none; }
+            }
             [data-kronos-pen-sandbox] {
                 position: fixed; inset: auto; margin: 0; width: min(250px, calc(100vw - 16px)); max-height: 50vh;
                 padding: 7px; border-radius: 10px; border: 1px solid var(--border); font-size: 12px; overflow: auto;
@@ -792,6 +1087,7 @@
                 min-width: 0; flex-shrink: 1; max-width: 64%; gap: 4px;
             }
             [data-kronos-pen-system-controls] { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+            [data-kronos-pen-editor-account] { display: none !important; }
             [data-kronos-pen-system-controls] :is([role="toolbar"], nav, [role="group"], [role="group"] span) {
                 display: flex; align-items: center; gap: 3px; white-space: nowrap;
             }
@@ -805,15 +1101,24 @@
             }
             [data-kronos-pen-system-controls] svg { height: 15px; width: 15px; flex: none; }
             [data-kronos-pen-system-controls] :is(kbd, .os-shell-status-value) { font-size: 10px; }
-            [data-kronos-pen-workers]:not(:empty) {
-                display: grid; gap: 3px; padding: 4px 10px; max-height: 100px; overflow: auto; font-size: 11px;
+            [data-kronos-pen-workers] {
+                box-sizing: border-box; width: min(720px, calc(100% - 20px)); margin-inline: auto;
+                font-size: 11px;
             }
-            [data-kronos-pen-workers] button { border-radius: 6px; background: color-mix(in srgb, currentColor 5%, transparent); }
-            [data-kronos-pen-workers] button {
-                display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px; cursor: pointer;
+            [data-kronos-pen-workers] [data-agent-progress] {
+                display: block; margin: 0 0 4px auto; padding: 4px 7px; cursor: pointer;
+                border: 1px solid color-mix(in srgb, currentColor 15%, transparent); border-radius: 6px;
+                font-variant-numeric: tabular-nums;
             }
-            [data-kronos-pen-workers] button span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            [data-kronos-pen-workers] button span:last-child { opacity: .65; text-transform: capitalize; }
+            [data-agent-todos] {
+                margin: 4px 0 0; padding: 4px 10px; list-style: none;
+                max-height: 140px; overflow: auto; border-radius: 8px;
+                border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+            }
+            [data-agent-todos] li + li { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+            [data-agent-todos] li { display: flex; justify-content: space-between; gap: 12px; padding-block: 4px; }
+            [data-agent-todos] li span:last-child { opacity: .7; flex: none; }
+            [data-kronos-pen-workers] [hidden] { display: none; }
             [data-kronos-pen-libraries] {
                 padding: 4px 6px; font-size: 12px;
                 color: var(--foreground);
@@ -893,6 +1198,12 @@
             }
             renderHistoryExtras();
             const titlebarRight = document.querySelector('[data-titlebar-right="true"]');
+            for (const button of titlebarRight?.querySelectorAll("button") ?? []) {
+                if (/^sign in$/i.test(button.textContent.trim()) && !button.closest("[data-kronos-pen-system-controls]")) {
+                    button.hidden = true;
+                    button.dataset.kronosPenEditorAccount = "";
+                }
+            }
             if (titlebarRight && systemControls?.parentElement !== titlebarRight) {
                 systemControls?.remove();
                 systemControls = document.createElement("div");
@@ -915,6 +1226,7 @@
                 filePanel = undefined;
                 emit({ type: "render-controls-slot" });
             }
+            if (voicePanel) fitVoicePanel();
             const titlebarLeft = document.querySelector('[data-titlebar-left="true"]');
             if (titlebarLeft && titlebarLeft.nextElementSibling !== navigation) {
                 navigation?.remove();
@@ -994,6 +1306,7 @@
         ];
         for (const [name, listener] of chatEvents) document.addEventListener(name, listener, true);
         view.addEventListener?.("resize", fitFloatingChat);
+        view.addEventListener?.("resize", fitVoicePanel);
         scene.eventEmitter?.on("selectionChangeDebounced", schedule);
         const mutations = new view.MutationObserver(schedule);
         mutations.observe(document.body, {
@@ -1001,6 +1314,10 @@
             subtree: true,
             attributes: true,
             attributeFilter: ["class", "data-state", "data-kronos-pen-library-panel", "data-kronos-pen-composer-controls"],
+        });
+        mutations.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-kronos-chat-split", "data-kronos-widget-expanded"],
         });
         const click = (event) => {
             const button = event.target?.closest?.("button");
@@ -1188,12 +1505,27 @@
         refresh();
         schedule();
         return {
+            advanceComparison(conversationId, agent) {
+                if (conversationId !== comparisonConversation || comparisonAgents[comparisonIndex] !== (agent === "Codex CLI" ? "codex" : agent?.toLowerCase())) return;
+                comparisonIndex++;
+                comparisonTimer = view.setTimeout(submitComparison, 900);
+            },
+            updateComposerAgentTiming({ conversationId, agent, milliseconds }) {
+                if (!["Pi", "Hermes", "OpenCode", "Codex CLI", "Local voice"].includes(agent) || !Number.isFinite(milliseconds)) return;
+                const slot = composerSlots().find((item) => item.dataset.kronosPenComposerControls === conversationId);
+                if (!slot) return;
+                const times = agentTimings.get(conversationId) ?? new Map();
+                times.set(agent, milliseconds);
+                agentTimings.set(conversationId, times);
+                if (agentTimings.size > 20) agentTimings.delete(agentTimings.keys().next().value);
+                composerPanels.get(slot)?.updatePiTitle();
+            },
             updateComposerVoice(update) {
-                const { conversationId, active, dictation, text, prompt, stop, error } = update;
+                const { conversationId, active, phase, dictation, text, prompt, stop, error } = update;
                 if (conversationId !== voiceId) return { success: false };
                 const slot = composerSlots().find((slot) => slot.dataset.kronosPenComposerControls === conversationId);
                 if (!slot?.kronosControls) return { success: false };
-                voiceStatus = { ...voiceStatus, ...(active !== undefined && { active }),
+                voiceStatus = { ...voiceStatus, ...(active !== undefined && { active }), ...(phase !== undefined && { phase }),
                     ...(dictation !== undefined && { dictation }), ...(error !== undefined && { error }) };
                 if (text) slot.kronosControls.insert(text);
                 if (prompt) slot.kronosControls.send(prompt);
@@ -1320,6 +1652,7 @@
                 }
             },
             dispose() {
+                if (comparisonTimer) view.clearTimeout(comparisonTimer);
                 disposed = true;
                 closeCompletion();
                 document.removeEventListener("input", completionInput);
@@ -1329,8 +1662,13 @@
                 if (scheduled != null) view.cancelAnimationFrame(scheduled);
                 for (const [name, listener] of chatEvents) document.removeEventListener(name, listener, true);
                 view.removeEventListener?.("resize", fitFloatingChat);
+                view.removeEventListener?.("resize", fitVoicePanel);
+                stopTrackingVoicePanels();
                 scene.eventEmitter?.off("selectionChangeDebounced", schedule);
                 if (voiceId) emit({ type: "composer-voice", conversationId: voiceId, action: "cancel" });
+                voicePanel?.layer.remove();
+                voicePanel?.composer.removeAttribute("data-kronos-pen-voice-active");
+                document.documentElement.removeAttribute("data-kronos-pen-voice-focused");
                 if (chatDrag) positionChat(chatDrag.panel);
                 if (floatingChat) positionChat(floatingChat.panel);
                 mutations.disconnect();

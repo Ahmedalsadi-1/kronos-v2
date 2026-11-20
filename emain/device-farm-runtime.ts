@@ -2,9 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomUUID } from "node:crypto";
-import type { ComputerTargetAction } from "../frontend/types/computer-targets";
+import type { ComputerTarget, ComputerTargetAction } from "../frontend/types/computer-targets";
 import type { ComputerTargetsRuntime } from "./computer-targets-runtime";
 import { DeviceFarmBatches } from "./device-farm-batches";
+
+function screenshotSize(imageDataUrl: string): { width: number; height: number } | undefined {
+    const prefix = "data:image/png;base64,";
+    if (!imageDataUrl.startsWith(prefix)) return;
+    const header = Buffer.from(imageDataUrl.slice(prefix.length, prefix.length + 32), "base64");
+    if (header.length < 24 || header.toString("ascii", 12, 16) !== "IHDR") return;
+    return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+}
 
 type Assignment = { targetId: string; assignee: string; requester: string; controlGeneration: number };
 
@@ -13,11 +21,21 @@ export class DeviceFarmRuntime {
     private batches = new DeviceFarmBatches((job, caller) => this.assign(job, caller, true));
     private observations = new Map<
         string,
-        { targetId: string; caller: string; generation: number; expiresAt: number; revision: number }
+        {
+            targetId: string;
+            caller: string;
+            generation: number;
+            expiresAt: number;
+            revision: number;
+            screenSize?: { width: number; height: number };
+        }
     >();
     private assignments = new Map<string, Assignment>();
     private busy = new Set<string>();
-    constructor(private computers: ComputerTargetsRuntime) {}
+    constructor(
+        private computers: ComputerTargetsRuntime,
+        private onDeviceUsed?: (target: ComputerTarget) => void
+    ) {}
 
     async authorize(targetId: string, caller: string, requireAssigned = false) {
         const assignment = this.assignments.get(targetId);
@@ -43,7 +61,9 @@ export class DeviceFarmRuntime {
                 for (const [id, observation] of this.observations)
                     if (observation.targetId === action.targetId) this.observations.delete(id);
             }
-            return await this.computers.performAgent(action);
+            const result = await this.computers.performAgent(action);
+            if (this.onDeviceUsed && result.target.status === "booted") this.onDeviceUsed(result.target);
+            return result;
         } finally {
             this.busy.delete(action.targetId);
         }
@@ -72,12 +92,11 @@ export class DeviceFarmRuntime {
                 generation: snapshot.target.controlGeneration,
                 expiresAt,
                 revision,
+                screenSize: screenshotSize(snapshot.imageDataUrl),
             });
             return { ...snapshot, observationId, expiresAt };
         }
-        if (name === "device_step") {
-            if (!["tap", "type", "key", "back", "home", "swipe", "rotate"].includes(args.action))
-                throw new Error("Unsupported observed input action.");
+        if (name === "device_pick_element" || name === "device_step") {
             const observation = this.observations.get(args.observationId);
             if (
                 !observation ||
@@ -90,6 +109,27 @@ export class DeviceFarmRuntime {
                 throw new Error(
                     "Observe this device again. The observation is stale, consumed, or belongs to another caller."
                 );
+            if (name === "device_pick_element") {
+                if (!observation.screenSize) throw new Error("The observation does not contain PNG screen dimensions.");
+                if (this.busy.has(args.targetId))
+                    throw new Error("Device operation or assignment is already in progress.");
+                this.busy.add(args.targetId);
+                try {
+                    await this.authorize(args.targetId, requester);
+                    const element = await this.computers.pickElement({
+                        targetId: args.targetId,
+                        expectedGeneration: observation.generation,
+                        x: args.x,
+                        y: args.y,
+                        ...observation.screenSize,
+                    });
+                    return { targetId: args.targetId, observationId: args.observationId, element };
+                } finally {
+                    this.busy.delete(args.targetId);
+                }
+            }
+            if (!["tap", "type", "key", "back", "home", "swipe", "rotate"].includes(args.action))
+                throw new Error("Unsupported observed input action.");
             this.observations.delete(args.observationId);
             const result = await this.perform(args, requester);
             try {

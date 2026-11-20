@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>KronOS — Give your work some room</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#131414;color:#faf3e7;font-family:system-ui,sans-serif}
+#film{width:100%;height:100%;position:relative;overflow:hidden;background:#131414}
+.shot{position:absolute;left:336px;top:248px;width:1248px;height:702px;border:1px solid #393a38;border-radius:12px}
+.header{position:absolute;inset:0 0 auto;height:232px;padding:44px 96px;background:#131414}
+.kicker{font-size:28px;font-weight:650;letter-spacing:.18em;color:#ff9a7e}
+h1,h2{margin:10px 0 0;font-size:82px;font-weight:650;letter-spacing:-.055em;line-height:1.07}
+.rail{position:absolute;left:96px;right:96px;bottom:62px;display:flex;justify-content:space-between;border-top:1px solid #55534e;padding-top:18px;color:#d1c7ba;font-size:28px;letter-spacing:.12em}
+.outro{position:absolute;inset:0;background:#171817;display:grid;place-items:center}
+.lockup{width:1320px;border-top:2px solid #ff9a7e;border-bottom:1px solid #5a534a;padding:65px 0 72px}
+.lockup h2{font-size:215px;margin:0 0 18px}
+.lockup p{margin:0;font-size:44px;color:#e6dace}
+</style></head><body>
+<div id="film" data-composition-id="film" data-width="1920" data-height="1080" data-fps="30" data-duration="18">
+<video id="canvas" class="clip shot" muted playsinline src="assets/canvas.mp4" data-start="0" data-duration="3.27" data-track-index="0"></video>
+<video id="focus" class="clip shot" muted playsinline src="assets/focus.mp4" data-start="3.27" data-duration="4.92" data-track-index="0"></video>
+<video id="overview" class="clip shot" muted playsinline src="assets/overview.mp4" data-start="8.19" data-duration="4.92" data-track-index="0"></video>
+<div id="intro" class="clip header" data-start="0" data-duration="3.27" data-track-index="1"><div class="copy"><div class="kicker">KRONOS · WORKSPACE</div><h1>Give your work some room.</h1></div></div>
+<div id="preview" class="clip header" data-start="3.27" data-duration="4.92" data-track-index="1"><div class="copy"><div class="kicker">01 / FOCUS</div><h1>Focus on the preview.</h1></div></div>
+<div id="wide" class="clip header" data-start="8.19" data-duration="4.92" data-track-index="1"><div class="copy"><div class="kicker">02 / OVERVIEW</div><h1>See the whole workspace.</h1></div></div>
+<div id="rail" class="clip rail" data-start="0" data-duration="13.11" data-track-index="3"><span>KRONOS</span><span>PRIVATE BETA</span></div>
+<div id="finale" class="clip outro" data-start="13.11" data-duration="4.89" data-track-index="2"><div class="lockup"><div class="kicker">PRIVATE BETA</div><h2>KronOS</h2><p>The desktop workspace.</p></div></div>
+<audio id="music" src="assets/music.mp3" data-start="0" data-duration="18" data-volume=".72" data-track-index="4"></audio>
+<audio id="cut-one" src="assets/click.ogg" data-start="3.27" data-duration=".086" data-volume=".22" data-track-index="5"></audio>
+<audio id="cut-two" src="assets/click.ogg" data-start="8.19" data-duration=".086" data-volume=".22" data-track-index="5"></audio>
+</div>
+<script>
+const timeline = gsap.timeline({paused:true});
+for (const [selector, start] of [['#intro .copy',0],['#preview .copy',3.27],['#wide .copy',8.19],['.lockup',13.11]]) {
+  timeline.fromTo(selector,{y:16},{y:0,duration:.42,ease:'power3.out'},start);
+}
+window.__timelines = window.__timelines || {};
+window.__timelines.film = timeline;
+</script>
+</body></html>

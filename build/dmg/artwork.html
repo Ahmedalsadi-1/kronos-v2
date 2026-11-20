@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KronOS installer preview</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #09090a; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    main { width: 400px; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 80px #0006; border: 1px solid #ffffff2b; }
+    header { height: 32px; background: #29292b; display: flex; align-items: center; padding: 0 14px; gap: 8px; color: #d0d0d1; font-size: 12px; }
+    header i { width: 11px; height: 11px; border-radius: 50%; background: #555557; }
+    header span { margin-left: 9px; }
+    section { position: relative; width: 400px; height: 490px; }
+    canvas { display: block; width: 400px; height: 490px; }
+    .item { position: absolute; top: 86px; width: 144px; text-align: center; font-size: 13px; color: #202124; }
+    .item img { display: block; width: 96px; height: 96px; margin: 0 auto 9px; }
+    .app { left: 128px; }
+    .applications { left: 128px; top: 299px; }
+    .item span { background: transparent; border-radius: 4px; padding: 2px 5px; }
+    output { position: fixed; bottom: 12px; color: #b8b8bd; font-size: 12px; }
+    output a { margin-left: 14px; color: #e0e0e5; cursor: pointer; }
+    @media (max-width: 430px) { main { transform: scale(.85); } }
+</style>
+<main aria-label="Installer preview">
+    <header><i></i><i></i><i></i><span>KronOS</span></header>
+    <section>
+        <canvas id="background" width="800" height="980" aria-label="KronOS chrome installer background"></canvas>
+        <div class="item app"><img src="../icons/512x512.png" alt="KronOS cube app icon"><span>KronOS</span></div>
+        <div class="item applications"><img src="applications.png" alt="Applications folder"><span>Applications</span></div>
+    </section>
+</main>
+<output id="status">Preparing artwork...</output>
+<script type="module">
+    const source = await fetch('../../website/src/os-liquid-chrome.tsx').then(response => response.text());
+    const shaderSource = name => source.match(new RegExp('const ' + name + ' = `([\\s\\S]*?)`;'))[1];
+    const chrome = document.createElement('canvas');
+    chrome.width = 800;
+    chrome.height = 980;
+    const gl = chrome.getContext('webgl', { preserveDrawingBuffer: true });
+    if (!gl) throw new Error('WebGL is required to render the website chrome artwork.');
+    const program = gl.createProgram();
+    for (const [type, name] of [[gl.VERTEX_SHADER, 'Vertex'], [gl.FRAGMENT_SHADER, 'Fragment']]) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, shaderSource(name));
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+        gl.attachShader(program, shader);
+    }
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+    gl.useProgram(program);
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+    const position = gl.getAttribLocation(program, 'position');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform2f(gl.getUniformLocation(program, 'resolution'), chrome.width, chrome.height);
+    gl.uniform1f(gl.getUniformLocation(program, 'time'), 18);
+    gl.uniform1f(gl.getUniformLocation(program, 'dark'), 1);
+    gl.viewport(0, 0, chrome.width, chrome.height);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    const canvas = document.querySelector('#background');
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    ctx.fillStyle = '#f6f7f8';
+    ctx.fillRect(0, 0, 400, 490);
+
+    const halo = ctx.createRadialGradient(200, 230, 10, 200, 230, 240);
+    halo.addColorStop(0, '#a1a5ac55');
+    halo.addColorStop(.45, '#c0c3c944');
+    halo.addColorStop(1, '#f6f7f800');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, 400, 490);
+
+    const veil = document.createElement('canvas');
+    veil.width = 800;
+    veil.height = 980;
+    const silver = veil.getContext('2d');
+    silver.scale(2, 2);
+    silver.beginPath();
+    silver.moveTo(28, 151);
+    silver.bezierCurveTo(4, 90, 395, 90, 372, 151);
+    silver.bezierCurveTo(345, 230, 249, 289, 216, 358);
+    silver.quadraticCurveTo(200, 388, 184, 358);
+    silver.bezierCurveTo(145, 281, 49, 230, 28, 151);
+    silver.closePath();
+    silver.clip();
+    silver.drawImage(chrome, 0, 64, 400, 340);
+    ctx.save();
+    ctx.filter = 'blur(19px)';
+    ctx.globalAlpha = .58;
+    ctx.drawImage(veil, 0, 0, 400, 490);
+    ctx.restore();
+
+    const reflection = ctx.createRadialGradient(205, 239, 0, 205, 239, 190);
+    reflection.addColorStop(0, '#ffffff00');
+    reflection.addColorStop(.68, '#f6f7f866');
+    reflection.addColorStop(1, '#f6f7f8');
+    ctx.fillStyle = reflection;
+    ctx.fillRect(0, 0, 400, 490);
+
+    for (let y = 41; y < 402; y += 7) {
+        for (let x = 45; x < 366; x += 7) {
+            const dx = (x - 205) / 175;
+            const dy = (y - 226) / 191;
+            const opacity = Math.max(0, 1 - dx * dx - dy * dy) * .65;
+            ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+            ctx.fillRect(x, y, 1.1, 1.1);
+        }
+    }
+
+    const hand = new Path2D('M8 24 L4 16 Q3 13 5 13 L9 17 L9 5 Q9 2 12 3 L12 13 L13 2 Q14 0 16 2 L16 13 L18 3 Q20 2 21 5 L20 14 L22 8 Q24 7 25 10 L24 22 L21 27 L11 27 Z');
+    for (const [x, y, angle, opacity] of [[245, 191, -.38, .12], [280, 221, -.3, .28], [298, 278, -.2, .65], [265, 329, -.28, 1]]) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.globalAlpha = opacity;
+        ctx.shadowColor = '#55575d50';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#26282c';
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        ctx.fill(hand);
+        ctx.stroke(hand);
+        ctx.restore();
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#747981';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Drag to Applications to install.', 200, 447);
+    ctx.fillStyle = '#abb0b7';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('© 2026 KRONOS', 200, 474);
+    document.querySelector('#status').textContent = 'Installer artwork preview - no DMG has been built';
+    const download = document.createElement('a');
+    download.id = 'download';
+    download.download = 'background@2x.png';
+    download.href = canvas.toDataURL('image/png');
+    download.textContent = 'Save Retina artwork';
+    document.querySelector('#status').append(download);
+</script>
+</html>

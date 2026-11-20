@@ -266,3 +266,56 @@ it("lets the user edit the visible farm size and restore all discovered devices"
     expect(host.querySelectorAll("article:not([hidden])")).toHaveLength(3);
     await act(async () => root.unmount());
 });
+
+it.each([
+    ["android", "android"],
+    ["ios", "ios"],
+] as const)("scopes the %s side panel to its simulator platform", async (platform, expectedId) => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () =>
+        root.render(
+            <DeviceWorkspace
+                sidePanel
+                preferredPlatform={platform}
+                state={{ targets, selectedId: "", loading: false, busy: false, error: "" }}
+                controller={{ refresh: vi.fn() } as unknown as ComputersController}
+                api={{} as ComputersApi}
+            />
+        )
+    );
+    const selector = host.querySelector<HTMLSelectElement>('[aria-label="Device list"]');
+    expect(Array.from(selector.options, (option) => option.value)).toEqual([expectedId]);
+    expect(host.querySelector('[aria-label="Device presentation"]')).toBeNull();
+    await act(async () => root.unmount());
+});
+
+it("starts only the selected emulator once and leaves failed starts available for manual retry", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const boot = vi.fn(async () => ({ success: false, error: { message: "Runtime unavailable" } }));
+    const api = { performComputerTargetAction: boot } as unknown as ComputersApi;
+    const state: ComputersState = { targets, selectedId: "", loading: false, busy: false, error: "" };
+    const refresh = vi.fn();
+    try {
+        await act(async () => root.render(<DeviceWorkspace state={state}
+            controller={{ refresh } as unknown as ComputersController} api={api} />));
+        expect(boot).toHaveBeenCalledTimes(1);
+        expect(boot).toHaveBeenLastCalledWith(expect.objectContaining({
+            targetId: "ios", action: "boot", expectedGeneration: 1,
+        }));
+        expect(host.textContent).toContain("Runtime unavailable");
+        await act(async () => root.render(<DeviceWorkspace state={{ ...state, targets: [...targets] }}
+            controller={{ refresh } as unknown as ComputersController} api={api} />));
+        expect(boot).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            const select = host.querySelector<HTMLSelectElement>('[aria-label="Device list"]');
+            select.value = "android";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(boot).toHaveBeenCalledTimes(2);
+        expect(boot).toHaveBeenLastCalledWith(expect.objectContaining({ targetId: "android", action: "boot" }));
+    } finally {
+        await act(async () => root.unmount());
+    }
+});

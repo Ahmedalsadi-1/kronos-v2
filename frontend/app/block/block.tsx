@@ -23,6 +23,7 @@ import { ComputersViewModel } from "@/app/view/computers/computers-model";
 import { DataStudioModel } from "@/app/view/datastudio/datastudio-model";
 import { DocumentStudioModel } from "@/app/view/documentstudio/documentstudio-model";
 import { GameStudioModel } from "@/app/view/gamestudio/game-studio";
+import { FloatingIslandModel, FloatingIslandView } from "@/app/view/floatingisland/floating-island";
 import { ImageStudioModel } from "@/app/view/imagestudio/imagestudio";
 import { InstalledAppsViewModel } from "@/app/view/installedapps/installedapps";
 import { KronosCanvasViewModel } from "@/app/view/kronoscanvas/kronoscanvas-model";
@@ -32,6 +33,7 @@ import { LinuxVmsViewModel } from "@/app/view/linux-vms/linux-vms-model";
 import { PersonalViewModel } from "@/app/view/personal/personal";
 import { PreviewModel } from "@/app/view/preview/preview-model";
 import { ReviewViewModel } from "@/app/view/review/review-model";
+import { RenderComparisonModel } from "@/app/view/rendercomparison/render-comparison";
 import { SysinfoViewModel } from "@/app/view/sysinfo/sysinfo";
 import { TsunamiViewModel } from "@/app/view/tsunami/tsunami";
 import { VDomModel } from "@/app/view/vdom/vdom-model";
@@ -70,8 +72,10 @@ BlockRegistry.set("documentstudio", DocumentStudioModel);
 BlockRegistry.set("datastudio", DataStudioModel);
 BlockRegistry.set("blenderproject", BlenderProjectModel);
 BlockRegistry.set("imagestudio", ImageStudioModel);
+BlockRegistry.set("rendercomparison", RenderComparisonModel);
 BlockRegistry.set("personal", PersonalViewModel);
 BlockRegistry.set("gamestudio", GameStudioModel);
+BlockRegistry.set(FloatingIslandView, FloatingIslandModel);
 BlockRegistry.set("plugin:kronterm.openhuman-workflow/canvas", WorkflowCanvasModel);
 BlockRegistry.set("plugin:kronterm.tapflow/devices", TapflowModel);
 BlockRegistry.set("workflowcanvas", WorkflowCanvasModel);
@@ -355,14 +359,17 @@ const BlockInner = memo((props: BlockProps & { viewType: string }) => {
     const waveEnv = useWaveEnv();
     const bcm = getBlockComponentModel(props.nodeModel.blockId);
     let viewModel = bcm?.viewModel;
-    if (viewModel == null) {
+    if (viewModel == null || viewModel.viewType !== resolveBlockView(props.viewType)) {
+        // A keyed replacement renders before the previous component cleans up.
         // viewModel gets the full waveEnv
         viewModel = makeViewModel(props.nodeModel.blockId, props.viewType, props.nodeModel, tabModel, waveEnv);
         registerBlockComponentModel(props.nodeModel.blockId, { viewModel });
     }
     useEffect(() => {
         return () => {
-            unregisterBlockComponentModel(props.nodeModel.blockId);
+            if (getBlockComponentModel(props.nodeModel.blockId)?.viewModel === viewModel) {
+                unregisterBlockComponentModel(props.nodeModel.blockId);
+            }
             viewModel?.dispose?.();
         };
     }, []);
@@ -390,14 +397,17 @@ const SubBlockInner = memo((props: SubBlockProps & { viewType: string }) => {
     const waveEnv = useWaveEnv();
     const bcm = getBlockComponentModel(props.nodeModel.blockId);
     let viewModel = bcm?.viewModel;
-    if (viewModel == null) {
+    if (viewModel == null || viewModel.viewType !== resolveBlockView(props.viewType)) {
+        // A keyed replacement renders before the previous component cleans up.
         // viewModel gets the full waveEnv
         viewModel = makeViewModel(props.nodeModel.blockId, props.viewType, props.nodeModel, tabModel, waveEnv);
         registerBlockComponentModel(props.nodeModel.blockId, { viewModel });
     }
     useEffect(() => {
         return () => {
-            unregisterBlockComponentModel(props.nodeModel.blockId);
+            if (getBlockComponentModel(props.nodeModel.blockId)?.viewModel === viewModel) {
+                unregisterBlockComponentModel(props.nodeModel.blockId);
+            }
             viewModel?.dispose?.();
         };
     }, []);

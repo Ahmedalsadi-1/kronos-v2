@@ -15,12 +15,14 @@ export type MachineSection = "desktop" | "macos" | "android" | "iphone";
 export function LinuxVmsPanel({
     initialSection = "desktop",
     settings = false,
+    sidePanel = false,
     targetId,
     blockId,
     onCloseWidget,
 }: {
     initialSection?: MachineSection;
     settings?: boolean;
+    sidePanel?: boolean;
     targetId?: string;
     blockId?: string;
     onCloseWidget?: () => void;
@@ -46,6 +48,7 @@ export function LinuxVmsPanel({
                         platform={initialSection}
                         onCloseWidget={onCloseWidget}
                         settings={settings}
+                        sidePanel={sidePanel}
                         targetId={targetId}
                     />
                 )}
@@ -60,11 +63,13 @@ function MobileMachinePanel({
     settings,
     targetId,
     onCloseWidget,
+    sidePanel,
 }: {
     blockId?: string;
     platform: string;
     onCloseWidget?: () => void;
     settings: boolean;
+    sidePanel: boolean;
     targetId?: string;
 }) {
     const [state, setState] = useState<ComputersState>({
@@ -111,6 +116,7 @@ function MobileMachinePanel({
             controller={controller}
             initialTargetId={targetId}
             onCloseWidget={onCloseWidget}
+            sidePanel={sidePanel}
             preferredPlatform={platform === "android" ? "android" : "ios"}
         />
     );

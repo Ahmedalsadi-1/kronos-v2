@@ -1,0 +1,2 @@
+set -eu
+ffmpeg -v error -y -i graphite-five/arc/picture.mp4 -i graphite-device-cut/kronos.mp4 -filter_complex '[1:a]asplit=3[x][y][z];[x]atrim=end=35.35,asetpts=PTS-STARTPTS,atempo=1.1005[a];[y]atrim=start=39.2:end=45.85,asetpts=PTS-STARTPTS,atempo=1.166[b];[z]atrim=start=45.7:end=63.7,asetpts=PTS-STARTPTS,atempo=1.083[c];[a][b]acrossfade=d=0.08[q];[q][c]acrossfade=d=0.08,apad,atrim=end=54.133333,afade=t=out:st=53.65:d=0.48[s]' -map 0:v -map '[s]' -c:v copy -c:a aac -b:a 192k -movflags +faststart graphite-five/arc/kronos-arc.mp4

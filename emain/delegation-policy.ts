@@ -60,7 +60,14 @@ export class DelegationPolicy {
         if (context.delegationScope && scope !== "inherit" && scope !== context.delegationScope)
             throw new Error("A child cannot broaden its parent's delegation scope.");
         const effective = context.delegationScope || scope;
-        const controlsComputer = effective === "sandbox" || (effective === "inherit" && !!context.sandboxComputerId);
+        const deviceOnly = context.deviceOnly || (effective === "inherit" && required.length > 0 &&
+            required.every(name => typeof name === "string" && name.startsWith("device_")));
+        if (deviceOnly) {
+            context = { ...context, deviceOnly: true };
+            available = available.filter(name => name.startsWith("device_") || name.startsWith("shared_skill_") ||
+                ["tool_search", "delegation_status"].includes(name));
+        }
+        const controlsComputer = !deviceOnly && (effective === "sandbox" || (effective === "inherit" && !!context.sandboxComputerId));
         if (controlsComputer && tasks !== 1)
             throw new Error("Delegate one sandbox task at a time to avoid simultaneous input on one computer.");
         const computerId = context.sandboxComputerId;

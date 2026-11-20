@@ -5,6 +5,11 @@ function fixture() {
     const target = { id: "android-avd:pixel", status: "shutdown", automationPaused: false, controlGeneration: 2 };
     const runtime = {
         list: vi.fn(async () => [target]),
+        pickElement: vi.fn(async () => ({
+            role: "Button",
+            name: "Continue",
+            frame: { x: 0.2, y: 0.3, width: 0.2, height: 0.1 },
+        })),
         performAgent: vi.fn(async () => {
             target.status = "booted";
         }),
@@ -69,6 +74,19 @@ it("does not reserve a device while another agent input operation is in flight",
     await expect(farm.manage("device_assign", args, "owner")).resolves.toMatchObject({ assignee: "bot-one" });
 });
 
+it("starts the preview only after an authorized device tool succeeds", async () => {
+    const { target, runtime } = fixture();
+    target.status = "booted";
+    const onDeviceUsed = vi.fn();
+    const farm = new DeviceFarmRuntime(runtime as any, onDeviceUsed);
+    runtime.performAgent.mockRejectedValueOnce(new Error("Device offline"));
+    await expect(farm.perform({ targetId: target.id, action: "screenshot" }, "owner")).rejects.toThrow("offline");
+    expect(onDeviceUsed).not.toHaveBeenCalled();
+    runtime.performAgent.mockResolvedValueOnce({ target } as any);
+    await farm.perform({ targetId: target.id, action: "screenshot" }, "owner");
+    expect(onDeviceUsed).toHaveBeenCalledExactlyOnceWith(target);
+});
+
 it("binds observed actions to a fresh single-use image and returns an after-image", async () => {
     const { farm, target, runtime, args } = fixture();
     target.status = "booted";
@@ -88,6 +106,39 @@ it("binds observed actions to a fresh single-use image and returns an after-imag
     expect(result.imageDataUrl).toContain("data:image/png");
     expect(runtime.performAgent).toHaveBeenCalledTimes(3);
     await expect(farm.manage("device_step", step, "bot-one")).rejects.toThrow("consumed");
+});
+
+it("inspects a point using captured screen dimensions without consuming the observation", async () => {
+    const { farm, target, runtime } = fixture();
+    target.status = "booted";
+    const pngHeader = Buffer.from("89504e470d0a1a0a0000000d494844520000043800000960", "hex");
+    const imageDataUrl = `data:image/png;base64,${pngHeader.toString("base64")}`;
+    runtime.performAgent.mockImplementation(async () => ({ target, imageDataUrl }) as any);
+    const observation = await farm.manage("device_observe", { targetId: target.id }, "homechat");
+    const args = {
+        targetId: target.id,
+        observationId: observation.observationId,
+        expectedGeneration: target.controlGeneration,
+        x: 0.3,
+        y: 0.35,
+    };
+
+    await expect(farm.manage("device_pick_element", args, "other")).rejects.toThrow("another caller");
+    await expect(farm.manage("device_pick_element", args, "homechat")).resolves.toMatchObject({
+        element: { name: "Continue" },
+    });
+    expect(runtime.pickElement).toHaveBeenCalledExactlyOnceWith({
+        targetId: target.id,
+        expectedGeneration: 2,
+        x: 0.3,
+        y: 0.35,
+        width: 1080,
+        height: 2400,
+    });
+    await expect(farm.manage("device_step", { ...args, action: "tap" }, "homechat")).resolves.toMatchObject({
+        actionCompleted: true,
+        imageDataUrl,
+    });
 });
 
 it("rejects expired observations and never replays an action after failed verification", async () => {

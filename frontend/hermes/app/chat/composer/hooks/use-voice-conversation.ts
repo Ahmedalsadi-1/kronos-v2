@@ -28,13 +28,17 @@ interface PendingVoiceResponse {
 interface VoiceConversationOptions {
     busy: boolean;
     enabled: boolean;
+    bargeIn?: boolean;
     onFatalError?: () => void;
     /** Interrupt the in-flight agent turn (the same seam as the Stop button).
      *  Fired when the user speaks while the model is still generating. */
     onInterrupt?: () => Promise<void> | void;
     onStopWord?: () => void;
-    onSubmit: (text: string) => Promise<void> | void;
+    onSubmit: (text: string) => Promise<boolean | void> | boolean | void;
     onTranscribeAudio?: (audio: Blob) => Promise<string>;
+    synthesize?: (text: string) => Promise<ArrayBuffer>;
+    replyChanges?: (listener: () => void) => () => void;
+    silenceMs?: number;
     pendingResponse: () => PendingVoiceResponse | null;
     consumePendingResponse: () => void;
     /** Awaited right before the mic is opened. Used to let the wake-word listener
@@ -49,11 +53,15 @@ const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
 export function useVoiceConversation({
     busy,
     enabled,
+    bargeIn = true,
     onFatalError,
     onInterrupt,
     onStopWord,
     onSubmit,
     onTranscribeAudio,
+    synthesize,
+    replyChanges,
+    silenceMs = 650,
     pendingResponse,
     consumePendingResponse,
     beforeMicOpen,
@@ -76,6 +84,7 @@ export function useVoiceConversation({
     const pendingStartRef = useRef(false);
     const turnClosingRef = useRef(false);
     const awaitingSpokenResponseRef = useRef(false);
+    const turnStartDeadlineRef = useRef(0);
     const responseIdRef = useRef<string | null>(null);
     const spokenSourceLengthRef = useRef(0);
     const speechSessionRef = useRef<null | SpeechStreamSession>(null);
@@ -145,6 +154,20 @@ export function useVoiceConversation({
         spokenSourceLengthRef.current = 0;
     };
 
+    const submitTranscript = useCallback(async (text: string, generation: number) => {
+        awaitingSpokenResponseRef.current = true;
+        turnStartDeadlineRef.current = performance.now() + 3000;
+        const accepted = await onSubmit(text);
+        if (generation !== generationRef.current || !enabledRef.current) return;
+        if (accepted === false) {
+            awaitingSpokenResponseRef.current = false;
+            pendingStartRef.current = true;
+            setStatus("idle");
+        } else {
+            setStatus("thinking");
+        }
+    }, [onSubmit]);
+
     const handleTurn = useCallback(
         async (forceTranscribe = false) => {
             if (turnClosingRef.current) {
@@ -202,13 +225,12 @@ export function useVoiceConversation({
                         return;
                     }
 
-                    awaitingSpokenResponseRef.current = true;
                     dropSpeechSession();
-                    await onSubmit(transcript);
-                    setStatus("thinking");
+                    await submitTranscript(transcript, generation);
                 } catch (error) {
                     if (generation !== generationRef.current || !enabledRef.current) return;
                     reportVoiceError(error, voiceCopy.transcriptionFailed);
+                    awaitingSpokenResponseRef.current = false;
 
                     pendingStartRef.current = false;
                     setStatus("idle");
@@ -217,7 +239,7 @@ export function useVoiceConversation({
                 turnClosingRef.current = false;
             }
         },
-        [handle, onSubmit, onTranscribeAudio, voiceCopy.transcriptionFailed]
+        [handle, onTranscribeAudio, submitTranscript, voiceCopy.transcriptionFailed]
     );
 
     const startListening = useCallback(async () => {
@@ -254,7 +276,7 @@ export function useVoiceConversation({
             // A short endpoint keeps hands-free turns conversational without clipping ordinary pauses.
             await handle.start({
                 silenceLevel: 0.075,
-                silenceMs: 650,
+                silenceMs,
                 idleSilenceMs: 12_000,
                 onError: (error) => {
                     generationRef.current += 1;
@@ -282,7 +304,7 @@ export function useVoiceConversation({
             pendingStartRef.current = false;
             setStatus("idle");
         }
-    }, [handle, handleTurn, onFatalError, voiceCopy.couldNotStartSession, voiceCopy.microphoneFailed]);
+    }, [handle, handleTurn, onFatalError, silenceMs, voiceCopy.couldNotStartSession, voiceCopy.microphoneFailed]);
 
     const settleAfterSpeech = useCallback(
         (barged: boolean, stoppedDuringSetup = false) => {
@@ -379,18 +401,17 @@ export function useVoiceConversation({
                     await new Promise((resolve) => window.setTimeout(resolve, 100));
                 }
 
-                awaitingSpokenResponseRef.current = true;
                 dropSpeechSession();
                 consumePendingResponse();
-                await onSubmit(transcript);
-                setStatus("thinking");
+                await submitTranscript(transcript, generation);
             } catch (error) {
                 if (generation !== generationRef.current || !enabledRef.current) return;
                 reportVoiceError(error, voiceCopy.transcriptionFailed);
+                awaitingSpokenResponseRef.current = false;
                 resumeListening();
             }
         },
-        [consumePendingResponse, onSubmit, onTranscribeAudio, voiceCopy.transcriptionFailed]
+        [consumePendingResponse, onTranscribeAudio, submitTranscript, voiceCopy.transcriptionFailed]
     );
 
     /**
@@ -408,7 +429,7 @@ export function useVoiceConversation({
      * all call this).
      */
     const ensureBargeMonitor = useCallback(() => {
-        if (!enabledRef.current || mutedRef.current) return;
+        if (!bargeIn || !enabledRef.current || mutedRef.current) return;
         if (stopBargeMonitorRef.current) {
             return;
         }
@@ -433,7 +454,7 @@ export function useVoiceConversation({
                 void submitCapturedUtterance(audio);
             },
         });
-    }, [submitCapturedUtterance]);
+    }, [bargeIn, submitCapturedUtterance]);
 
     /** Push any new reply text into the live session; finish when complete. */
     const feedSpeechSession = useCallback(
@@ -530,7 +551,7 @@ export function useVoiceConversation({
             ensureBargeMonitor();
 
             void (async () => {
-                const session = await startSpeechStream({ source: "voice-conversation" });
+                const session = await startSpeechStream({ source: "voice-conversation", synthesize });
 
                 // The session may resolve after the loop moved on (barge, disable).
                 if (responseIdRef.current !== responseId) {
@@ -579,11 +600,14 @@ export function useVoiceConversation({
 
                 // Timer-driven feed: reply text flows into the session at delta rate
                 // regardless of React render cadence.
-                const feedTimer = window.setInterval(() => feedSpeechSession(responseId), 150);
-                feedSpeechSession(responseId);
+                const feed = () => feedSpeechSession(responseId);
+                const unlisten = replyChanges?.(feed);
+                const feedTimer = window.setInterval(feed, 150);
+                feed();
 
                 const outcome = await session.done;
                 window.clearInterval(feedTimer);
+                unlisten?.();
 
                 if (responseIdRef.current !== responseId) {
                     return;
@@ -599,7 +623,7 @@ export function useVoiceConversation({
                 settleAfterSpeech(bargedRef.current);
             })();
         },
-        [awaitFallbackSpeech, ensureBargeMonitor, feedSpeechSession, settleAfterSpeech]
+        [awaitFallbackSpeech, ensureBargeMonitor, feedSpeechSession, replyChanges, settleAfterSpeech, synthesize]
     );
 
     const start = useCallback(async () => {
@@ -787,6 +811,7 @@ export function useVoiceConversation({
         }
 
         if (awaitingSpokenResponseRef.current && status !== "speaking") {
+            if (busy) turnStartDeadlineRef.current = 0;
             // Generation phase: the turn is in flight but no reply audio exists
             // yet. Keep the mic live so speech can interrupt the model mid-
             // generation (full-duplex) instead of going deaf until playback.
@@ -805,11 +830,24 @@ export function useVoiceConversation({
             if (!busy && status === "thinking" && !bargeCapturePendingRef.current) {
                 // Turn finished without any speakable reply (tool-only, error). A
                 // live barge capture owns the loop instead — it submits or resumes.
-                awaitingSpokenResponseRef.current = false;
-                dropSpeechSession();
-                pendingStartRef.current = true;
-                setStatus("idle");
-
+                const resume = () => {
+                    awaitingSpokenResponseRef.current = false;
+                    dropSpeechSession();
+                    pendingStartRef.current = true;
+                    setStatus("idle");
+                };
+                // Pen acknowledges the composer event before Hermes marks the turn busy.
+                const wait = turnStartDeadlineRef.current - performance.now();
+                if (wait > 0) {
+                    const timer = window.setTimeout(() => {
+                        if (!enabledRef.current || busyRef.current || bargeCapturePendingRef.current) return;
+                        const reply = pendingResponse();
+                        if (reply) openLiveSpeech(reply.id);
+                        else resume();
+                    }, wait);
+                    return () => window.clearTimeout(timer);
+                }
+                resume();
                 return;
             }
         }
@@ -836,5 +874,5 @@ export function useVoiceConversation({
         wasEnabledRef.current = enabled;
     }, [enabled, end, start]);
 
-    return { end, level, muted, start, status, stopTurn, toggleMute };
+    return { end, error: hudError, level, muted, start, status, stopTurn, toggleMute };
 }

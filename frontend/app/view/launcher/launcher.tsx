@@ -3,7 +3,7 @@ import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-contro
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import logoUrl from "@/app/asset/logo.svg?url";
+import Logo from "@/app/asset/logo.svg";
 import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { atoms, globalStore, replaceBlock } from "@/app/store/global";
 import type { TabModel } from "@/app/store/tab-model";
@@ -292,7 +292,7 @@ function LauncherView({ blockId, model }: ViewComponentProps<LauncherViewModel>)
             {/* Logo */}
             {showLogo && (
                 <div className="mb-6" style={{ width: logoWidth, maxWidth: 300 }}>
-                    <img src={logoUrl} className="w-full h-auto opacity-80" alt="KronTerm" />
+                    <Logo className="w-full h-auto opacity-80" role="img" aria-label="KronOS" />
                 </div>
             )}
 

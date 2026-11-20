@@ -31,6 +31,7 @@ export const OSCanvasEntity = memo(
         onResize,
         onDelete,
         onOpenResource,
+        onCreateVariants,
         onOpenCanvasEntry,
         browseFolderOnClick,
         onTextChange,
@@ -47,6 +48,7 @@ export const OSCanvasEntity = memo(
         onResize: (id: string, width: number, height: number, position?: { x: number; y: number }) => void;
         onDelete: (id: string) => void;
         onOpenResource: (object: OSCanvasObject) => void;
+        onCreateVariants?: (object: OSCanvasObject) => void;
         browseFolderOnClick?: boolean;
         onOpenCanvasEntry?: (object: OSCanvasObject, path: string, name: string) => void;
         onTextChange?: (id: string, text: string) => void;
@@ -334,6 +336,15 @@ export const OSCanvasEntity = memo(
                         onLostPointerCapture={release}
                     >
                         <span>{object.text || previewPath.split(/[\\/]/).pop()}</span>
+                        {object.render && onCreateVariants && !minimized && (
+                            <button
+                                type="button"
+                                className="shrink-0 cursor-pointer rounded-md border border-[var(--kt-separator)] bg-[var(--kt-window)] px-2 py-1 text-xs hover:bg-[var(--kt-fill)] focus-visible:outline-2"
+                                onClick={() => onCreateVariants(object)}
+                            >
+                                Create Variants
+                            </button>
+                        )}
                         <div className="os-window-lights">
                             <button
                                 type="button"

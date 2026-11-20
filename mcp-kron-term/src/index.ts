@@ -1386,12 +1386,12 @@ server.tool(
 server.tool(
     "workspace_focus_widget",
     "Focus a widget in any presentation. In tabs this makes the widget visible; in canvas this selects it; in widgets this focuses its pane.",
-    { blockId: z.string().min(1) },
+    { blockId: z.string().min(1), reveal: z.boolean().optional().describe("Reveal the chat side panel only when the user asks to see it.") },
     workspaceWriteAnnotations,
-    wrapActivity("workspace_focus_widget")(async ({ blockId }) => {
+    wrapActivity("workspace_focus_widget")(async ({ blockId, reveal }) => {
         try {
             return {
-                content: [{ type: "text", text: await wsh.workspaceSurfaceControl({ action: "focus", blockId }) }],
+                content: [{ type: "text", text: await wsh.workspaceSurfaceControl({ action: "focus", blockId, presentation: reveal ? "foreground" : undefined }) }],
             };
         } catch (err: any) {
             return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
@@ -1630,15 +1630,15 @@ server.tool(
 server.tool(
     "workspace_open_file",
     "Open a file or directory as a live preview session in the current KronOS workspace.",
-    { file: z.string().min(1) },
+    { file: z.string().min(1), reveal: z.boolean().optional().describe("Reveal the chat side panel only when the user asks to see it.") },
     workspaceWriteAnnotations,
-    wrapActivity("workspace_open_file")(async ({ file }) => {
+    wrapActivity("workspace_open_file")(async ({ file, reveal }) => {
         try {
             return {
                 content: [
                     {
                         type: "text",
-                        text: await wsh.workspaceSurfaceControl({ action: "spatial.openFile", file }),
+                        text: await wsh.workspaceSurfaceControl({ action: "spatial.openFile", file, presentation: reveal ? "foreground" : undefined }),
                     },
                 ],
             };

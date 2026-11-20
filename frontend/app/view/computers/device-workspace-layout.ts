@@ -1,7 +1,11 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { ComputerTarget } from "@/types/computer-targets";
 import { atom } from "jotai";
+import { createContext } from "react";
+
+export const DeviceWorkspaceSelectionContext = createContext<(target: ComputerTarget | null) => void>(null);
 
 const MinimumWidth = 176;
 const MaximumWidth = 340;

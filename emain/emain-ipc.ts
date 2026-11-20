@@ -66,11 +66,14 @@ import {
 } from "./emain-pet";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
+import { runPenAgent } from "./pen-agent-experiment";
+import { synthesizePenVoice } from "./pen-tiny-voca";
 import { handleCtrlShiftState } from "./emain-util";
 import { getWaveVersion } from "./emain-wavesrv";
 import { createNewWaveWindow, getWaveWindowByWebContentsId } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
-import { openKronosTestSignIn } from "./kronos-signin";
+import { openKronosSignIn } from "./kronos-signin";
+import { kronosAccount } from "./kronos-auth";
 import { HermesRuntime, type HermesApiRequest } from "./hermes-runtime";
 import {
     isKronosCodeLoopbackUrl,
@@ -355,10 +358,29 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
+    electron.ipcMain.handle("kronos-account-status", (event) => {
+        if (event.senderFrame !== event.sender.mainFrame || !getWaveTabViewByWebContentsId(event.sender.id)) {
+            throw new Error("Unknown account status renderer.");
+        }
+        return kronosAccount({ action: "status" });
+    });
+    electron.ipcMain.handle("kronos-account-sign-out", async (event) => {
+        if (event.senderFrame !== event.sender.mainFrame || !getWaveTabViewByWebContentsId(event.sender.id)) {
+            throw new Error("Unknown account renderer.");
+        }
+        const status = await kronosAccount({ action: "sign-out" });
+        if (!event.sender.isDestroyed()) event.sender.send("kronos-account-changed");
+        return status;
+    });
     electron.ipcMain.on("open-kronos-sign-in", (event) => {
         if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) return;
         const parent = getWaveWindowByWebContentsId(event.sender.id);
-        if (parent && !parent.isDestroyed()) openKronosTestSignIn(parent);
+        if (parent && !parent.isDestroyed()) {
+            const popup = openKronosSignIn(parent);
+            popup.once("closed", () => {
+                if (!event.sender.isDestroyed()) event.sender.send("kronos-account-changed");
+            });
+        }
     });
     electron.ipcMain.handle("swarm-recovery", async (event, command: SwarmRecoveryCommand) => {
         if (!getWaveTabViewByWebContentsId(event.sender.id) && !isTrustedNativeHudSender(event.sender.id))
@@ -1198,6 +1220,47 @@ export function initIpcHandlers() {
             throw new Error("Untrusted transcription caller");
         }
         return audioTranscribeFile(file);
+    });
+    const penRuns = new Map<number, { id: string; controller: AbortController }>();
+    electron.ipcMain.handle("pen-agent-experiment", async (event, id: string, mode: string, messages: unknown, selection?: PenModelSelection) => {
+        const sender = event.sender;
+        const tab = getWaveTabViewByWebContentsId(sender.id);
+        if (electron.app.isPackaged || !tab?.waveTabId || event.senderFrame !== sender.mainFrame ||
+            typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id) || (mode !== "voice" && mode !== "pi" && mode !== "opencode" && mode !== "codex") ||
+            (selection != null && [selection.provider, selection.model, selection.reasoning].some((value) =>
+                value != null && (typeof value !== "string" || value.length > 200))) ||
+            !Array.isArray(messages) || !messages.length || messages.length > 9 ||
+            !messages.every((message) => (message?.role === "user" || message?.role === "assistant") &&
+                typeof message.content === "string" && message.content.length <= 4000)) {
+            throw new Error("Invalid Pen agent experiment request.");
+        }
+        if (penRuns.has(sender.id)) throw new Error("A Pen agent turn is already running.");
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        penRuns.set(sender.id, { id, controller });
+        sender.once("destroyed", abort);
+        try {
+            return await runPenAgent({
+                mode, messages, selection, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(mode === "voice" ? 45000 : 180000)]),
+                tabId: tab.waveTabId, caller: `pen-pi:${sender.id}:${id}`,
+                onDelta: (text) => { if (!sender.isDestroyed() && !controller.signal.aborted) sender.send("pen-agent-delta", id, text); },
+                onTool: (tool) => { if (!sender.isDestroyed() && !controller.signal.aborted) sender.send("pen-agent-delta", id, tool); },
+            });
+        } finally {
+            penRuns.delete(sender.id);
+            if (!sender.isDestroyed()) sender.removeListener("destroyed", abort);
+        }
+    });
+    electron.ipcMain.on("pen-agent-cancel", (event, id) => {
+        if (event.senderFrame !== event.sender.mainFrame) return;
+        const run = penRuns.get(event.sender.id);
+        if (run?.id === id) run.controller.abort();
+    });
+    electron.ipcMain.handle("audio-pen-tiny-voca", (event, text: unknown) => {
+        if (!getWaveTabViewByWebContentsId(event.sender.id) || event.senderFrame !== event.sender.mainFrame) {
+            throw new Error("Untrusted Tiny Voca caller.");
+        }
+        return synthesizePenVoice(text);
     });
     electron.ipcMain.handle("audio-status", async () => {
         return audioGetStatus();

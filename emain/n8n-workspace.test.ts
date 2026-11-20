@@ -63,6 +63,7 @@ function fixture() {
         start: vi.fn(async () => ({ running: true, url: "http://127.0.0.1:5678" })),
         stop: vi.fn(),
         validateDraft: vi.fn(async () => ({ valid: true, errors: [] })),
+        decodeExecutionData: vi.fn((data) => data),
     };
     const store = new N8nWorkspaceStore(root);
     const worker = vi.fn(async () => ({ text: "done" }));
@@ -76,6 +77,45 @@ afterEach(() => {
     mocks.contents = [];
     vi.restoreAllMocks();
     vi.clearAllMocks();
+});
+
+it("reproduces only a failed execution from the selected workflow without running it", async () => {
+    const { workspace } = fixture();
+    const workflow = {
+        id: "flow1",
+        name: "Original",
+        nodes: [{ ...AddedNode.node, id: "map", name: "Map", type: "n8n-nodes-base.set" }],
+        connections: {},
+    };
+    const requests = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        if (init?.method === "POST") return Response.json({ data: { id: "draft1" } });
+        if (String(input).includes("/executions/")) return Response.json({
+            data: {
+                workflowId: "flow1",
+                status: "error",
+                workflowData: { ...workflow, name: "Historical graph" },
+                data: {
+                    resultData: { lastNodeExecuted: "Map" },
+                    executionData: {
+                        nodeExecutionStack: [{ node: { name: "Map" }, data: { main: [[{ json: { captured: true } }]] } }],
+                    },
+                },
+            },
+        });
+        return Response.json({ data: workflow });
+    });
+    const command = { operation: "reproduce-execution", workflowId: "flow1", executionId: "4" } as const;
+    await expect(workspace.command(command, context)).resolves.toMatchObject({
+        workflowId: "draft1", nodeId: "map", itemCount: 1, runnable: true,
+    });
+    const writes = requests.mock.calls.filter(([, request]) => request?.method === "POST");
+    expect(writes).toHaveLength(1);
+    expect(String(writes[0][0])).toBe("http://127.0.0.1:5678/rest/workflows");
+    expect(JSON.parse(String(writes[0][1].body))).toMatchObject({
+        name: "Reproduce #4 · Historical graph",
+        pinData: { "Recorded input": [{ json: { captured: true } }] },
+    });
+    await expect(workspace.command({ ...command, workflowId: "other" }, context)).rejects.toThrow("another workflow");
 });
 
 it("checks n8n runtime ownership without starting n8n or opening a widget", async () => {

@@ -4,10 +4,11 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import { makeMockWaveEnv } from "@/preview/mock/mockwaveenv";
 import type { WebviewTag } from "electron";
-import { atom } from "jotai";
+import { atom, Provider } from "jotai";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
+    BrowserPageToolbar,
     getWebPreviewDisplayUrl,
     isWebviewReadyForElectronCall,
     WebViewModel,
@@ -43,6 +44,28 @@ describe("webview preview fallback", () => {
         model.giveFocus();
         expect(guestFocus).toHaveBeenCalledOnce();
     });
+    it("renders the companion toolbar while its replacement guest is still attaching", () => {
+        const model = new WebViewModel({
+            blockId: "companion-reattach",
+            nodeModel: { isFocused: atom(true), focusNode: () => {} } as any,
+            tabModel: {} as any,
+            waveEnv: makeMockWaveEnv({}),
+        });
+        const getWebContentsId = vi.fn(() => {
+            throw new Error("Webview is not ready");
+        });
+        model.webviewRef.current = { isConnected: true, getWebContentsId } as unknown as WebviewTag;
+        globalStore.set(model.domReady, true);
+
+        const markup = renderToStaticMarkup(
+            <Provider store={globalStore}>
+                <BrowserPageToolbar model={model} companion />
+            </Provider>
+        );
+        expect(markup).toContain("companion");
+        expect(getWebContentsId).not.toHaveBeenCalled();
+    });
+
     it("shows the requested URL", () => {
         const markup = renderToStaticMarkup(<WebViewPreviewFallback url="https://kronterm.dev/docs" />);
 
@@ -184,10 +207,10 @@ describe("webview preview fallback", () => {
         const markup = renderToStaticMarkup(<>{globalStore.get(model.headerTop)}</>);
 
         expect(markup).toContain("webview-navigation");
-        expect(markup).toContain('aria-label="Find in page"');
-        expect(markup).toContain('aria-label="Open browser DevTools"');
+        expect(markup).toContain("Find in page");
+        expect(markup).toContain("DevTools");
         expect(markup).toContain('aria-label="Browser menu"');
-        expect(markup).toContain("Viewport profile");
+        expect(markup).toContain("Device toolbar");
         expect(markup).not.toContain("data-browser-preview");
         expect(markup).not.toContain("webview-tab-strip");
         expect(markup).not.toContain('role="tablist"');

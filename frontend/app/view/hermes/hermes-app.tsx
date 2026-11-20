@@ -10,7 +10,7 @@ import { getApi } from "@/store/global";
 import App from "@hermes/app";
 import { setTerminalTakeover } from "@hermes/app/right-sidebar/store";
 import { KronTermSettingsHostProvider } from "@hermes/app/settings/kronterm-settings-host";
-import { PenCanvasSettings, type PenCanvasSettingsRequest } from "@hermes/app/settings/pen-canvas-settings";
+import { type PenCanvasSettingsRequest } from "@hermes/app/settings/pen-canvas-settings";
 import { RootErrorBoundary } from "@hermes/components/error-boundary";
 import { removeTreePane, resetLayoutTree, revealTreePane } from "@hermes/components/pane-shell/tree/store";
 import { Button } from "@hermes/components/ui/button";
@@ -28,6 +28,7 @@ import { ThemeProvider } from "@hermes/themes/context";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { HashRouter } from "react-router";
+import { DesktopSettingsSection, DesktopSettingsSections, isDesktopSettingsSection } from "./desktop-settings-sections";
 
 const HermesDesignWidth = 1440;
 const HermesDesignHeight = 900;
@@ -71,11 +72,11 @@ export function HermesApp({
     const reducedMotion = useReducedAgentMotion();
     const hudSettingsModel = useMemo(() => {
         if (kronSettingsModel) return kronSettingsModel;
-        if (!hudMode || !waveEnv || !tabModel) return null;
+        if (!waveEnv || !tabModel) return null;
         const blockId = globalStore.get(tabModel.tabAtom)?.blockids?.[0];
         if (!blockId) return null;
         return new KronSettingsViewModel({ blockId, nodeModel: null, tabModel, waveEnv });
-    }, [kronSettingsModel, hudMode, waveEnv, tabModel]);
+    }, [kronSettingsModel, waveEnv, tabModel]);
     const kronTermSettingsHost = useMemo(() => {
         if (!hudSettingsModel) return null;
         const request: PenCanvasSettingsRequest = (method, params) =>
@@ -83,10 +84,16 @@ export function HermesApp({
         return {
             appearance: { reducedMotion },
             renderAppearance: () => <WorkspaceWallpaperSettings />,
-            sections: [...SETTINGS_SECTIONS.map(({ id, label }) => ({ id, label })), { id: "canvas", label: "Canvas" }],
+            sections: [
+                ...DesktopSettingsSections,
+                ...SETTINGS_SECTIONS.filter(({ id }) => !isDesktopSettingsSection(id)).map(({ id, label }) => ({
+                    id,
+                    label,
+                })),
+            ],
             renderSection: (sectionId: string) =>
-                sectionId === "canvas" ? (
-                    <PenCanvasSettings request={request} />
+                isDesktopSettingsSection(sectionId) ? (
+                    <DesktopSettingsSection sectionId={sectionId} canvasRequest={request} />
                 ) : (
                     <KronTermSettingsMount model={hudSettingsModel} sectionId={sectionId} />
                 ),

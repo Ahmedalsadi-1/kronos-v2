@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
+import { reopenLastClosedBrowserTab } from "@/app/view/webview/browser-library";
 import { FocusManager } from "@/app/store/focusManager";
 import {
     atoms,
@@ -774,11 +775,12 @@ function registerGlobalKeys() {
         toggleCommandCenter();
         return true;
     });
+    globalKeyMap.set("Cmd:Shift:t", reopenLastClosedBrowserTab);
     globalKeyMap.set("Ctrl:Shift:t", () => {
         const blockId = getFocusedBlockInStaticTab();
         if (!blockId) return false;
         const bcm = getBlockComponentModel(blockId);
-        if (bcm?.viewModel?.viewType !== "sandbox") return false;
+        if (bcm?.viewModel?.viewType !== "sandbox") return reopenLastClosedBrowserTab();
         const desktopUrl = "http://localhost:9990/computer-use";
         fetch(desktopUrl, {
             method: "POST",

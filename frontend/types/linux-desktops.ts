@@ -34,7 +34,8 @@ export interface LinuxDesktopAction {
         | "type"
         | "key"
         | "scroll"
-        | "exec";
+        | "exec"
+        | "history";
     assignedAgentId?: string;
     expectedGeneration?: number;
     button?: "left" | "right" | "middle";
@@ -48,6 +49,9 @@ export interface LinuxDesktopAction {
     deltaX?: number;
     deltaY?: number;
     command?: string;
+    historyAction?: "list" | "create" | "restore";
+    checkpointId?: string;
+    label?: string;
 }
 
 export interface LinuxDesktopActionResult {
@@ -55,6 +59,7 @@ export interface LinuxDesktopActionResult {
     imageDataUrl?: string;
     element?: DeviceSelectedElement;
     output?: string;
+    history?: VmHistory;
 }
 
 export type ComputerProviderId = "cua-qemu" | "openmaus-container";
@@ -81,3 +86,12 @@ export type SandboxComputerAccess = {
     mode?: "sandbox" | "hybrid";
     separateChat?: boolean;
 };
+
+export type VmCheckpoint = {
+    id: string;
+    label: string;
+    parentId?: string;
+    createdAt: string;
+    includesMemory: boolean;
+};
+export type VmHistory = { head?: string; checkpoints: VmCheckpoint[] };

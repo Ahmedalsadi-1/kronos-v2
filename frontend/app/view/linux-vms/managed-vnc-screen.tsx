@@ -7,7 +7,7 @@ import { ComputerSelection, type VmSelectionSnapshot } from "@/app/view/computer
 import { getApi } from "@/store/global";
 import type { LinuxDesktop } from "@/types/linux-desktops";
 import RFB from "@novnc/novnc";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useComputerActivity } from "./computer-activity";
 import "./computer-frame.css";
 
@@ -19,6 +19,8 @@ export function ManagedVncScreen({
     error,
     onLifecycle,
     onUpdate,
+    onHistory,
+    historyPanel,
 }: {
     desktop: LinuxDesktop;
     onTakeControl?: () => Promise<void>;
@@ -27,6 +29,8 @@ export function ManagedVncScreen({
     error?: string;
     onLifecycle?: () => void;
     onUpdate?: () => void;
+    onHistory?: () => void;
+    historyPanel?: ReactNode;
 }) {
     const root = useRef<HTMLDivElement>(null);
     const screen = useRef<HTMLDivElement>(null);
@@ -304,6 +308,17 @@ export function ManagedVncScreen({
                         </svg>
                     </summary>
                     <div className="computer-frame-tools-panel">
+                        {onHistory && (
+                            <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.currentTarget.closest("details").open = false;
+                                    onHistory();
+                                }}
+                            >
+                                Checkpoint timeline
+                            </button>
+                        )}
                         {!iframe && (
                             <>
                                 <button type="button" aria-pressed={fit} onClick={() => setFit((value) => !value)}>
@@ -373,6 +388,7 @@ export function ManagedVncScreen({
                     </button>
                 )}
             </footer>
+            {historyPanel}
         </div>
     );
 }

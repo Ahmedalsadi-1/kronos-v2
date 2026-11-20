@@ -50,7 +50,7 @@ describe("browser toolbar overflow", () => {
         expect(markup).toContain("Find in page");
         expect(markup).toContain("Open browser DevTools");
         expect(markup).toContain("Open in external browser");
-        expect(markup).toContain("Viewport profile");
+        expect(markup).toContain("Device toolbar");
     });
 
     it("includes session, cookie, annotation, markup and settings actions", () => {

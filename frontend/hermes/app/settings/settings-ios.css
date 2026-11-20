@@ -1,0 +1,275 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.kron-settings-ios {
+    --settings-page: var(--background);
+    --settings-group: color-mix(in srgb, var(--foreground) 6%, var(--background));
+    --settings-sidebar: color-mix(in srgb, var(--foreground) 10%, var(--background));
+    --settings-separator: color-mix(in srgb, var(--foreground) 9%, transparent);
+    --settings-highlight: color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: var(--settings-page);
+    color: var(--foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+.kron-settings-ios [data-settings-navigation] {
+    min-width: 0;
+    margin: 8px 0 8px 8px;
+    overflow: hidden;
+    border: 1px solid var(--settings-separator);
+    border-radius: 19px;
+    background: linear-gradient(150deg, #ffffff0a, transparent 65%), var(--settings-sidebar);
+    box-shadow:
+        inset 0 1px 0 #ffffff0c,
+        0 6px 24px #00000008;
+    -webkit-backdrop-filter: blur(24px) saturate(115%);
+    backdrop-filter: blur(24px) saturate(115%);
+}
+.kron-settings-ios [data-settings-navigation] > div:first-child {
+    padding: 23px 14px 12px;
+}
+.kron-settings-ios [data-settings-navigation] > div:first-child > p {
+    margin: 0 8px 20px;
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+}
+.kron-settings-ios [data-settings-navigation] label {
+    height: 36px;
+    border: 1px solid var(--settings-separator);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+.kron-settings-ios [data-settings-navigation] nav {
+    padding: 10px 10px 28px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--settings-separator) transparent;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 28px), transparent);
+}
+.kron-settings-ios .settings-category {
+    margin-bottom: 15px;
+}
+.kron-settings-ios .settings-category > h2 {
+    padding: 8px 10px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 450;
+}
+.kron-settings-ios .settings-category > div {
+    margin: 1px 0;
+    background: transparent;
+}
+.kron-settings-ios .settings-category button {
+    min-height: 38px;
+    gap: 10px;
+    padding: 5px 9px;
+    border-radius: 11px;
+    color: color-mix(in srgb, var(--foreground) 85%, var(--muted-foreground));
+    font-size: 13px;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease;
+}
+.kron-settings-ios .settings-category button:hover {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.kron-settings-ios .settings-category button[aria-current="page"] {
+    background: var(--settings-highlight);
+    color: var(--foreground);
+    box-shadow: inset 0 1px 0 #ffffff0a;
+}
+.kron-settings-ios .settings-category button.pl-8 {
+    padding-left: 32px;
+}
+.kron-settings-ios .settings-navigation-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    color: inherit;
+    box-shadow: inset 0 0 0 1px var(--settings-separator);
+}
+.kron-settings-ios .settings-navigation-icon > svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 1.7;
+}
+.kron-settings-ios [aria-current="page"] .settings-navigation-icon {
+    background: color-mix(in srgb, var(--foreground) 9%, transparent);
+    box-shadow: inset 0 1px 0 #ffffff14;
+}
+.kron-settings-ios .settings-navigation-chevron {
+    display: none;
+}
+.kron-settings-ios [data-settings-navigation] > div:last-child:not(:first-child) {
+    border-color: var(--settings-separator);
+}
+.kron-settings-ios [data-overlay-main] {
+    padding-top: 0;
+}
+.kron-settings-ios [data-settings-page-header] {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto 12px;
+    padding: 32px 36px 16px;
+    border: 0;
+}
+.kron-settings-ios [data-settings-page-header] > p {
+    display: none;
+}
+.kron-settings-ios [data-settings-page-header] h1 {
+    font-size: 27px;
+    line-height: 1.25;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+}
+.kron-settings-ios .settings-content-scroll {
+    max-width: 760px;
+    padding-inline: 36px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--settings-separator) transparent;
+}
+.kron-settings-ios [data-settings-section-heading] {
+    margin-bottom: 10px;
+    padding: 0 16px;
+    border: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    font-weight: 450;
+}
+.kron-settings-ios [data-settings-section-heading] > svg {
+    display: none;
+}
+.kron-settings-ios [data-settings-group] {
+    padding: 0 20px;
+    border-radius: 24px;
+    background: var(--settings-group);
+}
+.kron-settings-ios [data-settings-row] + [data-settings-row] {
+    border-top: 1px solid var(--settings-separator);
+}
+.kron-settings-ios [data-settings-row] > div {
+    min-height: 58px;
+    gap: 12px;
+    padding-block: 14px;
+}
+.kron-settings-ios [data-settings-row] input,
+.kron-settings-ios [data-settings-row] select,
+.kron-settings-ios [data-settings-row] button:not([role="switch"]),
+.kron-settings-ios [data-settings-row] textarea {
+    border-radius: 10px;
+}
+.kron-settings-ios [data-settings-row] [role="switch"] {
+    width: 44px;
+    height: 26px;
+    padding: 3px;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: none;
+}
+.kron-settings-ios [data-settings-row] [role="switch"][data-state="checked"] {
+    background: #30b350;
+}
+.kron-settings-ios [data-settings-row] [data-slot="switch-thumb"] {
+    width: 20px;
+    height: 20px;
+    background: white;
+    translate: none;
+}
+.kron-settings-ios [data-settings-row] [data-slot="switch-thumb"][data-state="checked"] {
+    transform: translateX(18px);
+}
+.kron-settings-ios .kron-settings--embedded {
+    background: transparent;
+}
+.kron-settings-ios .kron-settings--embedded .kron-settings-content-header {
+    padding-bottom: 0;
+    border: 0;
+}
+.kron-settings-ios .kron-settings--embedded .kron-settings-content-title {
+    display: none;
+}
+.kron-settings-ios .kron-settings-card {
+    padding: 18px 20px;
+    border: 0;
+    border-radius: 24px;
+    background: var(--settings-group);
+}
+.kron-settings-ios .kron-settings-row {
+    min-height: 58px;
+    align-items: center;
+    border-color: var(--settings-separator);
+}
+.kron-settings-ios .kron-settings-select,
+.kron-settings-ios .kron-settings-input {
+    border-radius: 10px;
+}
+@media (max-width: 760px) {
+    .kron-settings-ios [data-settings-navigation] {
+        margin: 6px;
+        border-radius: 16px;
+        backdrop-filter: none;
+    }
+    .kron-settings-ios [data-settings-navigation] > div:first-child {
+        padding: 12px 14px;
+    }
+    .kron-settings-ios .settings-content-scroll {
+        padding-inline: 18px;
+    }
+    .kron-settings-ios [data-settings-page-header] {
+        padding: 20px 18px 16px;
+    }
+    .kron-settings-ios [data-settings-page-header] h1 {
+        font-size: 25px;
+    }
+    .kron-settings-ios [data-settings-navigation] select {
+        border-radius: 10px;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .kron-settings-ios [data-settings-navigation] {
+        background: var(--settings-sidebar);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+.kron-settings-ios .settings-content-layout {
+    animation: kron-settings-enter 180ms ease-out;
+}
+@keyframes kron-settings-enter {
+    from {
+        opacity: 0;
+        transform: translateY(3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.os-hermes-settings-dialog[data-reduced-motion="true"] .settings-content-layout {
+    animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .kron-settings-ios .settings-content-layout {
+        animation: none;
+    }
+    .kron-settings-ios .settings-category button {
+        transition: none;
+    }
+}
+@container (min-width: 460px) {
+    .kron-settings-ios [data-settings-row]:not([data-settings-wide]) > div:has(> div:nth-child(2)) {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 42%);
+        align-items: center;
+    }
+    .kron-settings-ios [data-settings-row]:not([data-settings-wide]) > div > div:nth-child(2) {
+        justify-self: end;
+        max-width: 100%;
+    }
+}

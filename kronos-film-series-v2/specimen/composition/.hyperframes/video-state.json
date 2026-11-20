@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "historyId": "3669fbe6-4700-44a2-8200-6a3971824c50",
+  "currentRevision": null,
+  "pendingChanges": false,
+  "files": {
+    "assets/dark.png": {
+      "hash": "596de0f593835691a562beb47550bd0ef0249681cad29ec4095002bc32715eaa",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/59/596de0f593835691a562beb47550bd0ef0249681cad29ec4095002bc32715eaa"
+    },
+    "assets/gsap.min.js": {
+      "hash": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/c1/c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280"
+    },
+    "assets/light.png": {
+      "hash": "0df10d77d5b0d555fde1f09843c74b79c0c3db44aa030f87eb8ffee3481e33e1",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/0d/0df10d77d5b0d555fde1f09843c74b79c0c3db44aa030f87eb8ffee3481e33e1"
+    },
+    "assets/page-end.jpg": {
+      "hash": "3afcb8fd0102211a08285ce6f03326958bafcb92f10d558eec105a0652b2fa50",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/3a/3afcb8fd0102211a08285ce6f03326958bafcb92f10d558eec105a0652b2fa50"
+    },
+    "assets/page.mp4": {
+      "hash": "2d25c7534b959731480b3eaaa7d572fa96707ff0b6417cf536f4f4d3cf44c7b3",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/2d/2d25c7534b959731480b3eaaa7d572fa96707ff0b6417cf536f4f4d3cf44c7b3"
+    },
+    "assets/space.mp4": {
+      "hash": "16a11da9c0355be01ee82b05ae602569abb62d03b8e07a024d7ffa657debc13b",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/16/16a11da9c0355be01ee82b05ae602569abb62d03b8e07a024d7ffa657debc13b"
+    },
+    "assets/sw0.png": {
+      "hash": "913c2a5b39a3583c1231a05827a10c7ddcad610e43306fb12d7c17c7f0785a5b",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/91/913c2a5b39a3583c1231a05827a10c7ddcad610e43306fb12d7c17c7f0785a5b"
+    },
+    "assets/sw1.png": {
+      "hash": "d6e7cf11d81d88db1f18bf1dcc335304404d7119373d0eea4ea9bf5bdd066457",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/d6/d6e7cf11d81d88db1f18bf1dcc335304404d7119373d0eea4ea9bf5bdd066457"
+    },
+    "assets/sw2.png": {
+      "hash": "76173aef6b8f065e3bcf3be6c0fd9e2fe50a78324bf23933431b3e7755ba604a",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/76/76173aef6b8f065e3bcf3be6c0fd9e2fe50a78324bf23933431b3e7755ba604a"
+    },
+    "assets/wide.jpg": {
+      "hash": "2b8d7f261c02bee13f0644ba4a46bdeda3ae8c6a7a7cc734774dc1b29659c112",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/2b/2b8d7f261c02bee13f0644ba4a46bdeda3ae8c6a7a7cc734774dc1b29659c112"
+    },
+    "index.html": {
+      "hash": "13df47753483897ef591c6936c6298ee8370cd7549fdafc348aac8e05f92485a",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/13/13df47753483897ef591c6936c6298ee8370cd7549fdafc348aac8e05f92485a"
+    },
+    "assets/score.wav": {
+      "hash": "8f80d2b5a3dcbdfad3719d2164f760521ac87dc3b1421b29a0ae53119e5c3111",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/3669fbe6-4700-44a2-8200-6a3971824c50/blobs/8f/8f80d2b5a3dcbdfad3719d2164f760521ac87dc3b1421b29a0ae53119e5c3111"
+    }
+  },
+  "revisions": {},
+  "checks": {
+    "latest": {
+      "revision": null,
+      "id": "37fcab65-9758-4c70-8261-499933fe2663"
+    },
+    "revisions": {},
+    "unversioned": [
+      {
+        "id": "37fcab65-9758-4c70-8261-499933fe2663",
+        "scope": "project",
+        "report": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/specimen/composition/.hyperframes/artifacts/checks/37fcab65-9758-4c70-8261-499933fe2663.json",
+        "metadata": {
+          "ok": true,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 45000,
+            "cache": true,
+            "contrast": true,
+            "craft": true,
+            "strict": false,
+            "snapshots": false,
+            "safeZones": [
+              "tiktok",
+              "reels",
+              "shorts"
+            ],
+            "browserGpuMode": "auto",
+            "includeUnmounted": false
+          }
+        },
+        "createdAt": 1794982599630,
+        "contentHash": "5ec114ef86b4bd1e158c5a2b5b7960949c253a08162eab73b7fa77a42b94f28a",
+        "revision": null,
+        "inputFingerprint": "91ecb5dff3dfe127924af434a1edc5452ce9087314f4b88247c1e6a15fb08522",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "f920694e-dd2d-4a9d-a30a-66ce2667816d",
+      "completedAt": 1794982621826,
+      "output": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/specimen/brag.mp4",
+      "status": "completed",
+      "revision": null
+    },
+    "retainedRevisions": []
+  },
+  "pendingArtifactCleanup": []
+}

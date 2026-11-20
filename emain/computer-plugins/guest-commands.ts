@@ -1,15 +1,17 @@
 // Copyright 2026, KronTerm.
 // SPDX-License-Identifier: Apache-2.0
 
+import { gzipSync } from "node:zlib";
 import { BrowserLoginSignals } from "./browser-login-signals";
+import { GuestBrowserActionExpression } from "./guest-browser-actions";
 
 export function guestPython(source: string, input: Record<string, unknown>): string {
-    const code = Buffer.from(source).toString("base64");
+    const code = gzipSync(Buffer.from(source)).toString("base64");
     const data = Buffer.from(JSON.stringify(input)).toString("base64");
-    return `python3 -c "import base64; exec(base64.b64decode('${code}'))" '${data}'`;
+    return `python3 -c "import base64,gzip; exec(gzip.decompress(base64.b64decode('${code}')))" '${data}'`;
 }
 
-export const GuestFiles = `import base64,json,sys,pathlib
+export const GuestFiles = `import base64,json,sys,pathlib,gzip,hashlib,os,tempfile
 args=json.loads(base64.b64decode(sys.argv[1]))
 p=pathlib.Path(args.get('path','/home/cua/workspace')).expanduser()
 if not p.is_absolute(): p=pathlib.Path('/home/cua/workspace')/p
@@ -17,16 +19,36 @@ op=args['action']
 if op=='list': result=[{'name':x.name,'directory':x.is_dir()} for x in sorted(p.iterdir())][:1000]
 elif op=='read':
  if p.stat().st_size>1048576: raise ValueError('File exceeds 1 MB')
- text=p.read_text(); offset=max(0,args.get('offset',0)); result={'path':str(p),'text':text[offset:offset+4000],'nextOffset':offset+4000 if len(text)>offset+4000 else None}
+ data=p.read_bytes();text=data.decode(); offset=max(0,args.get('offset',0)); result={'path':str(p),'text':text[offset:offset+4000],'sha256':hashlib.sha256(data).hexdigest(),'nextOffset':offset+4000 if len(text)>offset+4000 else None}
 elif op in ['write','append']:
- text=args.get('text','')
- if len(text.encode())>1048576: raise ValueError('File exceeds 1 MB')
+ data=gzip.decompress(base64.b64decode(args['data'])) if 'data' in args else args.get('text','').encode()
+ if len(data)>1048576: raise ValueError('File exceeds 1 MB')
  p.parent.mkdir(parents=True,exist_ok=True)
- with p.open('a' if op=='append' else 'w') as f:f.write(text)
- result={'path':str(p),'written':len(text.encode())}
+ with p.open('ab' if op=='append' else 'wb') as f:f.write(data)
+ result={'path':str(p),'written':len(data)}
 elif op=='commit':
  dest=pathlib.Path(args['target']).expanduser(); dest=dest if dest.is_absolute() else pathlib.Path('/home/cua/workspace')/dest
- p.replace(dest);result={'path':str(dest)}
+ if dest.exists():p.chmod(dest.stat().st_mode & 0o777)
+ p.replace(dest);result={'path':str(dest),'sha256':hashlib.sha256(dest.read_bytes()).hexdigest()}
+elif op=='edit':
+ data=p.read_bytes()
+ if len(data)>1048576:raise ValueError('File exceeds 1 MB')
+ digest=hashlib.sha256(data).hexdigest()
+ if args.get('expectedSha256')!=digest:raise ValueError('File changed. Read it again before editing.')
+ if not isinstance(args.get('newText'),str):raise ValueError('Provide newText for the edit')
+ text=data.decode();old=args.get('oldText','');new=args['newText']
+ if not old or text.count(old)!=1:raise ValueError('oldText must match exactly once; include more surrounding context.')
+ updated=text.replace(old,new,1).encode()
+ if len(updated)>1048576:raise ValueError('File exceeds 1 MB')
+ fd,temp=tempfile.mkstemp(prefix='.kronterm-edit-',dir=p.parent)
+ try:
+  with os.fdopen(fd,'wb') as f:f.write(updated);f.flush();os.fsync(f.fileno())
+  os.chmod(temp,p.stat().st_mode & 0o777)
+  if hashlib.sha256(p.read_bytes()).hexdigest()!=digest:raise ValueError('File changed during edit')
+  os.replace(temp,p)
+ finally:
+  if os.path.exists(temp):os.unlink(temp)
+ result={'path':str(p),'sha256':hashlib.sha256(updated).hexdigest(),'replacements':1}
 elif op=='mkdir': p.mkdir(parents=True,exist_ok=True);result={'path':str(p)}
 else: raise ValueError('Unknown file action')
 print(json.dumps(result,ensure_ascii=False))
@@ -40,6 +62,14 @@ const BrowserStateExpression = `(() => {
         signInOrigin,
         title: document.title,
         text: document.body.innerText.slice(0, 8000),
+        controls: [...document.querySelectorAll('button,input,textarea,select,[role="button"],a[href]')]
+            .filter(element => element.getClientRects().length).slice(0, 60).map(element => ({
+                tag: element.tagName.toLowerCase(), role: element.getAttribute('role'),
+                name: (element.getAttribute('aria-label') || element.innerText || element.getAttribute('placeholder') || '').slice(0, 120),
+                selector: element.id ? '#' + CSS.escape(element.id) : null,
+                type: element.getAttribute('type'), disabled: Boolean(element.disabled),
+            })),
+        viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY },
         links: [...document.links].slice(0, 15).map((link) => ({
             text: link.innerText.slice(0, 100),
             url: link.href.slice(0, 400),
@@ -65,8 +95,13 @@ except Exception:
   except Exception: pass
  else: raise ValueError('Guest browser did not start; inspect /tmp/kronterm-browser.log')
 pages=[p for p in pages if p.get('type')=='page' and not str(p.get('url','')).startswith(('devtools:','chrome-devtools:'))]
+if args.get('action')=='tabs':
+ print(json.dumps({'pages':[{'id':p.get('id'),'title':p.get('title'),'url':p.get('url')} for p in pages]}));sys.exit(0)
 if not pages: raise ValueError('No browser page is available')
+if len(pages)>1 and not args.get('pageId') and not args.get('origin'):raise ValueError('Multiple pages are open. Use tabs then provide an exact pageId.')
 from urllib.parse import urlparse
+if args.get('pageId'):pages=[p for p in pages if p.get('id')==args['pageId']]
+if not pages:raise ValueError('Browser page no longer exists')
 u=urlparse(pages[0]['webSocketDebuggerUrl'])
 if u.hostname not in ['127.0.0.1','localhost'] or u.port!=9222: raise ValueError('Invalid guest browser endpoint')
 s=socket.create_connection(('127.0.0.1',9222),5);s.settimeout(15)
@@ -104,7 +139,7 @@ if op=='navigate':
  if urlparse(url).scheme not in ['https','http','about']:raise ValueError('Use an HTTP or HTTPS browser URL')
  payload={'id':1,'method':'Page.navigate','params':{'url':url}}
 else:
- expression=args.get('expression') if op=='evaluate' else ${JSON.stringify(BrowserStateExpression)}
+ expression=args.get('expression') if op=='evaluate' else ${JSON.stringify(GuestBrowserActionExpression)}.replace('__KRONOS_ACTION__',json.dumps(args)) if op in ['scroll','click','fill','wait'] else ${JSON.stringify(BrowserStateExpression)}
  payload={'id':1,'method':'Runtime.evaluate','params':{'expression':expression,'returnByValue':True,'awaitPromise':True}}
 send(payload);response=receive();s.close()
 if response.get('error') or response.get('result',{}).get('exceptionDetails'):raise ValueError(json.dumps(response))

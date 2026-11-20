@@ -48,6 +48,7 @@ describe("Image Studio canvas handoff", () => {
                 action: "add_file",
                 file: "/artifacts/artwork.png",
                 text: "artwork.png",
+                render: { id: render.id, origin: render.origin, image: render.image },
             });
             expect(globalStore.get(model.preview)?.data).toBe(displayed.imageData);
             expect(globalStore.get(model.pinStatus)).toBe("Pinned artwork.png to the canvas.");

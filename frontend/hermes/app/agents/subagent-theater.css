@@ -12,20 +12,19 @@
     top: 50%;
     transform: translate(-50%, -50%);
     z-index: 12001;
-    width: min(1280px, calc(100vw - 32px));
-    height: min(860px, calc(100dvh - 48px));
+    width: min(704px, calc(100vw - 32px));
+    height: min(480px, calc(100dvh - 48px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 10px solid #000 !important;
-    border-radius: 0 !important;
-    background: #111214 !important;
-    color: #ededf0;
+    border: 1px solid var(--ui-stroke-secondary, #34363d);
+    border-radius: 0;
+    background: var(--ui-chat-surface-background, #111214);
+    color: var(--ui-text-primary, #ededf0);
     font-family: var(--font-sans, system-ui, sans-serif);
     font-size: 13px;
     box-shadow: 0 24px 80px #0009;
     pointer-events: auto;
-    color-scheme: dark;
 }
 .subagent-theater button {
     cursor: pointer;
@@ -39,15 +38,15 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    min-height: 48px;
-    padding: 0 10px 8px;
-    background: #000;
+    min-height: 40px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--ui-stroke-secondary, #292a2e);
 }
 .subagent-theater-header h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 600;
-    color: #f4f4f5;
+    color: inherit;
 }
 .subagent-theater-controls {
     display: flex;
@@ -72,7 +71,7 @@
     flex-shrink: 0;
     gap: 12px;
     overflow-x: auto;
-    border-bottom: 1px solid #292a2e;
+    border-bottom: 1px solid var(--ui-stroke-secondary, #292a2e);
     padding: 0 10px;
 }
 .subagent-theater-tabs button {
@@ -81,11 +80,11 @@
     align-items: center;
     gap: 8px;
     max-width: 330px;
-    padding: 17px 8px 14px;
+    padding: 8px;
     border: 0;
     border-bottom: 2px solid transparent;
     background: transparent;
-    color: #afb1b8;
+    color: var(--ui-text-secondary, #afb1b8);
     text-align: left;
     font-size: 12px;
 }
@@ -119,22 +118,22 @@
     grid-template-rows: minmax(0, 1fr);
     flex: 1;
     min-height: 0;
-    padding: 16px;
+    padding: 8px;
 }
 .subagent-theater-surface {
     display: flex;
     flex-direction: column;
     min-height: 0;
     min-width: 0;
-    border: 1px solid #34363d;
-    background: #090a0c;
+    border: 1px solid var(--ui-stroke-secondary, #34363d);
+    background: var(--ui-chat-surface-background, #090a0c);
 }
 .subagent-theater-surface-label {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 10px;
-    border-bottom: 1px solid #292a2e;
+    border-bottom: 1px solid var(--ui-stroke-secondary, #292a2e);
     color: #c4c6ce;
     font-size: 11px;
 }
@@ -170,11 +169,11 @@
     gap: 12px;
     padding: 28px;
     text-align: center;
-    color: #a9adb7;
+    color: var(--ui-text-secondary, #a9adb7);
 }
 .subagent-theater-empty h3 {
     margin: 0;
-    color: #e8e9ec;
+    color: var(--ui-text-primary, #e8e9ec);
     font-size: 14px;
     font-weight: 500;
 }
@@ -190,16 +189,16 @@
 }
 .subagent-theater-feed {
     position: absolute;
-    right: 28px;
-    bottom: 28px;
-    width: min(280px, calc(100% - 56px));
+    right: 16px;
+    bottom: 16px;
+    width: min(280px, calc(100% - 32px));
     max-height: min(148px, 30%);
     min-height: 0;
     overflow: auto;
     margin: 0;
     padding: 6px 10px;
-    border: 1px solid #34363d;
-    background: #111214f5;
+    border: 1px solid var(--ui-stroke-secondary, #34363d);
+    background: var(--ui-chat-surface-background, #111214);
     box-shadow: 0 4px 16px #0004;
     list-style: none;
     overscroll-behavior: contain;
@@ -241,7 +240,7 @@
     white-space: pre-wrap;
 }
 .subagent-theater-feed .subagent-theater-feed-empty {
-    color: #a9adb7;
+    color: var(--ui-text-secondary, #a9adb7);
     line-height: 1.7;
 }
 .subagent-theater-feed [data-error="true"] p,
@@ -271,7 +270,7 @@
     border: 1px solid #454954;
     background: #252830;
     color: #f1f2f5;
-    border-radius: 0 !important;
+    border-radius: 0;
     font-size: 11px;
 }
 .subagent-theater-stop:hover {
@@ -287,9 +286,8 @@
 }
 @media (max-width: 720px) {
     .subagent-theater {
-        width: calc(100vw - 16px);
-        height: calc(100dvh - 32px);
-        border-width: 8px !important;
+        width: min(704px, calc(100vw - 16px));
+        height: min(480px, calc(100dvh - 32px));
     }
     .subagent-theater-body {
         padding: 10px;
@@ -336,7 +334,7 @@
 }
 
 .subagent-theater-tool-context {
-    width: min(100%, 860px);
+    width: min(100%, 480px);
     min-height: 0;
     margin: auto;
     padding: clamp(20px, 4vw, 48px);
@@ -358,7 +356,7 @@
 .subagent-theater-tool-heading h3 {
     margin: 4px 0 0;
     color: #eeeff2;
-    font-size: 18px;
+    font-size: 14px;
     overflow-wrap: anywhere;
 }
 .subagent-theater-tool-preview,
@@ -374,8 +372,8 @@
 .subagent-theater-tool-diff {
     max-height: 320px;
     overflow: auto;
-    padding: 16px;
-    border: 1px solid #34363d;
+    padding: 8px;
+    border: 1px solid var(--ui-stroke-secondary, #34363d);
     background: #101316;
     color: #b8d8c5;
 }

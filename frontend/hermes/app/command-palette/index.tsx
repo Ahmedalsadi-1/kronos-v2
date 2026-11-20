@@ -1,3 +1,5 @@
+import { openWorkspaceTool, WorkspaceTools } from '@hermes/app/settings/workspace-tools'
+import { notifyError } from '@hermes/store/notifications'
 import { WorkflowPickerResults } from '@hermes/app/workflows/workflow-picker-results'
 import { $workspaceCanvasPanels } from '@hermes/lib/kronterm-sidebar'
 import { createPortal } from 'react-dom'
@@ -8,13 +10,10 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import { useNavigate } from 'react-router'
 
 import {
-  HUD_HEADING,
-  HUD_ITEM,
   HUD_NOTE,
   HUD_NOTE_VARIANT,
   HUD_POSITION,
   HUD_SURFACE,
-  HUD_TEXT,
 } from '@hermes/app/floating-hud'
 import { codiconIcon } from '@hermes/components/ui/codicon'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@hermes/components/ui/command'
@@ -104,6 +103,7 @@ import {
   SETTINGS_ROUTE,
   SKILLS_ROUTE,
   STARMAP_ROUTE,
+  WORKFLOWS_ROUTE,
 } from '../routes'
 import { FIELD_LABELS, SECTIONS } from '../settings/constants'
 import { fieldCopyForSchemaKey } from '../settings/field-copy'
@@ -300,7 +300,7 @@ const PaletteGroups = memo(function PaletteGroups({
         <div className="py-6 text-center text-sm text-muted-foreground">{noResultsLabel}</div>
       )}
       {deferred.map((group, index) => (
-        <CommandGroup className={HUD_HEADING} heading={group.heading} key={group.heading ?? `palette-group-${index}`}>
+        <CommandGroup className="**:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pt-4 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-muted-foreground" heading={group.heading} key={group.heading ?? `palette-group-${index}`}>
           {group.items.map((item) => (
             <PaletteRow
               bindings={bindings}
@@ -345,7 +345,7 @@ const PaletteRow = memo(function PaletteRow({
 
   return (
     <CommandItem
-      className={cn(HUD_ITEM, HUD_TEXT)}
+      className="min-h-10 cursor-pointer gap-3 rounded-none px-3 py-2 text-[13px] data-[selected=true]:bg-foreground/8 data-[selected=true]:text-foreground"
       keywords={item.keywords}
       disabled={item.disabled}
       onMouseDown={onSelectMods}
@@ -810,6 +810,20 @@ function CommandPaletteBody({
     // where you're going, then what you can do, then what you can configure.
     return [
       {
+        heading: 'Workspaces',
+        items: WorkspaceTools.map((tool) => ({
+          id: `workspace-${tool.id}`,
+          label: tool.label,
+          icon: tool.icon,
+          keywords: [...tool.keywords],
+          run: () => {
+            void openWorkspaceTool(tool.id, () => navigateToWorkspacePage(navigate, WORKFLOWS_ROUTE)).catch(
+              (error) => notifyError(error, `Could not open ${tool.label}`)
+            )
+          },
+        })),
+      },
+      {
         heading: cc.goTo,
         items: [
           ...(window.hermesDesktop?.krontermSurfaces
@@ -861,13 +875,8 @@ function CommandPaletteBody({
                   ['files', 'Files'],
                   ['connections', 'Connections'],
                   ['scratchpad', 'Scratchpad'],
-                  ['comfy-workflow', 'KronRender workflow'],
                   ['activity', 'Activity Center'],
                   ['control', 'Hermes Settings'],
-                  ['widgets', 'Tiled Widgets'],
-                  ['tabs', 'Widget Tabs'],
-                  ['canvas', 'Canvas'],
-                  ['os', 'KronOS'],
                 ] as const
               ).map(([action, label]) => ({
                 id: `workspace-${action}`,
@@ -1087,6 +1096,13 @@ function CommandPaletteBody({
       {
         heading: cc.settings,
         items: [
+          ...WorkspaceTools.map((tool) => ({
+            id: `settings-${tool.id}`,
+            icon: Settings2,
+            label: `${tool.label} settings`,
+            keywords: [...tool.keywords, 'settings', 'preferences'],
+            run: go(settingsTab(tool.id)),
+          })),
           ...SECTIONS.map((section) => ({
             icon: section.icon,
             id: `set-config-${section.id}`,
@@ -1523,10 +1539,10 @@ function CommandPaletteBody({
   }
 
   const command = (
-    <Command className="bg-transparent" loop shouldFilter={false}>
+    <Command className="rounded-none bg-transparent" loop shouldFilter={false}>
       {activePage && (
         <button
-          className="flex w-full items-center gap-1.5 border-b border-border px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="flex w-full cursor-pointer items-center gap-1.5 border-b border-border px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
           onClick={goBack}
           type="button"
         >
@@ -1537,8 +1553,8 @@ function CommandPaletteBody({
         </button>
       )}
       <CommandInput
-        className={HUD_TEXT}
-        wrapperClassName="gap-[37px] bg-black px-[19px]"
+        className="h-12 text-sm"
+        wrapperClassName="h-14 gap-3 px-4"
         onKeyDown={(event) => {
           // Capture modifiers before cmdk's Enter fires onSelect (which
           // swipes the inviting MouseEvent and hands us nothing).
@@ -1563,7 +1579,7 @@ function CommandPaletteBody({
         right={page === 'pets' ? <PetInlineToggle /> : undefined}
         value={search}
       />
-      <CommandList className={cn("dt-portal-scrollbar", embedded ? "min-h-0 max-h-none flex-1" : "max-h-[404px] border-white bg-black text-[84px] text-[#a3a3a3]")}>
+      <CommandList className="dt-portal-scrollbar max-h-[min(440px,55dvh)] p-1.5">
         {!page && workflowItems.error && <p role="alert" className="px-3 py-2 text-sm text-destructive">{workflowItems.error}</p>}
         {/* Server-driven pages render their own list; the rest show groups. */}
         {page === 'pets' ? (
@@ -1588,6 +1604,11 @@ function CommandPaletteBody({
           />
         )}
       </CommandList>
+      <div className="flex shrink-0 items-center gap-4 border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground" aria-hidden="true">
+        <span><kbd className="font-mono">↑ ↓</kbd> Navigate</span>
+        <span><kbd className="font-mono">↵</kbd> Open</span>
+        <span className="ml-auto"><kbd className="font-mono">esc</kbd> Close</span>
+      </div>
     </Command>
   )
 
@@ -1600,11 +1621,11 @@ function CommandPaletteBody({
         data-hermes-command-palette=""
         className={cn(
           HUD_POSITION,
-          'top-[329px]',
+          'top-[min(16vh,120px)]',
           HUD_SURFACE,
-          'hermes-glass-menu',
+          'rounded-none bg-popover text-popover-foreground',
           contentClassName,
-          'z-(--z-over-modal-content) w-[323px] overflow-hidden duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95'
+          'z-(--z-over-modal-content) w-[min(560px,calc(100vw-24px))] max-h-[calc(100dvh-80px)] motion-reduce:animate-none overflow-hidden duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 data-[state=open]:zoom-in-95'
         )}
         // The close animation finishing is what retires this whole subtree —
         // the CSS owns the duration, not a hardcoded timer. Guarded on the

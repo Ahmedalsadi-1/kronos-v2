@@ -12,6 +12,7 @@ import { grantManagedRuntimeRequests } from "./authkey";
 import type { HermesSurfaceContext } from "./hermes-runtime";
 import { KronTermNativeToolBridge } from "./kronterm-native-tool-bridge";
 import { editN8nDraft, type N8nWorkflowDraft } from "./n8n-builder";
+import { makeN8nExecutionDraft } from "./n8n-execution-draft";
 import { requestN8n, type N8nEditorRequest } from "./n8n-client";
 import type { N8nRuntime } from "./n8n-runtime";
 import { selectWorkflowWorkerTarget } from "./n8n-worker-scope";
@@ -44,6 +45,7 @@ export type N8nWorkspaceCommand = {
         | "validate-workflow"
         | "executions"
         | "execution-detail"
+        | "reproduce-execution"
         | "run-workflow"
         | "run-agent";
     webContentsId?: number;
@@ -306,6 +308,7 @@ export class N8nWorkspace {
                 "edit-workflow",
                 "select-workflow",
                 "create-workflow",
+                "reproduce-execution",
                 "open",
                 "hide-desktop",
                 "switch-workspace",
@@ -355,6 +358,7 @@ export class N8nWorkspace {
                 "node-ports",
                 "executions",
                 "execution-detail",
+                "reproduce-execution",
                 "run-workflow",
                 "run-agent",
             ].includes(input.operation)
@@ -368,6 +372,7 @@ export class N8nWorkspace {
                     "node-ports",
                     "executions",
                     "execution-detail",
+                    "reproduce-execution",
                     "run-workflow",
                 ].includes(input.operation) &&
                 !workflowId
@@ -777,7 +782,7 @@ export class N8nWorkspace {
             const filter = encodeURIComponent(JSON.stringify({ workflowId }));
             return this.request(context, `/rest/executions?filter=${filter}&limit=50`);
         }
-        if (input.operation === "execution-detail") {
+        if (input.operation === "execution-detail" || input.operation === "reproduce-execution") {
             if (!input.executionId || !/^[a-zA-Z0-9_-]{1,128}$/.test(input.executionId))
                 throw new Error("Choose a valid execution.");
             const execution = await this.request(
@@ -786,6 +791,16 @@ export class N8nWorkspace {
             );
             if (execution.workflowId !== workflowId) throw new Error("Execution belongs to another workflow.");
             execution.data = this.runtime.decodeExecutionData(execution.data);
+            if (input.operation === "reproduce-execution") {
+                if (context.n8nWorkerId) throw new Error("Open the execution dock to reproduce an execution.");
+                if (!["error", "crashed"].includes(execution.status)) throw new Error("Choose a failed execution.");
+                await this.savedCanvases(context, workflowId);
+                return this.withEditorLease(context, workflowId, async () => {
+                    const { draft, ...details } = makeN8nExecutionDraft(input.executionId, execution.workflowData, execution.data);
+                    const created = await this.request(context, "/rest/workflows", "POST", draft);
+                    return { ...details, workflowId: created.id };
+                });
+            }
             return execution;
         }
         if (input.operation === "run-workflow") {

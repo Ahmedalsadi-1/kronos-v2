@@ -1,0 +1,42 @@
+[
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/manifest.json",
+    "sha256": "c0573120e5f6b034551cecc2243120204fab8cd79502cc52c4e2684f16b00190",
+    "size": 3346
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/route-Co9NN2bA.js",
+    "sha256": "09796bfb899c8bb11b75459d44c2b65c285f3fae711d8ecc969b769f94dbfd85",
+    "size": 66739
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/route-CaRfp4_Z.js",
+    "sha256": "4c95ef4be9944fa368b1305a42cad69f5e994ab6ef4ded92e4a89ec160c6b60b",
+    "size": 3872
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/-layouts-M6Ra33Cl.js",
+    "sha256": "61ffc33fcb97f1f3e0fe4ae8f852a6cccff58cdd20129c3d99842f010920286b",
+    "size": 4378
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/general-BCeZID85.js",
+    "sha256": "ba6747d3ce8f45fabfed0dcb95766d2c8973bd457931a7bb70a42ce15b537d08",
+    "size": 596282
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/appearance-69H9Yerh.js",
+    "sha256": "a52febe39481e48f71c16a417aba4be85d145422379be05abf344c05def7072a",
+    "size": 26294
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/privacy-7Ed82PJI.js",
+    "sha256": "461cf1f0c8d7718fd2fd22032fc212d800d675d8ef8694d1c607608c7ea31811",
+    "size": 30211
+  },
+  {
+    "path": "/Users/albsheralsadi/Library/Application Support/Aside/AsideAgentManager/1.26.1118.1753/assets/developers-DU1iuTuh.js",
+    "sha256": "ce7d466e7f415ed24dcfe97bfe49536462998592429339b0c80eb23fd9050d41",
+    "size": 21018
+  }
+]

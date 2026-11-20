@@ -1,0 +1,747 @@
+{
+    "shortcuts": [
+        {
+            "id": "composer.focus",
+            "category": "composer",
+            "defaults": [
+                "/",
+                "enter"
+            ],
+            "label": "Focus composer"
+        },
+        {
+            "id": "composer.modelPicker",
+            "category": "composer",
+            "defaults": [
+                "mod+shift+m"
+            ],
+            "label": "Open model picker"
+        },
+        {
+            "id": "composer.voice",
+            "category": "composer",
+            "defaults": [
+                "ctrl+b"
+            ],
+            "label": "Start / stop voice conversation"
+        },
+        {
+            "id": "profile.default",
+            "category": "profiles",
+            "defaults": [
+                "mod+d"
+            ],
+            "label": "Switch to default profile"
+        },
+        {
+            "id": "profile.switch.1",
+            "category": "profiles",
+            "defaults": [
+                "mod+1"
+            ],
+            "label": "Switch to profile 1"
+        },
+        {
+            "id": "profile.switch.2",
+            "category": "profiles",
+            "defaults": [
+                "mod+2"
+            ],
+            "label": "Switch to profile 2"
+        },
+        {
+            "id": "profile.switch.3",
+            "category": "profiles",
+            "defaults": [
+                "mod+3"
+            ],
+            "label": "Switch to profile 3"
+        },
+        {
+            "id": "profile.switch.4",
+            "category": "profiles",
+            "defaults": [
+                "mod+4"
+            ],
+            "label": "Switch to profile 4"
+        },
+        {
+            "id": "profile.switch.5",
+            "category": "profiles",
+            "defaults": [
+                "mod+5"
+            ],
+            "label": "Switch to profile 5"
+        },
+        {
+            "id": "profile.switch.6",
+            "category": "profiles",
+            "defaults": [
+                "mod+6"
+            ],
+            "label": "Switch to profile 6"
+        },
+        {
+            "id": "profile.switch.7",
+            "category": "profiles",
+            "defaults": [
+                "mod+7"
+            ],
+            "label": "Switch to profile 7"
+        },
+        {
+            "id": "profile.switch.8",
+            "category": "profiles",
+            "defaults": [
+                "mod+8"
+            ],
+            "label": "Switch to profile 8"
+        },
+        {
+            "id": "profile.switch.9",
+            "category": "profiles",
+            "defaults": [
+                "mod+9"
+            ],
+            "label": "Switch to profile 9"
+        },
+        {
+            "id": "profile.switch.10",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+1"
+            ],
+            "label": "Switch to profile 10"
+        },
+        {
+            "id": "profile.switch.11",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+2"
+            ],
+            "label": "Switch to profile 11"
+        },
+        {
+            "id": "profile.switch.12",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+3"
+            ],
+            "label": "Switch to profile 12"
+        },
+        {
+            "id": "profile.switch.13",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+4"
+            ],
+            "label": "Switch to profile 13"
+        },
+        {
+            "id": "profile.switch.14",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+5"
+            ],
+            "label": "Switch to profile 14"
+        },
+        {
+            "id": "profile.switch.15",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+6"
+            ],
+            "label": "Switch to profile 15"
+        },
+        {
+            "id": "profile.switch.16",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+7"
+            ],
+            "label": "Switch to profile 16"
+        },
+        {
+            "id": "profile.switch.17",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+8"
+            ],
+            "label": "Switch to profile 17"
+        },
+        {
+            "id": "profile.switch.18",
+            "category": "profiles",
+            "defaults": [
+                "mod+alt+9"
+            ],
+            "label": "Switch to profile 18"
+        },
+        {
+            "id": "profile.next",
+            "category": "profiles",
+            "defaults": [
+                "mod+shift+]"
+            ],
+            "label": "Next profile"
+        },
+        {
+            "id": "profile.prev",
+            "category": "profiles",
+            "defaults": [
+                "mod+shift+["
+            ],
+            "label": "Previous profile"
+        },
+        {
+            "id": "profile.toggleAll",
+            "category": "profiles",
+            "defaults": [
+                "mod+shift+0"
+            ],
+            "label": "Toggle all-profiles view"
+        },
+        {
+            "id": "profile.create",
+            "category": "profiles",
+            "defaults": [],
+            "label": "Create profile"
+        },
+        {
+            "id": "session.new",
+            "category": "session",
+            "defaults": [
+                "mod+n"
+            ],
+            "label": "New session"
+        },
+        {
+            "id": "session.newTab",
+            "category": "session",
+            "defaults": [
+                "mod+t"
+            ],
+            "label": "New session tab"
+        },
+        {
+            "id": "session.newWindow",
+            "category": "session",
+            "defaults": [
+                "mod+shift+n"
+            ],
+            "label": "New window"
+        },
+        {
+            "id": "session.next",
+            "category": "session",
+            "defaults": [
+                "ctrl+tab",
+                "ctrl+pagedown"
+            ],
+            "label": "Next session"
+        },
+        {
+            "id": "session.prev",
+            "category": "session",
+            "defaults": [
+                "ctrl+shift+tab",
+                "ctrl+pageup"
+            ],
+            "label": "Previous session"
+        },
+        {
+            "id": "session.slot.1",
+            "category": "session",
+            "defaults": [
+                "ctrl+1"
+            ],
+            "label": "Switch to recent session 1"
+        },
+        {
+            "id": "session.slot.2",
+            "category": "session",
+            "defaults": [
+                "ctrl+2"
+            ],
+            "label": "Switch to recent session 2"
+        },
+        {
+            "id": "session.slot.3",
+            "category": "session",
+            "defaults": [
+                "ctrl+3"
+            ],
+            "label": "Switch to recent session 3"
+        },
+        {
+            "id": "session.slot.4",
+            "category": "session",
+            "defaults": [
+                "ctrl+4"
+            ],
+            "label": "Switch to recent session 4"
+        },
+        {
+            "id": "session.slot.5",
+            "category": "session",
+            "defaults": [
+                "ctrl+5"
+            ],
+            "label": "Switch to recent session 5"
+        },
+        {
+            "id": "session.slot.6",
+            "category": "session",
+            "defaults": [
+                "ctrl+6"
+            ],
+            "label": "Switch to recent session 6"
+        },
+        {
+            "id": "session.slot.7",
+            "category": "session",
+            "defaults": [
+                "ctrl+7"
+            ],
+            "label": "Switch to recent session 7"
+        },
+        {
+            "id": "session.slot.8",
+            "category": "session",
+            "defaults": [
+                "ctrl+8"
+            ],
+            "label": "Switch to recent session 8"
+        },
+        {
+            "id": "session.slot.9",
+            "category": "session",
+            "defaults": [
+                "ctrl+9"
+            ],
+            "label": "Switch to recent session 9"
+        },
+        {
+            "id": "session.focusSearch",
+            "category": "session",
+            "defaults": [
+                "mod+shift+f"
+            ],
+            "label": "Search sessions"
+        },
+        {
+            "id": "session.togglePin",
+            "category": "session",
+            "defaults": [],
+            "label": "Pin / unpin current session"
+        },
+        {
+            "id": "session.archive",
+            "category": "session",
+            "defaults": [],
+            "label": "Archive current session"
+        },
+        {
+            "id": "workspace.newWorktree",
+            "category": "session",
+            "defaults": [
+                "mod+shift+b"
+            ],
+            "label": "New worktree"
+        },
+        {
+            "id": "workspace.openFolder",
+            "category": "session",
+            "defaults": [
+                "mod+o"
+            ],
+            "label": "Open folder as project"
+        },
+        {
+            "id": "nav.commandPalette",
+            "category": "navigation",
+            "defaults": [
+                "mod+k",
+                "mod+p",
+                "mod+shift+space"
+            ],
+            "label": "Open command palette"
+        },
+        {
+            "id": "nav.commandCenter",
+            "category": "navigation",
+            "defaults": [
+                "mod+."
+            ],
+            "label": "Open command center"
+        },
+        {
+            "id": "nav.settings",
+            "category": "navigation",
+            "defaults": [
+                "mod+,"
+            ],
+            "label": "Open settings"
+        },
+        {
+            "id": "nav.profiles",
+            "category": "navigation",
+            "defaults": [],
+            "label": "Open profiles"
+        },
+        {
+            "id": "nav.skills",
+            "category": "navigation",
+            "defaults": [],
+            "label": "Open skills"
+        },
+        {
+            "id": "nav.messaging",
+            "category": "navigation",
+            "defaults": [],
+            "label": "Open messaging"
+        },
+        {
+            "id": "nav.artifacts",
+            "category": "navigation",
+            "defaults": [],
+            "label": "Open artifacts"
+        },
+        {
+            "id": "nav.cron",
+            "category": "navigation",
+            "defaults": [],
+            "label": "Open scheduled jobs"
+        },
+        {
+            "id": "nav.agents",
+            "category": "navigation",
+            "defaults": [],
+            "label": "Open agents"
+        },
+        {
+            "id": "view.toggleSidebar",
+            "category": "view",
+            "defaults": [
+                "mod+b"
+            ],
+            "label": "Toggle sessions sidebar"
+        },
+        {
+            "id": "view.toggleRightSidebar",
+            "category": "view",
+            "defaults": [
+                "mod+j"
+            ],
+            "label": "Toggle file browser"
+        },
+        {
+            "id": "view.toggleStatusbar",
+            "category": "view",
+            "defaults": [
+                "mod+shift+s"
+            ],
+            "label": "Toggle status bar"
+        },
+        {
+            "id": "view.toggleReview",
+            "category": "view",
+            "defaults": [
+                "mod+g"
+            ],
+            "label": "Toggle review pane"
+        },
+        {
+            "id": "view.showFiles",
+            "category": "view",
+            "defaults": [],
+            "label": "Show file browser"
+        },
+        {
+            "id": "view.toggleHud",
+            "category": "view",
+            "defaults": [
+                "mod+shift+h"
+            ],
+            "label": "Toggle HUD mode"
+        },
+        {
+            "id": "view.showTerminal",
+            "category": "view",
+            "defaults": [
+                "ctrl+`"
+            ],
+            "label": "Toggle terminal"
+        },
+        {
+            "id": "view.newTerminal",
+            "category": "view",
+            "defaults": [
+                "ctrl+shift+`"
+            ],
+            "label": "New terminal"
+        },
+        {
+            "id": "view.nextTerminal",
+            "category": "view",
+            "defaults": [
+                "ctrl+shift+down"
+            ],
+            "label": "Next terminal"
+        },
+        {
+            "id": "view.prevTerminal",
+            "category": "view",
+            "defaults": [
+                "ctrl+shift+up"
+            ],
+            "label": "Previous terminal"
+        },
+        {
+            "id": "view.closeTerminal",
+            "category": "view",
+            "defaults": [
+                "ctrl+shift+w"
+            ],
+            "label": "Close terminal"
+        },
+        {
+            "id": "view.flipPanes",
+            "category": "view",
+            "defaults": [
+                "mod+\\"
+            ],
+            "label": "Swap sidebar sides"
+        },
+        {
+            "id": "view.closeTab",
+            "category": "view",
+            "defaults": [
+                "mod+w"
+            ],
+            "label": "Close tab"
+        },
+        {
+            "id": "view.reopenTab",
+            "category": "view",
+            "defaults": [
+                "mod+shift+t"
+            ],
+            "label": "Reopen closed tab"
+        },
+        {
+            "id": "view.findInPage",
+            "category": "view",
+            "defaults": [
+                "mod+f"
+            ],
+            "label": "Find in page"
+        },
+        {
+            "id": "view.findNext",
+            "category": "view",
+            "defaults": [],
+            "label": "Find next match"
+        },
+        {
+            "id": "view.findPrevious",
+            "category": "view",
+            "defaults": [],
+            "label": "Find previous match"
+        },
+        {
+            "id": "appearance.toggleMode",
+            "category": "view",
+            "defaults": [
+                "shift+x"
+            ],
+            "label": "Toggle light / dark"
+        },
+        {
+            "id": "keybinds.openPanel",
+            "category": "view",
+            "defaults": [
+                "mod+/"
+            ],
+            "label": "Open keyboard shortcuts"
+        }
+    ],
+    "readonlyShortcuts": [
+        {
+            "id": "composer.send",
+            "category": "composer",
+            "keys": [
+                "enter"
+            ],
+            "label": "Send message"
+        },
+        {
+            "id": "composer.newline",
+            "category": "composer",
+            "keys": [
+                "shift+enter"
+            ],
+            "label": "Insert newline"
+        },
+        {
+            "id": "composer.steer",
+            "category": "composer",
+            "keys": [
+                "enter"
+            ],
+            "label": "Steer the running turn"
+        },
+        {
+            "id": "composer.queue",
+            "category": "composer",
+            "keys": [
+                "mod+enter"
+            ],
+            "label": "Queue message"
+        },
+        {
+            "id": "composer.sendQueued",
+            "category": "composer",
+            "keys": [
+                "mod+shift+k"
+            ],
+            "label": "Send next queued turn"
+        },
+        {
+            "id": "composer.mention",
+            "category": "composer",
+            "keys": [
+                "@"
+            ],
+            "label": "Reference files, folders, URLs"
+        },
+        {
+            "id": "composer.slash",
+            "category": "composer",
+            "keys": [
+                "/"
+            ],
+            "label": "Slash command palette"
+        },
+        {
+            "id": "composer.help",
+            "category": "composer",
+            "keys": [
+                "?"
+            ],
+            "label": "Quick help"
+        },
+        {
+            "id": "composer.history",
+            "category": "composer",
+            "keys": [
+                "up",
+                "down"
+            ],
+            "label": "Cycle popover / history"
+        },
+        {
+            "id": "composer.cancel",
+            "category": "composer",
+            "keys": [
+                "escape"
+            ],
+            "label": "Close popover · cancel run"
+        },
+        {
+            "id": "view.terminalSelection",
+            "category": "view",
+            "keys": [
+                "mod+l"
+            ],
+            "label": "Send terminal selection to composer"
+        },
+        {
+            "id": "view.terminalCopy",
+            "category": "view",
+            "keys": [
+                "mod+c"
+            ],
+            "label": "Copy terminal selection"
+        },
+        {
+            "id": "view.terminalPaste",
+            "category": "view",
+            "keys": [
+                "mod+v"
+            ],
+            "label": "Paste into terminal"
+        },
+        {
+            "id": "hud.snapToPointer",
+            "category": "view",
+            "keys": [
+                "mod+shift+g"
+            ],
+            "label": "Move HUD to pointer (global, while HUD is open)"
+        }
+    ],
+    "notifications": {
+        "title": "Notifications",
+        "intro": "OS notifications (not in-app toasts). Per device.",
+        "enableAll": "Enable notifications",
+        "enableAllDesc": "Off silences every notification below.",
+        "focusedHint": "Completion alerts only fire while KronOS is in the background.",
+        "kinds": {
+            "approval": {
+                "label": "Approval needed",
+                "description": "A command is waiting for you to approve or reject it."
+            },
+            "input": {
+                "label": "Input needed",
+                "description": "KronOS asked a question or needs a password or secret."
+            },
+            "turnDone": {
+                "label": "Response ready",
+                "description": "A turn finished while KronOS was in the background."
+            },
+            "turnError": {
+                "label": "Turn failed",
+                "description": "Background turn errors."
+            },
+            "backgroundDone": {
+                "label": "Background task finished",
+                "description": "A backgrounded terminal command completed."
+            },
+            "credits": {
+                "label": "Credit alerts",
+                "description": "Credit access is paused or restored."
+            },
+            "plugin": {
+                "label": "Plugin notifications",
+                "description": "A desktop plugin sent a notification while KronOS was in the background."
+            }
+        },
+        "test": "Send test notification",
+        "testTitle": "KronOS",
+        "testBody": "Notifications are working.",
+        "testSent": "Test sent. If nothing appears, check your OS notification permissions and Focus/Do Not Disturb.",
+        "testUnsupported": "This system does not support native notifications.",
+        "completionSoundTitle": "Completion Sound",
+        "completionSoundDesc": "Plays when an agent turn finishes. Pick a preset and preview it here.",
+        "completionSoundPreview": "Preview"
+    },
+    "settings": {
+        "providers": "Providers",
+        "providerAccounts": "Accounts",
+        "providerApiKeys": "API keys",
+        "providerCustomEndpoints": "Custom Endpoints",
+        "gateway": "Gateway",
+        "connections": "Connections",
+        "apiKeys": "Tools & Keys",
+        "keybinds": "Keyboard Shortcuts",
+        "keysTools": "Tools",
+        "keysSettings": "Settings",
+        "mcp": "MCP",
+        "archivedChats": "Archived Chats",
+        "about": "About",
+        "billing": "Billing",
+        "notifications": "Notifications",
+        "plugins": "Plugins"
+    }
+}

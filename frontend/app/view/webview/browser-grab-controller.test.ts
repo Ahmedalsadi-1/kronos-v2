@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { globalStore } from "@/app/store/jotaiStore";
-import { publishAgentWidgetDesignSelection } from "@/app/view/agent-widget-bridge";
 import { beforeEach, expect, it, vi } from "vitest";
+import { stageBrowserSelectionInChat } from "./browser-chat-selection";
 import { BrowserGrabController } from "./browser-grab-controller";
 
 const api = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
     copyBrowserImage: vi.fn(async () => {}),
 }));
 vi.mock("@/store/global", () => ({ getApi: () => api }));
-vi.mock("@/app/view/agent-widget-bridge", () => ({ publishAgentWidgetDesignSelection: vi.fn() }));
+vi.mock("./browser-chat-selection", () => ({ stageBrowserSelectionInChat: vi.fn(async () => {}) }));
 const Payload = {
     page: { title: "Example", sanitizedUrl: "https://example.com", capturedAt: "2026-10-13" },
     target: {
@@ -25,15 +25,40 @@ const Payload = {
     },
     screenshot: null,
 } as any;
-beforeEach(() => vi.clearAllMocks());
-it("stores an inline comment on its own browser block without submitting a prompt", () => {
+beforeEach(() => {
+    vi.clearAllMocks();
+    api.captureBrowserPage.mockResolvedValue({ dataUrl: "data:image/png;base64,Y2FwdHVyZQ==" });
+});
+it("adds inline comments, screenshot, coordinates and page text to the chat draft without submitting", async () => {
     const controller = new BrowserGrabController("owned-browser", () => ({ getWebContentsId: () => 42 }) as any);
     controller.acceptGuestSelection(99, "annotate", Payload, "Wrong guest");
     controller.acceptGuestSelection(42, "annotate", Payload, "Review this control");
-    expect(publishAgentWidgetDesignSelection).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ blockId: "owned-browser", comment: "Review this control" })
-    );
+    await vi.waitFor(() => expect(stageBrowserSelectionInChat).toHaveBeenCalledTimes(1));
+    const selection = vi.mocked(stageBrowserSelectionInChat).mock.calls[0][0];
+    expect(selection.images).toEqual([
+        { filename: "browser-selection.png", dataUrl: "data:image/png;base64,Y2FwdHVyZQ==" },
+    ]);
+    expect(selection.text).toContain("Review this control");
+    expect(selection.text).toContain("Bounds (viewport CSS px): x=1, y=2, width=30, height=20");
+    expect(selection.text).toContain("Selected text: Submit");
+    expect(selection.text).toContain('browser block "owned-browser"');
+    expect(api.captureBrowserPage).toHaveBeenCalledExactlyOnceWith({ guestId: 42 });
     expect(api.sendHermesSelection).not.toHaveBeenCalled();
+});
+it("does not stage an annotation screenshot after the browser guest changes", async () => {
+    let guestId = 42;
+    let finish: (value: unknown) => void;
+    api.captureBrowserPage.mockReturnValue(
+        new Promise((resolve) => {
+            finish = resolve;
+        })
+    );
+    const controller = new BrowserGrabController("browser", () => ({ getWebContentsId: () => guestId }) as any);
+    controller.acceptGuestSelection(42, "annotate", Payload, "Change this");
+    guestId = 43;
+    finish({ dataUrl: "data:image/png;base64,Y2FwdHVyZQ==" });
+    await Promise.resolve();
+    expect(stageBrowserSelectionInChat).not.toHaveBeenCalled();
 });
 it("reviews a guest toolbar selection only on its owning browser block", async () => {
     const controller = new BrowserGrabController("owned-browser", () => ({ getWebContentsId: () => 42 }) as any);

@@ -2,7 +2,7 @@
     "name": "kronterm",
     "productName": "KronOS",
     "description": "A persistent desktop workspace for your apps, agents, and models.",
-    "version": "0.14.3",
+    "version": "0.14.5",
     "homepage": "https://ahmedalsadi-1.github.io/kronos-releases/",
     "build": {
         "appId": "dev.kronterm"
@@ -140,6 +140,7 @@
         "@xyflow/react": "^12.12.0",
         "ai": "^5.0.92",
         "base64-js": "^1.5.1",
+        "border-beam": "^1.4.1",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
@@ -170,6 +171,7 @@
         "monaco-yaml": "^5.4.0",
         "motion": "^12.42.2",
         "nanostores": "^1.4.0",
+        "orb-ui": "0.10.0",
         "overlayscrollbars": "^2.14.0",
         "overlayscrollbars-react": "^0.5.6",
         "papaparse": "^5.5.3",

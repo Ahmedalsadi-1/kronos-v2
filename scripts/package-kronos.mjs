@@ -105,8 +105,14 @@ for (const platform of ["mac", "linux", "win"]) {
 }
 config.directories = { ...config.directories, buildResources: path.join(root, "build"), output: ${JSON.stringify(productionOutput ?? path.join(Root, "make/kronos"))} };
 config.mac = { ...config.mac, icon: path.resolve(root, config.mac.icon), entitlements: path.resolve(root, config.mac.entitlements), entitlementsInherit: path.resolve(root, config.mac.entitlementsInherit) };
-if (${production}) config.mac.forceCodeSigning = true;
-if (process.env.KRONOS_ADHOC_BUILD === "1") config.mac.identity = "-";
+if (${production}) {
+  config.mac = { ...config.mac, forceCodeSigning: true, hardenedRuntime: true, notarize: true };
+  config.dmg = { ...config.dmg, sign: true };
+}
+if (process.env.KRONOS_ADHOC_BUILD === "1") {
+  config.mac = { ...config.mac, identity: "-", notarize: false };
+  config.dmg = { ...config.dmg, sign: false };
+}
 config.appImage = { ...config.appImage, license: path.join(root, "LICENSE") };
 config.deb = { ...config.deb, afterInstall: path.resolve(root, config.deb.afterInstall) };
 module.exports = config;
@@ -130,7 +136,8 @@ module.exports = config;
         "never",
         ...(production ? ["--mac", "dmg", "zip", "--arm64"] : args.length ? args : defaults),
       ],
-      { cwd: Root, stdio: "inherit", env: process.env }
+      // The signing tool scans cwd for provisioning profiles; keep it away from workspace symlinks.
+      { cwd: Stage, stdio: "inherit", env: process.env }
     );
     child.once("error", reject);
     child.once("exit", (code, signal) =>
@@ -146,6 +153,8 @@ module.exports = config;
     execFileSync("codesign", ["--verify", "--deep", "--strict", app], { stdio: "inherit" });
     execFileSync("xcrun", ["stapler", "validate", app], { stdio: "inherit" });
     execFileSync("spctl", ["--assess", "--type", "execute", app], { stdio: "inherit" });
+    const dmg = path.join(productionOutput, `${Package.productName}-darwin-arm64-${Package.version}.dmg`);
+    execFileSync("codesign", ["--verify", "--strict", dmg], { stdio: "inherit" });
     await verifyReleaseArtifacts(productionOutput, app);
     verified = true;
     console.log(`Verified production artifacts in ${productionOutput}`);

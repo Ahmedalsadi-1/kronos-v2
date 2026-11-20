@@ -1,44 +1,78 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { makeSurfaceClipPath } from "@/app/block/persistent-block-geometry";
 import { useSystemAppearance } from "@/app/components/system-ui";
+import { BrowserChatSelectionEvent, type BrowserChatSelectionRequest } from "@/app/view/webview/browser-chat-selection";
 import { SystemCenterOpenEvent } from "@/app/workspace/command-center-events";
 import { usePenPaletteCommands, type PenCanvasCommand } from "@/app/workspace/kronterm-pen-palette";
-import { openCommandPalettePopup } from "@hermes/store/command-palette";
-import { cancelCanvasChat, submitCanvasChat } from "@hermes/store/quick-entry";
-import { $cronJobs } from "@hermes/store/cron";
-import { $activeGatewayProfile, $profiles, selectProfile } from "@hermes/store/profile";
-import { desktopFsProfile, readDesktopDir, readDesktopFileText } from "@hermes/lib/desktop-fs";
-import { $krontermInspectorOpen } from "@hermes/lib/kronterm-sidebar";
-import { normalizeSessionSource } from "@hermes/lib/session-source";
-import type { PenDialogRequest } from "@hermes/app/contrib/pen-dialogs";
-import { resolveSlashSessionId } from "@hermes/app/session/hooks/use-prompt-actions/utils";
-import { parseSlashCommand, sessionTitle, SLASH_COMMAND_RE } from "@hermes/lib/chat-runtime";
+import { getApi } from "@/store/global";
 import { PenVoiceEvent, type PenVoiceRequest } from "@hermes/app/contrib/pen-composer-voice";
-import { $sandboxComputerAccess } from "@hermes/computer/access-store";
+import type { PenDialogRequest } from "@hermes/app/contrib/pen-dialogs";
 import { PenHistoryToolEvent } from "@hermes/app/contrib/pen-history-tools";
+import { resolveSlashSessionId } from "@hermes/app/session/hooks/use-prompt-actions/utils";
 import { runN8nWorkspaceCommand, type N8nRuntimeState } from "@hermes/app/workflows/n8n-workspace-client";
 import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
-import { setSidebarOpen } from "@hermes/store/layout";
+import { $sandboxComputerAccess } from "@hermes/computer/access-store";
 import { searchSessions } from "@hermes/hermes";
-import { sessionMatchesSearch } from "@hermes/lib/session-search";
 import type { ChatMessage } from "@hermes/lib/chat-messages";
-import { $activeSessionId, $connection, $currentCwd, $messagingSessions, $sessions } from "@hermes/store/session";
-import { $subagentsBySession } from "@hermes/store/subagents";
+import { parseSlashCommand, sessionTitle, SLASH_COMMAND_RE } from "@hermes/lib/chat-runtime";
+import { desktopFsProfile, readDesktopDir, readDesktopFileText } from "@hermes/lib/desktop-fs";
+import { $krontermInspectorOpen } from "@hermes/lib/kronterm-sidebar";
+import { sessionMatchesSearch } from "@hermes/lib/session-search";
+import { normalizeSessionSource } from "@hermes/lib/session-source";
+import { subscribeSubagentSurface, type SubagentSurfaceSnapshot } from "@hermes/lib/subagent-surface";
+import { latestSessionTodos, type TodoItem } from "@hermes/lib/todos";
+import { primeVoicePlayback } from "@hermes/lib/voice-playback";
+import { openCommandPalettePopup } from "@hermes/store/command-palette";
+import { $cronJobs } from "@hermes/store/cron";
+import { setSidebarOpen } from "@hermes/store/layout";
+import { $activeGatewayProfile, $profiles, selectProfile } from "@hermes/store/profile";
+import { cancelCanvasChat, submitCanvasChat } from "@hermes/store/quick-entry";
+import {
+    $activeSessionId,
+    $connection,
+    $currentCwd,
+    $currentModel,
+    $currentProvider,
+    $currentReasoningEffort,
+    $messagingSessions,
+    $sessions,
+} from "@hermes/store/session";
 import { $sessionStates, sessionTileDelegate } from "@hermes/store/session-states";
+import { $subagentsBySession } from "@hermes/store/subagents";
+import { $todosBySession } from "@hermes/store/todos";
 import { Download, LoaderCircle, RotateCcw } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { preparePenAgentPrompt } from "./os-pen-agent-prompt";
+import { atom } from "nanostores";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { captureBrowserTab } from "./browser-tab-preview";
 import { KronOSV2AgentFollowPauseEvent } from "./os-kronos-v2-agent-pointer-event";
+import { describePenWorker, OSPenActivityPreview, type PenActivityRun } from "./os-pen-activity-preview";
+import { preparePenAgentPrompt, readPenRunSettings } from "./os-pen-agent-prompt";
+import { penComposerAttachments } from "./os-pen-attachments";
 import { makePenCameraSync, type PenCamera, type PenViewport } from "./os-pen-camera";
+import type { PenChatDockTab, PenMobileSelection } from "./os-pen-chat-dock-model";
 import { makePenFrameClient, registerPenEditor } from "./os-pen-editor-bridge";
 import "./os-pen-editor.css";
 import { penDownload } from "./os-pen-export";
+import { makePenSurfaceOccluders, penSurfaceCornerRadius } from "./os-pen-surface-occlusion";
 import { penToolOutput } from "./os-pen-tool-output";
+import { penVoiceSynthesizer } from "./os-pen-voice";
 import { capturePenWidgetPreview } from "./os-pen-widget-preview";
 import { makePenWidgetSync, type PenLiveWidget, type PenWidgetSnapshot } from "./os-pen-widgets";
+import { updatePenTask, type PenTaskAction, type PenTaskGroup } from "./pen-task-history";
+import { getWorkspaceSurfaceModeProvider } from "./workspace-surface-runtime";
 
 const EmptyWidgets: PenLiveWidget[] = [];
+const ChatImageViewer = lazy(() =>
+    import("@/app/view/preview/preview-streaming").then(({ StreamingImagePreview }) => ({
+        default: StreamingImagePreview,
+    }))
+);
+const OSPenChatDock = lazy(() =>
+    import("./os-pen-chat-dock").then(({ OSPenChatDock }) => ({ default: OSPenChatDock }))
+);
 
 export function OSPenEditor({
     tabId,
@@ -61,12 +95,24 @@ export function OSPenEditor({
     onToolsSlot,
     onSystemControlsSlot,
     onRenderControlsSlot,
+    onIslandControlsSlot,
     onWidgetControlsSlot,
+    chatDockTabs,
+    chatDockFocus,
+    onChatDockActive,
+    onOpenActivityWidget,
+    onFullChat,
 }: {
+    chatDockTabs?: PenChatDockTab[];
+    chatDockFocus?: { id: string; background?: boolean };
+    onChatDockActive?: (id: string | undefined) => void;
+    onOpenActivityWidget?: (id: string) => boolean;
+    onFullChat?: (active: boolean) => void;
     context?: Record<string, unknown>;
     onRenderLibrary?: (library: string) => void;
     onWorkspaceAction?: (workspaceId?: string) => void;
     onRenderControlsSlot?: (slot: HTMLElement | null) => void;
+    onIslandControlsSlot?: (slot: HTMLElement | null) => void;
     onWidgetControlsSlot?: (slot: HTMLElement | null) => void;
     onSystemControlsSlot?: (slot: HTMLElement | null) => void;
     onToolsSlot?: (slot: HTMLElement | null) => void;
@@ -86,6 +132,15 @@ export function OSPenEditor({
     onWidgetsReady?: (ready: boolean) => void;
 }) {
     const appearance = useSystemAppearance();
+    const [activityRuns, setActivityRuns] = useState(new Map<string, PenActivityRun>());
+    const workerSessions = useRef(new Map<string, string>()).current;
+    const [taskGroups, setTaskGroups] = useState<PenTaskGroup[]>([]);
+    const dockTabsRef = useRef(chatDockTabs);
+    dockTabsRef.current = chatDockTabs;
+    const mobileSelection = useRef<PenMobileSelection>(null);
+    const setMobileSelection = useCallback((selection: PenMobileSelection | null) => {
+        mobileSelection.current = selection;
+    }, []);
     const frameRef = useRef<HTMLIFrameElement>(null);
     const presentationChromeRef = useRef<HTMLDivElement>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -115,6 +170,7 @@ export function OSPenEditor({
         onToolsSlot,
         onSystemControlsSlot,
         onRenderControlsSlot,
+        onIslandControlsSlot,
     });
     current.current = {
         camera,
@@ -133,11 +189,18 @@ export function OSPenEditor({
         onToolsSlot,
         onSystemControlsSlot,
         onRenderControlsSlot,
+        onIslandControlsSlot,
     };
     const [src] = useState(() => {
         const url = new URL("./pen/editor/index.html", document.baseURI);
         url.searchParams.set("workspace", kronosV2 ? `kronos-v2:${tabId}` : tabId);
         url.searchParams.set("theme", appearance.colorScheme);
+        if (import.meta.env.DEV) {
+            const launch = new URLSearchParams(location.search);
+            for (const key of ["compareAgent", "compareStart", "compareProject"]) {
+                if (launch.has(key)) url.searchParams.set(key, launch.get(key));
+            }
+        }
         return url.href;
     });
 
@@ -154,18 +217,27 @@ export function OSPenEditor({
         // Electron serializes file-frame message origins as "null", while URL.origin returns "file://".
         const origin = frameUrl.protocol === "file:" ? "null" : frameUrl.origin;
         const client = makePenFrameClient(frame, origin);
+        const stageBrowserSelection = (event: Event) => {
+            const detail = (event as CustomEvent<BrowserChatSelectionRequest>).detail;
+            if (!kronosV2 || !current.current.visible || detail.stage) return;
+            detail.stage = client.request("stage_chat_selection", detail.selection);
+        };
+        window.addEventListener(BrowserChatSelectionEvent, stageBrowserSelection);
+        let islandControlsSlot: HTMLElement;
         clientRef.current = client;
-        const sync = current.current.camera && makePenCameraSync({
-            camera: current.current.camera,
-            apply: (next) => client.request("set_camera", next),
-            onCamera: (next) => current.current.onCamera?.(next),
-            onViewport: (next) => current.current.onViewport?.(next),
-            onError: (failure) => {
-                setError(failure instanceof Error ? failure.message : "Could not connect the workspace camera.");
-                widgetSyncRef.current?.pause();
-                setStatus("error");
-            },
-        });
+        const sync =
+            current.current.camera &&
+            makePenCameraSync({
+                camera: current.current.camera,
+                apply: (next) => client.request("set_camera", next),
+                onCamera: (next) => current.current.onCamera?.(next),
+                onViewport: (next) => current.current.onViewport?.(next),
+                onError: (failure) => {
+                    setError(failure instanceof Error ? failure.message : "Could not connect the workspace camera.");
+                    widgetSyncRef.current?.pause();
+                    setStatus("error");
+                },
+            });
         cameraSyncRef.current = sync;
         current.current.onWidgetsReady?.(false);
         const widgetSync = makePenWidgetSync({
@@ -217,15 +289,16 @@ export function OSPenEditor({
             const term = query;
             const sessions = $sessions.get();
             const archived = new Set(sessions.filter((session) => session.archived).map((session) => session.id));
-            const titles = new Map(sessions.map((session) => [
-                session.id,
-                session.title?.trim() || session.preview?.trim() || "Untitled chat",
-            ]));
+            const titles = new Map(
+                sessions.map((session) => [
+                    session.id,
+                    session.title?.trim() || session.preview?.trim() || "Untitled chat",
+                ])
+            );
             const rows = new Map<string, string>();
             for (const session of sessions) {
                 if (session.archived || !session.message_count) continue;
-                if (sessionMatchesSearch(session, term))
-                    rows.set(session.id, titles.get(session.id));
+                if (sessionMatchesSearch(session, term)) rows.set(session.id, titles.get(session.id));
             }
             let error: string;
             if (term) {
@@ -233,7 +306,10 @@ export function OSPenEditor({
                     const { results } = await searchSessions(query);
                     for (const match of results) {
                         if (!rows.has(match.session_id) && !archived.has(match.session_id))
-                            rows.set(match.session_id, titles.get(match.session_id) || match.snippet || "Untitled chat");
+                            rows.set(
+                                match.session_id,
+                                titles.get(match.session_id) || match.snippet || "Untitled chat"
+                            );
                     }
                 } catch {
                     error = "Could not search earlier Kron Agent sessions.";
@@ -257,11 +333,15 @@ export function OSPenEditor({
             }
         };
         const openHistory = async (
-            requestId: number, title: string, getId: () => Promise<string>, conversationId?: string
+            requestId: number,
+            title: string,
+            getId: () => Promise<string>,
+            conversationId?: string
         ) => {
-            const send = (payload: object) => conversationId
-                ? client.request("resume_hermes_chat", { conversationId, ...payload })
-                : client.request("hermes_history_opened", { requestId, ...payload }).catch(() => {});
+            const send = (payload: object) =>
+                conversationId
+                    ? client.request("resume_hermes_chat", { conversationId, ...payload })
+                    : client.request("hermes_history_opened", { requestId, ...payload }).catch(() => {});
             try {
                 const delegate = sessionTileDelegate();
                 if (!delegate) throw new Error("Kron Agent is still connecting.");
@@ -272,31 +352,39 @@ export function OSPenEditor({
                 const messages = state.messages.flatMap((message): object[] => {
                     if (message.hidden) return [];
                     return message.parts.flatMap((part, index): object[] => {
-                        const createdAt = ((part.timestamp ?? message.timestamp) ?? Date.now() / 1000) * 1000;
+                        const createdAt = (part.timestamp ?? message.timestamp ?? Date.now() / 1000) * 1000;
                         if (part.type === "tool-call") {
-                            return [{
-                                id: part.toolCallId,
-                                role: "tool",
+                            return [
+                                {
+                                    id: part.toolCallId,
+                                    role: "tool",
+                                    status: "final",
+                                    createdAt,
+                                    toolUse: {
+                                        name: part.toolName,
+                                        toolUseId: part.toolCallId,
+                                        input: part.args,
+                                        output: penToolOutput(part.result, part.isError),
+                                        isError: part.isError,
+                                    },
+                                },
+                            ];
+                        }
+                        if (
+                            part.type !== "text" ||
+                            !part.text ||
+                            (message.role !== "user" && message.role !== "assistant")
+                        )
+                            return [];
+                        return [
+                            {
+                                id: `${message.id}:${index}`,
+                                role: message.role,
+                                text: part.text,
                                 status: "final",
                                 createdAt,
-                                toolUse: {
-                                    name: part.toolName,
-                                    toolUseId: part.toolCallId,
-                                    input: part.args,
-                                    output: penToolOutput(part.result, part.isError),
-                                    isError: part.isError,
-                                },
-                            }];
-                        }
-                        if (part.type !== "text" || !part.text || (message.role !== "user" && message.role !== "assistant"))
-                            return [];
-                        return [{
-                            id: `${message.id}:${index}`,
-                            role: message.role,
-                            text: part.text,
-                            status: "final",
-                            createdAt,
-                        }];
+                            },
+                        ];
                     });
                 });
                 openedHistory.set(sessionId, runtimeId);
@@ -321,11 +409,13 @@ export function OSPenEditor({
                 }
                 const workflows = state.running
                     ? await runN8nWorkspaceCommand<N8nRuntimeState["workflows"]>("workflows")
-                    : state.workflows ?? [];
+                    : (state.workflows ?? []);
                 workflowIds = new Set(workflows.map(({ id }) => id));
                 await client.request("set_workflow_library", { ...state, workflows });
             } catch {
-                void client.request("set_workflow_library", { error: "Could not load KronFlow workflows." }).catch(() => {});
+                void client
+                    .request("set_workflow_library", { error: "Could not load KronFlow workflows." })
+                    .catch(() => {});
             } finally {
                 workflowsPending = false;
             }
@@ -340,18 +430,30 @@ export function OSPenEditor({
         };
         const syncHistoryExtras = () => {
             if (!connected || !current.current.visible) return;
-            const telegram = telegramSessions().slice(0, 30).map(({ id, title, preview }) => ({
-                id, title: title?.trim() || preview?.trim() || "Telegram conversation",
-            }));
+            const telegram = telegramSessions()
+                .slice(0, 30)
+                .map(({ id, title, preview }) => ({
+                    id,
+                    title: title?.trim() || preview?.trim() || "Telegram conversation",
+                }));
             const jobs = $cronJobs.get().map(({ id, name, next_run_at, enabled }) => ({
-                id, title: name || "Scheduled job", nextRun: next_run_at, enabled,
+                id,
+                title: name || "Scheduled job",
+                nextRun: next_run_at,
+                enabled,
             }));
             const profiles = $profiles.get().map(({ name, is_default }) => ({
-                id: name, title: is_default ? "Hermes" : name,
+                id: name,
+                title: is_default ? "Hermes" : name,
             }));
-            void client.request("set_history_extras", {
-                telegram, jobs, profiles, activeProfile: $activeGatewayProfile.get(),
-            }).catch(() => {});
+            void client
+                .request("set_history_extras", {
+                    telegram,
+                    jobs,
+                    profiles,
+                    activeProfile: $activeGatewayProfile.get(),
+                })
+                .catch(() => {});
         };
         const offHistoryExtras = [$sessions, $messagingSessions, $cronJobs, $profiles, $activeGatewayProfile].map(
             (store) => store.listen(syncHistoryExtras)
@@ -371,7 +473,10 @@ export function OSPenEditor({
                         const document = await readDesktopFileText(file.path);
                         if (request === fileRequest && current.current.visible) {
                             await publishFiles({
-                                preview: { title: file.name, text: document.binary ? "This file is binary." : document.text.slice(0, 16000) },
+                                preview: {
+                                    title: file.name,
+                                    text: document.binary ? "This file is binary." : document.text.slice(0, 16000),
+                                },
                             });
                         }
                         return;
@@ -381,10 +486,14 @@ export function OSPenEditor({
                     directories = directories.slice(0, Math.max(1, directories.length - 1));
                 }
                 if (!directories.length) {
-                    const root = $currentCwd.get()?.trim() ||
-                        (await window.hermesDesktop.api<{ cwd: string }>({
-                            path: "/api/fs/default-cwd", profile: desktopFsProfile(),
-                        })).cwd;
+                    const root =
+                        $currentCwd.get()?.trim() ||
+                        (
+                            await window.hermesDesktop.api<{ cwd: string }>({
+                                path: "/api/fs/default-cwd",
+                                profile: desktopFsProfile(),
+                            })
+                        ).cwd;
                     if (request !== fileRequest) return;
                     if (!root) throw new Error("No workspace folder is available.");
                     directories = [root];
@@ -394,12 +503,15 @@ export function OSPenEditor({
                 if (error) throw new Error(error);
                 fileRows = entries;
                 await publishFiles({
-                    path: directories.at(-1), canGoUp: directories.length > 1,
+                    path: directories.at(-1),
+                    canGoUp: directories.length > 1,
                     rows: fileRows.map(({ name, isDirectory }) => ({ name, isDirectory })),
                 });
             } catch (error) {
                 if (request === fileRequest && current.current.visible)
-                    await publishFiles({ error: error instanceof Error ? error.message : "Could not read workspace files." });
+                    await publishFiles({
+                        error: error instanceof Error ? error.message : "Could not read workspace files.",
+                    });
             }
         };
         const syncInspector = () => {
@@ -416,18 +528,70 @@ export function OSPenEditor({
         const offFileScope = [$currentCwd.listen(resetFileScope), $connection.listen(resetFileScope)];
         const sessionForComposer = (id: string) =>
             id.startsWith("hermes:") ? openedHistory.get(id.slice(7)) : $activeSessionId.get();
-        const workerSessions = new Map<string, string>();
+        let pendingVoicePrompt: { conversationId: string; prompt: string; expires: number };
+        type PenReply = { id: string; pending: boolean; text: string };
+        type PenMessage = { role: "user" | "assistant"; content: string };
+        const voiceReplies = new Map<string, ReturnType<typeof atom<PenReply>>>();
+        const experimentTurns = new Map<string, PenMessage[]>();
         const openPenDialog = (detail: PenDialogRequest) =>
             window.dispatchEvent(new CustomEvent("kronos:pen-dialog", { detail }));
         const voiceAction = (conversationId: string, action: PenVoiceRequest["action"]) => {
             const runtimeId = conversationId.startsWith("hermes:") ? sessionForComposer(conversationId) : undefined;
             if (action !== "cancel" && conversationId.startsWith("hermes:") && !runtimeId) return;
-            window.dispatchEvent(new CustomEvent<PenVoiceRequest>(PenVoiceEvent, {
-                detail: {
-                    tabId, conversationId, runtimeId, action,
-                    publish: (update) => client.request("composer_voice_update", { conversationId, ...update }),
-                },
-            }));
+            if (action === "conversation") {
+                primeVoicePlayback();
+                if (!voiceReplies.has(conversationId)) voiceReplies.set(conversationId, atom<PenReply>(null));
+            }
+            if (action === "cancel") {
+                pendingVoicePrompt = undefined;
+                if (conversationId) voiceReplies.delete(conversationId);
+                else voiceReplies.clear();
+            }
+            window.dispatchEvent(
+                new CustomEvent<PenVoiceRequest>(PenVoiceEvent, {
+                    detail: {
+                        tabId,
+                        conversationId,
+                        runtimeId,
+                        action,
+                        reply: voiceReplies.get(conversationId),
+                        synthesize: penVoiceSynthesizer(getApi()?.audioPenTinyVoca),
+                        orbMount: () => {
+                            const editor = iframe.contentDocument?.querySelector<HTMLIFrameElement>("#pen-editor");
+                            return Array.from(
+                                editor?.contentDocument?.querySelectorAll<HTMLElement>("[data-kronos-pen-voice-orb]") ??
+                                    []
+                            ).find(
+                                (mount) =>
+                                    mount.dataset.kronosPenVoiceOrb === conversationId &&
+                                    mount.closest("[data-kronos-pen-voice-panel][data-active]")
+                            );
+                        },
+                        publish: async (update) => {
+                            const pending = update.prompt
+                                ? { conversationId, prompt: update.prompt.trim(), expires: performance.now() + 3000 }
+                                : undefined;
+                            if (pending) pendingVoicePrompt = pending;
+                            try {
+                                const result = await client.request("composer_voice_update", {
+                                    conversationId,
+                                    ...update,
+                                });
+                                if (
+                                    pending &&
+                                    pendingVoicePrompt === pending &&
+                                    (result as { success?: boolean })?.success !== true
+                                )
+                                    pendingVoicePrompt = undefined;
+                                return result;
+                            } catch (error) {
+                                if (pending && pendingVoicePrompt === pending) pendingVoicePrompt = undefined;
+                                throw error;
+                            }
+                        },
+                    },
+                })
+            );
         };
         const updateSandbox = async (conversationId: string, action: string, desktopId: string, mode: unknown) => {
             const bridge = window.hermesDesktop?.krontermSurfaces;
@@ -437,7 +601,8 @@ export function OSPenEditor({
             try {
                 if (!manager || !bridge.openMachines) throw new Error("Sandbox computers are unavailable.");
                 const runtimeId = sessionForComposer(conversationId);
-                if (conversationId.startsWith("hermes:") && !runtimeId) throw new Error("Reopen this Hermes chat first.");
+                if (conversationId.startsWith("hermes:") && !runtimeId)
+                    throw new Error("Reopen this Hermes chat first.");
                 const storedId = $sessionStates.get()[runtimeId]?.storedSessionId;
                 const sessionIds = [...new Set([runtimeId, storedId].filter(Boolean))];
                 const desktops = await manager.desktops();
@@ -445,16 +610,25 @@ export function OSPenEditor({
                 const desktop = desktops.find(({ id }) => id === desktopId);
                 if (action === "select") {
                     if (!desktop || desktop.status === "unavailable") throw new Error("This computer is unavailable.");
-                    if ($connection.get()?.mode === "remote") throw new Error("Computer mode requires local Kron Agent.");
-                    if ((runtimeId?.startsWith("kronoscode:") || runtimeId?.startsWith("openmausbot:")) ||
-                        (window.hermesDesktop?.agentBackends?.getActive?.() || "hermes") !== "hermes")
+                    if ($connection.get()?.mode === "remote")
+                        throw new Error("Computer mode requires local Kron Agent.");
+                    if (
+                        runtimeId?.startsWith("kronoscode:") ||
+                        runtimeId?.startsWith("openmausbot:") ||
+                        (window.hermesDesktop?.agentBackends?.getActive?.() || "hermes") !== "hermes"
+                    )
                         throw new Error("Computer mode requires Kron Agent.");
                     if ($sessionStates.get()[runtimeId]?.busy) throw new Error("Wait for the active turn to finish.");
                     if (desktop.imagePrepared || desktop.status === "running") {
-                        $sandboxComputerAccess.set(await manager.access({
-                            enabled: true, desktopId, mode: mode === "hybrid" ? "hybrid" : "sandbox",
-                            startIfStopped: true, sessionIds,
-                        }));
+                        $sandboxComputerAccess.set(
+                            await manager.access({
+                                enabled: true,
+                                desktopId,
+                                mode: mode === "hybrid" ? "hybrid" : "sandbox",
+                                startIfStopped: true,
+                                sessionIds,
+                            })
+                        );
                     }
                     const result = await bridge.openMachines("desktop", false, desktopId);
                     if (!result.ok) throw new Error(result.error);
@@ -465,7 +639,12 @@ export function OSPenEditor({
                 const access = await manager.access({ sessionIds });
                 await send({
                     access,
-                    desktops: desktops.map(({ id, name, status, imagePrepared }) => ({ id, name, status, imagePrepared })),
+                    desktops: desktops.map(({ id, name, status, imagePrepared }) => ({
+                        id,
+                        name,
+                        status,
+                        imagePrepared,
+                    })),
                 });
             } catch (error) {
                 await send({ error: error instanceof Error ? error.message : "Could not open the sandbox selector." });
@@ -505,13 +684,19 @@ export function OSPenEditor({
             if (current.current.visible && type === "workflow-library-open") {
                 const { workflowId } = event.data;
                 if (workflowIds.has(workflowId)) {
-                    void runN8nWorkspaceCommand("open", { surface: "canvas", workflowId }).then(() => {
-                        window.dispatchEvent(new CustomEvent("kronterm:workflow-open", {
-                            detail: { tabId, surface: "canvas", focusWorkflow: true, workflowId },
-                        }));
-                    }).catch(() => {
-                        void client.request("set_workflow_library", { error: "Could not open this workflow." }).catch(() => {});
-                    });
+                    void runN8nWorkspaceCommand("open", { surface: "canvas", workflowId })
+                        .then(() => {
+                            window.dispatchEvent(
+                                new CustomEvent("kronterm:workflow-open", {
+                                    detail: { tabId, surface: "canvas", focusWorkflow: true, workflowId },
+                                })
+                            );
+                        })
+                        .catch(() => {
+                            void client
+                                .request("set_workflow_library", { error: "Could not open this workflow." })
+                                .catch(() => {});
+                        });
                 }
             }
             if (current.current.visible && type === "render-library-open" && typeof event.data.library === "string")
@@ -521,6 +706,16 @@ export function OSPenEditor({
                 current.current.onRenderControlsSlot?.(
                     engine?.contentDocument?.querySelector("[data-kronos-pen-render-controls]") ?? null
                 );
+                if (current.current.onIslandControlsSlot) {
+                    const inspector = engine?.contentDocument?.getElementById("kronos-pen-workspace-inspector");
+                    if (inspector && islandControlsSlot?.parentElement !== inspector) {
+                        islandControlsSlot?.remove();
+                        islandControlsSlot = inspector.ownerDocument.createElement("div");
+                        islandControlsSlot.style.display = "contents";
+                        inspector.prepend(islandControlsSlot);
+                    }
+                    current.current.onIslandControlsSlot(inspector ? islandControlsSlot : null);
+                }
             }
             if (type === "files-panel-action" && current.current.visible && $krontermInspectorOpen.get()) {
                 const { action, index } = event.data;
@@ -548,7 +743,11 @@ export function OSPenEditor({
                 const { sessionId, requestId } = event.data;
                 const session = telegramSessions().find(({ id }) => id === sessionId);
                 if (session && Number.isSafeInteger(requestId))
-                    void openHistory(requestId, session.title || session.preview || "Telegram conversation", async () => sessionId);
+                    void openHistory(
+                        requestId,
+                        session.title || session.preview || "Telegram conversation",
+                        async () => sessionId
+                    );
             }
             if (type === "history-tool-open" && current.current.visible && typeof event.data.tool === "string")
                 window.dispatchEvent(new CustomEvent(PenHistoryToolEvent, { detail: event.data.tool }));
@@ -580,8 +779,10 @@ export function OSPenEditor({
             }
             if (type === "composer-voice" && current.current.visible) {
                 const { conversationId, action } = event.data;
-                if (typeof conversationId === "string" &&
-                    (action === "conversation" || action === "dictation" || action === "cancel"))
+                if (
+                    typeof conversationId === "string" &&
+                    (action === "conversation" || action === "dictation" || action === "cancel")
+                )
                     voiceAction(conversationId, action);
             }
             if (type === "close-workspace-inspector" && current.current.visible) $krontermInspectorOpen.set(false);
@@ -593,25 +794,53 @@ export function OSPenEditor({
             }
             if (type === "composer-complete" && current.current.visible) {
                 const { conversationId, requestId, trigger, query } = event.data;
-                if (typeof conversationId !== "string" || typeof requestId !== "number" ||
-                    (trigger !== "/" && trigger !== "@") || typeof query !== "string" || query.length > 512) return;
+                if (
+                    typeof conversationId !== "string" ||
+                    typeof requestId !== "number" ||
+                    (trigger !== "/" && trigger !== "@") ||
+                    typeof query !== "string" ||
+                    query.length > 512
+                )
+                    return;
                 const sessionId = sessionForComposer(conversationId);
                 if (conversationId.startsWith("hermes:") && !sessionId) return;
-                window.dispatchEvent(new CustomEvent("kronos:pen-composer-complete", {
-                    detail: { trigger, query, sessionId, publish: (items: unknown) => {
-                        void client.request("composer_completions", { conversationId, requestId, items }).catch(() => {});
-                    } },
-                }));
+                window.dispatchEvent(
+                    new CustomEvent("kronos:pen-composer-complete", {
+                        detail: {
+                            trigger,
+                            query,
+                            sessionId,
+                            publish: (items: unknown) => {
+                                void client
+                                    .request("composer_completions", { conversationId, requestId, items })
+                                    .catch(() => {});
+                            },
+                        },
+                    })
+                );
             }
             if (type === "composer-sandbox" && current.current.visible) {
                 const { conversationId, action, desktopId, mode } = event.data;
-                if (typeof conversationId === "string" && (action === "list" || action === "select" || action === "disable"))
+                if (
+                    typeof conversationId === "string" &&
+                    (action === "list" || action === "select" || action === "disable")
+                )
                     void updateSandbox(conversationId, action, desktopId, mode);
             }
             if (type === "agent-stop" && typeof event.data.requestId === "string") stopAgent?.(event.data.requestId);
             if (type === "agent-prompt") {
-                const { requestId, prompt, conversationId } = event.data;
+                const { requestId, prompt, conversationId, imageReview } = event.data;
                 if (typeof requestId !== "string" || typeof prompt !== "string") return;
+                const submittedAt = performance.now();
+                let agentLabel = "Hermes";
+                let reportedFirstText = false;
+                const comparison = import.meta.env.DEV && new URLSearchParams(location.search).has("compareAgent");
+                const penVoice =
+                    pendingVoicePrompt != null &&
+                    pendingVoicePrompt.conversationId === conversationId &&
+                    pendingVoicePrompt.prompt === prompt.trim() &&
+                    pendingVoicePrompt.expires > performance.now();
+                if (penVoice || pendingVoicePrompt?.expires <= performance.now()) pendingVoicePrompt = undefined;
                 type ToolUpdate = {
                     id: string;
                     name: string;
@@ -629,48 +858,279 @@ export function OSPenEditor({
                     if (updates.length === 0) return;
                     const batch = updates;
                     updates = [];
-                    void client.request("agent_reply", { requestId, updates: batch }).catch(() => {});
+                    void client
+                        .request("agent_reply", { requestId, updates: batch, agent: agentLabel })
+                        .catch(() => {});
                 };
+                const spoken = penVoice ? voiceReplies.get(conversationId) : undefined;
+                let spokenText = "";
+                let spokenPrefix = "";
+                let spokenSnapshot = "";
                 const reply = (update: AgentUpdate) => {
+                    if (!reportedFirstText && update.text?.trim() && typeof conversationId === "string") {
+                        reportedFirstText = true;
+                        if (comparison)
+                            getApi().sendLog(
+                                `[Pen comparison] ${agentLabel} first text ${Math.round(performance.now() - submittedAt)}ms`
+                            );
+
+                        if (import.meta.env.DEV)
+                            void client
+                                .request("composer_agent_timing", {
+                                    conversationId,
+                                    agent: agentLabel,
+                                    milliseconds: Math.round(performance.now() - submittedAt),
+                                })
+                                .catch(() => {});
+                    }
+                    if (spoken) {
+                        if (update.start && spokenSnapshot) spokenPrefix = spokenText + " ";
+                        if (update.text) {
+                            spokenSnapshot = update.text;
+                            spokenText = spokenPrefix + spokenSnapshot;
+                        }
+                        spoken.set({
+                            id: requestId,
+                            pending: !update.done,
+                            text:
+                                spokenText ||
+                                (update.error && update.error !== "Stopped."
+                                    ? "I couldn't complete that request."
+                                    : ""),
+                        });
+                    }
                     const last = updates.at(-1);
                     if (!update.done && update.text && !update.start && last?.text && !last.done) {
                         last.text = update.text;
                     } else {
                         updates.push(update);
                     }
-                    if (update.done) flush();
-                    else flushTimer ??= setTimeout(flush, 16);
+                    if (update.done) {
+                        if (comparison)
+                            getApi().sendLog(
+                                `[Pen comparison] ${agentLabel} ${update.error ? "failed" : "finished"} ${Math.round(performance.now() - submittedAt)}ms ${update.error ?? ""}`
+                            );
+                        flush();
+                    } else flushTimer ??= setTimeout(flush, 16);
                 };
-                if (!current.current.visible || !prompt.trim() || prompt.length > 32000 || activeAgentRequest) {
+                let attachments: ReturnType<typeof penComposerAttachments>;
+                try {
+                    attachments = penComposerAttachments(event.data.files);
+                } catch (error) {
+                    reply({ done: true, error: error instanceof Error ? error.message : String(error) });
+                    return;
+                }
+                if (attachments.length && SLASH_COMMAND_RE.test(prompt.trim())) {
+                    reply({ done: true, error: "Send attachments with a chat message, not a slash command." });
+                    return;
+                }
+                if (imageReview && SLASH_COMMAND_RE.test(prompt.trim())) {
+                    reply({ done: true, error: "Send image comments with a chat message." });
+                    return;
+                }
+                if (
+                    !current.current.visible ||
+                    (!prompt.trim() && !attachments.length) ||
+                    prompt.length > 32000 ||
+                    activeAgentRequest
+                ) {
                     reply({ done: true, error: "Open the canvas and wait for the current request to finish." });
                     return;
                 }
+                if (spoken) spoken.set({ id: requestId, pending: true, text: "" });
                 const controller = new AbortController();
                 const slash = SLASH_COMMAND_RE.test(prompt.trim());
-                const agentPrompt = slash ? prompt.trim() : preparePenAgentPrompt(prompt, event.data.options);
-                const tools = new Map<string, boolean>();
-                let workerSnapshot = "";
-                const relayWorkers = () => {
-                    if (!sessionId) return;
-                    const bySession = $subagentsBySession.get();
-                    const storedKey = $sessionStates.get()[sessionId]?.storedSessionId;
-                    const workers = new Map(
-                        (storedKey ? bySession[storedKey] ?? [] : []).map((worker) => [worker.id, worker])
+                const { designs } = readPenRunSettings(event.data.options);
+                const designCount = slash ? 1 : designs;
+                let design = 1;
+                let displayPrompt = prompt;
+                let selection = mobileSelection.current;
+                const fullChat =
+                    frameRef.current?.contentDocument
+                        ?.querySelector<HTMLIFrameElement>("#pen-editor")
+                        ?.contentDocument?.documentElement.hasAttribute("data-kronos-full-chat") ?? false;
+                const makeAgentPrompt = () => {
+                    if (slash) return prompt.trim();
+                    const text = preparePenAgentPrompt(
+                        prompt.trim() || "Review the attached files.",
+                        event.data.options,
+                        selection,
+                        fullChat,
+                        design,
+                        penVoice
                     );
-                    for (const worker of bySession[sessionId] ?? []) workers.set(worker.id, worker);
-                    const rows = [...workers.values()].filter((worker) => worker.startedAt >= runStartedAt)
-                        .slice(0, 12)
-                        .map(({ id, goal, status, currentTool, summary }) => ({
-                            id, goal: goal.slice(0, 160), status, detail: (summary || currentTool || "").slice(0, 400),
-                        }));
-                    const snapshot = JSON.stringify(rows);
+                    const project = comparison ? new URLSearchParams(location.search).get("compareProject") : null;
+                    if (project) {
+                        const target =
+                            new URLSearchParams(location.search).get("compareAgent") === "sequential"
+                                ? project + "/hermes/project"
+                                : project;
+                        return `For this comparison, work only in this absolute project directory: ${target}.\n\n${text}`;
+                    }
+                    if (!imageReview?.comments.length) return text;
+                    return (
+                        text +
+                        "\n\nImage comments for " +
+                        imageReview.filename +
+                        ":\n" +
+                        imageReview.comments
+                            .map(
+                                ({ number, x, y, text }: { number: number; x: number; y: number; text: string }) =>
+                                    `${number}. (x: ${x.toFixed(1)}%, y: ${y.toFixed(1)}%) ${text}`
+                            )
+                            .join("\n")
+                    );
+                };
+                let agentPrompt = makeAgentPrompt();
+                const existingTabs = new Set((dockTabsRef.current ?? []).map(({ id }) => id));
+                const tools = new Map<string, boolean>();
+                let showWrittenFile = Promise.resolve();
+                let workerSnapshot = "";
+                let mainStatus: "running" | "completed" | "failed" = "running";
+                let mainDetail = "";
+                let mainTool = "";
+                let mainToolImage: string;
+                let mainBrowserBlock: string;
+                let browserPreview = Promise.resolve();
+                const preparedBrowserBlocks = new Set<string>();
+                const surfaces = new Map<string, SubagentSurfaceSnapshot>();
+                const subscriptions = new Map<string, { key: string; stop: () => void }>();
+                let relayTimer: ReturnType<typeof setTimeout>;
+                const scheduleWorkers = () => {
+                    relayTimer ??= setTimeout(() => {
+                        relayTimer = undefined;
+                        relayWorkers();
+                    }, 80);
+                };
+                const previousTodos = $todosBySession.get();
+                let transcriptTodos: TodoItem[] | null = null;
+                let retainedTodos: TodoItem[] | undefined;
+                const taskTitle =
+                    prompt.startsWith("The user is in KronOS full chat.") && prompt.includes("\nUser request:\n")
+                        ? prompt.slice(prompt.lastIndexOf("\nUser request:\n") + "\nUser request:\n".length).trim()
+                        : prompt.trim();
+                const recordTask = (action?: PenTaskAction) => {
+                    const blockId = action?.blockId || mainBrowserBlock || surfaces.get("main")?.blockId;
+                    if (!blockId && !action) return;
+                    setTaskGroups((groups) =>
+                        updatePenTask(
+                            groups,
+                            { id: requestId, title: taskTitle.slice(0, 160), status: mainStatus },
+                            [...new Set([blockId, ...[...surfaces.values()].map((surface) => surface.blockId)])].filter(
+                                (id) => id && !existingTabs.has(id)
+                            ),
+                            action
+                        )
+                    );
+                };
+                const relayWorkers = () => {
+                    const bySession = $subagentsBySession.get();
+                    const storedKey = sessionId ? $sessionStates.get()[sessionId]?.storedSessionId : undefined;
+                    const workers = new Map(
+                        (storedKey ? (bySession[storedKey] ?? []) : []).map((worker) => [worker.id, worker])
+                    );
+                    for (const worker of (sessionId ? bySession[sessionId] : undefined) ?? [])
+                        workers.set(worker.id, worker);
+                    const todoStore = $todosBySession.get();
+                    const liveTodos =
+                        sessionId && todoStore[sessionId] !== previousTodos[sessionId]
+                            ? todoStore[sessionId]
+                            : storedKey && todoStore[storedKey] !== previousTodos[storedKey]
+                              ? todoStore[storedKey]
+                              : undefined;
+                    retainedTodos = liveTodos ?? transcriptTodos ?? retainedTodos;
+                    const todos = retainedTodos;
+                    const rows = [
+                        {
+                            id: "main",
+                            goal: taskTitle.slice(0, 160),
+                            status: mainStatus,
+                            detail: mainDetail,
+                            tool: mainTool,
+                            sessionId,
+                            swarm: false,
+                        },
+                        ...[...workers.values()]
+                            .filter((worker) => worker.startedAt >= runStartedAt)
+                            .slice(0, 12)
+                            .map((worker) => describePenWorker(worker, runStartedAt)),
+                    ]
+                        .map(({ id, goal, status, detail, tool, sessionId, swarm }) => {
+                            const live = status === "running";
+                            const key = JSON.stringify([sessionId, live, swarm]);
+                            const prior = subscriptions.get(id);
+                            if ((sessionId || swarm) && prior?.key !== key) {
+                                prior?.stop();
+                                subscriptions.set(id, {
+                                    key,
+                                    stop: subscribeSubagentSurface(
+                                        { id, sessionId, live, swarm, since: runStartedAt, capture: false },
+                                        (surface) => {
+                                            const previous = surfaces.get(id);
+                                            surfaces.set(id, {
+                                                ...surface,
+                                                imageUrl:
+                                                    surface.imageUrl ??
+                                                    (!live && surface.targetKey === previous?.targetKey
+                                                        ? previous?.imageUrl
+                                                        : undefined),
+                                            });
+                                            scheduleWorkers();
+                                        }
+                                    ),
+                                });
+                            }
+                            const surface = surfaces.get(id);
+                            const imageUrl = id === "main" ? (mainToolImage ?? surface?.imageUrl) : surface?.imageUrl;
+                            const blockId = (id === "main" ? mainBrowserBlock : undefined) || surface?.blockId;
+                            return {
+                                id,
+                                goal,
+                                status,
+                                detail: detail || surface?.detail || "",
+                                tool,
+                                sessionId,
+                                swarm,
+                                since: runStartedAt,
+                                ...(imageUrl ? { imageUrl } : {}),
+                                ...(blockId ? { blockId } : {}),
+                                ...(id === "main" && todos?.length ? { todos } : {}),
+                            };
+                        })
+                        .filter(
+                            (row) => row.id !== "main" || Boolean(row.blockId || row.imageUrl || row.todos?.length)
+                        );
+                    recordTask();
+                    const snapshot = JSON.stringify([sessionId, storedKey, rows]);
                     if (snapshot === workerSnapshot) return;
                     workerSnapshot = snapshot;
-                    void client.request("agent_workers", { requestId, rows }).catch(() => {});
+                    if (typeof conversationId === "string") {
+                        setActivityRuns((previous) => {
+                            const next = new Map(previous);
+                            next.delete(conversationId);
+                            next.set(conversationId, { rows, sessionId, storedId: storedKey, since: runStartedAt });
+                            if (next.size > 20) next.delete(next.keys().next().value);
+                            return next;
+                        });
+                    }
+                    void client
+                        .request("agent_workers", {
+                            requestId,
+                            rows: rows.map(({ id, goal, status, detail, blockId, imageUrl, todos }) => ({
+                                id,
+                                goal,
+                                status,
+                                detail,
+                                ...(blockId ? { blockId } : {}),
+                                ...(imageUrl ? { imageUrl } : {}),
+                                ...(todos ? { todos } : {}),
+                            })),
+                        })
+                        .catch(() => {});
                 };
                 const runStartedAt = Date.now();
                 const replyTool = (tool: ToolUpdate) => reply({ done: false, tool });
-                const previous = new Set(
+                let previous = new Set(
                     Object.values($sessionStates.get()).flatMap((state) => state.messages.map((message) => message.id))
                 );
                 const storedId = event.data.hermesSessionId;
@@ -681,7 +1141,12 @@ export function OSPenEditor({
                 let lastState: ReturnType<typeof $sessionStates.get>[string];
                 let lastText = "";
                 let streamedAnswerId: string;
+                let advancing = false;
+                let stopping = false;
+                let submission: Promise<unknown>;
                 const finish = (result: { text?: string; error?: string }) => {
+                    mainStatus = result.error ? "failed" : "completed";
+                    if (!slash) relayWorkers();
                     reply({ done: true, ...result });
                     activeAgentRequest?.();
                     activeAgentRequest = undefined;
@@ -692,7 +1157,9 @@ export function OSPenEditor({
                     deadline = setTimeout(() => finish({ error: "The agent stopped sending updates to Pen." }), 180000);
                 };
                 refreshDeadline();
+                let relayHermes = false;
                 const relayTurn = (states: ReturnType<typeof $sessionStates.get>) => {
+                    if (!relayHermes) return;
                     const runtimeId = sessionId ?? targetId ?? $activeSessionId.get();
                     const state = runtimeId == null ? undefined : states[runtimeId];
                     if (!state || state === lastState) return;
@@ -702,7 +1169,9 @@ export function OSPenEditor({
                         (message) =>
                             message.role === "user" &&
                             !previous.has(message.id) &&
-                            (slash || readText(message).trim() === prompt.trim() || (targetId && readText(message) === agentPrompt))
+                            (slash ||
+                                readText(message).trim() === displayPrompt.trim() ||
+                                (targetId && readText(message) === agentPrompt))
                     )?.id;
                     const user = messages.findIndex((message) => message.id === userId);
                     if (user < 0) return;
@@ -711,23 +1180,177 @@ export function OSPenEditor({
                         workerSessions.set(conversationId, runtimeId);
                         if (workerSessions.size > 20) workerSessions.delete(workerSessions.keys().next().value);
                     }
-                    relayWorkers();
                     refreshDeadline();
                     const tail = messages.slice(user + 1);
                     const nextUser = tail.findIndex((message) => message.role === "user");
                     const turn = nextUser < 0 ? tail : tail.slice(0, nextUser);
+                    transcriptTodos = latestSessionTodos(turn);
                     for (const message of turn) {
                         for (const part of message.parts) {
                             if (part.type !== "tool-call") continue;
                             const done = part.completedAt != null || part.result !== undefined;
+                            mainTool = part.toolName.replaceAll("_", " ");
+                            const targetsWidget =
+                                /(?:^|_)(?:browser_.*|workspace_focus_widget|workspace_open_file|widget_.*)$/.test(
+                                    part.toolName
+                                );
+                            if (targetsWidget) {
+                                const args = part.args as { blockId?: unknown; blockid?: unknown };
+                                const target = args?.blockId ?? args?.blockid;
+                                if (typeof target === "string") mainBrowserBlock = target.replace(/^block:/, "");
+                            }
                             const previous = tools.get(part.toolCallId);
-                            if (previous === undefined)
+                            if (previous === undefined) {
                                 replyTool({ id: part.toolCallId, name: part.toolName, done: false, input: part.args });
-                            if (done && !previous)
+                            }
+                            if (done && !previous) {
+                                const output = penToolOutput(part.result, part.isError);
+                                if (targetsWidget) {
+                                    const text =
+                                        typeof output === "string"
+                                            ? output
+                                            : output
+                                                  .flatMap((item) => (item.type === "text" ? [item.text] : []))
+                                                  .join(" ");
+                                    mainBrowserBlock =
+                                        /\bblock:([\w-]+)/.exec(text)?.[1] ||
+                                        /"(?:blockId|blockid)"\s*:\s*"([\w-]+)"/.exec(text)?.[1] ||
+                                        mainBrowserBlock;
+                                }
+                                if (
+                                    fullChat &&
+                                    !part.isError &&
+                                    mainBrowserBlock &&
+                                    targetsWidget &&
+                                    !preparedBrowserBlocks.has(mainBrowserBlock)
+                                ) {
+                                    const blockId = mainBrowserBlock;
+                                    preparedBrowserBlocks.add(blockId);
+                                    browserPreview = browserPreview
+                                        .then(async () => {
+                                            const result = await getWorkspaceSurfaceModeProvider(tabId)?.control({
+                                                action: "focus",
+                                                blockid: blockId,
+                                                presentation: "background",
+                                            });
+                                            if (!result?.success) preparedBrowserBlocks.delete(blockId);
+                                        })
+                                        .catch((error) => {
+                                            preparedBrowserBlocks.delete(blockId);
+                                            console.warn("Could not attach the browser tab", error);
+                                        });
+                                }
+                                if (
+                                    fullChat &&
+                                    !part.isError &&
+                                    !mainBrowserBlock &&
+                                    /(?:^|_)browser_(?:open|open_tab|navigate)$/.test(part.toolName)
+                                ) {
+                                    const url = (part.args as { url?: unknown })?.url;
+                                    if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+                                        browserPreview = browserPreview
+                                            .then(async () => {
+                                                if (mainBrowserBlock) return;
+                                                const result = await getWorkspaceSurfaceModeProvider(tabId)?.control({
+                                                    action: "spatial.open",
+                                                    view: "web",
+                                                    text: url,
+                                                });
+                                                if (result?.success) {
+                                                    mainBrowserBlock = /^block:([\w-]+)$/.exec(result.message)?.[1];
+                                                    relayWorkers();
+                                                }
+                                            })
+                                            .catch((error) => console.warn("Could not prepare the browser tab", error));
+                                    }
+                                }
+                                const image = Array.isArray(output)
+                                    ? output.findLast((item) => item.type === "image" && item.data.length < 4_000_000)
+                                    : undefined;
+                                if (targetsWidget && image?.type === "image")
+                                    mainToolImage = `data:${image.mimeType};base64,${image.data}`;
+                                if (targetsWidget) {
+                                    const action: PenTaskAction = {
+                                        id: part.toolCallId,
+                                        title: mainTool,
+                                        timestamp: part.completedAt ?? Date.now(),
+                                        status: part.isError ? "failed" : "completed",
+                                        blockId: mainBrowserBlock,
+                                        result: (typeof output === "string"
+                                            ? output
+                                            : output
+                                                  .filter((item) => item.type === "text")
+                                                  .map((item) => item.text)
+                                                  .join("\n")
+                                        ).slice(0, 1600),
+                                        image:
+                                            image?.type === "image"
+                                                ? `data:${image.mimeType};base64,${image.data}`
+                                                : undefined,
+                                    };
+                                    recordTask(action);
+                                    void browserPreview.then(async () => {
+                                        const blockId = action.blockId || mainBrowserBlock;
+                                        if (!blockId || action.image) return;
+                                        for (let attempt = 0; attempt < 4; attempt++) {
+                                            const capture = await captureBrowserTab(blockId).catch(() => undefined);
+                                            if (capture?.image) {
+                                                recordTask({ ...action, blockId, image: capture.image });
+                                                break;
+                                            }
+                                            if (controller.signal.aborted) break;
+                                            await new Promise((resolve) => setTimeout(resolve, 600));
+                                        }
+                                    });
+                                }
                                 replyTool({
-                                    id: part.toolCallId, name: part.toolName, done, failed: part.isError,
-                                    output: penToolOutput(part.result, part.isError),
+                                    id: part.toolCallId,
+                                    name: part.toolName,
+                                    done,
+                                    failed: part.isError,
+                                    output,
                                 });
+                                const args = part.args as { path?: unknown } | undefined;
+                                const file =
+                                    typeof args?.path === "string" && args.path
+                                        ? args.path.startsWith("/")
+                                            ? args.path
+                                            : state.cwd?.startsWith("/") && !/^(?:~|[\w+.-]+:)/.test(args.path)
+                                              ? `${state.cwd}/${args.path}`
+                                              : undefined
+                                        : undefined;
+                                if (
+                                    fullChat &&
+                                    !part.isError &&
+                                    ["write_file", "patch"].includes(part.toolName) &&
+                                    file
+                                ) {
+                                    showWrittenFile = showWrittenFile
+                                        .then(async () => {
+                                            const surface = getWorkspaceSurfaceModeProvider(tabId);
+                                            if (surface?.snapshot().penchatmode === "tabs") {
+                                                const result = await surface.control({
+                                                    action: "spatial.openFile",
+                                                    file,
+                                                });
+                                                const blockId =
+                                                    result?.success && /\bblock:([\w-]+)/.exec(result.message)?.[1];
+                                                if (blockId)
+                                                    recordTask({
+                                                        id: part.toolCallId,
+                                                        title: "Updated file",
+                                                        timestamp: part.completedAt ?? Date.now(),
+                                                        status: "completed",
+                                                        blockId,
+                                                        result: file,
+                                                    });
+                                            }
+                                        })
+                                        .catch((error) =>
+                                            console.warn("Could not prepare the agent’s file preview", error)
+                                        );
+                                }
+                            }
                             tools.set(part.toolCallId, done || previous === true);
                         }
                     }
@@ -738,11 +1361,46 @@ export function OSPenEditor({
                             !message.hidden &&
                             (message.error || readText(message).trim())
                     );
+                    mainDetail = answer && !answer.error ? readText(answer).trim().slice(0, 400) : "";
+                    relayWorkers();
                     if (!answer) return;
                     const text = readText(answer);
                     if (answer.error) finish({ error: answer.error });
-                    else if (!state.busy && answer.completedAt != null) finish({ text });
-                    else if (text && (text !== lastText || streamedAnswerId !== answer.id)) {
+                    else if (!state.busy && answer.completedAt != null) {
+                        if (advancing) return;
+                        advancing = true;
+                        void browserPreview
+                            .then(async () => {
+                                await submission;
+                                if (controller.signal.aborted || stopping) return;
+                                if (design === designCount) {
+                                    finish({ text });
+                                    return;
+                                }
+                                reply({ done: false, text, start: streamedAnswerId !== answer.id });
+                                const currentState = $sessionStates.get()[runtimeId];
+                                previous = new Set((currentState?.messages ?? messages).map((message) => message.id));
+                                userId = undefined;
+                                streamedAnswerId = undefined;
+                                lastText = "";
+                                displayPrompt = `Design pass ${++design} of ${designCount}`;
+                                agentPrompt = makeAgentPrompt();
+                                refreshDeadline();
+                                advancing = false;
+                                submission = submitCanvasChat(
+                                    agentPrompt,
+                                    displayPrompt,
+                                    controller.signal,
+                                    [],
+                                    runtimeId,
+                                    currentState?.storedSessionId ?? storedId
+                                );
+                                await submission;
+                            })
+                            .catch((error) => {
+                                if (!controller.signal.aborted) finish({ error: String(error) });
+                            });
+                    } else if (text && (text !== lastText || streamedAnswerId !== answer.id)) {
                         const start = streamedAnswerId !== answer.id;
                         streamedAnswerId = answer.id;
                         lastText = text;
@@ -750,11 +1408,15 @@ export function OSPenEditor({
                     }
                 };
                 const offWorkers = $subagentsBySession.listen(relayWorkers);
+                const offTodos = $todosBySession.listen(relayWorkers);
                 const offStates = $sessionStates.listen(relayTurn);
                 const offActive = $activeSessionId.listen(() => relayTurn($sessionStates.get()));
                 activeAgentRequest = () => {
                     controller.abort();
                     offWorkers();
+                    offTodos();
+                    clearTimeout(relayTimer);
+                    for (const { stop } of subscriptions.values()) stop();
                     offStates();
                     offActive();
                     stopAgent = undefined;
@@ -764,13 +1426,19 @@ export function OSPenEditor({
                 };
                 const cleanup = activeAgentRequest;
                 stopAgent = (id) => {
-                    if (id !== requestId) return;
+                    if (id !== requestId || stopping) return;
+                    stopping = true;
                     if (!sessionId) {
                         finish({ error: "Stopped." });
                         return;
                     }
-                    if (!targetId && $activeSessionId.get() !== sessionId) return;
-                    void (targetId ? delegate.interruptSession(sessionId) : cancelCanvasChat()).then(
+                    const sessionDelegate = sessionTileDelegate();
+                    const interruption = sessionDelegate
+                        ? sessionDelegate.interruptSession(sessionId)
+                        : $activeSessionId.get() === sessionId
+                          ? cancelCanvasChat()
+                          : Promise.resolve();
+                    void interruption.then(
                         () => {
                             if (activeAgentRequest === cleanup) finish({ error: "Stopped." });
                         },
@@ -780,6 +1448,21 @@ export function OSPenEditor({
                     );
                 };
                 const submit = async () => {
+                    relayHermes = true;
+                    if (!slash) relayWorkers();
+                    if (
+                        !slash &&
+                        (selection?.platform === "iphone" ||
+                            (/\biPhone simulator\b/i.test(prompt) && /\b(start|launch|boot|open)\b/i.test(prompt)))
+                    ) {
+                        const result = await getApi().resolveIPhonePreviewTarget();
+                        if (controller.signal.aborted) return;
+                        selection = {
+                            platform: "iphone",
+                            ...(result.success ? { targetId: result.data.id, name: result.data.name } : {}),
+                        };
+                        agentPrompt = makeAgentPrompt();
+                    }
                     if (slash && typeof conversationId === "string") {
                         const { name, arg } = parseSlashCommand(agentPrompt);
                         const sessionPicker = ["resume", "sessions", "switch"].includes(name);
@@ -788,7 +1471,10 @@ export function OSPenEditor({
                                 if (!current.current.visible) throw new Error("Return to the originating Pen canvas.");
                                 const session = $sessions.get().find((entry) => entry.id === id);
                                 await openHistory(
-                                    undefined, session ? sessionTitle(session) : "Hermes chat", async () => id, conversationId
+                                    undefined,
+                                    session ? sessionTitle(session) : "Hermes chat",
+                                    async () => id,
+                                    conversationId
                                 );
                             };
                             if (sessionPicker && arg.trim()) {
@@ -797,28 +1483,152 @@ export function OSPenEditor({
                                 await resume(id);
                                 return;
                             }
-                            if (!arg.trim()) openPenDialog({
-                                kind: "command", sessionId: targetId ?? $activeSessionId.get(), resume,
-                            });
+                            if (!arg.trim())
+                                openPenDialog({
+                                    kind: "command",
+                                    sessionId: targetId ?? $activeSessionId.get(),
+                                    resume,
+                                });
                         }
                     }
-                    if (!storedId) return submitCanvasChat(agentPrompt, prompt, controller.signal);
+                    if (imageReview && !slash) {
+                        if (storedId && !targetId) throw new Error("Reopen this Hermes session before sending.");
+                        attachments.push({
+                            id: crypto.randomUUID(),
+                            kind: "image",
+                            label: imageReview.filename,
+                            path: imageReview.filename,
+                            imageDataUrl: imageReview.dataUrl,
+                        });
+                    }
+                    if (!storedId || attachments.length || designCount > 1) {
+                        if (storedId && !targetId) throw new Error("Reopen this Hermes session before sending.");
+                        return submitCanvasChat(
+                            agentPrompt,
+                            prompt,
+                            controller.signal,
+                            attachments,
+                            targetId,
+                            storedId
+                        );
+                    }
                     if (!delegate || !targetId) throw new Error("Reopen this Hermes session before sending.");
-                    if ($sessionStates.get()[targetId]?.busy) throw new Error("This Hermes session is already running.");
+                    if ($sessionStates.get()[targetId]?.busy)
+                        throw new Error("This Hermes session is already running.");
                     if (slash) await delegate.executeSlash(agentPrompt, targetId);
                     else await delegate.submitToSession(targetId, agentPrompt);
                 };
-                void submit().then(() => {
-                    if (!slash || userId || activeAgentRequest !== cleanup) return;
-                    const messages = $sessionStates.get()[targetId ?? $activeSessionId.get()]?.messages ?? [];
-                    const answer = messages.filter((message) =>
-                        (message.role === "system" || message.role === "assistant") &&
-                        !previous.has(message.id) && !message.hidden
-                    ).at(-1);
-                    finish(answer?.error ? { error: answer.error } : { text: answer ? readText(answer) : undefined });
-                }).catch((error) => {
-                    if (activeAgentRequest === cleanup) finish({ error: error.message });
-                });
+                const submitExperiment = async () => {
+                    const api = getApi();
+                    const selectedAgent = event.data.agent;
+                    const mode =
+                        selectedAgent === "codex" || selectedAgent === "opencode" || selectedAgent === "pi"
+                            ? selectedAgent
+                            : penVoice && selectedAgent !== "hermes"
+                              ? "voice"
+                              : undefined;
+                    const namedAgent =
+                        mode === "codex"
+                            ? "Codex CLI"
+                            : mode === "opencode"
+                              ? "OpenCode"
+                              : mode === "pi"
+                                ? "Pi"
+                                : "Local voice";
+                    if (mode && mode !== "voice" && (slash || attachments.length || imageReview)) {
+                        agentLabel = namedAgent;
+                        throw new Error(`${namedAgent} currently accepts plain-text prompts.`);
+                    }
+                    if (
+                        !import.meta.env.DEV ||
+                        !mode ||
+                        slash ||
+                        attachments.length ||
+                        imageReview ||
+                        typeof conversationId !== "string"
+                    )
+                        return submit();
+                    if (!api?.runPenAgent || !api?.onPenAgentDelta) {
+                        if (mode !== "voice")
+                            throw new Error(`Restart the dev app to load the ${namedAgent} connection.`);
+                        return submit();
+                    }
+                    agentLabel = namedAgent;
+                    const historyKey = mode + ":" + conversationId;
+                    const messages: PenMessage[] = [
+                        ...(experimentTurns.get(historyKey) ?? []),
+                        { role: "user", content: prompt.trim().slice(0, 4000) },
+                    ];
+                    let output = "";
+                    const unsubscribe = api.onPenAgentDelta((id, delta) => {
+                        if (id !== requestId || controller.signal.aborted) return;
+                        if (typeof delta !== "string") {
+                            reply({ done: false, tool: delta });
+                            return;
+                        }
+                        const start = !output;
+                        output += delta;
+                        reply({ done: false, start, text: output });
+                    });
+                    const cancel = () => api.cancelPenAgent(requestId);
+                    controller.signal.addEventListener("abort", cancel, { once: true });
+                    try {
+                        let outcome: "done" | "hermes";
+                        try {
+                            outcome = await api.runPenAgent(
+                                requestId,
+                                mode,
+                                messages,
+                                mode !== "voice"
+                                    ? {
+                                          provider: $currentProvider.get(),
+                                          model: $currentModel.get(),
+                                          reasoning: $currentReasoningEffort.get(),
+                                      }
+                                    : undefined
+                            );
+                        } catch (error) {
+                            if (controller.signal.aborted || mode !== "voice" || output) throw error;
+                            outcome = "hermes";
+                        }
+                        controller.signal.throwIfAborted();
+                        if (outcome === "hermes") {
+                            agentLabel = "Hermes";
+                            experimentTurns.delete(historyKey);
+                            return submit();
+                        }
+                        if (!output.trim()) throw new Error("The model returned an empty reply.");
+                        experimentTurns.set(
+                            historyKey,
+                            [...messages, { role: "assistant" as const, content: output.slice(0, 4000) }].slice(-8)
+                        );
+                        if (experimentTurns.size > 20) experimentTurns.delete(experimentTurns.keys().next().value);
+                        finish({ text: output });
+                    } finally {
+                        controller.signal.removeEventListener("abort", cancel);
+                        unsubscribe();
+                    }
+                };
+                submission = submitExperiment();
+                void submission
+                    .then(() => {
+                        if (!slash || userId || activeAgentRequest !== cleanup) return;
+                        const messages = $sessionStates.get()[targetId ?? $activeSessionId.get()]?.messages ?? [];
+                        const answer = messages
+                            .filter(
+                                (message) =>
+                                    (message.role === "system" || message.role === "assistant") &&
+                                    !previous.has(message.id) &&
+                                    !message.hidden
+                            )
+                            .at(-1);
+                        finish(
+                            answer?.error ? { error: answer.error } : { text: answer ? readText(answer) : undefined }
+                        );
+                    })
+                    .catch((error) => {
+                        if (activeAgentRequest === cleanup) finish({ error: error.message });
+                    });
             }
             if (type === "open-settings")
                 window.dispatchEvent(
@@ -847,6 +1657,7 @@ export function OSPenEditor({
         client.connect();
         return () => {
             clearTimeout(timeout);
+            window.removeEventListener(BrowserChatSelectionEvent, stageBrowserSelection);
             activeAgentRequest?.();
             activeAgentRequest = undefined;
             unregister?.();
@@ -856,6 +1667,8 @@ export function OSPenEditor({
             offInspector();
             offFileScope.forEach((off) => off());
             current.current.onRenderControlsSlot?.(null);
+            current.current.onIslandControlsSlot?.(null);
+            islandControlsSlot?.remove();
             current.current.onSystemControlsSlot?.(null);
             iframe.removeEventListener("kronos-pen-surface", receiveSurfaceEvent);
             window.removeEventListener("message", receive);
@@ -900,7 +1713,9 @@ export function OSPenEditor({
 
     useEffect(() => {
         if (visible && status === "ready")
-            void clientRef.current?.request("set_workspace_inspector", { open: $krontermInspectorOpen.get() }).catch(() => {});
+            void clientRef.current
+                ?.request("set_workspace_inspector", { open: $krontermInspectorOpen.get() })
+                .catch(() => {});
     }, [visible, status]);
 
     useEffect(() => {
@@ -975,45 +1790,118 @@ export function OSPenEditor({
         const editorWindow = engine?.contentWindow;
         if (!editorDocument || !editorWindow || !host) return;
 
+        const compactChatStyle = editorDocument.createElement("style");
+        compactChatStyle.dataset.kronosCompactChat = "";
+        compactChatStyle.textContent = `
+            [data-kronos-mini-chat] [data-kronos-pen-workers],
+            [aria-label="Mini chat"] [data-kronos-pen-workers] { display: none !important; }
+        `;
+        editorDocument.head.append(compactChatStyle);
+
         // Live widgets paint above the iframe, so their clip needs to leave Pen's interactive chrome exposed.
-        const selector = presenting ? [
+        const selector = [
             "[data-agent-spotlight]",
+            "[data-kronos-pen-island-bar]",
+            "[data-agent-input-notch]",
+            "[data-kronos-island-controls]",
+            "[data-kronos-island-resize]",
+            "[data-radix-popper-content-wrapper]",
+            '[data-slot="popover-content"]',
+            "dialog[open]",
+            ...(typeof CSS !== "undefined" && CSS.supports("selector(:popover-open)")
+                ? ["[popover]:popover-open"]
+                : []),
+            "[data-kronos-pen-voice-panel][data-active]",
             "[data-kronos-mini-chat]",
+            '[aria-label="Mini chat"]',
             "[data-kronos-pen-slide-control]",
             '[role="menu"]',
             '[role="listbox"]',
             '[role="dialog"]',
-        ].join(", ") : ".tools-panel:has([data-kronos-v2-workflow-tools]), .kronos-v2-workflow-tool-popover";
+            ".tools-panel:has([data-kronos-v2-workflow-tools])",
+            ".kronos-v2-workflow-tool-popover",
+        ].join(", ");
         let frame: number;
         let lastRects = "";
+        let clippedPlane: HTMLElement;
+        let clippedDock: HTMLElement;
         const update = () => {
             const offset = engine.getBoundingClientRect();
             const rects = Array.from(editorDocument.querySelectorAll(selector)).flatMap((element) => {
                 const rect = element.getBoundingClientRect();
-                if (!rect.width || !rect.height || editorWindow.getComputedStyle(element).visibility === "hidden")
+                const computed = editorWindow.getComputedStyle(element);
+                if (!rect.width || !rect.height || computed.visibility === "hidden" || computed.opacity === "0")
                     return [];
-                return [[
-                    Math.floor(offset.x + rect.x) - 2,
-                    Math.floor(offset.y + rect.y) - 2,
-                    Math.ceil(rect.width) + 4,
-                    Math.ceil(rect.height) + 4,
-                ]];
+                const floating = editorDocument.documentElement.hasAttribute("data-kronos-floating-chat");
+                if (floating && element.matches("[data-agent-spotlight]")) return [];
+                const rounded =
+                    element.matches("[data-kronos-pen-voice-panel]") ||
+                    (floating &&
+                        element.matches(
+                            "[data-kronos-pen-island-bar], [data-kronos-mini-chat], [data-agent-input-notch], [data-kronos-island-controls], [data-kronos-pen-voice-panel]"
+                        ));
+                const bounds = rounded
+                    ? { x: offset.x + rect.x, y: offset.y + rect.y, width: rect.width, height: rect.height }
+                    : {
+                          x: Math.floor(offset.x + rect.x) - 2,
+                          y: Math.floor(offset.y + rect.y) - 2,
+                          width: Math.ceil(rect.width) + 4,
+                          height: Math.ceil(rect.height) + 4,
+                      };
+                return makePenSurfaceOccluders(
+                    bounds,
+                    rounded ? penSurfaceCornerRadius(computed.borderTopLeftRadius, rect.width, rect.height) : 0
+                ).map(({ x, y, width, height }) => [x, y, width, height]);
             });
             const signature = JSON.stringify(rects);
             if (signature !== lastRects) {
                 lastRects = signature;
-                host.replaceChildren(...rects.map(([x, y, width, height]) => {
-                    const marker = document.createElement("div");
-                    marker.dataset.liveBlockOccluder = "";
-                    marker.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${width}px;height:${height}px`;
-                    return marker;
-                }));
+                host.replaceChildren(
+                    ...rects.map(([x, y, width, height]) => {
+                        const marker = document.createElement("div");
+                        marker.dataset.liveBlockOccluder = "";
+                        marker.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${width}px;height:${height}px`;
+                        return marker;
+                    })
+                );
             }
+            const plane = host.closest(".os-mode-root")?.querySelector<HTMLElement>(".os-kronos-live-plane");
+            if (plane) {
+                clippedPlane = plane;
+                const bounds = plane.getBoundingClientRect();
+                const occluders = Array.from(
+                    host.parentElement.querySelectorAll("[data-live-block-occluder]"),
+                    (marker) => marker.getBoundingClientRect()
+                );
+                const clip =
+                    bounds.width && bounds.height && occluders.length
+                        ? makeSurfaceClipPath(bounds, bounds, occluders, plane.offsetWidth, plane.offsetHeight)
+                        : "";
+                if (plane.style.clipPath !== clip) plane.style.clipPath = clip;
+            }
+            const dock = host.parentElement.querySelector<HTMLElement>(".pen-chat-dock:not([data-backgrounded])");
+            if (clippedDock && clippedDock !== dock) clippedDock.style.clipPath = "";
+            if (dock) {
+                const bounds = dock.getBoundingClientRect();
+                const occluders = Array.from(
+                    host.parentElement.querySelectorAll("[data-live-block-occluder]"),
+                    (marker) => marker.getBoundingClientRect()
+                );
+                const clip =
+                    bounds.width && bounds.height && occluders.length
+                        ? makeSurfaceClipPath(bounds, bounds, occluders, dock.offsetWidth, dock.offsetHeight)
+                        : "";
+                if (dock.style.clipPath !== clip) dock.style.clipPath = clip;
+            }
+            clippedDock = dock;
             frame = requestAnimationFrame(update);
         };
         update();
         return () => {
             cancelAnimationFrame(frame);
+            compactChatStyle.remove();
+            if (clippedPlane) clippedPlane.style.clipPath = "";
+            if (clippedDock) clippedDock.style.clipPath = "";
             host.replaceChildren();
         };
     }, [kronosV2, presenting, status, visible]);
@@ -1050,6 +1938,48 @@ export function OSPenEditor({
         };
     }, [status, visible, tabId, nativeOverlay, widgets.length]);
 
+    const editorDocument =
+        status === "ready" && kronosV2
+            ? frameRef.current?.contentDocument?.querySelector<HTMLIFrameElement>("#pen-editor")?.contentDocument
+            : null;
+
+    const [chatImage, setChatImage] = useState<{
+        url: string;
+        filename: string;
+        mount: HTMLDivElement;
+        docked?: boolean;
+    }>();
+    const imageHost = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        if (!chatImage) return;
+        if (!chatImage.docked) imageHost.current?.append(chatImage.mount);
+        return () => {
+            if (!chatImage.docked && chatImage.mount.parentElement === imageHost.current) chatImage.mount.remove();
+        };
+    }, [chatImage]);
+    useEffect(() => {
+        if (!editorDocument || !visible) {
+            setChatImage(undefined);
+            return;
+        }
+        const showChatImage = (event: MouseEvent) => {
+            const target = event.target as Element;
+            if (target?.closest?.("[data-kronos-pen-workers], [data-kronos-browser-previews]")) return;
+            const attachment = target?.closest?.('button[aria-label="Open attachment"]');
+            const image = target?.closest?.("img") ?? attachment?.querySelector("img");
+            if (!image?.closest("[data-kronos-chat-panel], [data-agent-spotlight]")) return;
+            const url = image.currentSrc || image.src;
+            if (!/^(data:image\/|blob:)/i.test(url) && !(attachment && /^https?:/i.test(url))) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            const mount = document.createElement("div");
+            mount.style.cssText = "width:100%;height:100%;min-height:0";
+            setChatImage({ url, filename: image.alt || "Image", mount });
+        };
+        editorDocument.addEventListener("click", showChatImage, true);
+        return () => editorDocument.removeEventListener("click", showChatImage, true);
+    }, [editorDocument, visible]);
+
     const exportDesign = async () => {
         try {
             const result = (await clientRef.current.request("export")) as Parameters<typeof penDownload>[0] & {
@@ -1085,9 +2015,71 @@ export function OSPenEditor({
                 name="kronos-pen-editor"
                 sandbox="allow-scripts allow-same-origin allow-downloads"
             />
-            {kronosV2 && (
-                <div ref={presentationChromeRef} aria-hidden="true" className="os-pen-presentation-chrome" />
+            {kronosV2 && <div ref={presentationChromeRef} aria-hidden="true" className="os-pen-presentation-chrome" />}
+            {visible && editorDocument && (
+                <OSPenActivityPreview
+                    editorDocument={editorDocument}
+                    runs={activityRuns}
+                    onOpenWidget={async (id) => {
+                        if (!onOpenActivityWidget?.(id)) return false;
+                        if (!editorDocument.documentElement.hasAttribute("data-kronos-full-chat"))
+                            await clientRef.current.request("show_full_chat");
+                        return true;
+                    }}
+                    onOpenTheater={(conversationId, workerId) => {
+                        const sessionId = workerSessions.get(conversationId);
+                        if (!sessionId) return;
+                        const detail: PenDialogRequest = { kind: "subagents", sessionId, workerId };
+                        window.dispatchEvent(new CustomEvent("kronos:pen-dialog", { detail }));
+                    }}
+                />
             )}
+            {editorDocument && onFullChat && (
+                <Suspense fallback={null}>
+                    <OSPenChatDock
+                        workspaceId={tabId}
+                        editorDocument={editorDocument}
+                        visible={visible}
+                        tabs={chatDockTabs ?? []}
+                        imageTab={
+                            chatImage?.docked
+                                ? {
+                                      title: chatImage.filename,
+                                      mount: chatImage.mount,
+                                      close: () => setChatImage(undefined),
+                                  }
+                                : undefined
+                        }
+                        focusRequest={chatDockFocus}
+                        taskGroups={taskGroups}
+                        workingTabIds={[...activityRuns.values()].flatMap(({ rows }) =>
+                            rows.flatMap(({ status, blockId }) => (status === "running" && blockId ? [blockId] : []))
+                        )}
+                        onActiveTab={onChatDockActive}
+                        onFullChat={onFullChat}
+                        onMobileSelection={setMobileSelection}
+                    />
+                </Suspense>
+            )}
+            <div ref={imageHost} />
+            {visible &&
+                chatImage &&
+                createPortal(
+                    <Suspense fallback={null}>
+                        <ChatImageViewer
+                            key={chatImage.url}
+                            url={chatImage.url}
+                            filename={chatImage.filename}
+                            onDismiss={() => setChatImage(undefined)}
+                            onMoveToSidePanel={
+                                onFullChat
+                                    ? () => setChatImage((current) => current && { ...current, docked: true })
+                                    : undefined
+                            }
+                        />
+                    </Suspense>,
+                    chatImage.mount
+                )}
             {status === "ready" && error && (
                 <div className="os-pen-editor-alert" role="alert">
                     <p>{error}</p>

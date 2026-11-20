@@ -178,7 +178,9 @@ def _bridge_request(payload: Dict[str, Any]) -> Dict[str, Any]:
     name = payload.get("name", "")
     arguments = payload.get("arguments") or {}
     timeout = _READ_TIMEOUT_SECONDS if name in _readonly_tools else _TIMEOUT_SECONDS
-    if name == "acp_run_agent":
+    if name == "delegate_pi_coding":
+        timeout = 165
+    elif name == "acp_run_agent":
         timeout = _timeout_number(arguments.get("timeoutSeconds", 180), 180, 15, 600) + 10
     elif name == "n8n_run_agent":
         timeout = _timeout_number(arguments.get("timeoutSeconds", 180), 180, 15, 600) + 125

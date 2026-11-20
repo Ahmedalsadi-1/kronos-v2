@@ -66,7 +66,7 @@ interface SubmitPromptDeps {
   syncAttachmentsForSubmit: (
     sessionId: string,
     attachments: ComposerAttachment[],
-    options?: { updateComposerAttachments?: boolean }
+    options?: { updateComposerAttachments?: boolean; storedSessionId?: string | null }
   ) => Promise<{ attachments: ComposerAttachment[]; sessionId: string }>
   updateSessionState: (
     sessionId: string,
@@ -659,7 +659,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         // plain text survived sleep/wake but images reported "session not
         // found". The attach path recovers and reports the live id back here.
         const attachResult = await syncAttachmentsForSubmit(sessionId, attachments, {
-          updateComposerAttachments: usingComposerAttachments
+          updateComposerAttachments: usingComposerAttachments,
+          storedSessionId: targetStoredSessionId ?? startingStoredSessionId
         })
 
         const syncedAttachments = attachResult.attachments

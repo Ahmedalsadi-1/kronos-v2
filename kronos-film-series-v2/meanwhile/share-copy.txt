@@ -1,0 +1,1 @@
+Browser research, sandbox files, and a terminal check share the screen in this recreation of a parallel KronOS Agent session.

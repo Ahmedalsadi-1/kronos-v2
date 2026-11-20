@@ -1,18 +1,19 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { BrowserDownloadsButton } from "@/app/view/webview/browser-site-settings";
 import { BrowserPageToolbar, type WebViewModel } from "@/app/view/webview/webview";
 import { getApi, getBlockComponentModel } from "@/store/global";
 import { useAtomValue } from "jotai";
 import { memo, useEffect, useState } from "react";
 
 const ModelLookupRetryMs = 120;
-const ModelLookupMaxAttempts = 40;
 
 function useWebViewModel(blockId: string): WebViewModel | undefined {
     const [model, setModel] = useState<WebViewModel | undefined>(undefined);
     useEffect(() => {
         setModel(undefined);
+        if (!blockId) return;
         let attempts = 0;
         let timer: number | undefined;
         const lookup = () => {
@@ -21,7 +22,8 @@ function useWebViewModel(blockId: string): WebViewModel | undefined {
                 setModel(candidate);
                 return;
             }
-            if (attempts++ < ModelLookupMaxAttempts) timer = window.setTimeout(lookup, ModelLookupRetryMs);
+            attempts++;
+            timer = window.setTimeout(lookup, Math.min(1000, ModelLookupRetryMs * 2 ** Math.floor(attempts / 10)));
         };
         lookup();
         return () => {
@@ -72,10 +74,16 @@ export const OSWebNavBar = memo(function OSWebNavBar({
     blockId,
     islandControls,
     nativeHeader = false,
+    syncNativeHeader = true,
+    companion,
+    downloadsTarget,
 }: {
     blockId: string;
     islandControls?: React.ReactNode;
     nativeHeader?: boolean;
+    syncNativeHeader?: boolean;
+    companion?: boolean;
+    downloadsTarget?: HTMLElement;
 }) {
     const model = useWebViewModel(blockId);
     if (nativeHeader) return model ? <NativeBrowserHeaderBridge model={model} /> : null;
@@ -86,14 +94,33 @@ export const OSWebNavBar = memo(function OSWebNavBar({
                 role="toolbar"
                 aria-label="Browser navigation"
             >
+                <span role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                    Loading browser controls…
+                </span>
                 {islandControls}
             </div>
         );
     return (
         <>
-            <NativeBrowserHeaderBridge model={model} />
-            <BrowserPageToolbar model={model} islandControls={islandControls} />
+            {syncNativeHeader && <NativeBrowserHeaderBridge model={model} />}
+            <BrowserPageToolbar
+                model={model}
+                islandControls={islandControls}
+                companion={companion}
+                downloadsTarget={downloadsTarget}
+            />
         </>
     );
 });
 OSWebNavBar.displayName = "OSWebNavBar";
+
+function WebDownloads({ model }: { model: WebViewModel }) {
+    const guestId = useAtomValue(model.webContentsId);
+    const url = useAtomValue(model.url);
+    return <BrowserDownloadsButton guestId={guestId} url={url} />;
+}
+
+export function OSWebDownloads({ blockId }: { blockId: string }) {
+    const model = useWebViewModel(blockId);
+    return model ? <WebDownloads model={model} /> : <BrowserDownloadsButton url="" />;
+}

@@ -26,7 +26,10 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import "./native-island-chrome.css";
 
-function makeNativeIslandNodeModel(blockId: string): NodeModel {
+export function makeNativeIslandNodeModel(
+    blockId: string,
+    onClose: () => void = () => getApi().closeNativeHudSurface()
+): NodeModel {
     return {
         additionalProps: atom({}),
         innerRect: atom({}),
@@ -47,7 +50,7 @@ function makeNativeIslandNodeModel(blockId: string): NodeModel {
         toggleMagnify: () => {},
         toggleFold: () => {},
         focusNode: () => {},
-        onClose: () => getApi().closeNativeHudSurface(),
+        onClose,
         dragHandleRef: undefined,
         displayContainerRef: undefined,
     } as unknown as NodeModel;

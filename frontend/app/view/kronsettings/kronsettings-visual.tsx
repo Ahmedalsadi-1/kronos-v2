@@ -3,14 +3,8 @@
 
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import {
-    normalizeWorkspacePresentation,
-    publishWorkspacePresentation,
-    readWorkspacePresentation,
-    subscribeWorkspacePresentation,
-} from "@/app/tab/workspace-presentation";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useSyncExternalStore } from "react";
+import { memo, useCallback } from "react";
 import type { KronSettingsViewModel } from "./kronsettings-model";
 import { SectionHeader, SelectSetting, SettingsCard, ToggleSetting } from "./kronsettings-shared";
 
@@ -35,12 +29,6 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
     const confirmTabClose = settings["tab:confirmclose"] ?? false;
     const hideAIButton = settings["app:hideaibutton"] ?? false;
     const focusFollowsCursor = settings["app:focusfollowscursor"] ?? "off";
-    const settingsLayoutMode = normalizeWorkspacePresentation(settings["app:layoutmode"]) ?? "os";
-    const layoutMode = useSyncExternalStore(
-        subscribeWorkspacePresentation,
-        () => readWorkspacePresentation(settingsLayoutMode),
-        () => settingsLayoutMode
-    );
     const minimalUi = settings["app:minimalui"] ?? false;
     const telemetryEnabled = settings["telemetry:enabled"] ?? false;
 
@@ -97,20 +85,6 @@ const KronSettingsVisualContent = memo(({ model }: KronSettingsVisualContentProp
                     description="Quiet chrome: fewer borders, flat surfaces, and content-first styling across the workspace."
                     checked={minimalUi}
                     onChange={(v) => setValues({ "app:minimalui": v })}
-                />
-                <SelectSetting
-                    title="Workspace Layout"
-                    description="Choose tiled widgets, browser-style widget tabs, or the spatial canvas."
-                    value={layoutMode}
-                    onChange={(v) => {
-                        const presentation = publishWorkspacePresentation(v);
-                        setValues({ "app:layoutmode": presentation });
-                    }}
-                    options={[
-                        { value: "widgets", label: "Widgets" },
-                        { value: "tabs", label: "Widget tabs" },
-                        { value: "os", label: "OS Mode" },
-                    ]}
                 />
                 <SelectSetting
                     title="Focus Follows Cursor"

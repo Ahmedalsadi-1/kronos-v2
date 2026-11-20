@@ -36,3 +36,14 @@ test("unsupported platforms and destroyed renderers receive no gesture", () => {
     dispose();
     expect(window.listenerCount("swipe")).toBe(0);
 });
+
+test("routes native horizontal swipes only from the focused window", () => {
+    const window = Object.assign(new EventEmitter(), { isFocused: () => true, isDestroyed: () => false });
+    const browserSwipe = vi.fn();
+    installOSOverviewGestures(window, () => undefined, "darwin", browserSwipe);
+    window.emit("swipe", {}, "left");
+    window.emit("swipe", {}, "right");
+    window.isFocused = () => false;
+    window.emit("swipe", {}, "left");
+    expect(browserSwipe.mock.calls).toEqual([["left"], ["right"]]);
+});

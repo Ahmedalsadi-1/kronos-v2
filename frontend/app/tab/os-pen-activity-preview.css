@@ -1,0 +1,203 @@
+.pen-activity-compact,
+.pen-activity-dialog {
+    color: var(--kt-label, var(--foreground, #ededed));
+    background: var(--kt-content, var(--canvas-bg, #242424));
+    border-radius: 9px;
+    overflow: hidden;
+    font:
+        12px/1.4 system-ui,
+        sans-serif;
+}
+
+.pen-activity-compact {
+    width: min(235px, 72%);
+    margin: 3px 0 6px auto;
+    padding: 4px 4px 0;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.pen-activity-compact button,
+.pen-activity-dialog button,
+.pen-activity-line select {
+    cursor: pointer;
+}
+
+.pen-activity-compact :focus-visible,
+.pen-activity-dialog :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+}
+
+.pen-activity-thumbnail,
+.pen-activity-media {
+    display: block;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border: none;
+    padding: 0;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.pen-activity-thumbnail > svg,
+.pen-activity-actions {
+    position: absolute;
+    inset: 6px 6px auto auto;
+}
+
+.pen-activity-thumbnail > svg,
+.pen-activity-actions button {
+    color: #fff;
+    background: #171717de;
+    border-radius: 5px;
+}
+
+.pen-activity-thumbnail > svg {
+    box-sizing: content-box;
+    padding: 4px;
+}
+
+.pen-activity-thumbnail img,
+.pen-activity-media img {
+    width: 100%;
+    display: block;
+    object-position: center;
+}
+
+.pen-activity-thumbnail img {
+    aspect-ratio: 2.2;
+    object-fit: cover;
+}
+
+.pen-activity-media img {
+    max-height: 52dvh;
+    object-fit: contain;
+}
+
+.pen-activity-empty {
+    display: grid;
+    min-height: 36px;
+    place-items: center;
+    color: inherit;
+}
+
+.pen-activity-media .pen-activity-empty {
+    min-height: 110px;
+}
+
+.pen-activity-line {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px;
+    min-width: 0;
+}
+
+.pen-activity-caption,
+.pen-activity-tool > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pen-activity-caption {
+    flex: 1;
+}
+
+.pen-activity-status {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, currentColor 50%, transparent);
+}
+
+.pen-activity-status[data-running="true"] {
+    background: #21978c;
+}
+
+.pen-activity-line select {
+    flex: none;
+    max-width: 104px;
+    background: transparent;
+    color: inherit;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-radius: 4px;
+    font: inherit;
+}
+
+.pen-activity-dialog {
+    position: fixed;
+    inset: auto;
+    top: 58%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    width: clamp(280px, 42vw, 720px);
+    max-width: calc(100vw - 24px);
+    max-height: 75dvh;
+    overflow: auto;
+    padding: 0;
+    border: 0;
+    box-shadow: 0 14px 48px #0008;
+}
+
+.pen-activity-dialog::backdrop {
+    background: #0005;
+}
+
+.pen-activity-dialog > .pen-activity-line {
+    padding: 5px 8px;
+}
+
+.pen-activity-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.pen-activity-actions button,
+.pen-activity-line button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    color: inherit;
+}
+
+.pen-activity-actions button {
+    color: #fff;
+}
+
+.pen-activity-line button {
+    background: transparent;
+    border-radius: 5px;
+}
+
+.pen-activity-line button:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.pen-activity-tool {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 40%;
+    border-inline-end: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    padding-inline-end: 7px;
+}
+
+.pen-activity-tool svg {
+    flex: none;
+}
+
+.pen-activity-details {
+    padding: 6px 10px 10px;
+    overflow-wrap: anywhere;
+}
+
+.pen-activity-details p + p {
+    margin-top: 4px;
+}

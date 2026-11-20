@@ -82,6 +82,9 @@ const previewElectronApi: ElectronApi = {
         throw new Error("Agent workspace requires the managed Electron runtime.");
     },
     openKronosSignIn: () => {},
+    getKronosAccountStatus: async () => ({ configured: false, account: null }),
+    signOutKronosAccount: async () => ({ configured: false, account: null }),
+    onKronosAccountChanged: () => () => {},
     getAuthKey: () => "",
     getIsDev: () => false,
     getCursorPoint: () => ({ x: 0, y: 0 }) as Electron.Point,
@@ -121,7 +124,12 @@ const previewElectronApi: ElectronApi = {
     cancelDesktopGrab: async () => {},
     onBrowserElementSelection: () => () => {},
     pickComputerTargetElement: async () => ({ success: true, data: null }),
+    browserSessions: async () => { throw new Error("Browser sessions require the desktop app."); },
     browserAccount: async () => undefined,
+    browserMigration: async () => ({ canceled: true }),
+    importBrowserExtension: async () => null,
+    browserSearchSuggestions: async () => [],
+    browserSiteSettings: async () => ({ origin: null, permissions: {}, downloads: [] }),
     browserNavigationHistory: async () => null,
     browserGrab: async (input) => ({ opId: input.opId, kind: "error", reason: "Native browser required" }),
     browserCancelGrab: async () => {},
@@ -289,6 +297,10 @@ const previewElectronApi: ElectronApi = {
     resumeLinuxDesktop: async () => ({
         success: false as const,
         error: { code: "unavailable", message: "Enable the local Linux desktop runtime." },
+    }),
+    resolveIPhonePreviewTarget: async () => ({
+        success: false as const,
+        error: { code: "computer-target-unavailable", message: "The iPhone preview requires KronOS desktop." },
     }),
     listComputerTargets: async () => ({ success: true as const, data: [] }),
     startComputerTargetSession: async () => ({
@@ -497,6 +509,10 @@ const previewElectronApi: ElectronApi = {
         throw new Error("File transcription requires the desktop audio engine and a cached speech model.");
     },
     audioStart: () => Promise.resolve(false),
+    runPenAgent: () => Promise.reject(new Error("The Pen agent experiment requires the desktop app.")),
+    cancelPenAgent: () => {},
+    onPenAgentDelta: () => () => {},
+    audioPenTinyVoca: () => Promise.reject(new Error("Tiny Voca requires the KronOS desktop app.")),
     audioShutdown: () => {},
     audioStartListening: () => {},
     audioStopListening: () => {},

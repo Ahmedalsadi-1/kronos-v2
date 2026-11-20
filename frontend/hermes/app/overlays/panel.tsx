@@ -30,9 +30,10 @@ import { OVERLAY_TOP_CLEARANCE, OverlayView } from "./overlay-view";
 
 interface PanelProps {
     children: ReactNode;
-    // Root layout override (the card already fills the equidistant inset).
+    // Root layout override.
     className?: string;
     closeLabel?: string;
+    compact?: boolean;
     contentClassName?: string;
     onClose: () => void;
 }
@@ -41,12 +42,14 @@ export function Panel({
     children,
     className,
     closeLabel = translateNow("common.close"),
+    compact,
     contentClassName,
     onClose,
 }: PanelProps) {
     return (
         <OverlayView
             closeLabel={closeLabel}
+            compact={compact}
             // Header title rides up next to the floating close button — see
             // OVERLAY_TOP_CLEARANCE, the shared clearance every overlay column uses.
             contentClassName={cn(
@@ -55,7 +58,7 @@ export function Panel({
                 contentClassName
             )}
             onClose={onClose}
-            rootClassName={cn("flex h-full w-full flex-col", className)}
+            rootClassName={cn("w-full", className)}
         >
             {children}
         </OverlayView>

@@ -216,3 +216,14 @@ it("coalesces overlapping inventory reads and refreshes after they finish", asyn
     await runtime.list();
     expect(execute).toHaveBeenCalledTimes(2);
 });
+
+it("sends an iOS swipe over multiple display frames so it is recognized as a gesture", async () => {
+    const gesture = vi.fn();
+    const runtime = new ComputerTargetsRuntime(vi.fn(async () => deviceList("Booted")), "darwin", undefined, undefined, { gesture } as any);
+    await runtime.perform({ targetId: DeviceId, action: "swipe", x: 0.8, y: 0.5, endX: 0.2, endY: 0.5 });
+    const points = gesture.mock.calls[0][1];
+    expect(points.length).toBeGreaterThanOrEqual(18);
+    expect(points[0]).toEqual({ type: "begin", x: 0.8, y: 0.5 });
+    expect(points.at(-1)).toEqual({ type: "end", x: 0.2, y: 0.5 });
+    expect(points.slice(1, -1).every((p, i) => p.x < points[i].x && p.y === 0.5)).toBe(true);
+});

@@ -1,0 +1,50 @@
+[
+  {
+    "clip": "tabs",
+    "source": 1,
+    "source_start": 0,
+    "source_duration": 21,
+    "edit_duration": 7,
+    "speed": 3.0
+  },
+  {
+    "clip": "canvas",
+    "source": 2,
+    "source_start": 0,
+    "source_duration": 10,
+    "edit_duration": 4,
+    "speed": 2.5
+  },
+  {
+    "clip": "browser",
+    "source": 3,
+    "source_start": 10,
+    "source_duration": 20,
+    "edit_duration": 4.5,
+    "speed": 4.444444444444445
+  },
+  {
+    "clip": "annotate",
+    "source": 4,
+    "source_start": 2,
+    "source_duration": 9,
+    "edit_duration": 2.5,
+    "speed": 3.6
+  },
+  {
+    "clip": "vm",
+    "source": 5,
+    "source_start": 7,
+    "source_duration": 20,
+    "edit_duration": 5,
+    "speed": 4.0
+  },
+  {
+    "clip": "design",
+    "source": 6,
+    "source_start": 0,
+    "source_duration": 8.8,
+    "edit_duration": 4,
+    "speed": 2.2
+  }
+]

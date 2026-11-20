@@ -3,13 +3,18 @@ import { DeviceFarmRuntime } from "./device-farm-runtime";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ensureIPhonePreview } from "./device-simulator/iphone-preview";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage, MessageExtraInfo, RequestId } from "@modelcontextprotocol/sdk/types.js";
 import { dialog } from "electron";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { delimiter, isAbsolute } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { z } from "zod/v3";
 import { setTimeout as delay } from "node:timers/promises";
+import { DefaultComfyOrigin, type ComfyImage, type ComfyRequest, type ComfyWorkflow } from "../frontend/types/comfyui";
 import {
     createToolSessionServer,
     server as mcpServer,
@@ -21,16 +26,13 @@ import {
     setN8nWorkflowBridge,
     setProductivityToolBridge,
     setSandboxComputerBridge,
-    setSwarmToolBridge,
     setSharedSkillCatalog,
+    setSwarmToolBridge,
     warmKronComputerUse,
 } from "../mcp-kron-term/src/index";
-import { isToolAllowedBySurfaceCapability } from "../mcp-kron-term/src/surface-policy";
 import { SharedSkillCatalog } from "../mcp-kron-term/src/shared-skills";
-import { delimiter } from "node:path";
-import { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
+import { isToolAllowedBySurfaceCapability } from "../mcp-kron-term/src/surface-policy";
 import type { SurfaceCapability } from "../mcp-kron-term/src/wsh-bridge";
-import { DefaultComfyOrigin, type ComfyImage, type ComfyRequest, type ComfyWorkflow } from "../frontend/types/comfyui";
 import { attributeAgentSurfaceActivity } from "./agent-surface-context";
 import {
     hasSandboxComputerGrants,
@@ -41,6 +43,8 @@ import {
     withSandboxComputerScope,
 } from "./computer-access-policy";
 import { GuestBrowser, GuestFiles, guestPython } from "./computer-plugins/guest-commands";
+import { GuestExec } from "./computer-plugins/guest-exec";
+import { guestFileWriteCommands } from "./computer-plugins/guest-file-transfer";
 import { getComputerTargetsRuntime } from "./computer-targets-runtime";
 import { notifyDesktopPetSurfaceActivity } from "./emain-pet";
 import type { HermesSurfaceContext } from "./hermes-runtime";
@@ -52,6 +56,7 @@ import { pinWorkflowComputerAction, validateWorkflowComputerGrant, workflowWorke
 import { commandProductivity, queryProductivity } from "./productivity-runtime";
 import { getSandboxLoginBroker } from "./sandbox-login";
 import { SandboxTaskRuntime } from "./sandbox-task-runtime";
+import { resolveKronTermSharedSkillDirs } from "./shared-skill-roots";
 import { makeSwarmRuntime } from "./swarm-runtime";
 import type { SwarmService } from "./swarm-service";
 import { assertSwarmToolCall, isSwarmScoped, isSwarmToolAllowed } from "./swarm-target-scope";
@@ -118,13 +123,24 @@ function loginAllowsTool(tabId: string, name: string): boolean {
 }
 
 function surfaceAllowsTool(context: HermesSurfaceContext, name: string): boolean {
+    if (name === "delegate_pi_coding") {
+        const scoped = withSandboxComputerScope(context);
+        if (scoped?.agentRuntime !== "hermes" || !scoped.tabId || scoped.deviceOnly || scoped.sandboxComputerId ||
+            scoped.delegationScope || scoped.hostMode === "web-fullscreen" || isSwarmScoped(scoped)) return false;
+        return loginAllowsTool(scoped.tabId, "terminal");
+    }
+    if (context.deviceOnly && !["tool_search", "delegation_status"].includes(name) &&
+        !name.startsWith("device_") && !name.startsWith("shared_skill_")) return false;
     if (!isSwarmToolAllowed(context, name)) return false;
     if (isSwarmScoped(context)) {
         if (context.hostMode === "web-fullscreen" || !loginAllowsTool(context.tabId, name)) return false;
         if (context.swarmTarget?.kind === "vm") return swarmVmBindingAllows(context);
         const sessionId = context.chatId || context.toolSessionId;
-        if (sandboxComputerForTab(context.tabId, sessionId) &&
-            sandboxComputerModeForTab(context.tabId, sessionId) !== "hybrid") return false;
+        if (
+            sandboxComputerForTab(context.tabId, sessionId) &&
+            sandboxComputerModeForTab(context.tabId, sessionId) !== "hybrid"
+        )
+            return false;
         if (context.swarmTarget?.kind === "device")
             return !context.sandboxComputerId || context.sandboxComputerMode === "hybrid";
     }
@@ -292,7 +308,12 @@ export function availableKronTermToolNames(context: HermesSurfaceContext): strin
 }
 
 export function availableHermesCodingToolNames(context: HermesSurfaceContext): string[] {
-    if (!context?.tabId || isSwarmScoped(context) || context.n8nWorkerId || !loginAllowsTool(context.tabId, "terminal")) {
+    if (
+        !context?.tabId ||
+        isSwarmScoped(context) ||
+        context.n8nWorkerId ||
+        !loginAllowsTool(context.tabId, "terminal")
+    ) {
         return [];
     }
     return [
@@ -570,9 +591,13 @@ export class KronTermToolServer {
                     desktop.assignedAgentId !== `sandbox:${context.tabId}`) ||
                 hasSeparateChatComputer(id, context.tabId, context.chatId || context.toolSessionId)
             )
-                throw new Error("Control of this desktop belongs to another workspace or chat. Choose a sandbox again.");
-            if (!isSwarmScoped(context) &&
-                sandboxComputerForTab(context.tabId, context.chatId || context.toolSessionId) !== id)
+                throw new Error(
+                    "Control of this desktop belongs to another workspace or chat. Choose a sandbox again."
+                );
+            if (
+                !isSwarmScoped(context) &&
+                sandboxComputerForTab(context.tabId, context.chatId || context.toolSessionId) !== id
+            )
                 throw new Error("The selected sandbox changed. Check Computer mode before retrying.");
             if (isSwarmScoped(context)) {
                 assertSwarmToolCall(context, tool, args);
@@ -665,13 +690,29 @@ export class KronTermToolServer {
                 console.log("[computer-access] handback", { tabId: context.tabId, desktopId: id, reason: args.reason });
                 return { desktop: released, handedBack: true, handbackReason: args.reason, resumeRequiresUser: true };
             }
+            if (tool === "sandbox_vm_history") {
+                if (context.delegationScope || isSwarmScoped(context))
+                    throw new Error("VM history is managed by the parent chat.");
+                if (desktop.provider !== "cua-qemu") throw new Error("Checkpoints are supported only for QEMU VMs.");
+                return performAgent({
+                    desktopId: id,
+                    action: "history",
+                    historyAction: args.action as any,
+                    label: args.label as string,
+                    checkpointId: args.checkpointId as string,
+                    assignedAgentId: desktop.assignedAgentId,
+                    expectedGeneration: desktop.controlGeneration,
+                });
+            }
             const action = tool === "sandbox_vm_desktop" ? args.action : "exec";
             const command =
                 tool === "sandbox_vm_files"
                     ? guestPython(GuestFiles, args)
                     : tool === "sandbox_vm_browser"
                       ? guestPython(GuestBrowser, args)
-                      : args.command;
+                      : tool === "sandbox_vm_exec"
+                        ? guestPython(GuestExec, args)
+                        : args.command;
             return withFeedback(
                 `vm:${id}`,
                 "sandbox",
@@ -687,17 +728,12 @@ export class KronTermToolServer {
                         const text = String(args.text || "");
                         if (Buffer.byteLength(text) > 1048576) throw new Error("File exceeds 1 MB.");
                         const temporaryPath = `${String(args.path)}.kronterm-${randomUUID()}.tmp`;
-                        for (let offset = 0; offset < Math.max(1, text.length); offset += 2000) {
+                        for (const command of guestFileWriteCommands(temporaryPath, text)) {
                             if (signal?.aborted) throw new Error("Sandbox file write was cancelled.");
                             await performAgent({
                                 desktopId: id,
                                 action: "exec",
-                                command: guestPython(GuestFiles, {
-                                    ...args,
-                                    path: temporaryPath,
-                                    action: offset === 0 ? "write" : "append",
-                                    text: text.slice(offset, offset + 2000),
-                                }),
+                                command,
                                 assignedAgentId: desktop.assignedAgentId,
                                 expectedGeneration: desktop.controlGeneration,
                             });
@@ -724,6 +760,12 @@ export class KronTermToolServer {
                         assignedAgentId: desktop.assignedAgentId,
                         expectedGeneration: desktop.controlGeneration,
                     });
+                    if (tool === "sandbox_vm_exec") {
+                        const { stdoutBase64, stderrBase64, ...execution } = JSON.parse(result.output);
+                        const stdout = Buffer.from(stdoutBase64, "base64").toString("utf8");
+                        const stderr = Buffer.from(stderrBase64, "base64").toString("utf8");
+                        return { ...result, ...execution, stdout, stderr, output: stdout };
+                    }
                     if (
                         tool === "sandbox_vm_browser" &&
                         args.action === "state" &&
@@ -741,8 +783,34 @@ export class KronTermToolServer {
                         } catch {
                             return result;
                         }
-                        const login = await getSandboxLoginBroker().request(context.tabId, context.toolSessionId, origin);
+                        const login = await getSandboxLoginBroker().request(
+                            context.tabId,
+                            context.toolSessionId,
+                            origin
+                        );
                         return { ...result, login };
+                    }
+                    if (
+                        tool === "sandbox_vm_desktop" &&
+                        args.observe !== false &&
+                        ["click", "drag", "type", "key", "scroll"].includes(String(args.action))
+                    ) {
+                        try {
+                            const after = await performAgent({
+                                desktopId: id,
+                                action: "screenshot",
+                                assignedAgentId: desktop.assignedAgentId,
+                                expectedGeneration: desktop.controlGeneration,
+                            });
+                            return { ...result, imageDataUrl: after.imageDataUrl, actionDispatched: true };
+                        } catch (error) {
+                            return {
+                                ...result,
+                                actionDispatched: true,
+                                verificationError: error instanceof Error ? error.message : "After-image unavailable",
+                                guidance: "Observe again before further input. Do not repeat the delivered action.",
+                            };
+                        }
                     }
                     return result;
                 }
@@ -750,7 +818,13 @@ export class KronTermToolServer {
         });
         const computers = getComputerTargetsRuntime();
         setProductivityToolBridge({ query: queryProductivity, command: commandProductivity });
-        const deviceFarm = new DeviceFarmRuntime(computers);
+        const deviceFarm = new DeviceFarmRuntime(computers, (target) => {
+            if (target.kind === "ios-simulator" && /^iPhone\b/i.test(target.name)) {
+                void ensureIPhonePreview(target.id).catch((error) =>
+                    console.warn("Could not start iPhone preview:", error.message)
+                );
+            }
+        });
         const deviceCaller = () => resolveToolRequestContext(this.contextProvider)?.nativeCallerId;
         setComputerTargetToolBridge({
             list: () => computers.list(),
@@ -936,7 +1010,11 @@ export class KronTermToolServer {
         }
     }
 
-    private async handleNativeRequest(request: IncomingMessage, response: ServerResponse, callerToken?: string): Promise<void> {
+    private async handleNativeRequest(
+        request: IncomingMessage,
+        response: ServerResponse,
+        callerToken?: string
+    ): Promise<void> {
         if (request.method !== "POST") {
             writeError(response, 405, "Method not allowed");
             return;
@@ -1181,6 +1259,31 @@ export function startKronTermToolServer(
     owner: string = "desktop"
 ): Promise<KronTermToolServerDescriptor> {
     if (!toolServer) {
+        const registry = mcpServer as unknown as {
+            registerTool(
+                name: string,
+                config: { title: string; description: string; inputSchema: Record<string, z.ZodString> },
+                handler: (args: { task: string; directory: string }, extra: { signal: AbortSignal }) =>
+                    Promise<{ content: { type: "text"; text: string }[] }>
+            ): unknown;
+        };
+        registry.registerTool("delegate_pi_coding", {
+            title: "Delegate coding to Pi",
+            description: "Delegate a local coding task to Pi on gpt-6.1-sol. Supply the exact project directory and a focused task with its verification command. Wait for the result before editing the same files.",
+            inputSchema: { task: z.string().trim().min(1).max(12000), directory: z.string().trim().min(1).max(4096) },
+        }, async ({ task, directory }, extra) => {
+            const context = resolveToolRequestContext(contextProvider);
+            if (!surfaceAllowsTool(context, "delegate_pi_coding")) throw new Error("Pi delegation is unavailable for this session.");
+            if (!isAbsolute(directory)) throw new Error("Provide the absolute project directory.");
+            const cwd = await realpath(directory);
+            if (!(await stat(cwd)).isDirectory()) throw new Error("Pi needs an existing project directory.");
+            const { runDelegatedPiCoding } = await import("./pen-agent-experiment");
+            const text = await runDelegatedPiCoding({
+                cwd, task, tabId: context.tabId,
+                signal: AbortSignal.any([extra.signal, AbortSignal.timeout(150000)].filter(Boolean)),
+            });
+            return { content: [{ type: "text" as const, text }] };
+        });
         toolServer = new KronTermToolServer(contextProvider);
     }
     const token = toolServer.registerCaller(owner, contextProvider);

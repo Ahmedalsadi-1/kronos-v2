@@ -3,6 +3,11 @@ import type { SettingsView } from "./types";
 
 export const BASE_SETTINGS_VIEWS: readonly SettingsView[] = [
     ...SECTIONS.map((section) => `config:${section.id}` as SettingsView),
+    "kronrender",
+    "kronflow",
+    "integrations",
+    "quick-entry",
+    "companion",
     "providers",
     "gateway",
     "connections",
@@ -13,6 +18,7 @@ export const BASE_SETTINGS_VIEWS: readonly SettingsView[] = [
     "notifications",
     "billing",
     "plugins",
+    "skills",
     "sessions",
     "about",
 ];

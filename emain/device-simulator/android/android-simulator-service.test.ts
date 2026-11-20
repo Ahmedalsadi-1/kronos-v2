@@ -201,3 +201,70 @@ it("starts a fresh screenshot across a control generation change", async () => {
     await Promise.all([f.service.screenshot(id, 1), f.service.screenshot(id, 2)]);
     expect(f.commands.filter((args) => args.includes("screencap"))).toHaveLength(2);
 });
+
+it("polls the selected boot serial without repeating SDK inventory", async () => {
+    const f = fixture(false);
+    let checks = 0;
+    const service = new AndroidSimulatorService({
+        sdk,
+        launch: f.launch,
+        sleep: async () => {},
+        run: async (binary, args) => {
+            if (args.includes("sys.boot_completed")) return Buffer.from(++checks === 3 ? "1" : "0");
+            return f.run(binary, args);
+        },
+    });
+    expect((await service.boot("android-avd:Pixel_8")).serial).toBe("emulator-5554");
+    expect(checks).toBe(3);
+    expect(f.commands.filter((args) => args[0] === "-list-avds")).toHaveLength(1);
+    expect(f.commands.filter((args) => args[0] === "devices")).toHaveLength(2);
+});
+
+it("counts slow ADB work toward the boot deadline", async () => {
+    const f = fixture(false);
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => elapsed);
+    const service = new AndroidSimulatorService({
+        sdk,
+        launch: f.launch,
+        bootTimeoutMs: 2000,
+        sleep: async () => {},
+        run: async (binary, args) => {
+            if (args.includes("sys.boot_completed")) {
+                elapsed += 2500;
+                return Buffer.from("0");
+            }
+            return f.run(binary, args);
+        },
+    });
+    try {
+        await expect(service.boot("android-avd:Pixel_8")).rejects.toThrow("did not finish booting");
+        expect(elapsed).toBe(2500);
+    } finally {
+        clock.mockRestore();
+    }
+});
+
+it("does not reuse an overlapping pre-input capture for the after-image", async () => {
+    const f = fixture();
+    let release: (data: Buffer) => void;
+    let captures = 0;
+    const service = new AndroidSimulatorService({
+        sdk,
+        run: async (binary, args) => {
+            if (args.includes("screencap") && ++captures === 1)
+                return new Promise((resolve) => {
+                    release = resolve;
+                });
+            return f.run(binary, args);
+        },
+    });
+    await service.discover();
+    const before = service.screenshot("android-avd:Pixel_8");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await service.tap("android-avd:Pixel_8", 0.5, 0.5);
+    await service.screenshot("android-avd:Pixel_8");
+    expect(captures).toBe(2);
+    release(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]));
+    await before;
+});

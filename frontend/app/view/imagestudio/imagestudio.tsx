@@ -100,6 +100,7 @@ export class ImageStudioModel implements ViewModel {
                 action: "add_file",
                 file: filePath,
                 text: preview.image.filename,
+                render: { id: preview.id, origin: preview.origin, image: preview.image },
             });
             if (!this.disposed) globalStore.set(this.pinStatus, `Pinned ${preview.image.filename} to the canvas.`);
         } catch (error) {

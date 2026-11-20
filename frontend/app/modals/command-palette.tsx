@@ -7,11 +7,10 @@ import { getBuiltinViewDescriptors, useInstalledAppDescriptors } from "@/app/sto
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { createBlock, getApi } from "@/store/global";
 import type { LucideIcon } from "lucide-react";
-import { Bot, Layers, LayoutGrid, Search } from "lucide-react";
+import { Bot, Layers, Search } from "lucide-react";
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { filterCommandPaletteActions } from "./command-palette-utils";
@@ -41,18 +40,6 @@ const CommandActions: CommandPaletteAction[] = [
         run: () => {
             WorkspaceLayoutModel.getInstance().setAIPanelVisible(true);
             setTimeout(() => WaveAIModel.getInstance().focusInput(), 50);
-        },
-    },
-    {
-        id: "os-mode",
-        label: "Open OS Mode",
-        detail: "Switch to the spatial desktop",
-        keywords: ["spatial", "desktop", "canvas", "os", "fullscreen"],
-        group: "commands",
-        icon: LayoutGrid,
-        run: () => {
-            publishWorkspacePresentation("os");
-            void RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": "os" });
         },
     },
 ];

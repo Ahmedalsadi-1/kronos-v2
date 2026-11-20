@@ -1,0 +1,1 @@
+Move three selected cards together, then pull back to see the design frame on the KronOS canvas.

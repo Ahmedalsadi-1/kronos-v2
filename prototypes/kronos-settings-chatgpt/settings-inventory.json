@@ -1,0 +1,432 @@
+{
+    "controls": [
+        {
+            "file": "about-settings.tsx",
+            "component": "ListRow",
+            "label": "Automatic updates",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Language",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Interface font",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Button style",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{\n              <div className=\"flex items-center justify-between gap-3\">\n                <span>{a.themeTitle}</span>\n                <SegmentedControl\n                  onChange={id => {\n                    triggerHaptic('crisp')\n                    setMode(id)\n                  }}\n                  options={modeOptions}\n                  value={mode}\n                />\n              </div>\n            }",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "UI Scale",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Session List Density",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Window Translucency",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Chat Backdrop",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Floating Composer",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Message Reactions",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Tool Call Display",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Collapse thinking by default",
+            "status": "captured"
+        },
+        {
+            "file": "appearance-settings.tsx",
+            "component": "ListRow",
+            "label": "Inline Embeds",
+            "status": "captured"
+        },
+        {
+            "file": "browser-settings.tsx",
+            "component": "ListRow",
+            "label": "Start page",
+            "status": "captured"
+        },
+        {
+            "file": "browser-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Open links inside KronOS",
+            "status": "captured"
+        },
+        {
+            "file": "browser-settings.tsx",
+            "component": "ListRow",
+            "label": "Search engine",
+            "status": "captured"
+        },
+        {
+            "file": "browser-settings.tsx",
+            "component": "ListRow",
+            "label": "Search URL",
+            "status": "captured"
+        },
+        {
+            "file": "browser-settings.tsx",
+            "component": "ListRow",
+            "label": "Separate your browsing accounts",
+            "status": "captured"
+        },
+        {
+            "file": "browser-settings.tsx",
+            "component": "ListRow",
+            "label": "Permissions are managed per website",
+            "status": "captured"
+        },
+        {
+            "file": "config-field.tsx",
+            "component": "ListRow",
+            "labelExpression": "{label}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "config-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Keep computer awake",
+            "status": "captured"
+        },
+        {
+            "file": "config-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Disable F12 DevTools",
+            "status": "captured"
+        },
+        {
+            "file": "config-settings.tsx",
+            "component": "ListRow",
+            "label": "Max preview / image load size",
+            "status": "captured"
+        },
+        {
+            "file": "connections-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{\n                <span className=\"flex items-center gap-2\">\n                  <Icon className=\"size-4 shrink-0 text-muted-foreground\" />\n                  <span className=\"truncate\">{conn.label}</span>\n                  {isPrimary && <Pill tone=\"primary\">{s.primaryPill}</Pill>}\n                  {conn.kind === 'local' && <Pill>{s.managedPill}</Pill>}\n                </span>\n              }",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "connections-settings.tsx",
+            "component": "ListRow",
+            "label": "Name",
+            "status": "captured"
+        },
+        {
+            "file": "connections-settings.tsx",
+            "component": "ListRow",
+            "label": "Gateway URL",
+            "status": "captured"
+        },
+        {
+            "file": "connections-settings.tsx",
+            "component": "ListRow",
+            "label": "Authentication",
+            "status": "captured"
+        },
+        {
+            "file": "connections-settings.tsx",
+            "component": "ListRow",
+            "label": "Session token",
+            "status": "captured"
+        },
+        {
+            "file": "connections-settings.tsx",
+            "component": "ListRow",
+            "label": "SSH host",
+            "status": "captured"
+        },
+        {
+            "file": "credential-key-ui.tsx",
+            "component": "ListRow",
+            "labelExpression": "{fieldLabel}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "KronOS Cloud",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{orgEntry.name}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{agent.name}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Remote URL",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Authentication",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Session token",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Host",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Host",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "User",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Port",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Identity file",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "KronOS path (optional)",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Remote profile (optional)",
+            "status": "captured"
+        },
+        {
+            "file": "gateway-settings.tsx",
+            "component": "ListRow",
+            "label": "Diagnostics",
+            "status": "captured"
+        },
+        {
+            "file": "model-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{\n                                        <span className=\"flex items-baseline gap-2\">\n                                            {copy.label}\n                                            <Pill>{copy.hint}</Pill>\n                                        </span>\n                                    }",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "model-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{`Reference ${index + 1}`}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "model-settings.tsx",
+            "component": "ListRow",
+            "label": "Aggregator",
+            "status": "captured"
+        },
+        {
+            "file": "notifications-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Enable notifications",
+            "status": "captured"
+        },
+        {
+            "file": "notifications-settings.tsx",
+            "component": "ToggleRow",
+            "labelExpression": "{copy.kinds[kind].label}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "notifications-settings.tsx",
+            "component": "ListRow",
+            "label": "Completion Sound",
+            "status": "captured"
+        },
+        {
+            "file": "pen-canvas-settings.tsx",
+            "component": "ToggleRow",
+            "labelExpression": "{field.label}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "pen-canvas-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{field.label}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "pet-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{\n            <div className=\"flex items-center justify-between gap-3\">\n              <span>{copy.chooseTitle}</span>\n              <SegmentedControl\n                onChange={id => void toggle(id === 'on')}\n                options={[\n                  { id: 'off', label: copy.off },\n                  { id: 'on', label: copy.on }\n                ]}\n                value={enabled ? 'on' : 'off'}\n              />\n            </div>\n          }",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "pet-settings.tsx",
+            "component": "ListRow",
+            "label": "Size",
+            "status": "captured"
+        },
+        {
+            "file": "pet-settings.tsx",
+            "component": "ListRow",
+            "label": "Roam",
+            "status": "captured"
+        },
+        {
+            "file": "primitives.tsx",
+            "component": "ListRow",
+            "labelExpression": "{label}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "quick-entry-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Quick Entry",
+            "status": "captured"
+        },
+        {
+            "file": "quick-entry-settings.tsx",
+            "component": "ListRow",
+            "label": "Quick Entry shortcut",
+            "status": "captured"
+        },
+        {
+            "file": "sessions-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{sessionTitle(session)}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "sessions-settings.tsx",
+            "component": "ToggleRow",
+            "label": "Auto-archive stale chats",
+            "status": "captured"
+        },
+        {
+            "file": "sessions-settings.tsx",
+            "component": "ListRow",
+            "label": "Archive after",
+            "status": "captured"
+        },
+        {
+            "file": "sessions-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{dir ? dir : s.notSet}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "terminal-font-setting.tsx",
+            "component": "ListRow",
+            "label": "Terminal Font",
+            "status": "captured"
+        },
+        {
+            "file": "workspace-tool-settings.tsx",
+            "component": "ListRow",
+            "labelExpression": "{tool.label}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "workspace-tool-settings.tsx",
+            "component": "ListRow",
+            "label": "Always available",
+            "status": "captured"
+        },
+        {
+            "file": "billing/auto-reload-row.tsx",
+            "component": "ListRow",
+            "labelExpression": "{row.title}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "billing/index.tsx",
+            "component": "ListRow",
+            "labelExpression": "{row.title}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "billing/index.tsx",
+            "component": "ListRow",
+            "labelExpression": "{row.title}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "memory/provider-config-modal.tsx",
+            "component": "ListRow",
+            "labelExpression": "{<FieldTitle field={field} />}",
+            "status": "dynamic-row"
+        },
+        {
+            "file": "memory/provider-config-panel.tsx",
+            "component": "ListRow",
+            "labelExpression": "{<FieldTitle field={field} />}",
+            "status": "dynamic-row"
+        }
+    ],
+    "staticRows": 50,
+    "dynamicRows": 21
+}

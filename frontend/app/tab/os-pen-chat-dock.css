@@ -1,0 +1,557 @@
+/* Copyright 2026, Command Line Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.pen-chat-dock,
+.pen-chat-review {
+    position: absolute;
+    z-index: 3;
+    background: var(--kt-content, #181818);
+    color: var(--kt-label, #ededed);
+    font:
+        13px -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+}
+
+.pen-chat-dock {
+    right: 0;
+    bottom: 0;
+    width: var(--kronos-chat-dock-width);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--kt-separator, #333);
+    overflow: hidden;
+}
+
+.pen-chat-dock[hidden],
+.pen-chat-dock [hidden] {
+    display: none;
+}
+
+.pen-chat-review {
+    z-index: 4;
+    right: 12px;
+    width: min(290px, calc(100% - 24px));
+    padding: 14px;
+    border: 1px solid var(--kt-separator, #333);
+    border-radius: 14px;
+    background: var(--kt-popover, #252525);
+    box-shadow: 0 8px 24px #0003;
+}
+
+.pen-chat-review > div {
+    color: var(--kt-label-secondary, #aaa);
+    padding: 5px 8px;
+}
+
+.os-pen-editor :is(.pen-chat-review, .pen-chat-launcher, .pen-chat-changes) button {
+    background: transparent;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding-inline: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.pen-chat-dock button:focus-visible,
+.pen-chat-review button:focus-visible {
+    outline: 2px solid var(--kt-focus-ring, var(--accent-color, #8875ff));
+    outline-offset: -2px;
+}
+
+.pen-chat-dock button:disabled {
+    opacity: 0.55;
+}
+
+.os-pen-editor :is(.pen-chat-review, .pen-chat-launcher, .pen-chat-changes) button:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.pen-chat-review button {
+    width: 100%;
+}
+
+.pen-chat-review-total,
+.pen-chat-changes button span {
+    margin-inline-start: auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.pen-chat-review-total span:first-child {
+    color: var(--kt-success, #49b879);
+}
+.pen-chat-review-total span:last-child {
+    color: var(--kt-danger, #ee7474);
+}
+
+.pen-chat-divider {
+    position: absolute;
+    z-index: 5;
+    inset: 0 auto 0 0;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.pen-chat-divider:hover,
+.pen-chat-divider:focus-visible,
+.pen-chat-divider:active {
+    background: color-mix(in srgb, #a889ff 26%, transparent);
+    outline: none;
+}
+
+.pen-chat-launcher,
+.pen-chat-changes {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+}
+
+.pen-chat-launcher {
+    width: min(100%, 800px);
+    margin-inline: auto;
+    padding: clamp(32px, 12vh, 144px) 20px 24px;
+}
+
+.pen-chat-launcher form {
+    position: relative;
+    margin-bottom: 26px;
+}
+
+.pen-chat-launcher label {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    border-radius: 24px;
+    padding: 0 16px;
+    min-height: 56px;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.pen-chat-launcher label:focus-within {
+    box-shadow:
+        0 0 0 1px #b198ff50,
+        0 0 12px #9876ff20;
+}
+
+.pen-chat-launcher input[role="combobox"] {
+    min-width: 0;
+    width: 100%;
+    font-size: 16px;
+    outline: none !important;
+    box-shadow: none !important;
+    border: 0;
+    background: transparent;
+}
+
+.pen-chat-suggestions {
+    position: absolute;
+    z-index: 4;
+    top: calc(100% + 5px);
+    inset-inline: 0;
+    max-height: min(350px, 45vh);
+    overflow: auto;
+    padding: 5px;
+    border: 1px solid var(--kt-separator, #444);
+    border-radius: 14px;
+    background: var(--kt-popover, #252525);
+    box-shadow: 0 8px 24px #0003;
+}
+
+.pen-chat-suggestions li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.pen-chat-suggestions li:is(:hover, [aria-selected="true"]) {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.pen-chat-suggestions svg {
+    flex: none;
+}
+.pen-chat-suggestions li span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.pen-chat-suggestions small {
+    color: var(--kt-label-secondary, #aaa);
+}
+
+.pen-chat-launcher p {
+    color: var(--kt-label-secondary, #aaa);
+    margin-bottom: 12px;
+}
+
+.pen-chat-launch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+    gap: 8px;
+}
+
+.os-pen-editor .pen-chat-launch-grid > button {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    min-height: 90px;
+    padding: 12px;
+    border-radius: 14px;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.pen-chat-launch-grid > button svg {
+    width: 17px;
+    height: 17px;
+}
+
+.pen-chat-dock-page {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.pen-browser-toolbar-home {
+    flex: none;
+    margin-top: 4px;
+}
+.pen-browser-toolbar-home:empty {
+    display: none;
+}
+
+.pen-chat-changes {
+    padding: 12px;
+}
+.pen-chat-changes button {
+    width: 100%;
+    text-align: start;
+    overflow-wrap: anywhere;
+}
+.pen-chat-changes pre {
+    overflow: auto;
+    padding: 12px;
+}
+.pen-chat-dock-error {
+    padding: 8px 12px;
+    color: var(--kt-danger, #ee7474);
+}
+
+@media (max-width: 640px) {
+    .pen-chat-dock {
+        width: 100%;
+    }
+    .pen-chat-divider {
+        display: none;
+    }
+    .pen-chat-launcher {
+        padding-top: 24px;
+    }
+}
+
+.pen-chat-dock-page[hidden] {
+    display: none;
+}
+
+.pen-chat-dock-page[data-app="iphone"] {
+    background: var(--kt-content, #181818);
+}
+
+.pen-chat-dock-page[data-app="iphone"] .webview-navigation {
+    display: none;
+}
+
+/* Discrete display transitions keep the live widget painted until the exit finishes. */
+.pen-chat-dock {
+    opacity: 1;
+    transform: translateX(0);
+    transition:
+        width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 180ms ease,
+        display 280ms allow-discrete;
+}
+
+.pen-chat-dock[hidden] {
+    opacity: 0;
+    transform: translateX(48px);
+    pointer-events: none;
+}
+
+.pen-chat-dock[hidden] .pen-chat-dock-page {
+    transition: display 280ms allow-discrete;
+}
+
+@starting-style {
+    .pen-chat-dock:not([hidden]) {
+        opacity: 0;
+        transform: translateX(48px);
+    }
+}
+
+.pen-chat-dock[data-resizing] {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pen-chat-dock,
+    .pen-chat-dock[hidden] .pen-chat-dock-page {
+        transition: none;
+    }
+}
+
+.pen-files { display: flex; flex: 1; min-height: 0; flex-direction: column; background: #181818; color: #eee; }
+.pen-files header { position: relative; min-width: 0; display: flex; gap: 6px; padding: 8px; align-items: center; border-bottom: 1px solid #333; }
+.pen-files header > button, .pen-files nav { padding: 7px 10px; border-radius: 999px; background: #303030; }
+.pen-files nav { display: flex; margin-right: auto; align-items: center; gap: 5px; min-width: 0; }
+.pen-files nav > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-files button { cursor: pointer; }
+.pen-files > header button:hover, .pen-files-body aside button:hover, .pen-files-body aside button[aria-current="true"] { background: #3b3b3b; }
+.pen-files-crumb { position: relative; display: flex; align-items: center; gap: 4px; }
+.pen-files-crumb > button { border-radius: 6px; padding: 2px 4px; }
+.pen-files-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 12; width: 225px; max-height: 280px; overflow: auto; padding: 5px; border: 1px solid #444; border-radius: 12px; background: #292929; }
+.pen-files-body { display: flex; flex: 1; min-height: 0; }
+.pen-files-body main { min-width: 0; flex: 1; display: flex; flex-direction: column; position: relative; }
+.pen-files-body aside { width: min(32%, 290px); border-left: 1px solid #333; overflow: auto; padding: 8px; }
+.pen-files-body aside input { width: 100%; margin-bottom: 8px; border: 1px solid #444; border-radius: 999px; padding: 6px 10px; }
+.pen-files-body summary { cursor: pointer; padding: 6px; }
+.pen-files-menu button, .pen-files-body aside button { display: flex; align-items: center; width: 100%; gap: 7px; padding: 6px; border-radius: 6px; text-align: left; }
+.pen-files-menu button span, .pen-files-body aside button span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-files-menu button svg, .pen-files-body aside button svg, .pen-files-body aside button small { flex: none; }
+.pen-files-empty { margin: auto; display: grid; place-items: center; gap: 10px; color: #bbb; }
+.pen-files-body pre { overflow: auto; margin: 0; padding: 8px; }
+.pen-files-body pre span { display: inline-block; min-width: 100%; }
+.pen-files-body pre [data-diff="add"] { background: #203729; }
+.pen-files-body pre [data-diff="remove"] { background: #48282d; }
+
+.pen-files-crumb { position: static; }
+.pen-files-menu-chain {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 8px;
+    z-index: 12;
+    max-width: min(calc(100% - 16px), 700px);
+    overflow-x: auto;
+}
+.pen-files-menu-level { display: flex; align-items: start; gap: 4px; width: max-content; }
+.pen-files-menu-chain .pen-files-menu {
+    position: static;
+    width: 225px;
+    max-height: 320px;
+}
+.pen-files-menu input {
+    width: 100%;
+    margin: 4px 0;
+    padding: 6px 8px;
+    border: 1px solid #555;
+    border-radius: 8px;
+}
+.pen-files-menu-results p { padding: 6px; color: #bbb; }
+
+.pen-chat-widget-panes:not([hidden]),
+.pen-chat-widget-pane:not([hidden]) {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.pen-chat-widget-panes[data-split-axis="vertical"] {
+    flex-direction: column;
+}
+
+.pen-chat-widget-panes {
+    position: relative;
+}
+
+.pen-chat-split-drop {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    grid-template: repeat(2, 1fr) / repeat(3, 1fr);
+    grid-template-areas:
+        "left top right"
+        "left bottom right";
+}
+
+.pen-chat-split-drop > div {
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--kt-focus-ring, #8ab4ff);
+    background: color-mix(in srgb, var(--kt-focus-ring, #8ab4ff) 14%, transparent);
+}
+
+.pen-chat-split-drop > div:hover {
+    background: color-mix(in srgb, var(--kt-focus-ring, #8ab4ff) 30%, transparent);
+}
+
+.pen-chat-split-drop [data-side="left"] { grid-area: left; }
+.pen-chat-split-drop [data-side="right"] { grid-area: right; }
+.pen-chat-split-drop [data-side="top"] { grid-area: top; }
+.pen-chat-split-drop [data-side="bottom"] { grid-area: bottom; }
+
+.pen-chat-split-drop span {
+    pointer-events: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    color: var(--kt-label, #fff);
+    background: var(--kt-content, #282828);
+}
+
+.pen-chat-widget-panes[data-split="true"] > .pen-chat-widget-pane:not([data-secondary="true"]) {
+    flex: var(--pen-split-size) 1 0;
+}
+
+.pen-chat-widget-panes[data-split="true"] > .pen-chat-widget-pane[data-secondary="true"] {
+    order: 2;
+    flex: calc(100 - var(--pen-split-size)) 1 0;
+}
+
+.pen-chat-split-divider {
+    position: relative;
+    z-index: 1;
+    order: 1;
+    flex: 0 0 1px;
+    cursor: col-resize;
+    touch-action: none;
+    background: color-mix(in srgb, var(--kt-separator, #454545) 35%, transparent);
+}
+
+.pen-chat-split-divider::before {
+    position: absolute;
+    inset: 0 -4px;
+    content: "";
+}
+
+.pen-chat-split-divider:hover,
+.pen-chat-split-divider:focus-visible {
+    background: var(--kt-focus-ring, #8ab4ff);
+}
+
+[data-split-axis="vertical"] > .pen-chat-split-divider {
+    cursor: row-resize;
+}
+
+[data-split-axis="vertical"] > .pen-chat-split-divider::before {
+    inset: -4px 0;
+}
+
+.pen-chat-widget-pane {
+    position: relative;
+}
+
+.pen-chat-pane-drag {
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 2px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    padding-inline: 4px;
+    border-radius: 4px;
+    color: var(--kt-label, #fff);
+    background: var(--kt-content, #282828);
+    cursor: grab;
+    opacity: 0.45;
+    user-select: none;
+}
+
+.pen-chat-pane-drag:hover,
+.pen-chat-pane-drag:active {
+    opacity: 1;
+}
+
+
+.pen-chat-widget-pane:has(> .pen-chat-dock-page[data-app="files"]) {
+    overflow: clip;
+    isolation: isolate;
+}
+
+.pen-files nav > .pen-files-crumb {
+    min-width: 0;
+}
+
+.pen-files-crumb > button {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Keep guest viewports laid out so agent actions can capture background tabs. */
+.pen-chat-dock[data-backgrounded="true"][data-background-browser="true"] {
+    display: flex;
+    opacity: 0;
+    pointer-events: none;
+    transform: none;
+}
+.pen-chat-dock[data-background-browser="true"] .pen-chat-widget-panes[data-backgrounded="true"] {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.pen-chat-dock .pen-chat-widget-pane[data-background-browser="true"][data-backgrounded="true"] {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.pen-chat-dock .pen-chat-dock-page[data-app="browser"][data-backgrounded="true"] {
+    display: flex;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pen-chat-dock[data-floating-chat] {
+    border-left: 0;
+    transition: none;
+    transform: none;
+    clip-path: polygon(
+        evenodd,
+        0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+        var(--pen-float-left) var(--pen-float-top),
+        var(--pen-float-right) var(--pen-float-top),
+        var(--pen-float-right) var(--pen-float-bottom),
+        var(--pen-float-left) var(--pen-float-bottom),
+        var(--pen-float-left) var(--pen-float-top),
+        0 0
+    );
+}
+
+.pen-chat-dock[data-chat-side] {
+    clip-path: none;
+}
+
+.pen-chat-dock[data-chat-side="right"] {
+    right: auto;
+    left: 0;
+}
+
+/* The tab button carries agent activity in the browser dock. */
+.pen-chat-dock-page[data-app="browser"] .agent-block-aura {
+    display: none;
+}
+
+/* Detached live widgets need the same chat cutout as the dock itself. */
+.pen-chat-float-occlusion {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.pen-chat-float-occlusion > div {
+    position: absolute;
+    pointer-events: none;
+}
+

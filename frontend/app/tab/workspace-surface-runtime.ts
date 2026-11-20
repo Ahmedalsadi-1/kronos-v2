@@ -81,6 +81,7 @@ type WorkspaceSurfaceControlInput = {
     presentation?: string;
     position?: string;
     file?: string;
+    render?: import("@/types/comfyui").ComfyRenderRef;
 };
 
 type WorkspaceSurfaceModeState = {
@@ -98,6 +99,7 @@ type WorkspaceSurfaceModeState = {
     tabgroups?: unknown;
     presentations?: Record<string, string>;
     osview?: KronTermOSView;
+    penchatmode?: "tabs" | "canvas";
 };
 
 type WorkspaceSurfaceModeProvider = {

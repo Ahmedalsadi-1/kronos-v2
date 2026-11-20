@@ -134,7 +134,10 @@ export async function uploadComposerAttachment(
     const path = attachment.path ?? "";
     const label = attachment.label || pathLabel(path);
     const uploadBytes =
-        !!attachment.imageDataUrl || remote || attachmentPathNeedsUpload(path, backendCwd, terminalBackend);
+        !!attachment.imageDataUrl ||
+        !!attachment.fileDataUrl ||
+        remote ||
+        attachmentPathNeedsUpload(path, backendCwd, terminalBackend);
 
     // Read bytes/paths ONCE, outside the retry. Only the session-scoped RPC is
     // replayed on recovery — re-reading a multi-MB file to retry a dead session
@@ -149,7 +152,7 @@ export async function uploadComposerAttachment(
             if (attachment.kind === "image") {
                 imagePayload = await readImageForRemoteAttach(path, attachment.imageDataUrl ?? attachment.previewUrl);
             } else {
-                fileDataUrl = await readFileDataUrlForAttach(path);
+                fileDataUrl = attachment.fileDataUrl ?? (await readFileDataUrlForAttach(path));
             }
         } catch (err) {
             throw friendlyRemoteAttachError(err, label);
@@ -191,7 +194,8 @@ export async function uploadComposerAttachment(
 
         const result = await requestGateway<FileAttachResponse>("file.attach", {
             name: label,
-            path,
+            // Browser filenames must not resolve to an unrelated gateway-side file.
+            path: attachment.fileDataUrl ? "" : path,
             session_id: liveSessionId,
             ...(fileDataUrl ? { data_url: fileDataUrl } : {}),
         });
@@ -204,6 +208,8 @@ export async function uploadComposerAttachment(
             ...attachment,
             attachedSessionId: liveSessionId,
             refText: result.ref_text,
+            path: result.path || path,
+            fileDataUrl: undefined,
             uploadState: undefined,
         };
     };
@@ -337,18 +343,22 @@ export function usePromptActions({
         async (
             sessionId: string,
             attachments: ComposerAttachment[],
-            options: { updateComposerAttachments?: boolean } = {}
+            options: { updateComposerAttachments?: boolean; storedSessionId?: string | null } = {}
         ): Promise<{ attachments: ComposerAttachment[]; sessionId: string }> => {
             const updateComposerAttachments = options.updateComposerAttachments ?? true;
             const remote = $connection.get()?.mode === "remote";
-            const storedSessionId = selectedStoredSessionIdRef.current;
+            const storedSessionId = "storedSessionId" in options
+                ? options.storedSessionId
+                : selectedStoredSessionIdRef.current;
             let liveSessionId = sessionId;
             const synced: ComposerAttachment[] = [];
 
             const onSessionRecovered = (recoveredId: string) => {
+                if (activeSessionIdRef.current === liveSessionId) {
+                    activeSessionIdRef.current = recoveredId;
+                    setActiveSessionId(recoveredId);
+                }
                 liveSessionId = recoveredId;
-                activeSessionIdRef.current = recoveredId;
-                setActiveSessionId(recoveredId);
             };
 
             for (const original of attachments) {

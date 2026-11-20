@@ -3,42 +3,66 @@
 
 import { useComposerVoice } from "@hermes/app/chat/composer/hooks/use-composer-voice";
 import { ComposerScopeProvider, MAIN_COMPOSER_SCOPE } from "@hermes/app/chat/composer/scope";
+import { $speechMotion } from "@hermes/lib/speech-motion";
 import { $busy, $messages } from "@hermes/store/session";
 import { $sessionStates } from "@hermes/store/session-states";
+import { $voicePlayback } from "@hermes/store/voice-playback";
 import { useStore } from "@nanostores/react";
-import { computed } from "nanostores";
+import { computed, type ReadableAtom } from "nanostores";
+import type { OrbState } from "orb-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { PenVoiceOrb } from "./pen-voice-orb";
 
 export const PenVoiceEvent = "kronos:pen-composer-voice";
 
-type VoiceUpdate = { active?: boolean; dictation?: string; text?: string; prompt?: string; stop?: boolean; error?: string };
+type VoiceUpdate = {
+    active?: boolean;
+    phase?: OrbState;
+    dictation?: string;
+    text?: string;
+    prompt?: string;
+    stop?: boolean;
+    error?: string;
+};
 export type PenVoiceRequest = {
     tabId: string;
     conversationId: string;
     runtimeId?: string;
     action: "conversation" | "dictation" | "cancel";
     publish: (update: VoiceUpdate) => Promise<unknown>;
+    orbMount?: () => HTMLElement;
+    synthesize?: (text: string) => Promise<ArrayBuffer>;
+    reply?: ReadableAtom<{ id: string; pending: boolean; text: string }>;
     handled?: boolean;
 };
 
 type VoiceConfig = { transcribe: (audio: Blob) => Promise<string>; maxSeconds: number };
 const EmptyMessages = [];
+const EmptyReply = computed($busy, () => null);
 
 function PenVoiceSession({ request, transcribe, maxSeconds }: VoiceConfig & { request: PenVoiceRequest }) {
     const mainBusy = useStore($busy);
+    const reply = useStore(request.reply ?? EmptyReply);
     const sessions = useStore($sessionStates);
+    const output = useStore($speechMotion);
+    const playback = useStore($voicePlayback);
+    const [orbMount, setOrbMount] = useState<HTMLElement>();
     const seen = useRef<PenVoiceRequest>(null);
     const busy = request.runtimeId ? Boolean(sessions[request.runtimeId]?.busy) : mainBusy;
     const voice = useComposerVoice({
-        busy,
+        busy: busy || Boolean(reply?.pending),
+        conversationReply: request.reply,
         disabled: false,
         clearDraft: () => {},
         focusInput: () => {},
         insertText: (text) => void request.publish({ text }).catch(() => {}),
         maxRecordingSeconds: maxSeconds,
-        onInterrupt: async () => { await request.publish({ stop: true }); },
+        onInterrupt: async () => {
+            await request.publish({ stop: true });
+        },
         onSubmit: async (prompt) => {
-            const result = await request.publish({ prompt }) as { success?: boolean };
+            const result = (await request.publish({ prompt })) as { success?: boolean };
             return result?.success === true;
         },
         onTranscribeAudio: async (audio) => {
@@ -46,11 +70,14 @@ function PenVoiceSession({ request, transcribe, maxSeconds }: VoiceConfig & { re
                 void request.publish({ error: "" }).catch(() => {});
                 return await transcribe(audio);
             } catch (error) {
-                void request.publish({ error: error instanceof Error ? error.message : "Transcription failed." }).catch(() => {});
+                void request
+                    .publish({ error: error instanceof Error ? error.message : "Transcription failed." })
+                    .catch(() => {});
                 throw error;
             }
         },
         sessionId: request.runtimeId,
+        synthesize: request.synthesize,
         target: "pen",
     });
     useEffect(() => {
@@ -62,10 +89,39 @@ function PenVoiceSession({ request, transcribe, maxSeconds }: VoiceConfig & { re
         }
         if (request.action === "dictation" && !voice.voiceConversationActive) void voice.dictate();
     }, [request, voice]);
+    const active = voice.voiceConversationActive;
+    const status = voice.conversation.status;
+    const error = voice.conversation.error;
+    const phase = !active
+        ? "idle"
+        : error
+          ? "error"
+          : status === "listening"
+            ? "listening"
+            : status === "speaking" && playback.status === "speaking"
+              ? "speaking"
+              : status === "idle"
+                ? "connecting"
+                : "thinking";
     useEffect(() => {
-        void request.publish({ active: voice.voiceConversationActive, dictation: voice.voiceStatus }).catch(() => {});
-    }, [request, voice.voiceConversationActive, voice.voiceStatus]);
-    return null;
+        let current = true;
+        void request
+            .publish({ active, phase, dictation: voice.voiceStatus, ...(active && { error: error ?? "" }) })
+            .then(() => {
+                if (current) setOrbMount(active ? request.orbMount?.() : undefined);
+            })
+            .catch(() => {});
+        return () => {
+            current = false;
+        };
+    }, [request, active, phase, error, voice.voiceStatus]);
+
+    return active && orbMount?.isConnected
+        ? createPortal(
+              <PenVoiceOrb state={phase} inputVolume={voice.conversation.level} outputVolume={output.level} />,
+              orbMount
+          )
+        : null;
 }
 
 export function PenComposerVoice(config: VoiceConfig) {
@@ -76,8 +132,11 @@ export function PenComposerVoice(config: VoiceConfig) {
             if (!next || next.handled) return;
             next.handled = true;
             setRequest((current) => {
-                if (next.action === "cancel") return current?.tabId === next.tabId &&
-                    (!next.conversationId || current.conversationId === next.conversationId) ? undefined : current;
+                if (next.action === "cancel")
+                    return current?.tabId === next.tabId &&
+                        (!next.conversationId || current.conversationId === next.conversationId)
+                        ? undefined
+                        : current;
                 return next;
             });
         };
@@ -85,13 +144,16 @@ export function PenComposerVoice(config: VoiceConfig) {
         return () => window.removeEventListener(PenVoiceEvent, receive);
     }, []);
     const runtimeId = request?.runtimeId;
-    const scope = useMemo(() => ({
-        ...MAIN_COMPOSER_SCOPE,
-        target: "pen",
-        $messages: runtimeId
-            ? computed($sessionStates, (states) => states[runtimeId]?.messages ?? EmptyMessages)
-            : $messages,
-    }), [runtimeId]);
+    const scope = useMemo(
+        () => ({
+            ...MAIN_COMPOSER_SCOPE,
+            target: "pen",
+            $messages: runtimeId
+                ? computed($sessionStates, (states) => states[runtimeId]?.messages ?? EmptyMessages)
+                : $messages,
+        }),
+        [runtimeId]
+    );
     if (!request) return null;
     return (
         <ComposerScopeProvider value={scope}>

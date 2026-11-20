@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "historyId": "f0527cc6-706a-4d4a-a188-32c1a983ed98",
+  "currentRevision": null,
+  "pendingChanges": false,
+  "files": {
+    "assets/both.mp4": {
+      "hash": "31218944e7be3e09320769f948d3da15acc76e4ac4e7d74cff138f5bada6d1c5",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/31/31218944e7be3e09320769f948d3da15acc76e4ac4e7d74cff138f5bada6d1c5"
+    },
+    "assets/first.mp4": {
+      "hash": "b830bb035da253782134e77e0f12487cb4c22676e53119b313ecfcf3fecdc493",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/b8/b830bb035da253782134e77e0f12487cb4c22676e53119b313ecfcf3fecdc493"
+    },
+    "assets/gsap.min.js": {
+      "hash": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/c1/c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280"
+    },
+    "assets/inter.woff2": {
+      "hash": "8af7bd5b545567adffb3dfceb5bedb353a522d7bf1b3a2b8af7b6064156babc0",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/8a/8af7bd5b545567adffb3dfceb5bedb353a522d7bf1b3a2b8af7b6064156babc0"
+    },
+    "assets/next.mp4": {
+      "hash": "76b917f2b4a52fa82f294add7e5db54126193cc075e4a4a73b102b3e0ba57378",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/76/76b917f2b4a52fa82f294add7e5db54126193cc075e4a4a73b102b3e0ba57378"
+    },
+    "assets/score.m4a": {
+      "hash": "e3fd1f44811c3825d23cc6f495744daa9e33ed4d34ca255a4784bc675656a25d",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/e3/e3fd1f44811c3825d23cc6f495744daa9e33ed4d34ca255a4784bc675656a25d"
+    },
+    "assets/wordmark.jpg": {
+      "hash": "b8c02b775d6af6f5c562bed201ffad89b43015695dd3560a182d5035fc6a6f79",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/b8/b8c02b775d6af6f5c562bed201ffad89b43015695dd3560a182d5035fc6a6f79"
+    },
+    "index.html": {
+      "hash": "533e5eab77140982eb72c32bc6312a4162a90dd220781e4e2c4fdaba05243808",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/f0527cc6-706a-4d4a-a188-32c1a983ed98/blobs/53/533e5eab77140982eb72c32bc6312a4162a90dd220781e4e2c4fdaba05243808"
+    }
+  },
+  "revisions": {},
+  "checks": {
+    "latest": {
+      "revision": null,
+      "id": "a10c0c47-3702-4218-a736-39a154ec8c46"
+    },
+    "revisions": {},
+    "unversioned": [
+      {
+        "id": "a10c0c47-3702-4218-a736-39a154ec8c46",
+        "scope": "project",
+        "report": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/split/composition/.hyperframes/artifacts/checks/a10c0c47-3702-4218-a736-39a154ec8c46.json",
+        "metadata": {
+          "ok": true,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 45000,
+            "cache": true,
+            "contrast": true,
+            "craft": true,
+            "strict": false,
+            "snapshots": false,
+            "safeZones": [
+              "tiktok",
+              "reels",
+              "shorts"
+            ],
+            "browserGpuMode": "auto",
+            "includeUnmounted": false
+          }
+        },
+        "createdAt": 1794982602469,
+        "contentHash": "4f6c38ed12e82e70d5ad83654f4739a892c1bf01610dd0342254c124fe32394d",
+        "revision": null,
+        "inputFingerprint": "b5e89b950972a149e6e76d4e76ea3e0b0f3e9c23d0887cb7451f58fd6c9e9ccc",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "ba85b32f-bbe0-4ba8-8d1e-fe508cc6999c",
+      "completedAt": 1794983364569,
+      "output": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/split/brag.mp4",
+      "status": "completed",
+      "revision": null
+    },
+    "retainedRevisions": []
+  },
+  "pendingArtifactCleanup": []
+}

@@ -165,7 +165,7 @@ export class ComputerTargetsRuntime {
                             ? ["boot"]
                             : device.status === "booted"
                               ? [
-                                    ...(device.avdName ? ["shutdown" as const] : []),
+                                    ...(device.avdName ? (["shutdown", "rotate"] as const) : []),
                                     "screenshot",
                                     "tap",
                                     "type",
@@ -263,7 +263,8 @@ export class ComputerTargetsRuntime {
                 let imageDataUrl: string;
                 if (action.action === "boot") await this.android.boot(target.id);
                 else if (action.action === "shutdown") await this.android.shutdown(target.id);
-                else if (action.action === "screenshot") imageDataUrl = await this.android.screenshot(target.id, target.controlGeneration);
+                else if (action.action === "screenshot")
+                    imageDataUrl = await this.android.screenshot(target.id, target.controlGeneration);
                 else if (action.action === "tap") await this.android.tap(target.id, action.x, action.y);
                 else if (action.action === "type") await this.android.type(target.id, action.text);
                 else if (action.action === "key") await this.android.key(target.id, action.key);
@@ -274,6 +275,7 @@ export class ComputerTargetsRuntime {
                     );
                 else if (action.action === "swipe")
                     await this.android.swipe(target.id, action.x, action.y, action.endX, action.endY);
+                else if (action.action === "rotate") await this.android.rotate(target.id, action.orientation);
                 else if (action.action === "home" || action.action === "back")
                     await this.android.button(target.id, action.action);
                 else throw new Error("Unsupported Android control.");
@@ -316,7 +318,11 @@ export class ComputerTargetsRuntime {
                         target.id,
                         [
                             { type: "begin", x: action.x, y: action.y },
-                            { type: "move", x: action.endX, y: action.endY },
+                            ...Array.from({ length: 18 }, (_, index) => ({
+                                type: "move" as const,
+                                x: action.x + (action.endX - action.x) * (index + 1) / 18,
+                                y: action.y + (action.endY - action.y) * (index + 1) / 18,
+                            })),
                             { type: "end", x: action.endX, y: action.endY },
                         ],
                         assertControl
@@ -407,6 +413,16 @@ export class ComputerTargetsRuntime {
         }
     }
 
+    async subscribeAndroidVideo(
+        targetId: string,
+        listener: (packet: import("./device-simulator/android/android-live-stream").AndroidVideoPacket) => void
+    ): Promise<() => void> {
+        const target = await this.resolve(targetId);
+        if (!targetId.startsWith("android-") || target.status !== "booted")
+            throw new Error("Start the Android device first.");
+        return this.android.subscribeVideo(targetId, listener);
+    }
+
     async liveFrame(targetId: string): Promise<{ imageDataUrl: string; capturedAt: number }> {
         if (UdidPattern.test(targetId) && this.ios) return this.ios.frame(targetId);
         if (targetId.startsWith("android-") && this.android) {
@@ -422,7 +438,10 @@ export class ComputerTargetsRuntime {
 
     async detachLive(targetId: string): Promise<void> {
         if (UdidPattern.test(targetId) && this.ios) await this.ios.stop(targetId);
+        if (targetId.startsWith("android-")) this.android?.detachLive(targetId);
     }
+
+    stopAndroidVideoStreams(): void { this.android?.stopVideoStreams(); }
 }
 
 let sharedRuntime: ComputerTargetsRuntime;

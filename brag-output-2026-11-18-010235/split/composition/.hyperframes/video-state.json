@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "historyId": "6b99a197-ead6-441a-ade6-9c78370b3f40",
+  "currentRevision": "90488327-e656-42d1-8e59-cee00563f81e",
+  "pendingChanges": false,
+  "files": {
+    "assets/both.mp4": {
+      "hash": "31218944e7be3e09320769f948d3da15acc76e4ac4e7d74cff138f5bada6d1c5",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/31/31218944e7be3e09320769f948d3da15acc76e4ac4e7d74cff138f5bada6d1c5"
+    },
+    "assets/first.mp4": {
+      "hash": "b830bb035da253782134e77e0f12487cb4c22676e53119b313ecfcf3fecdc493",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/b8/b830bb035da253782134e77e0f12487cb4c22676e53119b313ecfcf3fecdc493"
+    },
+    "assets/gsap.min.js": {
+      "hash": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/c1/c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280"
+    },
+    "assets/inter.woff2": {
+      "hash": "8af7bd5b545567adffb3dfceb5bedb353a522d7bf1b3a2b8af7b6064156babc0",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/8a/8af7bd5b545567adffb3dfceb5bedb353a522d7bf1b3a2b8af7b6064156babc0"
+    },
+    "assets/next.mp4": {
+      "hash": "76b917f2b4a52fa82f294add7e5db54126193cc075e4a4a73b102b3e0ba57378",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/76/76b917f2b4a52fa82f294add7e5db54126193cc075e4a4a73b102b3e0ba57378"
+    },
+    "assets/score.m4a": {
+      "hash": "e3fd1f44811c3825d23cc6f495744daa9e33ed4d34ca255a4784bc675656a25d",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/e3/e3fd1f44811c3825d23cc6f495744daa9e33ed4d34ca255a4784bc675656a25d"
+    },
+    "assets/wordmark.jpg": {
+      "hash": "b8c02b775d6af6f5c562bed201ffad89b43015695dd3560a182d5035fc6a6f79",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/b8/b8c02b775d6af6f5c562bed201ffad89b43015695dd3560a182d5035fc6a6f79"
+    },
+    "index.html": {
+      "hash": "485551f51df7e0a7264f0654293b90488391039dbf4b560ab27492779a382a76",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/48/485551f51df7e0a7264f0654293b90488391039dbf4b560ab27492779a382a76"
+    }
+  },
+  "revisions": {
+    "90488327-e656-42d1-8e59-cee00563f81e": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1794981977151,
+      "endedAt": 1794981977151,
+      "files": {
+        "index.html": {
+          "before": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/89/891b4a9608426cf11cef96a56a0ea706e7419159b64cc2c613ca5ae1659b16ee",
+          "after": "/Users/albsheralsadi/.cache/hyperframes/history/6b99a197-ead6-441a-ade6-9c78370b3f40/blobs/48/485551f51df7e0a7264f0654293b90488391039dbf4b560ab27492779a382a76"
+        }
+      }
+    }
+  },
+  "checks": {
+    "latest": {
+      "revision": "90488327-e656-42d1-8e59-cee00563f81e",
+      "id": "e0d86b7f-a257-4b29-9636-73d6dfc7e466"
+    },
+    "revisions": {
+      "90488327-e656-42d1-8e59-cee00563f81e": [
+        {
+          "id": "e0d86b7f-a257-4b29-9636-73d6dfc7e466",
+          "scope": "project",
+          "report": "/Users/albsheralsadi/kronterm/brag-output-2026-11-18-010235/split/composition/.hyperframes/artifacts/checks/e0d86b7f-a257-4b29-9636-73d6dfc7e466.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 45000,
+              "cache": true,
+              "contrast": true,
+              "craft": true,
+              "strict": false,
+              "snapshots": false,
+              "safeZones": [
+                "tiktok",
+                "reels",
+                "shorts"
+              ],
+              "browserGpuMode": "auto",
+              "includeUnmounted": false
+            }
+          },
+          "createdAt": 1794981988914,
+          "contentHash": "f0207e14a4d29d19077f89823bb4e8bab1cc789c3335191d51f44732842d21eb",
+          "revision": "90488327-e656-42d1-8e59-cee00563f81e",
+          "inputFingerprint": "c23537d20706483de4987f8de9ceb55a3816a75c278ecac548354b3accf8e95e",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ]
+    },
+    "unversioned": [
+      {
+        "id": "1351c277-f37d-4837-a036-b25ac6a00c47",
+        "scope": "project",
+        "report": "/Users/albsheralsadi/kronterm/brag-output-2026-11-18-010235/split/composition/.hyperframes/artifacts/checks/1351c277-f37d-4837-a036-b25ac6a00c47.json",
+        "metadata": {
+          "ok": false,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 45000,
+            "cache": true,
+            "contrast": true,
+            "craft": true,
+            "strict": false,
+            "snapshots": false,
+            "safeZones": [
+              "tiktok",
+              "reels",
+              "shorts"
+            ],
+            "browserGpuMode": "auto",
+            "includeUnmounted": false
+          }
+        },
+        "createdAt": 1794981929144,
+        "contentHash": "1d3ef41a15603a7e32a53ed0700d42815ae84bda75011146835c82d29a8c47ec",
+        "revision": null,
+        "inputFingerprint": "dda32bb22fe052bd2915a1f82d63fa9fc16b9b1bd4300d6f79593626b1692565",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "bc9af408-2319-41aa-bd4a-42f0558c45dd",
+      "completedAt": 1794982066132,
+      "output": "/Users/albsheralsadi/kronterm/brag-output-2026-11-18-010235/split/final-cut.mp4",
+      "status": "completed",
+      "revision": "90488327-e656-42d1-8e59-cee00563f81e"
+    },
+    "retainedRevisions": [
+      "90488327-e656-42d1-8e59-cee00563f81e"
+    ]
+  },
+  "pendingArtifactCleanup": []
+}

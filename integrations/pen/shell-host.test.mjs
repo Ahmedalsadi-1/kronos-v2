@@ -2,8 +2,28 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { JSDOM } from "jsdom";
 
 const source = readFileSync(new URL("./shell-host.js", import.meta.url), "utf8");
+
+test("the titlebar hides editor sign-in while preserving the KronOS account control", () => {
+  const dom = new JSDOM('<div data-titlebar-right="true"><button>Sign In</button></div>', {
+    runScripts: "outside-only", pretendToBeVisual: true,
+  });
+  const { window } = dom;
+  window.eval(source);
+  const shell = window.createKronosPenShell({ ipc: {} }, () => {}, window.document, { workspaceId: "main" });
+  try {
+    const editor = window.document.querySelector("button");
+    assert.equal(editor.hidden, true);
+    assert.ok(editor.hasAttribute("data-kronos-pen-editor-account"));
+    assert.ok(window.document.querySelector("[data-kronos-pen-system-controls]"));
+  } finally {
+    shell.dispose();
+    window.close();
+  }
+});
+
 function setup() {
   const events = [],
     notifications = [],
@@ -33,6 +53,7 @@ function setup() {
     defaultView: view,
     head: { append() {} },
     body: {},
+    documentElement: { removeAttribute() {} },
     createElement: () => ({ remove() {} }),
     querySelector: () => null,
     querySelectorAll: (selector) => (selector === "[data-kronos-pen-action]" ? [] : dialogs),
@@ -168,4 +189,109 @@ test("the Pen chat handle detaches above the dock and snaps back on return", () 
   assert.equal(floating, false);
   assert.equal(y, 0);
   shell.dispose();
+});
+
+test("dragging the centered voice orb down reveals chat without ending voice", () => {
+  const dom = new JSDOM(`<aside data-pencil-allow-canvas-clipboard style="width: var(--left-panel-width)"></aside>
+    <aside data-slot="card"><div data-kronos-pen-inspector-slot></div></aside>
+    <main aria-label="Chat" data-chat-fullscreen><div class="absolute"><div class="group"><div class="relative">
+    <div data-kronos-pen-composer-controls="chat"></div>
+    </div></div></div></main>`, { runScripts: "outside-only", pretendToBeVisual: true });
+  const { window } = dom;
+  const { document } = window;
+  const chat = document.querySelector("[data-chat-fullscreen]");
+  const sidebar = document.querySelector("[data-pencil-allow-canvas-clipboard]");
+  const inspector = document.querySelector('[data-slot="card"]');
+  let sidebarWidth = 280;
+  let inspectorWidth = 200;
+  sidebar.getBoundingClientRect = () => ({ left: 0, right: sidebarWidth, width: sidebarWidth, height: 600 });
+  inspector.getBoundingClientRect = () => ({
+    left: window.innerWidth - inspectorWidth, right: window.innerWidth, width: inspectorWidth, height: 600,
+  });
+  chat.getBoundingClientRect = () => ({ left: 40, right: 340, width: 300, top: 100, bottom: 500, height: 400 });
+  const slot = document.querySelector("[data-kronos-pen-composer-controls]");
+  slot.getClientRects = () => [{ width: 100, height: 30 }];
+  slot.kronosControls = {};
+  window.HTMLElement.prototype.setPointerCapture = () => {};
+  window.eval(source);
+  const events = [];
+  const shell = window.createKronosPenShell({ ipc: {} }, (event) => events.push(event), document, {
+    workspaceId: "main",
+  });
+  try {
+    slot.querySelector('[aria-label="Start voice conversation"]').click();
+    shell.updateComposerVoice({ conversationId: "chat", active: true, phase: "listening" });
+    const layer = document.querySelector("[data-kronos-pen-voice-panel][data-active]");
+    const button = layer.querySelector("button");
+    assert.equal(layer.parentElement, document.body);
+    assert.ok(document.documentElement.hasAttribute("data-kronos-pen-voice-focused"));
+    assert.equal(layer.style.getPropertyValue("--orb-center-x"), `${window.innerWidth / 2 + 40}px`);
+    assert.equal(layer.style.getPropertyValue("--orb-room"), `${window.innerWidth - 480}px`);
+    sidebarWidth = 0;
+    window.dispatchEvent(new window.Event("resize"));
+    assert.equal(layer.style.getPropertyValue("--orb-center-x"), `${window.innerWidth / 2 - 100}px`);
+    inspectorWidth = 0;
+    window.dispatchEvent(new window.Event("resize"));
+    assert.equal(layer.style.getPropertyValue("--orb-center-x"), `${window.innerWidth / 2}px`);
+    sidebarWidth = 340;
+    inspectorWidth = 200;
+    document.documentElement.setAttribute("data-kronos-chat-split", "");
+    window.dispatchEvent(new window.Event("resize"));
+    assert.equal(layer.style.getPropertyValue("--orb-center-x"), "190px");
+    assert.equal(layer.style.getPropertyValue("--orb-center-y"), "300px");
+    assert.equal(layer.style.getPropertyValue("--orb-room"), "300px");
+    const pointer = (type, y) => {
+      const event = new window.MouseEvent(type, { clientY: y, button: 0, bubbles: true });
+      Object.defineProperty(event, "pointerId", { value: 1 });
+      button.dispatchEvent(event);
+    };
+    pointer("pointerdown", 300);
+    pointer("pointermove", 380);
+    pointer("pointerup", 380);
+    button.dispatchEvent(new window.MouseEvent("click", { detail: 1, bubbles: true }));
+    assert.ok(layer.hasAttribute("data-docked"));
+    assert.ok(!document.documentElement.hasAttribute("data-kronos-pen-voice-focused"));
+    assert.equal(events.filter(({ type }) => type === "composer-voice").length, 1);
+    button.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    assert.ok(!layer.hasAttribute("data-docked"));
+    button.click();
+    assert.equal(events.filter(({ type }) => type === "composer-voice").length, 2);
+    shell.updateComposerVoice({ conversationId: "chat", active: false });
+    assert.ok(!layer.isConnected);
+    assert.ok(!document.documentElement.hasAttribute("data-kronos-pen-voice-focused"));
+  } finally {
+    shell.dispose();
+    window.close();
+  }
+});
+
+test("the Pen dev toolbar toggles Pi and reports both harness timings", () => {
+  const dom = new JSDOM('<div data-kronos-pen-composer-controls="chat"></div>', {
+    url: "http://localhost:9124/pen/editor/index.html",
+    runScripts: "outside-only",
+    pretendToBeVisual: true,
+  });
+  const { window } = dom;
+  const slot = window.document.querySelector("[data-kronos-pen-composer-controls]");
+  slot.getClientRects = () => [{ width: 100, height: 30 }];
+  window.eval(source);
+  const shell = window.createKronosPenShell({ ipc: {} }, () => {}, window.document, { workspaceId: "main" });
+  try {
+    const tools = slot.querySelector('[aria-label="Hermes chat tools"]');
+    const pi = tools.nextElementSibling;
+    assert.equal(pi.getAttribute("aria-pressed"), "false");
+    assert.equal(tools.hidden, false);
+    assert.equal(slot.querySelector('[aria-label="OpenCode"], [aria-label="Codex CLI"]'), null);
+    pi.click();
+    assert.equal(slot.dataset.kronosPenAgent, "pi");
+    assert.equal(pi.getAttribute("aria-pressed"), "true");
+    shell.updateComposerAgentTiming({ conversationId: "chat", agent: "Pi", milliseconds: 550 });
+    shell.updateComposerAgentTiming({ conversationId: "chat", agent: "Hermes", milliseconds: 900 });
+    pi.click();
+    assert.equal(slot.dataset.kronosPenAgent, "hermes");
+    assert.match(pi.title, /Pi 0\.55s to first text.*Hermes 0\.90s to first text/);
+  } finally {
+    shell.dispose();
+    window.close();
+  }
 });

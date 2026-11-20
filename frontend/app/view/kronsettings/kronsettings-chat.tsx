@@ -3,21 +3,13 @@
 
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import {
-    normalizeWorkspacePresentation,
-    publishWorkspacePresentation,
-    readWorkspacePresentation,
-    subscribeWorkspacePresentation,
-} from "@/app/tab/workspace-presentation";
-import { useAtomValue } from "jotai";
-import { memo, useCallback, useSyncExternalStore } from "react";
+import { memo, useCallback } from "react";
 import { useSettingField, useToggleField } from "./kronsettings-hooks";
 import type { KronSettingsViewModel } from "./kronsettings-model";
 import {
     InfoCallout,
     InputSetting,
     SectionHeader,
-    SelectSetting,
     SettingsCard,
     ToggleSetting,
 } from "./kronsettings-shared";
@@ -26,21 +18,13 @@ interface KronSettingsChatContentProps {
     model: KronSettingsViewModel;
 }
 
-const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) => {
-    const fullConfig = useAtomValue(model.env.atoms.fullConfigAtom);
-    const settings = fullConfig?.settings ?? {};
+const KronSettingsChatContent = memo((_props: KronSettingsChatContentProps) => {
     const [defaultMode, setDefaultMode] = useSettingField("waveai:defaultmode");
     const [baseUrl, setBaseUrl] = useSettingField("ai:baseurl");
     const [apiToken, setApiToken] = useSettingField("ai:apitoken");
     const [aiModel, setAiModel] = useSettingField("ai:model");
     const [maxTokens, setMaxTokens] = useSettingField("ai:maxtokens");
     const [autoNameChats, setAutoNameChats] = useToggleField("waveai:autoname" as keyof SettingsType);
-    const settingsLayoutMode = normalizeWorkspacePresentation(settings["app:layoutmode"]) ?? "os";
-    const layoutMode = useSyncExternalStore(
-        subscribeWorkspacePresentation,
-        () => readWorkspacePresentation(settingsLayoutMode),
-        () => settingsLayoutMode
-    );
 
     const setValues = useCallback((values: Record<string, any>) => {
         void RpcApi.SetConfigCommand(TabRpcClient, values).catch((error) => {
@@ -53,9 +37,7 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
             if (preset === "kronos") {
                 setValues({
                     "waveai:defaultmode": "waveai@kronos",
-                    "app:layoutmode": "widgets",
                 });
-                publishWorkspacePresentation("widgets");
                 return;
             }
             if (preset === "openai") {
@@ -176,27 +158,6 @@ const KronSettingsChatContent = memo(({ model }: KronSettingsChatContentProps) =
                     description="Let KronOS create readable conversation titles for you."
                     checked={autoNameChats}
                     onChange={setAutoNameChats}
-                />
-            </SettingsCard>
-            <SettingsCard>
-                <SectionHeader
-                    title="KronOS Chat UI"
-                    icon="wand-magic-sparkles"
-                    description="Control the Kronos inspector and workspace layout."
-                />
-                <SelectSetting
-                    title="Workspace Layout"
-                    description="Choose tiled widgets, browser-style widget tabs, or canvas mode."
-                    value={layoutMode}
-                    onChange={(v) => {
-                        const presentation = publishWorkspacePresentation(v);
-                        setValues({ "app:layoutmode": presentation });
-                    }}
-                    options={[
-                        { value: "widgets", label: "Widgets" },
-                        { value: "tabs", label: "Widget tabs" },
-                        { value: "os", label: "OS Mode" },
-                    ]}
                 />
             </SettingsCard>
             <InfoCallout>

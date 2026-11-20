@@ -1,0 +1,207 @@
+[
+    {
+        "key": "flow.timezone",
+        "label": "Timezone",
+        "value": "DEFAULT",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.errorWorkflow",
+        "label": "Error Workflow",
+        "value": "DEFAULT",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.callerIds",
+        "label": "Caller Ids",
+        "value": "",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.callerPolicy",
+        "label": "Caller Policy",
+        "value": "workflowsFromSameOwner",
+        "type": "select",
+        "options": [
+            "workflowsFromSameOwner",
+            "workflowsFromAList",
+            "any",
+            "none"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.saveDataErrorExecution",
+        "label": "Save Data Error Execution",
+        "value": "DEFAULT",
+        "type": "select",
+        "options": [
+            "DEFAULT",
+            "all",
+            "none"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.saveDataSuccessExecution",
+        "label": "Save Data Success Execution",
+        "value": "DEFAULT",
+        "type": "select",
+        "options": [
+            "DEFAULT",
+            "all",
+            "none"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.saveManualExecutions",
+        "label": "Save Manual Executions",
+        "value": "DEFAULT",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.saveExecutionProgress",
+        "label": "Save Execution Progress",
+        "value": "DEFAULT",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.executionTimeout",
+        "label": "Execution Timeout",
+        "value": "",
+        "type": "number",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.executionOrder",
+        "label": "Execution Order",
+        "value": "v0",
+        "type": "select",
+        "options": [
+            "v0",
+            "v1"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.engineType",
+        "label": "Engine Type",
+        "value": "v1",
+        "type": "select",
+        "options": [
+            "v1",
+            "v2"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.binaryMode",
+        "label": "Binary Mode",
+        "value": "",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.timeSavedPerExecution",
+        "label": "Time Saved Per Execution",
+        "value": "",
+        "type": "number",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.timeSavedMode",
+        "label": "Time Saved Mode",
+        "value": "fixed",
+        "type": "select",
+        "options": [
+            "fixed",
+            "dynamic"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.availableInMCP",
+        "label": "Available In MCP",
+        "value": false,
+        "type": "toggle",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.credentialResolverId",
+        "label": "Credential Resolver Id",
+        "value": "",
+        "type": "text",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.redactionPolicy",
+        "label": "Redaction Policy",
+        "value": "none",
+        "type": "select",
+        "options": [
+            "none",
+            "all",
+            "non-manual",
+            "manual-only"
+        ],
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.redactCallerExecutions",
+        "label": "Redact Caller Executions",
+        "value": false,
+        "type": "toggle",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    },
+    {
+        "key": "flow.customTelemetryTags",
+        "label": "Custom Telemetry Tags",
+        "value": [],
+        "type": "json",
+        "category": "Workflow",
+        "source": "KronFlow",
+        "description": "Applies to the selected workflow."
+    }
+]

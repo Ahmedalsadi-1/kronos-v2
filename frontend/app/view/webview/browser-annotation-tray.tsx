@@ -5,7 +5,7 @@ import { subscribeAgentWidgetDesignSelection, type AgentWidgetDesignSelection } 
 import { getApi } from "@/store/global";
 import { fireAndForget } from "@/util/util";
 import { useAtom } from "jotai";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useId, useState } from "react";
 import {
     BrowserAnnotationsMaxPerPage,
     formatAnnotationsBundle,
@@ -34,6 +34,8 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
         }
     };
     const annotations = allAnnotations.filter((row) => !url || pageKey(row.url) === pageKey(url));
+    const [expanded, setExpanded] = useState(false);
+    const listId = useId();
     const [copied, setCopied] = useState(false);
     const [sendError, setSendError] = useState("");
 
@@ -94,10 +96,6 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
     return (
         <aside aria-label="Browser annotations" className="browser-annotation-tray">
             <header className="browser-annotation-tray-header">
-                <i className="fa-solid fa-message-plus" aria-hidden="true" />
-                <span className="browser-annotation-tray-count">
-                    {annotations.length === 1 ? "1 annotation" : `${annotations.length} annotations`}
-                </span>
                 <span className="browser-annotation-tray-actions">
                     <button
                         type="button"
@@ -115,7 +113,7 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
                                 );
                         }}
                     >
-                        <i className="fa-solid fa-arrow-up" aria-hidden="true" />
+                        <i className="fa-solid fa-paper-plane" aria-hidden="true" />
                     </button>
                     <button type="button" onClick={copyBundle} aria-label="Copy annotations" title="Copy annotations">
                         <i className={`fa-solid fa-${copied ? "check" : "copy"}`} aria-hidden="true" />
@@ -132,10 +130,24 @@ export const BrowserAnnotationTray = memo(({ blockId, url }: { blockId: string; 
                     >
                         <i className="fa-solid fa-trash" aria-hidden="true" />
                     </button>
+                    <button
+                        type="button"
+                        aria-expanded={expanded}
+                        aria-controls={listId}
+                        aria-label={`${expanded ? "Hide" : "Show"} annotations (${annotations.length})`}
+                        title={expanded ? "Hide annotations" : "Show annotations"}
+                        onClick={() => setExpanded((value) => !value)}
+                    >
+                        <i className={`fa-solid fa-chevron-${expanded ? "down" : "up"}`} aria-hidden="true" />
+                    </button>
                 </span>
             </header>
-            {sendError && <p role="alert">{sendError}</p>}
-            <ol className="browser-annotation-tray-list">
+            {sendError && (
+                <p className="browser-annotation-tray-error" role="alert">
+                    {sendError}
+                </p>
+            )}
+            <ol id={listId} hidden={!expanded} className="browser-annotation-tray-list">
                 {annotations.map((annotation) => (
                     <li key={annotation.id} className="browser-annotation-tray-item">
                         <div className="browser-annotation-tray-label">{annotation.elementLabel}</div>

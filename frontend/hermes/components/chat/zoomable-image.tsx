@@ -1,12 +1,16 @@
 'use client'
 
-import { type ComponentProps, useState } from 'react'
+import { lazy, Suspense, type ComponentProps, useState } from 'react'
 
 import { Dialog, DialogContent } from '@hermes/components/ui/dialog'
 import { useImageDownload } from '@hermes/hooks/use-image-download'
 import { useI18n } from '@hermes/i18n'
 import { Download } from '@hermes/lib/icons'
 import { cn } from '@hermes/lib/utils'
+
+const KronOSImageViewer = lazy(() =>
+  import('@/app/view/preview/preview-streaming').then(({ StreamingImagePreview }) => ({ default: StreamingImagePreview }))
+)
 
 export interface ZoomableImageProps extends ComponentProps<'img'> {
   containerClassName?: string
@@ -76,6 +80,19 @@ export function ImageLightbox({
   saving: boolean
   src: string
 }) {
+  if (typeof window !== 'undefined' && 'api' in window) {
+    return open ? (
+      <Suspense fallback={null}>
+        <KronOSImageViewer
+          url={src}
+          filename={alt || 'Image'}
+          onDismiss={() => onOpenChange(false)}
+          onDownload={onClick}
+          downloading={saving}
+        />
+      </Suspense>
+    ) : null
+  }
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent

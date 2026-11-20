@@ -6,21 +6,20 @@ import {
     getAdjacentWorkspacePresentation,
     isWorkspacePresentation,
     normalizeWorkspacePresentation,
+    publishWorkspacePresentation,
+    readWorkspacePresentation,
 } from "./workspace-presentation";
 
 describe("workspace presentation navigation", () => {
-    it("cycles forward and backward through every presentation", () => {
-        expect(getAdjacentWorkspacePresentation("widgets", 1)).toBe("tabs");
-        expect(getAdjacentWorkspacePresentation("tabs", 1)).toBe("os");
-        expect(getAdjacentWorkspacePresentation("os", 1)).toBe("widgets");
-        expect(getAdjacentWorkspacePresentation("widgets", -1)).toBe("os");
-        expect(getAdjacentWorkspacePresentation("os", -1)).toBe("tabs");
-    });
-
-    it("maps saved legacy layouts to active presentations", () => {
-        expect(normalizeWorkspacePresentation("canvas")).toBe("os");
-        expect(normalizeWorkspacePresentation("web")).toBe("tabs");
-        expect(normalizeWorkspacePresentation("browsermode")).toBe("tabs");
+    it("always reads and publishes OS for saved presentation names", () => {
+        for (const previous of ["widgets", "tabs", "canvas", "os", "web"] as const) {
+            expect(normalizeWorkspacePresentation(previous)).toBe("os");
+            expect(readWorkspacePresentation(previous)).toBe("os");
+            expect(publishWorkspacePresentation(previous)).toBe("os");
+            expect(getAdjacentWorkspacePresentation(previous, 1)).toBe("os");
+            expect(getAdjacentWorkspacePresentation(previous, -1)).toBe("os");
+        }
+        expect(normalizeWorkspacePresentation("browsermode")).toBe("os");
     });
 
     it("accepts only supported presentations", () => {

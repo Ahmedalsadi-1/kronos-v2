@@ -1,0 +1,1 @@
+Didot display on warm paper. Source the swatches, moving section and canvas from the supplied design and canvas recordings. Let the footage carry the selection and spatial reveal. Use an original four-note mallet bed and synchronized page-turn accents.

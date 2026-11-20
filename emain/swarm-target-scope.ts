@@ -37,6 +37,9 @@ const BrowserTools = new Set([
     "widget_sequence",
 ]);
 const DeviceTools = new Set([
+    "device_observe",
+    "device_pick_element",
+    "device_step",
     "device_screenshot",
     "device_tap",
     "device_type",
@@ -130,7 +133,11 @@ export function assertSwarmToolCall(context: HermesSurfaceContext, name: string,
             break;
         case "device":
             if (target.deviceId && args.targetId === target.deviceId) {
-                if (name === "device_screenshot" || args.expectedGeneration === target.generation) return;
+                if (
+                    ["device_screenshot", "device_observe"].includes(name) ||
+                    args.expectedGeneration === target.generation
+                )
+                    return;
                 throw new ToolFailure("STALE_TARGET", "Device control generation changed.");
             }
             break;

@@ -30,6 +30,7 @@ import { $previewStatusBySession, dismissPreviewArtifact } from '@hermes/store/p
 import { $subagentsBySession } from '@hermes/store/subagents'
 import { $threadScrolledUp } from '@hermes/store/thread-scroll'
 
+import { AgentActivityPills } from './agent-activity-pills'
 import { PreviewStatusRow } from './preview-row'
 import { StatusItemRow } from './status-row'
 
@@ -274,13 +275,18 @@ export function ComposerStatusStack({ queue, sessionId, storedSessionId, onStopS
     />
   ) : null
 
+  const activity = sessionId ? (
+    <AgentActivityPills sessionId={sessionId} subagents={subagents} onOpenSubagent={setSelectedSubagentId} />
+  ) : null
+
   if (!visible) {
-    return theater
+    return <>{theater}{activity}</>
   }
 
   return (
     <>
       {theater}
+      {activity}
       <div
         // In flow in the dock column, directly above the composer. The dock is
         // bottom-anchored, so this grows upward over the thread without needing

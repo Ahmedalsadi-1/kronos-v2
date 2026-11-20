@@ -1,0 +1,1532 @@
+[
+    {
+        "key": "NOUS_BASE_URL",
+        "label": "Nous Portal base URL (leave empty for default)",
+        "description": "Nous Portal base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "HERMES_ANON_API_SECRET",
+        "label": "Nous free-tier shared secret (leave empty unless given one)",
+        "description": "Shared secret for the Nous free-tier sign-up endpoints while they are in their gated integration phase (not needed once the gate is removed)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENROUTER_API_KEY",
+        "label": "OpenRouter API key",
+        "description": "OpenRouter API key (for vision, web scraping helpers, and MoA)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GOOGLE_API_KEY",
+        "label": "Google AI Studio API key",
+        "description": "Google AI Studio API key (also recognized as GEMINI_API_KEY)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GEMINI_API_KEY",
+        "label": "Gemini API key",
+        "description": "Google AI Studio API key (alias for GOOGLE_API_KEY)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GEMINI_BASE_URL",
+        "label": "Gemini base URL (leave empty for default)",
+        "description": "Google AI Studio base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "VERTEX_CREDENTIALS_PATH",
+        "label": "Vertex service account JSON path (leave empty to use ADC / GOOGLE_APPLICATION_CREDENTIALS)",
+        "description": "Path to a Google Cloud service account JSON for Vertex AI (Gemini). Vertex uses OAuth2, not a static API key \u2014 this points at the credentials Hermes mints short-lived tokens from. Falls back to GOOGLE_APPLICATION_CREDENTIALS, then to ADC (gcloud auth application-default login). Set project/region under vertex: in config.yaml.",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "XAI_API_KEY",
+        "label": "xAI API key",
+        "description": "xAI API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "XAI_BASE_URL",
+        "label": "xAI base URL (leave empty for default)",
+        "description": "xAI base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "NVIDIA_API_KEY",
+        "label": "NVIDIA NIM API key",
+        "description": "NVIDIA NIM API key (build.nvidia.com or local NIM endpoint)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "NVIDIA_BASE_URL",
+        "label": "NVIDIA NIM base URL (leave empty for default)",
+        "description": "NVIDIA NIM base URL override (e.g. http://localhost:8000/v1 for local NIM)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "LM_API_KEY",
+        "label": "LM Studio API key / bearer token",
+        "description": "LM Studio bearer token for auth-enabled local servers",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "LM_BASE_URL",
+        "label": "LM Studio base URL (leave empty for default)",
+        "description": "LM Studio base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "GLM_API_KEY",
+        "label": "Z.AI / GLM API key",
+        "description": "Z.AI / GLM API key (also recognized as ZAI_API_KEY / Z_AI_API_KEY)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "ZAI_API_KEY",
+        "label": "Z.AI API key",
+        "description": "Z.AI API key (alias for GLM_API_KEY)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "Z_AI_API_KEY",
+        "label": "Z.AI API key",
+        "description": "Z.AI API key (alias for GLM_API_KEY)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GLM_BASE_URL",
+        "label": "Z.AI / GLM base URL (leave empty for default)",
+        "description": "Z.AI / GLM base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "KIMI_API_KEY",
+        "label": "Kimi API key",
+        "description": "Kimi / Moonshot API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "KIMI_BASE_URL",
+        "label": "Kimi base URL (leave empty for default)",
+        "description": "Kimi / Moonshot base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "KIMI_CN_API_KEY",
+        "label": "Kimi (China) API key",
+        "description": "Kimi / Moonshot China API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "STEPFUN_API_KEY",
+        "label": "StepFun Step Plan API key",
+        "description": "StepFun Step Plan API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "STEPFUN_BASE_URL",
+        "label": "StepFun Step Plan base URL (leave empty for default)",
+        "description": "StepFun Step Plan base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "ARCEEAI_API_KEY",
+        "label": "Arcee AI API key",
+        "description": "Arcee AI API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "ARCEE_BASE_URL",
+        "label": "Arcee base URL (leave empty for default)",
+        "description": "Arcee AI base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "GMI_API_KEY",
+        "label": "GMI Cloud API key",
+        "description": "GMI Cloud API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GMI_BASE_URL",
+        "label": "GMI Cloud base URL (leave empty for default)",
+        "description": "GMI Cloud base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "ACTUAL_API_KEY",
+        "label": "Actual Computer inference key",
+        "description": "Actual Computer inference key (ac_...)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "FIREWORKS_API_KEY",
+        "label": "Fireworks AI API key",
+        "description": "Fireworks AI API key",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MINIMAX_API_KEY",
+        "label": "MiniMax API key",
+        "description": "MiniMax API key (international)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MINIMAX_BASE_URL",
+        "label": "MiniMax base URL (leave empty for default)",
+        "description": "MiniMax base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MINIMAX_CN_API_KEY",
+        "label": "MiniMax (China) API key",
+        "description": "MiniMax API key (China endpoint)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MINIMAX_CN_BASE_URL",
+        "label": "MiniMax (China) base URL (leave empty for default)",
+        "description": "MiniMax (China) base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "DEEPSEEK_API_KEY",
+        "label": "DeepSeek API Key",
+        "description": "DeepSeek API key for direct DeepSeek access",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "DEEPSEEK_BASE_URL",
+        "label": "DeepSeek Base URL",
+        "description": "Custom DeepSeek API base URL (advanced)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "DASHSCOPE_API_KEY",
+        "label": "DashScope API Key",
+        "description": "Alibaba Cloud DashScope API key (Qwen + multi-provider models)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "DASHSCOPE_BASE_URL",
+        "label": "DashScope Base URL",
+        "description": "Custom DashScope base URL (default: coding-intl OpenAI-compat endpoint)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "HERMES_QWEN_BASE_URL",
+        "label": "Qwen Portal base URL (leave empty for default)",
+        "description": "Qwen Portal base URL override (default: https://portal.qwen.ai/v1)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENCODE_ZEN_API_KEY",
+        "label": "OpenCode Zen API key",
+        "description": "OpenCode Zen API key (pay-as-you-go access to curated models)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "COMMANDCODE_API_KEY",
+        "label": "CommandCode API key",
+        "description": "CommandCode API key (GOAT/Pro/Max/Provider plans \u2014 30+ models via one key)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENCODE_ZEN_BASE_URL",
+        "label": "OpenCode Zen base URL (leave empty for default)",
+        "description": "OpenCode Zen base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENCODE_GO_API_KEY",
+        "label": "OpenCode Go API key",
+        "description": "OpenCode Go API key ($10/month subscription for open models)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENCODE_GO_BASE_URL",
+        "label": "OpenCode Go base URL (leave empty for default)",
+        "description": "OpenCode Go base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "HF_TOKEN",
+        "label": "Hugging Face Token",
+        "description": "Hugging Face token for Inference Providers (20+ open models via router.huggingface.co)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "HF_BASE_URL",
+        "label": "HF base URL (leave empty for default)",
+        "description": "Hugging Face Inference Providers base URL override",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "OLLAMA_API_KEY",
+        "label": "Ollama Cloud API key",
+        "description": "Ollama Cloud API key (ollama.com \u2014 cloud-hosted open models)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "OLLAMA_BASE_URL",
+        "label": "Ollama base URL (leave empty for default)",
+        "description": "Ollama Cloud base URL override (default: https://ollama.com/v1)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "XIAOMI_API_KEY",
+        "label": "Xiaomi MiMo API Key",
+        "description": "Xiaomi MiMo API key for MiMo models (mimo-v2.5-pro, mimo-v2.5, mimo-v2-pro, mimo-v2-omni, mimo-v2-flash)",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "XIAOMI_BASE_URL",
+        "label": "Xiaomi base URL (leave empty for default)",
+        "description": "Xiaomi MiMo base URL override (default: https://api.xiaomimimo.com/v1)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "UPSTAGE_API_KEY",
+        "label": "Upstage API Key",
+        "description": "Upstage API key for Solar LLM models",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "UPSTAGE_BASE_URL",
+        "label": "Upstage base URL (leave empty for default)",
+        "description": "Upstage base URL override (default: https://api.upstage.ai/v1)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "AWS_REGION",
+        "label": "AWS Region",
+        "description": "AWS region for Bedrock API calls (e.g. us-east-1, eu-central-1)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "AWS_PROFILE",
+        "label": "AWS Profile",
+        "description": "AWS named profile for Bedrock authentication (from ~/.aws/credentials)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "AZURE_FOUNDRY_API_KEY",
+        "label": "Azure Foundry API Key",
+        "description": "Azure Foundry API key for custom Azure endpoints",
+        "category": "provider",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "AZURE_FOUNDRY_BASE_URL",
+        "label": "Azure Foundry base URL",
+        "description": "Azure Foundry base URL (set via 'hermes model' for endpoint-specific config)",
+        "category": "provider",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "EXA_API_KEY",
+        "label": "Exa API key",
+        "description": "Exa API key for AI-native web search and contents",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "PARALLEL_API_KEY",
+        "label": "Parallel API key",
+        "description": "Parallel API key for AI-native web search and extract",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "FIRECRAWL_API_KEY",
+        "label": "Firecrawl API key",
+        "description": "Firecrawl API key for web search and scraping",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "FIRECRAWL_API_URL",
+        "label": "Firecrawl API URL (leave empty for cloud)",
+        "description": "Firecrawl API URL for self-hosted instances (optional)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "FIRECRAWL_GATEWAY_URL",
+        "label": "Firecrawl gateway URL (leave empty to derive from domain)",
+        "description": "Exact Firecrawl tool-gateway origin override for Nous Subscribers only (optional)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "TOOL_GATEWAY_URL",
+        "label": "Shared tool-gateway URL (leave empty to derive from domain)",
+        "description": "Exact shared tool-gateway origin for on-origin vendors and media uploads (optional)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "CONNECTOR_GATEWAY_URL",
+        "label": "Connector-gateway URL (leave empty to derive from domain)",
+        "description": "Exact connector-gateway origin for the connectors API (optional)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "TOOL_GATEWAY_DOMAIN",
+        "label": "Tool-gateway domain suffix",
+        "description": "Shared tool-gateway domain suffix for Nous Subscribers only, used to derive vendor hosts, e.g. nousresearch.com -> firecrawl-gateway.nousresearch.com",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "TOOL_GATEWAY_SCHEME",
+        "label": "Tool-gateway URL scheme",
+        "description": "Shared tool-gateway URL scheme for Nous Subscribers only, used to derive vendor hosts (`https` by default, set `http` for local gateway testing)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "TOOL_GATEWAY_USER_TOKEN",
+        "label": "Tool-gateway user token",
+        "description": "Explicit Nous Subscriber access token for tool-gateway requests (optional; otherwise read from the Hermes auth store)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "TAVILY_API_KEY",
+        "label": "Tavily API key",
+        "description": "Tavily API key for AI-native web search and extract (optional \u2014 keyless works when Tavily is selected)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "PERPLEXITY_API_KEY",
+        "label": "Perplexity API key",
+        "description": "Perplexity API key for the Search API web backend (ranked results + query-relevant page snippets)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "KEENABLE_API_KEY",
+        "label": "Keenable API key",
+        "description": "Keenable API key for fast independent-index web search and page fetch (optional \u2014 keyless free tier works without it)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "SEARXNG_URL",
+        "label": "SearXNG URL (e.g. http://localhost:8080)",
+        "description": "URL of your SearXNG instance for free self-hosted web search",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "BRAVE_SEARCH_API_KEY",
+        "label": "Brave Search subscription token",
+        "description": "Brave Search API subscription token (free tier: 2,000 queries/mo)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "BROWSERBASE_API_KEY",
+        "label": "Browserbase API key",
+        "description": "Browserbase API key for cloud browser (optional \u2014 local browser works without this)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "BROWSERBASE_PROJECT_ID",
+        "label": "Browserbase project ID",
+        "description": "Browserbase project ID (optional \u2014 only needed for cloud browser)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "BROWSER_USE_API_KEY",
+        "label": "Browser Use API key",
+        "description": "Browser Use API key for cloud browser (optional \u2014 local browser works without this)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "FIRECRAWL_BROWSER_TTL",
+        "label": "Browser session TTL (seconds)",
+        "description": "Firecrawl browser session TTL in seconds (optional, default 300)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "AGENT_BROWSER_ENGINE",
+        "label": "Browser engine (auto/lightpanda/chrome)",
+        "description": "Local browser engine: auto (default Chrome), lightpanda (faster, no screenshots; Browser Use mode spawns lightpanda serve), chrome",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "CAMOFOX_URL",
+        "label": "Camofox server URL",
+        "description": "Camofox browser server URL for local anti-detection browsing (e.g. http://localhost:9377)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "CAMOFOX_API_KEY",
+        "label": "Camofox API key",
+        "description": "Optional bearer token sent as Authorization header to a remote/authenticated Camofox server",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "FAL_KEY",
+        "label": "FAL API key",
+        "description": "FAL API key for image and video generation",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "KREA_API_KEY",
+        "label": "Krea API key",
+        "description": "Krea API key for Krea 3 and Krea 2 image generation",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "VOICE_TOOLS_OPENAI_KEY",
+        "label": "OpenAI API Key (for Whisper STT + TTS)",
+        "description": "OpenAI API key for voice transcription (Whisper) and OpenAI TTS",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "ELEVENLABS_API_KEY",
+        "label": "ElevenLabs API key",
+        "description": "ElevenLabs API key for premium text-to-speech voices and Scribe transcription",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MISTRAL_API_KEY",
+        "label": "Mistral API key",
+        "description": "Mistral API key for Voxtral TTS and transcription (STT)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "PORCUPINE_ACCESS_KEY",
+        "label": "Picovoice access key",
+        "description": "Picovoice access key for the Porcupine 'Hey Hermes' wake word engine (optional; openWakeWord is the free default)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GITHUB_TOKEN",
+        "label": "GitHub Token",
+        "description": "GitHub token for Skills Hub (higher API rate limits, skill publish)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "NOTION_API_KEY",
+        "label": "Notion API key",
+        "description": "Notion integration token (used by the `notion` skill)",
+        "category": "skill",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "LINEAR_API_KEY",
+        "label": "Linear API key",
+        "description": "Linear personal API key (used by the `linear` skill)",
+        "category": "skill",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "AIRTABLE_API_KEY",
+        "label": "Airtable API key",
+        "description": "Airtable personal access token (used by the `airtable` skill)",
+        "category": "skill",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "TENOR_API_KEY",
+        "label": "Tenor API key",
+        "description": "Tenor API key for GIF search (used by the `gif-search` skill)",
+        "category": "skill",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "HONCHO_API_KEY",
+        "label": "Honcho API key",
+        "description": "Honcho API key for AI-native persistent memory",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "HONCHO_BASE_URL",
+        "label": "Honcho base URL (e.g. http://localhost:8000)",
+        "description": "Base URL for self-hosted Honcho instances (no API key needed)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "HINDSIGHT_API_KEY",
+        "label": "Hindsight API key",
+        "description": "Hindsight API key for graph-aware persistent memory",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "HINDSIGHT_API_URL",
+        "label": "Hindsight API URL",
+        "description": "Base URL for the Hindsight API (default: https://api.hindsight.vectorize.io)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "SUPERMEMORY_API_KEY",
+        "label": "Supermemory API key",
+        "description": "Supermemory API key for conversation-scoped persistent memory",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MEM0_API_KEY",
+        "label": "Mem0 API key",
+        "description": "Mem0 Platform API key for semantic persistent memory",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "RETAINDB_API_KEY",
+        "label": "RetainDB API key",
+        "description": "RetainDB API key for persistent memory",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "RETAINDB_BASE_URL",
+        "label": "RetainDB base URL",
+        "description": "Base URL for self-hosted RetainDB instances (default: https://api.retaindb.com)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "BRV_API_KEY",
+        "label": "ByteRover API key",
+        "description": "ByteRover API key (optional, for cloud sync \u2014 local-first by default)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENVIKING_API_KEY",
+        "label": "OpenViking API key",
+        "description": "OpenViking API key (leave blank for local dev mode)",
+        "category": "tool",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "OPENVIKING_ENDPOINT",
+        "label": "OpenViking endpoint",
+        "description": "OpenViking server URL (default: http://127.0.0.1:1933)",
+        "category": "tool",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "TELEGRAM_BOT_TOKEN",
+        "label": "Telegram bot token",
+        "description": "Complete Telegram bot token created by @BotFather (numeric bot ID followed by a colon and secret)",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "TELEGRAM_ALLOWED_USERS",
+        "label": "Allowed Telegram user IDs (comma-separated)",
+        "description": "Optional comma-separated numeric Telegram user IDs allowed immediately; leave blank to approve new users through DM pairing",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "TELEGRAM_PROXY",
+        "label": "Telegram proxy URL (optional)",
+        "description": "Proxy URL for Telegram connections (overrides HTTPS_PROXY). Supports http://, https://, socks5://",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "DISCORD_BOT_TOKEN",
+        "label": "Discord bot token",
+        "description": "Discord bot token from Developer Portal",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "DISCORD_ALLOWED_USERS",
+        "label": "Allowed Discord user IDs (comma-separated)",
+        "description": "Comma-separated Discord user IDs allowed to use the bot",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "DISCORD_REPLY_TO_MODE",
+        "label": "Discord reply mode (off/first/all)",
+        "description": "Discord reply threading mode: 'off' (no reply references), 'first' (reply on first message only, default), 'all' (reply on every chunk)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "SLACK_BOT_TOKEN",
+        "label": "Slack Bot Token (xoxb-...)",
+        "description": "Slack bot token (xoxb-). Get from OAuth & Permissions after installing your app. Required scopes: chat:write, app_mentions:read, channels:history, groups:history, im:history, im:read, im:write, mpim:history, mpim:read, users:read, files:read, files:write",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "SLACK_APP_TOKEN",
+        "label": "Slack App Token (xapp-...)",
+        "description": "Slack app-level token (xapp-) for Socket Mode. Get from Basic Information \u2192 App-Level Tokens. Also ensure Event Subscriptions include: message.im, message.channels, message.groups, message.mpim, app_mention",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "SLACK_ALLOWED_USERS",
+        "label": "Allowed Slack member IDs",
+        "description": "Comma-separated Slack member IDs allowed to use Hermes, e.g. U01ABC2DEF3. Without this, Slack may connect but deny messages by default.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATTERMOST_URL",
+        "label": "Mattermost server URL",
+        "description": "Mattermost server URL (e.g. https://mm.example.com)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATTERMOST_TOKEN",
+        "label": "Mattermost bot token",
+        "description": "Mattermost bot token or personal access token",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MATTERMOST_ALLOWED_USERS",
+        "label": "Allowed Mattermost user IDs (comma-separated)",
+        "description": "Comma-separated Mattermost user IDs allowed to use the bot",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATTERMOST_REQUIRE_MENTION",
+        "label": "Require @mention in channels",
+        "description": "Require @mention in Mattermost channels (default: true). Set to false to respond to all messages.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATTERMOST_FREE_RESPONSE_CHANNELS",
+        "label": "Free-response channel IDs (comma-separated)",
+        "description": "Comma-separated Mattermost channel IDs where bot responds without @mention",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_HOMESERVER",
+        "label": "Matrix homeserver URL",
+        "description": "Matrix homeserver URL (e.g. https://matrix.example.org)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_ACCESS_TOKEN",
+        "label": "Matrix access token",
+        "description": "Matrix access token (preferred over password login)",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_USER_ID",
+        "label": "Matrix user ID (@user:server)",
+        "description": "Matrix user ID (e.g. @hermes:example.org)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_ALLOWED_USERS",
+        "label": "Allowed Matrix user IDs (comma-separated)",
+        "description": "Comma-separated Matrix user IDs allowed to use the bot (@user:server format)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_REQUIRE_MENTION",
+        "label": "Require @mention in rooms (true/false)",
+        "description": "Require @mention in Matrix rooms (default: true). Set to false to respond to all messages.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_FREE_RESPONSE_ROOMS",
+        "label": "Free-response room IDs (comma-separated)",
+        "description": "Comma-separated Matrix room IDs where bot responds without @mention",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_AUTO_THREAD",
+        "label": "Auto-create threads in rooms (true/false)",
+        "description": "Auto-create threads for messages in Matrix rooms (default: true)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_DM_AUTO_THREAD",
+        "label": "Auto-create threads in DMs (true/false)",
+        "description": "Auto-create threads for DM messages in Matrix (default: false)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_DEVICE_ID",
+        "label": "Matrix device ID (stable across restarts)",
+        "description": "Stable Matrix device ID for E2EE persistence across restarts (e.g. HERMES_BOT)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "MATRIX_RECOVERY_KEY",
+        "label": "Matrix recovery key",
+        "description": "Matrix recovery key for cross-signing verification after device key rotation (from Element: Settings \u2192 Security \u2192 Recovery Key)",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "BLUEBUBBLES_SERVER_URL",
+        "label": "BlueBubbles server URL",
+        "description": "BlueBubbles server URL for iMessage integration (e.g. http://192.168.1.10:1234)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "BLUEBUBBLES_PASSWORD",
+        "label": "BlueBubbles server password",
+        "description": "BlueBubbles server password (from BlueBubbles Server \u2192 Settings \u2192 API)",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "BLUEBUBBLES_ALLOWED_USERS",
+        "label": "Allowed iMessage addresses (comma-separated)",
+        "description": "Comma-separated iMessage addresses (email or phone) allowed to use the bot",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "BLUEBUBBLES_ALLOW_ALL_USERS",
+        "label": "Allow All BlueBubbles Users",
+        "description": "Allow all BlueBubbles users without allowlist",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQ_APP_ID",
+        "label": "QQ App ID",
+        "description": "QQ Bot App ID from QQ Open Platform (q.qq.com)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQ_CLIENT_SECRET",
+        "label": "QQ Client Secret",
+        "description": "QQ Bot Client Secret from QQ Open Platform",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "QQ_ALLOWED_USERS",
+        "label": "QQ Allowed Users",
+        "description": "Comma-separated QQ user IDs allowed to use the bot",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQ_GROUP_ALLOWED_USERS",
+        "label": "QQ Group Allowed Users",
+        "description": "Comma-separated QQ group IDs allowed to interact with the bot",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQ_ALLOW_ALL_USERS",
+        "label": "Allow All QQ Users",
+        "description": "Allow all QQ users without an allowlist (true/false)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQBOT_HOME_CHANNEL",
+        "label": "QQ Home Channel",
+        "description": "Default QQ channel/group for cron delivery and notifications",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQBOT_HOME_CHANNEL_NAME",
+        "label": "QQ Home Channel Name",
+        "description": "Display name for the QQ home channel",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "QQ_SANDBOX",
+        "label": "QQ Sandbox Mode",
+        "description": "Enable QQ sandbox mode for development testing (true/false)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "IRC_SERVER",
+        "label": "IRC server",
+        "description": "IRC server hostname (e.g. irc.libera.chat)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "IRC_CHANNEL",
+        "label": "IRC channel",
+        "description": "IRC channel to join (e.g. #hermes)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "IRC_NICKNAME",
+        "label": "IRC nickname",
+        "description": "Bot nickname on IRC (default: hermes-bot)",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "IRC_SERVER_PASSWORD",
+        "label": "IRC server password",
+        "description": "IRC server password (if required)",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "IRC_NICKSERV_PASSWORD",
+        "label": "NickServ password",
+        "description": "NickServ password for nick identification",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "GATEWAY_ALLOW_ALL_USERS",
+        "label": "Allow all users (true/false)",
+        "description": "Allow all users to interact with messaging bots (true/false). Default: false.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "API_SERVER_ENABLED",
+        "label": "Enable API server (true/false)",
+        "description": "Enable the OpenAI-compatible API server (true/false). Allows frontends like Open WebUI, LobeChat, etc. to connect.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "API_SERVER_KEY",
+        "label": "API server auth key",
+        "description": "Bearer token for API server authentication. Required whenever the API server is enabled; server refuses to start without it.",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "API_SERVER_PORT",
+        "label": "API server port",
+        "description": "Port for the API server (default: 8642).",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "API_SERVER_HOST",
+        "label": "API server host",
+        "description": "Host/bind address for the API server (default: 127.0.0.1). API_SERVER_KEY is still required even on loopback binds.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "API_SERVER_MODEL_NAME",
+        "label": "API server model name",
+        "description": "Model name advertised on /v1/models. Defaults to the profile name (or 'hermes-agent' for the default profile). Useful for multi-user setups with OpenWebUI.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "GATEWAY_PROXY_URL",
+        "label": "Remote Hermes API server URL (e.g. http://192.168.1.100:8642)",
+        "description": "URL of a remote Hermes API server to forward messages to (proxy mode). When set, the gateway handles platform I/O only \u2014 all agent work is delegated to the remote server. Use for Docker E2EE containers that relay to a host agent. Also configurable via gateway.proxy_url in config.yaml.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "GATEWAY_PROXY_KEY",
+        "label": "Remote API server auth key",
+        "description": "Bearer token for authenticating with the remote Hermes API server (proxy mode). Must match the API_SERVER_KEY on the remote host.",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "WEBHOOK_ENABLED",
+        "label": "Enable webhooks (true/false)",
+        "description": "Enable the webhook platform adapter for receiving events from GitHub, GitLab, etc.",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "WEBHOOK_PORT",
+        "label": "Webhook port",
+        "description": "Port for the webhook HTTP server (default: 8644).",
+        "category": "messaging",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "WEBHOOK_SECRET",
+        "label": "Webhook secret",
+        "description": "Global HMAC secret for webhook signature validation (overridable per route in config.yaml).",
+        "category": "messaging",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "SUDO_PASSWORD",
+        "label": "Sudo password",
+        "description": "Sudo password for terminal commands requiring root access; set to an explicit empty string to try empty without prompting",
+        "category": "setting",
+        "secret": true,
+        "value": "",
+        "type": "password",
+        "source": "Environment"
+    },
+    {
+        "key": "HERMES_PREFILL_MESSAGES_FILE",
+        "label": "Prefill messages file path",
+        "description": "Path to JSON file with ephemeral prefill messages for few-shot priming",
+        "category": "setting",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    },
+    {
+        "key": "HERMES_EPHEMERAL_SYSTEM_PROMPT",
+        "label": "Ephemeral system prompt",
+        "description": "Ephemeral system prompt injected at API-call time (never persisted to sessions)",
+        "category": "setting",
+        "secret": false,
+        "value": "",
+        "type": "text",
+        "source": "Environment"
+    }
+]

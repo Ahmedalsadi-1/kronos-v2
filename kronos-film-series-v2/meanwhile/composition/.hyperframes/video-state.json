@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "historyId": "621302cd-12b5-48c8-a0ee-3d7b91984329",
+  "currentRevision": null,
+  "pendingChanges": false,
+  "files": {
+    "assets/band0.jpg": {
+      "hash": "fb431ca40bbe1ccc6476b4018a2ee00be8956ec7181787f008f792d306609b65",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/fb/fb431ca40bbe1ccc6476b4018a2ee00be8956ec7181787f008f792d306609b65"
+    },
+    "assets/band1.jpg": {
+      "hash": "6ee658061039213baa6f60c425b0bcd0ecfa1119503f2e20467d1a496d36fbd8",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/6e/6ee658061039213baa6f60c425b0bcd0ecfa1119503f2e20467d1a496d36fbd8"
+    },
+    "assets/band2.jpg": {
+      "hash": "76ec34301663029cf9da57a3adb6b0b1bdcea1a66b732e93406ccb81d05df6a0",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/76/76ec34301663029cf9da57a3adb6b0b1bdcea1a66b732e93406ccb81d05df6a0"
+    },
+    "assets/dark.png": {
+      "hash": "596de0f593835691a562beb47550bd0ef0249681cad29ec4095002bc32715eaa",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/59/596de0f593835691a562beb47550bd0ef0249681cad29ec4095002bc32715eaa"
+    },
+    "assets/feed1.mp4": {
+      "hash": "db520ad7cec41a63cdfb8816fbbafbd63e73d07a915ff41a439f5ff9a4250d4a",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/db/db520ad7cec41a63cdfb8816fbbafbd63e73d07a915ff41a439f5ff9a4250d4a"
+    },
+    "assets/feed2.mp4": {
+      "hash": "46646f0134e5de76e3bac2d941b74e257cbaae750addfd77441b6c31e556f94f",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/46/46646f0134e5de76e3bac2d941b74e257cbaae750addfd77441b6c31e556f94f"
+    },
+    "assets/gsap.min.js": {
+      "hash": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/c1/c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280"
+    },
+    "assets/light.png": {
+      "hash": "0df10d77d5b0d555fde1f09843c74b79c0c3db44aa030f87eb8ffee3481e33e1",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/0d/0df10d77d5b0d555fde1f09843c74b79c0c3db44aa030f87eb8ffee3481e33e1"
+    },
+    "assets/wall-short.mp4": {
+      "hash": "1d55603075b3291c63b4bd5bf1413c32c32916dfb9e9142de78ace1cc47b5ff7",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/1d/1d55603075b3291c63b4bd5bf1413c32c32916dfb9e9142de78ace1cc47b5ff7"
+    },
+    "index.html": {
+      "hash": "fbaa06eb75641670855371488033456b0447a20916c653dc9361bdf39c347b85",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/fb/fbaa06eb75641670855371488033456b0447a20916c653dc9361bdf39c347b85"
+    },
+    "assets/feed0.mp4": {
+      "hash": "49cd94f1409185eb8cda0ddcdb6b340edb9afe3d6b482ecf5abc7d9655ebfa86",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/49/49cd94f1409185eb8cda0ddcdb6b340edb9afe3d6b482ecf5abc7d9655ebfa86"
+    },
+    "assets/score.wav": {
+      "hash": "e669477ca02a447797991908e5df9ff6ca88fc7888481004a2fb8da7a739fff7",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/e6/e669477ca02a447797991908e5df9ff6ca88fc7888481004a2fb8da7a739fff7"
+    },
+    "assets/wall.mp4": {
+      "hash": "1ca99100ce90e7f8a49b370182f66d651453625d5f008ac97bc39aff9787db91",
+      "content": "/Users/albsheralsadi/.cache/hyperframes/history/621302cd-12b5-48c8-a0ee-3d7b91984329/blobs/1c/1ca99100ce90e7f8a49b370182f66d651453625d5f008ac97bc39aff9787db91"
+    }
+  },
+  "revisions": {},
+  "checks": {
+    "latest": {
+      "revision": null,
+      "id": "a6e4bd0f-a50e-4d20-81ad-5760e24723ae"
+    },
+    "revisions": {},
+    "unversioned": [
+      {
+        "id": "a6e4bd0f-a50e-4d20-81ad-5760e24723ae",
+        "scope": "project",
+        "report": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/meanwhile/composition/.hyperframes/artifacts/checks/a6e4bd0f-a50e-4d20-81ad-5760e24723ae.json",
+        "metadata": {
+          "ok": true,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 45000,
+            "cache": true,
+            "contrast": true,
+            "craft": true,
+            "strict": false,
+            "snapshots": false,
+            "safeZones": [
+              "tiktok",
+              "reels",
+              "shorts"
+            ],
+            "browserGpuMode": "auto",
+            "includeUnmounted": false
+          }
+        },
+        "createdAt": 1794982600705,
+        "contentHash": "e25216a01cef4e3e5f0ed70ecf0ce8037c37a1f3215eea8a178c743d1d751333",
+        "revision": null,
+        "inputFingerprint": "dbf59999cda1b9c55750250eb7e86ced25727ec39ebb381481e79d804d050df4",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "82df6392-df1b-4967-a82f-66f1b90f162f",
+      "completedAt": 1794982670862,
+      "output": "/Users/albsheralsadi/kronterm/kronos-film-series-v2/meanwhile/brag.mp4",
+      "status": "completed",
+      "revision": null
+    },
+    "retainedRevisions": []
+  },
+  "pendingArtifactCleanup": []
+}

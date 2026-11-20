@@ -1,0 +1,2319 @@
+diff --git a/packages/frontend/@n8n/stores/src/versions.store.ts b/packages/frontend/@n8n/stores/src/versions.store.ts
+index bfe18ef6..28ea51ea 100644
+--- a/packages/frontend/@n8n/stores/src/versions.store.ts
++++ b/packages/frontend/@n8n/stores/src/versions.store.ts
+@@ -140,6 +140,7 @@ export const useVersionsStore = defineStore(STORES.VERSIONS, () => {
+ 	// ---------------------------------------------------------------------------
+ 
+ 	const fetchVersions = async () => {
++        if(typeof window !== 'undefined' && (window as any).__KRONTERM_WORKFLOW_HOST__) return;
+ 		if (typeof window !== 'undefined' && (window as any).__KRONTERM_WORKFLOW_HOST__) return;
+ 		try {
+ 			const { enabled, endpoint } = versionNotificationSettings.value;
+@@ -208,6 +209,7 @@ export const useVersionsStore = defineStore(STORES.VERSIONS, () => {
+ 	};
+ 
+ 	const fetchWhatsNew = async () => {
++        if(typeof window !== 'undefined' && (window as any).__KRONTERM_WORKFLOW_HOST__) return;
+ 		if (typeof window !== 'undefined' && (window as any).__KRONTERM_WORKFLOW_HOST__) return;
+ 		try {
+ 			const { enabled, whatsNewEnabled, whatsNewEndpoint } = versionNotificationSettings.value;
+diff --git a/packages/frontend/editor-ui/src/NativeWorkspaceWidgetSlot.vue b/packages/frontend/editor-ui/src/NativeWorkspaceWidgetSlot.vue
+index a625a15d..89274123 100644
+--- a/packages/frontend/editor-ui/src/NativeWorkspaceWidgetSlot.vue
++++ b/packages/frontend/editor-ui/src/NativeWorkspaceWidgetSlot.vue
+@@ -1,42 +1,34 @@
+ <script setup lang="ts">
+-import { inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
++import { inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+ const props = defineProps<{ query?: string }>();
+-const host =
+-	inject('kronterm:surface-role', 'root') === 'workflow'
+-		? (window as any).__KRONTERM_WORKFLOW_HOST__
+-		: null;
++const host = inject("kronterm:surface-role", "root") === "workflow" ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
+ const target = ref<HTMLElement>();
+ function publish() {
+-	if (!host?.tabId || !target.value) return;
+-	window.dispatchEvent(
+-		new CustomEvent('kronterm:workflow-widget-picker-target', {
+-			detail: { tabId: host.tabId, target: target.value, query: props.query || '' },
+-		}),
+-	);
++  if (!host?.tabId || !target.value) return;
++  window.dispatchEvent(
++    new CustomEvent("kronterm:workflow-widget-picker-target", {
++      detail: { tabId: host.tabId, target: target.value, query: props.query || "" },
++    })
++  );
+ }
+ function replay(event: Event) {
+-	if ((event as CustomEvent).detail?.tabId === host?.tabId) publish();
++  if ((event as CustomEvent).detail?.tabId === host?.tabId) publish();
+ }
+ onMounted(() => {
+-	window.addEventListener('kronterm:original-node-picker', replay);
+-	publish();
++  window.addEventListener("kronterm:original-node-picker", replay);
++  publish();
+ });
+-watch(() => props.query, publish, { flush: 'post' });
++watch(() => props.query, publish, { flush: "post" });
+ onBeforeUnmount(() => {
+-	window.removeEventListener('kronterm:original-node-picker', replay);
+-	if (host?.tabId)
+-		window.dispatchEvent(
+-			new CustomEvent('kronterm:workflow-widget-picker-target', {
+-				detail: { tabId: host.tabId, target: null, previousTarget: target.value, query: '' },
+-			}),
+-		);
++  window.removeEventListener("kronterm:original-node-picker", replay);
++  if (host?.tabId)
++    window.dispatchEvent(
++      new CustomEvent("kronterm:workflow-widget-picker-target", {
++        detail: { tabId: host.tabId, target: null, previousTarget: target.value, query: "" },
++      })
++    );
+ });
+ </script>
+ <template>
+-	<div
+-		v-if="host"
+-		ref="target"
+-		data-workspace-widget-slot
+-		style="flex-shrink: 0; min-width: 0; width: 100%"
+-	/>
++  <div v-if="host" ref="target" data-workspace-widget-slot style="flex-shrink: 0; min-width: 0; width: 100%" />
+ </template>
+diff --git a/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue b/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue
+index 979965b8..2f9ea535 100644
+--- a/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue
++++ b/packages/frontend/editor-ui/src/app/components/MainHeader/MainHeader.vue
+@@ -134,6 +134,7 @@ function syncTabsWithRoute(to: RouteLocation, from?: RouteLocation): void {
+ }
+ 
+ function onTabSelected(tab: MAIN_HEADER_TABS, event: MouseEvent) {
++    if(nativeWorkflowHost && tab === MAIN_HEADER_TABS.EXECUTIONS) { nativeWorkflowHost.onInspector?.('executions'); return; }
+ 	if (nativeWorkflowHost && tab === MAIN_HEADER_TABS.EXECUTIONS) {
+ 		nativeWorkflowHost.onInspector?.('executions');
+ 		return;
+diff --git a/packages/frontend/editor-ui/src/app/layouts/KronTermExecutions.vue b/packages/frontend/editor-ui/src/app/layouts/KronTermExecutions.vue
+index d938fd82..116e0099 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/KronTermExecutions.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/KronTermExecutions.vue
+@@ -1,9 +1,9 @@
+ <script setup lang="ts">
+-import { onBeforeUnmount, onMounted, ref, watch, computed } from 'vue';
+-import WorkflowExecutionsSidebar from '@/features/execution/executions/components/workflow/WorkflowExecutionsSidebar.vue';
+-import { useExecutionsStore } from '@/features/execution/executions/executions.store';
+-import { injectWorkflowDocumentStore } from '@/app/stores/workflowDocument.store';
+-import type { ExecutionSummaryWithScopes } from '@/features/execution/executions/executions.types';
++import { onBeforeUnmount, onMounted, ref, watch, computed } from "vue";
++import WorkflowExecutionsSidebar from "@/features/execution/executions/components/workflow/WorkflowExecutionsSidebar.vue";
++import { useExecutionsStore } from "@/features/execution/executions/executions.store";
++import { injectWorkflowDocumentStore } from "@/app/stores/workflowDocument.store";
++import type { ExecutionSummaryWithScopes } from "@/features/execution/executions/executions.types";
+ const props = defineProps<{ workflowId?: string }>();
+ const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ const target = host?.executionTarget ?? ref(null);
+@@ -11,66 +11,119 @@ const store = useExecutionsStore();
+ const document = injectWorkflowDocumentStore();
+ const workflow = computed(() => document?.value?.getSnapshot());
+ const rows = ref<ExecutionSummaryWithScopes[]>([]);
+-const error = ref('');
++const error = ref("");
++const draftError = ref("");
++const creatingDraft = ref(false);
++const selectedFailure = ref("");
++const failures = computed(() => rows.value.filter((row) => row.status === "error" || row.status === "crashed"));
++const failureId = computed(() => {
++  const active = store.activeExecution?.id;
++  return [selectedFailure.value, active].find((id) => failures.value.some((row) => row.id === id)) ?? failures.value[0]?.id;
++});
+ let epoch = 0;
+ let interval: ReturnType<typeof setInterval>;
+ async function refresh() {
+-	const request = ++epoch;
+-	const id = props.workflowId;
+-	if (!id || id === 'new') {
+-		rows.value = [];
+-		host?.onExecutionsChanged?.(false);
+-		return;
+-	}
+-	try {
+-		const result = await store.fetchExecutionsPage({ workflowId: id });
+-		if (request !== epoch || id !== props.workflowId) return;
+-		rows.value = result.results;
+-		error.value = '';
+-		host?.onExecutionsChanged?.(rows.value.length > 0);
+-	} catch (failure) {
+-		if (request === epoch)
+-			error.value = failure instanceof Error ? failure.message : 'Could not load executions.';
+-	}
++  const request = ++epoch;
++  const id = props.workflowId;
++  if (!id || id === "new") {
++    rows.value = [];
++    host?.onExecutionsChanged?.(false);
++    return;
++  }
++  try {
++    const result = await store.fetchExecutionsPage({ workflowId: id });
++    if (request !== epoch || id !== props.workflowId) return;
++    rows.value = result.results;
++    error.value = "";
++    host?.onExecutionsChanged?.(rows.value.length > 0);
++  } catch (failure) {
++    if (request === epoch) error.value = failure instanceof Error ? failure.message : "Could not load executions.";
++  }
+ }
+ watch(
+-	() => props.workflowId,
+-	() => {
+-		rows.value = [];
+-		void refresh();
+-	},
++  () => props.workflowId,
++  () => {
++    rows.value = [];
++    selectedFailure.value = "";
++    draftError.value = "";
++    void refresh();
++  }
+ );
++async function reproduce() {
++  if (!props.workflowId || !failureId.value || creatingDraft.value) return;
++  creatingDraft.value = true;
++  draftError.value = "";
++  try {
++    await host.reproduceExecution(props.workflowId, failureId.value);
++  } catch (failure) {
++    draftError.value = failure instanceof Error ? failure.message : "Could not create the reproduction draft.";
++  } finally {
++    creatingDraft.value = false;
++  }
++}
+ onMounted(() => {
+-	void refresh();
+-	interval = setInterval(() => void refresh(), 5000);
++  void refresh();
++  interval = setInterval(() => void refresh(), 5000);
+ });
+ onBeforeUnmount(() => {
+-	epoch++;
+-	clearInterval(interval);
++  epoch++;
++  clearInterval(interval);
+ });
+ </script>
+ <template>
+-	<Teleport v-if="target" :to="target">
+-		<section aria-label="Workflow executions" class="kronterm-executions" data-workflow-panel>
+-			<p v-if="error" role="alert">{{ error }}</p>
+-			<WorkflowExecutionsSidebar
+-				:workflow="workflow"
+-				:executions="rows"
+-				:loading="false"
+-				:loading-more="false"
+-				:has-more="false"
+-				@load-more="refresh"
+-			/>
+-		</section>
+-	</Teleport>
++  <Teleport v-if="target" :to="target">
++    <section aria-label="Workflow executions" class="kronterm-executions" data-workflow-panel>
++      <p v-if="error" role="alert">{{ error }}</p>
++      <div v-if="host?.reproduceExecution && failureId" class="kronterm-execution-reproduce">
++        <label v-if="failures.length > 1">
++          <span>Failed execution</span>
++          <select :value="failureId" :disabled="creatingDraft" @change="selectedFailure = ($event.target as HTMLSelectElement).value">
++            <option v-for="failure in failures" :key="failure.id" :value="failure.id">#{{ failure.id }}</option>
++          </select>
++        </label>
++        <button type="button" :disabled="creatingDraft" @click="reproduce">
++          {{ creatingDraft ? "Creating draft…" : "Reproduce in draft" }}
++        </button>
++        <p v-if="draftError" role="alert">{{ draftError }}</p>
++      </div>
++      <WorkflowExecutionsSidebar
++        :workflow="workflow"
++        :executions="rows"
++        :loading="false"
++        :loading-more="false"
++        :has-more="false"
++        @load-more="refresh"
++      />
++    </section>
++  </Teleport>
+ </template>
+ <style>
+ .kronterm-executions {
+-	height: 100%;
+-	width: 100%;
+-	pointer-events: auto;
+-	background: var(--color--background);
+-	color: var(--color--text);
+-	overflow: auto;
++  height: 100%;
++  width: 100%;
++  pointer-events: auto;
++  background: var(--color--background);
++  color: var(--color--text);
++  overflow: auto;
++}
++.kronterm-execution-reproduce {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 8px;
++  padding: 8px 12px;
++  border-bottom: var(--border);
++}
++.kronterm-execution-reproduce label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
++.kronterm-execution-reproduce :is(button, select) {
++  border: var(--border);
++  border-radius: 6px;
++  background: var(--color--background);
++  color: var(--color--text);
++  padding: 5px 8px;
++  cursor: pointer;
+ }
++.kronterm-execution-reproduce button:hover { background: var(--color--background--light-3); }
++.kronterm-execution-reproduce button:disabled { opacity: .65; }
++.kronterm-execution-reproduce p { flex-basis: 100%; margin: 0; }
+ </style>
+diff --git a/packages/frontend/editor-ui/src/app/layouts/KronTermHostFrame.vue b/packages/frontend/editor-ui/src/app/layouts/KronTermHostFrame.vue
+index e10ee8b0..48bae172 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/KronTermHostFrame.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/KronTermHostFrame.vue
+@@ -1,111 +1,92 @@
+ <script setup lang="ts">
+-import { inject, onMounted, onBeforeUnmount, useTemplateRef } from 'vue';
++import { inject, onMounted, onBeforeUnmount, useTemplateRef } from "vue";
+ const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
+-const role = inject('kronterm:surface-role', 'root');
+-const root = useTemplateRef('root');
+-const header = useTemplateRef<HTMLElement>('header');
++const role = inject("kronterm:surface-role", "root");
++const root = useTemplateRef("root");
++const header = useTemplateRef<HTMLElement>("header");
+ let observer: ResizeObserver;
+ const emit = defineEmits<{ mounted: [Element] }>();
+ onMounted(() => {
+-	if (root.value) emit('mounted', root.value);
+-	if (header.value) {
+-		const measure = () =>
+-			host.setCssVar?.(
+-				'--kronterm-workflow-header-height',
+-				header.value?.getBoundingClientRect().height + 'px',
+-			);
+-		observer = new ResizeObserver(measure);
+-		observer.observe(header.value);
+-		measure();
+-	}
++  if (root.value) emit("mounted", root.value);
++  if (header.value) {
++    const measure = () =>
++      host.setCssVar?.("--kronterm-workflow-header-height", header.value?.getBoundingClientRect().height + "px");
++    observer = new ResizeObserver(measure);
++    observer.observe(header.value);
++    measure();
++  }
+ });
+ onBeforeUnmount(() => observer?.disconnect());
+ </script>
+ <template>
+-	<div
+-		ref="root"
+-		style="height: 100%"
+-		:class="['kronterm-native-frame', 'kronterm-native-' + role]"
+-		:data-workflow-panel="role === 'management' ? '' : undefined"
+-	>
+-		<template v-if="role === 'management'">
+-			<slot name="header" /><slot name="sidebar" /><slot /><slot name="footer" /><slot
+-				name="aside"
+-			/><slot name="overlays" />
+-		</template>
+-		<template v-else>
+-			<Teleport
+-				v-if="host.chromeTarget && role === 'workflow'"
+-				:to="host.headerTarget || host.chromeTarget"
+-			>
+-				<div ref="header" class="kronterm-workflow-header" data-workflow-panel>
+-					<slot name="header" />
+-				</div>
+-			</Teleport>
+-			<slot />
+-			<Teleport v-if="host.detailTarget" :to="host.detailTarget"><slot name="overlays" /></Teleport>
+-			<slot v-if="role === 'workflow'" name="aside" />
+-			<Teleport
+-				v-if="host.chromeTarget && role === 'workflow'"
+-				:to="host.logsTarget || host.chromeTarget"
+-			>
+-				<div class="kronterm-workflow-logs" data-workflow-panel><slot name="footer" /></div>
+-			</Teleport>
+-		</template>
+-	</div>
++  <div
++    ref="root"
++    style="height: 100%"
++    :class="['kronterm-native-frame', 'kronterm-native-' + role]"
++    :data-workflow-panel="role === 'management' ? '' : undefined"
++  >
++    <template v-if="role === 'management'">
++      <slot name="header" /><slot name="sidebar" /><slot /><slot name="footer" /><slot name="aside" /><slot
++        name="overlays"
++      />
++    </template>
++    <template v-else>
++      <Teleport v-if="host.chromeTarget && role === 'workflow'" :to="host.headerTarget || host.chromeTarget">
++        <div ref="header" class="kronterm-workflow-header" data-workflow-panel><slot name="header" /></div>
++      </Teleport>
++      <slot />
++      <Teleport v-if="host.detailTarget" :to="host.detailTarget"><slot name="overlays" /></Teleport>
++      <slot v-if="role === 'workflow'" name="aside" />
++      <Teleport v-if="host.chromeTarget && role === 'workflow'" :to="host.logsTarget || host.chromeTarget">
++        <div class="kronterm-workflow-logs" data-workflow-panel><slot name="footer" /></div>
++      </Teleport>
++    </template>
++  </div>
+ </template>
+ <style>
+ .kronterm-native-frame {
+-	width: 100%;
+-	height: 100%;
+-	background: transparent;
+-	pointer-events: none;
++  width: 100%;
++  height: 100%;
++  background: transparent;
++  pointer-events: none;
+ }
+ .kronterm-native-workflow {
+-	position: absolute;
+-	inset: 0;
++  position: absolute;
++  inset: 0;
+ }
+ .kronterm-native-management {
+-	pointer-events: auto;
+-	height: 100%;
++  pointer-events: auto;
++  height: 100%;
+ }
+ .kronterm-workflow-header {
+-	position: absolute;
+-	top: 0;
+-	left: 0;
+-	width: 100%;
+-	--navbar--height: 32px;
+-	pointer-events: auto;
+-	background: var(--color-black, #000);
+-	border: 0;
+-	border-bottom: 1px solid var(--color--foreground);
+-	border-radius: 0;
+-	overflow: visible;
++  position: absolute;
++  top: 0;
++  left: 0;
++  width: 100%;
++  --navbar--height: 32px;
++  pointer-events: auto;
++  background: var(--color-black, #000);
++  border: 0;
++  border-bottom: 1px solid var(--color--foreground);
++  border-radius: 0;
++  overflow: visible;
+ }
+ .kronterm-workflow-logs {
+-	position: absolute;
+-	bottom: 0;
+-	left: 0;
+-	right: 0;
+-	width: auto;
+-	--logs-panel--header-height: 28px;
+-	pointer-events: auto;
++  position: absolute;
++  bottom: 0;
++  left: 0;
++  right: 0;
++  width: auto;
++  --logs-panel--header-height: 28px;
++  pointer-events: auto;
+ }
+ .kronterm-native-frame > main,
+ .kronterm-native-frame > div {
+-	background: transparent;
++  background: transparent;
+ }
+ </style>
+ 
+ <style>
+-.kronterm-workflow-header .tab-bar-container {
+-	position: static;
+-	transform: none;
+-	justify-content: flex-start;
+-	padding: 2px 6px;
+-	min-height: 32px;
+-}
+-.kronterm-workflow-header [data-test-id='workflow-menu'] {
+-	min-width: 0;
+-}
++.kronterm-workflow-header .tab-bar-container {position:static;transform:none;justify-content:flex-start;padding:2px 6px;min-height:32px;}
++.kronterm-workflow-header [data-test-id="workflow-menu"] {min-width:0;}
+ </style>
+diff --git a/packages/frontend/editor-ui/src/app/layouts/KronTermHostLayout.vue b/packages/frontend/editor-ui/src/app/layouts/KronTermHostLayout.vue
+index fc879fc8..b7e2d17f 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/KronTermHostLayout.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/KronTermHostLayout.vue
+@@ -1,88 +1,81 @@
+ <script setup lang="ts">
+-import { computed, shallowRef, watch } from 'vue';
+-import { useRoute, useRouter } from 'vue-router';
+-import WorkflowLayout from '@/app/layouts/WorkflowLayout.vue';
+-import DefaultLayout from '@/app/layouts/DefaultLayout.vue';
+-import SettingsLayout from '@/app/layouts/SettingsLayout.vue';
+-import KronTermRouteScope from './KronTermRouteScope.vue';
++import { computed, shallowRef, watch } from "vue";
++import { useRoute, useRouter } from "vue-router";
++import WorkflowLayout from "@/app/layouts/WorkflowLayout.vue";
++import DefaultLayout from "@/app/layouts/DefaultLayout.vue";
++import SettingsLayout from "@/app/layouts/SettingsLayout.vue";
++import KronTermRouteScope from "./KronTermRouteScope.vue";
+ const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
+ const route = useRoute();
+ const router = useRouter();
+-const isEditorRoute = (value: any) =>
+-	value.meta.layout === 'workflow' && value.meta.nodeView === true;
++const isEditorRoute = (value: any) => value.meta.layout === "workflow" && value.meta.nodeView === true;
+ const workflowRoute = shallowRef(
+-	isEditorRoute(route)
+-		? router.currentRoute.value
+-		: router.resolve('/workflow/' + (host.workflowId || 'new')),
++  isEditorRoute(route) ? router.currentRoute.value : router.resolve("/workflow/" + (host.workflowId || "new"))
+ );
+ watch(
+-	() => router.currentRoute.value,
+-	(value) => {
+-		if (isEditorRoute(value)) workflowRoute.value = value;
+-	},
++  () => router.currentRoute.value,
++  (value) => {
++    if (isEditorRoute(value)) workflowRoute.value = value;
++  }
+ );
+ const managementOpen = computed(() => !isEditorRoute(route));
+ watch(
+-	managementOpen,
+-	(open) => {
+-		host.managementOpen.value = open;
+-	},
+-	{ immediate: true },
++  managementOpen,
++  (open) => {
++    host.managementOpen.value = open;
++  },
++  { immediate: true }
+ );
+ const managementLayout = computed(() =>
+-	route.meta.layout === 'settings'
+-		? SettingsLayout
+-		: route.meta.layout === 'workflow'
+-			? WorkflowLayout
+-			: DefaultLayout,
++  route.meta.layout === "settings" ? SettingsLayout : route.meta.layout === "workflow" ? WorkflowLayout : DefaultLayout
+ );
+ function closeManagement() {
+-	void router.push(workflowRoute.value.fullPath);
++  void router.push(workflowRoute.value.fullPath);
+ }
+ </script>
+ <template>
+-	<KronTermRouteScope :route="workflowRoute" role="workflow"><WorkflowLayout /></KronTermRouteScope>
+-	<Teleport v-if="managementOpen && host.detailTarget" :to="host.detailTarget">
+-		<section class="kronterm-management" aria-label="Workflow details" data-workflow-panel>
+-			<button
+-				class="kronterm-close-management"
+-				type="button"
+-				aria-label="Close workflow details"
+-				@click="closeManagement"
+-			>
+-				×
+-			</button>
+-			<KronTermRouteScope :route="router.currentRoute.value" role="management"
+-				><component :is="managementLayout"
+-			/></KronTermRouteScope>
+-		</section>
+-	</Teleport>
++  <KronTermRouteScope :route="workflowRoute" role="workflow"><WorkflowLayout /></KronTermRouteScope>
++  <Teleport v-if="managementOpen && host.detailTarget" :to="host.detailTarget">
++    <section class="kronterm-management" aria-label="Workflow details" data-workflow-panel>
++      <button
++        class="kronterm-close-management"
++        type="button"
++        aria-label="Close workflow details"
++        @click="closeManagement"
++      >
++        ×
++      </button>
++      <KronTermRouteScope :route="router.currentRoute.value" role="management"
++        ><component :is="managementLayout"
++      /></KronTermRouteScope>
++    </section>
++  </Teleport>
+ </template>
+ <style>
+ .kronterm-management {
+-	position: absolute;
+-	inset: 8px;
+-	overflow: auto;
+-	pointer-events: auto;
+-	background: var(--color--background);
+-	color: var(--color--text);
+-	border: 1px solid var(--color--foreground);
+-	border-radius: 12px;
+-	box-shadow: 0 16px 48px #0003;
++  position: absolute;
++  inset: 8px;
++  overflow: auto;
++  pointer-events: auto;
++  background: var(--color--background);
++  color: var(--color--text);
++  border: 1px solid var(--color--foreground);
++  border-radius: 12px;
++  box-shadow: 0 16px 48px #0003;
+ }
+ .kronterm-close-management {
+-	position: sticky;
+-	float: right;
+-	right: 12px;
+-	top: 8px;
+-	z-index: 100;
+-	width: 32px;
+-	height: 32px;
+-	border: 0;
+-	border-radius: 8px;
+-	cursor: pointer;
+-	background: var(--color--background);
+-	color: var(--color--text);
+-	font-size: 22px;
++  position: sticky;
++  float: right;
++  right: 12px;
++  top: 8px;
++  z-index: 100;
++  width: 32px;
++  height: 32px;
++  border: 0;
++  border-radius: 8px;
++  cursor: pointer;
++  background: var(--color--background);
++  color: var(--color--text);
++  font-size: 22px;
+ }
+ </style>
+diff --git a/packages/frontend/editor-ui/src/app/layouts/KronTermRouteScope.vue b/packages/frontend/editor-ui/src/app/layouts/KronTermRouteScope.vue
+index d3f08208..4fcd5cbf 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/KronTermRouteScope.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/KronTermRouteScope.vue
+@@ -1,26 +1,26 @@
+ <script setup lang="ts">
+-import { computed, inject, provide, shallowReactive, watch } from 'vue';
+-import { routeLocationKey, routerViewLocationKey } from 'vue-router';
+-import { WorkflowDocumentStoreKey, WorkflowIdKey } from '@/app/constants/injectionKeys';
+-const props = defineProps<{ route: any; role: 'workflow' | 'management' }>();
++import { computed, inject, provide, shallowReactive, watch } from "vue";
++import { routeLocationKey, routerViewLocationKey } from "vue-router";
++import { WorkflowDocumentStoreKey, WorkflowIdKey } from "@/app/constants/injectionKeys";
++const props = defineProps<{ route: any; role: "workflow" | "management" }>();
+ const route = shallowReactive({ ...props.route });
+ watch(
+-	() => props.route,
+-	(value) => Object.assign(route, value),
++  () => props.route,
++  (value) => Object.assign(route, value)
+ );
+ provide(routeLocationKey, route as any);
+ provide(
+-	routerViewLocationKey,
+-	computed(() => props.route),
++  routerViewLocationKey,
++  computed(() => props.route)
+ );
+-provide('kronterm:surface-role', props.role);
++provide("kronterm:surface-role", props.role);
+ provide(
+-	WorkflowIdKey,
+-	computed(() => String(props.route.params?.workflowId || '')),
++  WorkflowIdKey,
++  computed(() => String(props.route.params?.workflowId || ""))
+ );
+-if (props.role === 'management') {
+-	const document = inject(WorkflowDocumentStoreKey);
+-	if (document) provide(WorkflowDocumentStoreKey, document);
++if (props.role === "management") {
++  const document = inject(WorkflowDocumentStoreKey);
++  if (document) provide(WorkflowDocumentStoreKey, document);
+ }
+ </script>
+ <template><slot /></template>
+diff --git a/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue b/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue
+index 57395464..fe8affba 100644
+--- a/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue
++++ b/packages/frontend/editor-ui/src/app/layouts/WorkflowLayout.vue
+@@ -66,38 +66,26 @@ const {
+ } = useWorkflowInitialization();
+ 
+ if (nativeHost && nativeRole !== 'management') {
+-	nativeHost.getDocumentState = () =>
+-		currentWorkflowDocumentStore.value?.hydrated
+-			? {
+-					workflowId: currentWorkflowDocumentStore.value.workflowId,
+-					dirty: uiStore.stateIsDirty,
+-					versionId: currentWorkflowDocumentStore.value.versionId,
+-					checksum: currentWorkflowDocumentStore.value.checksum,
+-				}
+-			: null;
+-	nativeHost.refreshDocument = async (draft: any) => {
+-		const document = currentWorkflowDocumentStore.value;
+-		if (!document || !draft || document.workflowId !== draft.id)
+-			throw new Error('The workflow document is not ready.');
+-		if (uiStore.stateIsDirty)
+-			throw new Error('Save the local workflow edits before applying Hermes changes.');
+-		const ndv = useNDVStore(document.documentId);
+-		const activeNodeId = ndv.activeNode?.id;
+-		const selectedIds = nativeHost.getSelection?.() || [];
+-		nativeHost.isReconcilingDocument = true;
+-		try {
+-			document.hydrate(draft);
+-			const active = activeNodeId ? document.getNodeById(activeNodeId) : null;
+-			if (active) ndv.setActiveNodeName(active.name, 'canvas_default_view');
+-			uiStore.markStateClean();
+-			await nextTick();
+-			nativeHost.setSelection?.(selectedIds);
+-		} finally {
+-			nativeHost.isReconcilingDocument = false;
+-		}
+-		nativeHost.onDirty?.(uiStore.stateIsDirty);
+-		return { workflowId: document.workflowId, versionId: document.versionId };
+-	};
++    nativeHost.getDocumentState = () => currentWorkflowDocumentStore.value?.hydrated ? ({ workflowId: currentWorkflowDocumentStore.value.workflowId, dirty: uiStore.stateIsDirty, versionId: currentWorkflowDocumentStore.value.versionId, checksum: currentWorkflowDocumentStore.value.checksum }) : null;
++    nativeHost.refreshDocument = async (draft: any) => {
++        const document = currentWorkflowDocumentStore.value;
++        if (!document || !draft || document.workflowId !== draft.id) throw new Error('The workflow document is not ready.');
++        if (uiStore.stateIsDirty) throw new Error('Save the local workflow edits before applying Hermes changes.');
++        const ndv = useNDVStore(document.documentId);
++        const activeNodeId = ndv.activeNode?.id;
++        const selectedIds = nativeHost.getSelection?.() || [];
++        nativeHost.isReconcilingDocument = true;
++        try {
++            document.hydrate(draft);
++            const active = activeNodeId ? document.getNodeById(activeNodeId) : null;
++            if (active) ndv.setActiveNodeName(active.name, 'canvas_default_view');
++            uiStore.markStateClean();
++            await nextTick();
++            nativeHost.setSelection?.(selectedIds);
++        } finally { nativeHost.isReconcilingDocument = false; }
++        nativeHost.onDirty?.(uiStore.stateIsDirty);
++        return { workflowId: document.workflowId, versionId: document.versionId };
++    };
+ }
+ const { setup: setupPostMessages, cleanup: cleanupPostMessages } = usePostMessageHandler({
+ 	currentWorkflowDocumentStore,
+@@ -122,11 +110,12 @@ provide(
+ );
+ 
+ onMounted(async () => {
++    if(nativeRole === 'management') { isLoading.value = false; return; }
+ 	if (nativeRole === 'management') {
+ 		isLoading.value = false;
+ 		return;
+ 	}
+-	if (nativeRole !== 'management') pushConnectionStore.pushConnect();
++	if (nativeRole !== 'management') if(nativeRole !== 'management') pushConnectionStore.pushConnect();
+ 	setupPostMessages();
+ 	await initializeData();
+ 	await initializeWorkflow();
+@@ -140,6 +129,7 @@ onMounted(async () => {
+ watch(
+ 	workflowId,
+ 	async (newId, oldId) => {
++        if(nativeRole === 'management') return;
+ 		if (nativeRole === 'management') return;
+ 		if (newId !== oldId && newId) {
+ 			await initializeWorkflow(true);
+@@ -162,8 +152,9 @@ watch(
+ );
+ 
+ onBeforeUnmount(() => {
++    if(nativeRole === 'management') return;
+ 	if (nativeRole === 'management') return;
+-	if (nativeRole !== 'management') pushConnectionStore.pushDisconnect();
++	if (nativeRole !== 'management') if(nativeRole !== 'management') pushConnectionStore.pushDisconnect();
+ 	cleanupPostMessages();
+ 	cleanup();
+ 	if (isCanvasOnly) delete window.krontermWorkflowState;
+diff --git a/packages/frontend/editor-ui/src/app/views/NodeView.vue b/packages/frontend/editor-ui/src/app/views/NodeView.vue
+index 6f0e3b64..c4797abf 100644
+--- a/packages/frontend/editor-ui/src/app/views/NodeView.vue
++++ b/packages/frontend/editor-ui/src/app/views/NodeView.vue
+@@ -340,7 +340,7 @@ const runWorkflowButtonType = computed(() =>
+ 
+ const isCanvasReadOnly = computed(() => {
+ 	return (
+-		(window as any).__KRONTERM_WORKFLOW_HOST__?.documentMutation?.value ||
++        (window as any).__KRONTERM_WORKFLOW_HOST__?.documentMutation?.value ||
+ 		isDemoRoute.value ||
+ 		isReadOnlyEnvironment.value ||
+ 		collaborationStore.shouldBeReadOnly ||
+@@ -595,6 +595,7 @@ function onClickNode(_id: string, event: VueFlowXYPosition) {
+ }
+ 
+ async function onSetNodeActivated(id: string, event?: MouseEvent) {
++    if(nativeWorkflowHost?.managementOpen?.value) void nativeWorkflowHost.navigate('/workflow/' + workflowId.value);
+ 	if (nativeWorkflowHost?.managementOpen?.value)
+ 		void nativeWorkflowHost.navigate('/workflow/' + workflowId.value);
+ 	if (isDemoRoute.value && !canOpenNDV.value) return;
+@@ -2099,6 +2100,7 @@ watch(
+ );
+ 
+ onBeforeRouteLeave(async (to, from, next) => {
++    if ((window as any).__KRONTERM_WORKFLOW_HOST__ && !(to.meta.layout === 'workflow' && to.meta.nodeView)) { next(); return; }
+ 	if (
+ 		(window as any).__KRONTERM_WORKFLOW_HOST__ &&
+ 		!(to.meta.layout === 'workflow' && to.meta.nodeView)
+diff --git a/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue b/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue
+index 226ee6dc..31e2a18c 100644
+--- a/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue
++++ b/packages/frontend/editor-ui/src/features/ndv/shared/views/NodeDetailsView.vue
+@@ -775,8 +775,7 @@ const nativeDetailsRole = inject('kronterm:surface-role', 'root');
+ 		"
+ 	>
+ 		<div
+-			v-if="!nativeWorkflowHost"
+-			data-test-id="ndv-backdrop"
++			v-if="!nativeWorkflowHost" data-test-id="ndv-backdrop"
+ 			:class="$style.backdrop"
+ 			:style="{ zIndex: APP_Z_INDEXES.NDV }"
+ 			@click="close"
+diff --git a/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts b/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts
+index e60203bf..ecc91d00 100644
+--- a/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts
++++ b/packages/frontend/editor-ui/src/features/shared/nodeCreator/nodeCreator.store.ts
+@@ -147,6 +147,7 @@ export const useNodeCreatorStore = defineStore(STORES.NODE_CREATOR, () => {
+ 		connectionType,
+ 		workflowId,
+ 	}: ToggleNodeCreatorOptions & { workflowId: string }) {
++        if(createNodeActive) (window as any).__KRONTERM_WORKFLOW_HOST__?.onInspector?.('nodes');
+ 		if (createNodeActive) (window as any).__KRONTERM_WORKFLOW_HOST__?.onInspector?.('nodes');
+ 		if (!nodeCreatorView) {
+ 			nodeCreatorView =
+diff --git a/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue b/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue
+index 41846533..5c7b5240 100644
+--- a/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue
++++ b/packages/frontend/editor-ui/src/features/shared/nodeCreator/views/NodeCreation.vue
+@@ -149,6 +149,7 @@ const instanceAiCapability = useInstanceAiEditorCapability();
+ // button hands the current workflow off to a thread. The behavior is the host's
+ // (WorkflowLayout vs the artifact); this component never branches on context.
+ async function onInstanceAiCanvasActionClick() {
++    if ((window as any).__KRONTERM_WORKFLOW_HOST__?.openChat) { (window as any).__KRONTERM_WORKFLOW_HOST__.openChat(); return; }
+ 	if ((window as any).__KRONTERM_WORKFLOW_HOST__?.openChat) {
+ 		(window as any).__KRONTERM_WORKFLOW_HOST__.openChat();
+ 		return;
+@@ -157,6 +158,7 @@ async function onInstanceAiCanvasActionClick() {
+ }
+ 
+ async function onAskAssistantButtonClick() {
++    if ((window as any).__KRONTERM_WORKFLOW_HOST__?.openChat) { (window as any).__KRONTERM_WORKFLOW_HOST__.openChat(); return; }
+ 	if ((window as any).__KRONTERM_WORKFLOW_HOST__?.openChat) {
+ 		(window as any).__KRONTERM_WORKFLOW_HOST__.openChat();
+ 		return;
+diff --git a/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue b/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue
+index fb673b26..b87b3a06 100644
+--- a/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue
++++ b/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue
+@@ -880,6 +880,7 @@ function onNodeDrag(event: NodeDragEvent) {
+ }
+ 
+ function onNodeDragStop(event: NodeDragEvent) {
++    if(krontermHost) requestAnimationFrame(() => { nativeNodeDragged = false; });
+ 	if (krontermHost)
+ 		requestAnimationFrame(() => {
+ 			nativeNodeDragged = false;
+@@ -1358,6 +1359,7 @@ function onReplaceNode(id: string) {
+ }
+ 
+ function onAddToAi(id: string) {
++    if(krontermHost) { krontermHost.openChat?.({nodeIds:[id]}); return; }
+ 	if (krontermHost) {
+ 		krontermHost.openChat?.({ nodeIds: [id] });
+ 		return;
+@@ -1446,6 +1448,7 @@ function onConnect(connection: Connection) {
+ }
+ 
+ function onConnectEnd(event?: MouseEvent) {
++  if (!connectedHandle.value) dispatchNativeWidgetConnection(event, (window as any).__KRONTERM_WORKFLOW_HOST__, connectingHandle.value);
+ 	if (!connectedHandle.value)
+ 		dispatchNativeWidgetConnection(
+ 			event,
+@@ -1582,7 +1585,7 @@ if (
+ 	!(window as any).__KRONTERM_WORKFLOW_HOST__ ||
+ 	inject('kronterm:surface-role', 'root') !== 'workflow'
+ )
+-	useViewportAutoAdjust(viewportRef, viewport, setViewport);
++if (!(window as any).__KRONTERM_WORKFLOW_HOST__ || inject('kronterm:surface-role', 'root') !== 'workflow') useViewportAutoAdjust(viewportRef, viewport, setViewport);
+ 
+ function getProjectedPosition(event?: MouseEvent | TouchEvent) {
+ 	const bounds = krontermHost?.viewportTarget?.getBoundingClientRect() ??
+@@ -1600,6 +1603,7 @@ function onClickPane(event: MouseEvent) {
+ }
+ 
+ async function onFitBounds(nodes: GraphNode[]) {
++    if(krontermHost) { krontermHost.onCameraIntent?.({fitBounds:getRectOfNodes(nodes),scope:'workflow'});return; }
+ 	if (krontermHost) {
+ 		krontermHost.onCameraIntent?.({ fitBounds: getRectOfNodes(nodes), scope: 'workflow' });
+ 		return;
+@@ -1608,6 +1612,7 @@ async function onFitBounds(nodes: GraphNode[]) {
+ }
+ 
+ async function onFitView() {
++    if(krontermHost) { if(!initialized.value) return; krontermHost.onCameraIntent?.({fitBounds:getRectOfNodes(graphNodes.value),scope:'workflow'});return; }
+ 	if (krontermHost) {
+ 		if (!initialized.value) return;
+ 		krontermHost.onCameraIntent?.({
+@@ -1624,6 +1629,7 @@ async function onFitView() {
+ }
+ 
+ async function onZoomTo(zoomLevel: number) {
++    if(krontermHost) { const camera=krontermHost.camera || viewport.value; const ratio=zoomLevel/camera.zoom; krontermHost.onCameraIntent?.({camera:{x:dimensions.value.width/2-(dimensions.value.width/2-camera.x)*ratio,y:dimensions.value.height/2-(dimensions.value.height/2-camera.y)*ratio,zoom:zoomLevel}}); return; }
+ 	if (krontermHost) {
+ 		const camera = krontermHost.camera || viewport.value;
+ 		const ratio = zoomLevel / camera.zoom;
+@@ -1640,11 +1646,13 @@ async function onZoomTo(zoomLevel: number) {
+ }
+ 
+ async function onZoomIn() {
++    if(krontermHost) return onZoomTo(viewport.value.zoom * 1.2);
+ 	if (krontermHost) return onZoomTo(viewport.value.zoom * 1.2);
+ 	await zoomIn();
+ }
+ 
+ async function onZoomOut() {
++    if(krontermHost) return onZoomTo(viewport.value.zoom / 1.2);
+ 	if (krontermHost) return onZoomTo(viewport.value.zoom / 1.2);
+ 	await zoomOut();
+ }
+@@ -2129,79 +2137,32 @@ defineExpose({
+ });
+ 
+ // The original canvas publishes its objects and camera into the OS registry.
+-const krontermHost =
+-	inject('kronterm:surface-role', 'root') === 'workflow'
+-		? (window as any).__KRONTERM_WORKFLOW_HOST__
+-		: null;
++const krontermHost = inject('kronterm:surface-role', 'root') === 'workflow' ? (window as any).__KRONTERM_WORKFLOW_HOST__ : null;
+ if (krontermHost) {
+-	const canvasToken = Symbol('workflow-scene');
+-	krontermHost.activeCanvasToken = canvasToken;
+-	krontermHost.fitWorkflow = () => onFitView();
+-	onUnmounted(() => {
+-		if (krontermHost.activeCanvasToken === canvasToken) {
+-			krontermHost.onObjects?.([]);
+-			delete krontermHost.setSelection;
+-			delete krontermHost.moveNode;
+-			delete krontermHost.removeNode;
+-			delete krontermHost.fitWorkflow;
+-		}
+-	});
+-	let objectSignature = '';
+-	let applyingSelection = false;
+-	watch(
+-		[graphNodes, () => workflowDocumentStore.value?.allNodes],
+-		([nodes, canonicalNodes]) => {
+-			if (krontermHost.activeCanvasToken !== canvasToken) return;
+-			const canonicalIds = new Set((canonicalNodes || []).map((node) => node.id));
+-			const objects = nodes
+-				.filter((node) => canonicalIds.has(node.id))
+-				.map((node) => ({
+-					id: node.id,
+-					name: node.data?.name,
+-					position: {
+-						x: node.computedPosition?.x ?? node.position.x,
+-						y: node.computedPosition?.y ?? node.position.y,
+-					},
+-					dimensions: { ...node.dimensions },
+-					type: node.data?.type,
+-				}));
+-			const signature = JSON.stringify(objects);
+-			if (signature !== objectSignature) {
+-				objectSignature = signature;
+-				krontermHost.onObjects?.(objects);
+-			}
+-		},
+-		{ deep: true, immediate: true },
+-	);
+-	krontermHost.getSelection = () => selectedNodesAndGroups.value.map((node) => node.id);
+-	krontermHost.setSelection = (ids: string[]) => {
+-		applyingSelection = true;
+-		removeSelectedNodes(selectedNodesAndGroups.value);
+-		addSelectedNodes(ids.map((id) => findNode(id)).filter(Boolean));
+-		void nextTick(() => {
+-			applyingSelection = false;
+-		});
+-	};
+-	const requireMutableNode = (id: string) => {
+-		if (krontermHost.activeCanvasToken !== canvasToken || !findNode(id))
+-			throw new Error('Workflow node is unavailable');
+-		if (props.readOnly || props.suppressInteraction || krontermHost.documentMutation?.value)
+-			throw new Error('Workflow is read only');
+-	};
+-	krontermHost.moveNode = (id: string, position: any) => {
+-		requireMutableNode(id);
+-		if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
+-			throw new Error('Invalid node position');
+-		onUpdateNodePosition(id, position);
+-	};
+-	krontermHost.removeNode = (id: string) => {
+-		requireMutableNode(id);
+-		onDeleteNode(id);
+-	};
+-	watch(selectedNodesAndGroups, (nodes) => {
+-		if (!applyingSelection) krontermHost.onSelection?.(nodes[0]?.id);
+-	});
++    const canvasToken = Symbol('workflow-scene');
++    krontermHost.activeCanvasToken = canvasToken;
++    krontermHost.fitWorkflow = () => onFitView();
++    onUnmounted(() => { if(krontermHost.activeCanvasToken === canvasToken) { krontermHost.onObjects?.([]); delete krontermHost.setSelection; delete krontermHost.moveNode; delete krontermHost.removeNode; delete krontermHost.fitWorkflow; } });
++    let objectSignature = '';
++    let applyingSelection = false;
++    watch([graphNodes, () => workflowDocumentStore.value?.allNodes], ([nodes, canonicalNodes]) => {
++        if(krontermHost.activeCanvasToken !== canvasToken) return;
++        const canonicalIds = new Set((canonicalNodes || []).map(node => node.id));
++        const objects = nodes.filter(node => canonicalIds.has(node.id)).map(node => ({ id: node.id, name: node.data?.name, position: {x: node.computedPosition?.x ?? node.position.x, y: node.computedPosition?.y ?? node.position.y}, dimensions: {...node.dimensions}, type: node.data?.type }));
++        const signature = JSON.stringify(objects);
++        if (signature !== objectSignature) { objectSignature = signature; krontermHost.onObjects?.(objects); }
++    }, { deep: true, immediate: true });
++    krontermHost.getSelection = () => selectedNodesAndGroups.value.map(node => node.id);
++    krontermHost.setSelection = (ids: string[]) => { applyingSelection = true; removeSelectedNodes(selectedNodesAndGroups.value); addSelectedNodes(ids.map(id => findNode(id)).filter(Boolean)); void nextTick(() => { applyingSelection = false; }); };
++    const requireMutableNode = (id: string) => {
++        if(krontermHost.activeCanvasToken !== canvasToken || !findNode(id)) throw new Error('Workflow node is unavailable');
++        if(props.readOnly || props.suppressInteraction || krontermHost.documentMutation?.value) throw new Error('Workflow is read only');
++    };
++    krontermHost.moveNode = (id: string, position: any) => { requireMutableNode(id); if(!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) throw new Error('Invalid node position'); onUpdateNodePosition(id, position); };
++    krontermHost.removeNode = (id: string) => { requireMutableNode(id); onDeleteNode(id); };
++    watch(selectedNodesAndGroups, (nodes) => { if(!applyingSelection) krontermHost.onSelection?.(nodes[0]?.id); });
+ }
++
+ </script>
+ 
+ <template>
+diff --git a/packages/frontend/editor-ui/src/kronterm-native-axios.ts b/packages/frontend/editor-ui/src/kronterm-native-axios.ts
+index 963557ad..dd84436c 100644
+--- a/packages/frontend/editor-ui/src/kronterm-native-axios.ts
++++ b/packages/frontend/editor-ui/src/kronterm-native-axios.ts
+@@ -1,95 +1,87 @@
+-import axios, { AxiosError, CanceledError } from 'axios-native';
+-export * from 'axios-native';
++import axios, { AxiosError, CanceledError } from "axios-native";
++export * from "axios-native";
+ axios.defaults.adapter = async (config) => {
+-	const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
+-	if (!host) throw new Error('The KronTerm workflow host is not connected.');
+-	const url = new URL(axios.getUri(config), host.backendUrl);
+-	if (url.origin !== new URL(host.backendUrl).origin)
+-		throw new Error('This workflow request is outside the managed runtime.');
+-	const requestId = crypto.randomUUID();
+-	const abort = () => {
+-		void host.cancelRequest?.(requestId);
+-	};
+-	if (config.signal?.aborted) throw new CanceledError('Workflow request canceled.', config);
+-	config.signal?.addEventListener?.('abort', abort);
+-	try {
+-		let body = config.data;
+-		let contentType = String(
+-			config.headers?.['Content-Type'] || config.headers?.['content-type'] || '',
+-		);
+-		let encoding = 'json';
+-		let form;
+-		if (body instanceof FormData) {
+-			form = await Promise.all(
+-				Array.from(body.entries()).map(async ([name, value]) =>
+-					typeof value === 'string'
+-						? { name, value }
+-						: {
+-								name,
+-								value: Array.from(new Uint8Array(await value.arrayBuffer())),
+-								filename: value.name,
+-								type: value.type,
+-							},
+-				),
+-			);
+-			body = undefined;
+-		} else if (body instanceof Blob) {
+-			contentType = body.type || contentType;
+-			body = Array.from(new Uint8Array(await body.arrayBuffer()));
+-			encoding = 'bytes';
+-		} else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+-			body = Array.from(
+-				body instanceof ArrayBuffer
+-					? new Uint8Array(body)
+-					: new Uint8Array(body.buffer, body.byteOffset, body.byteLength),
+-			);
+-			encoding = 'bytes';
+-		} else if (typeof body === 'string') {
+-			try {
+-				body = JSON.parse(body);
+-			} catch {
+-				encoding = 'text';
+-			}
+-		}
+-		const result = await host.request({
+-			route: url.pathname + url.search,
+-			requestId,
+-			pushRef: config.headers?.['push-ref'],
+-			form,
+-			encoding,
+-			contentType: contentType || undefined,
+-			responseType: config.responseType,
+-			method: (config.method || 'GET').toUpperCase(),
+-			body,
+-		});
+-		if (config.signal?.aborted) throw new CanceledError('Workflow request canceled.', config);
+-		const data = result.bytes
+-			? config.responseType === 'blob'
+-				? new Blob([new Uint8Array(result.bytes)], { type: result.headers?.['content-type'] })
+-				: new Uint8Array(result.bytes).buffer
+-			: result.data;
+-		const response = {
+-			data,
+-			status: result.status,
+-			statusText: result.statusText,
+-			headers: result.headers || {},
+-			config,
+-			request: {},
+-		};
+-		if (result.status >= 400)
+-			throw new AxiosError(
+-				`Workflow request failed: ${result.status}`,
+-				'ERR_BAD_RESPONSE',
+-				config,
+-				{},
+-				response,
+-			);
+-		return response;
+-	} catch (error) {
+-		if (config.signal?.aborted) throw new CanceledError('Workflow request canceled.', config);
+-		throw error;
+-	} finally {
+-		config.signal?.removeEventListener?.('abort', abort);
+-	}
++    const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    if (!host) throw new Error("The KronTerm workflow host is not connected.");
++    const url = new URL(axios.getUri(config), host.backendUrl);
++    if (url.origin !== new URL(host.backendUrl).origin)
++        throw new Error("This workflow request is outside the managed runtime.");
++    const requestId = crypto.randomUUID();
++    const abort = () => {
++        void host.cancelRequest?.(requestId);
++    };
++    if (config.signal?.aborted) throw new CanceledError("Workflow request canceled.", config);
++    config.signal?.addEventListener?.("abort", abort);
++    try {
++        let body = config.data;
++        let contentType = String(config.headers?.["Content-Type"] || config.headers?.["content-type"] || "");
++        let encoding = "json";
++        let form;
++        if (body instanceof FormData) {
++            form = await Promise.all(
++                Array.from(body.entries()).map(async ([name, value]) =>
++                    typeof value === "string"
++                        ? { name, value }
++                        : {
++                              name,
++                              value: Array.from(new Uint8Array(await value.arrayBuffer())),
++                              filename: value.name,
++                              type: value.type,
++                          }
++                )
++            );
++            body = undefined;
++        } else if (body instanceof Blob) {
++            contentType = body.type || contentType;
++            body = Array.from(new Uint8Array(await body.arrayBuffer()));
++            encoding = "bytes";
++        } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
++            body = Array.from(
++                body instanceof ArrayBuffer
++                    ? new Uint8Array(body)
++                    : new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
++            );
++            encoding = "bytes";
++        } else if (typeof body === "string") {
++            try {
++                body = JSON.parse(body);
++            } catch {
++                encoding = "text";
++            }
++        }
++        const result = await host.request({
++            route: url.pathname + url.search,
++            requestId,
++            pushRef: config.headers?.["push-ref"],
++            form,
++            encoding,
++            contentType: contentType || undefined,
++            responseType: config.responseType,
++            method: (config.method || "GET").toUpperCase(),
++            body,
++        });
++        if (config.signal?.aborted) throw new CanceledError("Workflow request canceled.", config);
++        const data = result.bytes
++            ? config.responseType === "blob"
++                ? new Blob([new Uint8Array(result.bytes)], { type: result.headers?.["content-type"] })
++                : new Uint8Array(result.bytes).buffer
++            : result.data;
++        const response = {
++            data,
++            status: result.status,
++            statusText: result.statusText,
++            headers: result.headers || {},
++            config,
++            request: {},
++        };
++        if (result.status >= 400)
++            throw new AxiosError(`Workflow request failed: ${result.status}`, "ERR_BAD_RESPONSE", config, {}, response);
++        return response;
++    } catch (error) {
++        if (config.signal?.aborted) throw new CanceledError("Workflow request canceled.", config);
++        throw error;
++    } finally {
++        config.signal?.removeEventListener?.("abort", abort);
++    }
+ };
+ export default axios;
+diff --git a/packages/frontend/editor-ui/src/kronterm-native-bootstrap.ts b/packages/frontend/editor-ui/src/kronterm-native-bootstrap.ts
+index d6fda683..161fa845 100644
+--- a/packages/frontend/editor-ui/src/kronterm-native-bootstrap.ts
++++ b/packages/frontend/editor-ui/src/kronterm-native-bootstrap.ts
+@@ -1,306 +1,291 @@
+-import { useUIStore } from '@/app/stores/ui.store';
+-import { useNodeCreatorStore } from '@/features/shared/nodeCreator/nodeCreator.store';
+-import { createRenderer, nextTick, nodeOps, patchProp, ref, shallowRef, watch } from 'vue';
++import { useUIStore } from "@/app/stores/ui.store";
++import { useNodeCreatorStore } from "@/features/shared/nodeCreator/nodeCreator.store";
++import { createRenderer, nextTick, nodeOps, patchProp, ref, shallowRef, watch } from "vue";
+ 
+-import '@vue-flow/controls/dist/style.css';
+-import '@vue-flow/core/dist/style.css';
+-import '@vue-flow/core/dist/theme-default.css';
+-import '@vue-flow/minimap/dist/style.css';
+-import '@vue-flow/node-resizer/dist/style.css';
++import "@vue-flow/controls/dist/style.css";
++import "@vue-flow/core/dist/style.css";
++import "@vue-flow/core/dist/theme-default.css";
++import "@vue-flow/minimap/dist/style.css";
++import "@vue-flow/node-resizer/dist/style.css";
+ 
+-import '@n8n/design-system/css/index.scss';
+-import 'vue-json-pretty/lib/styles.css';
++import "@n8n/design-system/css/index.scss";
++import "vue-json-pretty/lib/styles.css";
+ 
+-import '@/features/ai/assistant/aiBuilderDiff.scss';
+-import '@/main.scss';
+-import './kronterm-native.css';
++import "@/features/ai/assistant/aiBuilderDiff.scss";
++import "@/main.scss";
++import "./kronterm-native.css";
+ // Ensure i18n HMR owner is evaluated as early as possible in dev
+-import '@/app/dev/i18nHmr';
++import "@/app/dev/i18nHmr";
+ 
+-import App from '@/app/App.vue';
+-import router from '@/app/router';
++import App from "@/app/App.vue";
++import router from "@/app/router";
+ 
+-import { IconBodyLoaderKey } from '@n8n/design-system';
+-import { loadLucideIconBody } from '@n8n/design-system/icons/lucide';
+-import { i18nInstance } from '@n8n/i18n';
++import { IconBodyLoaderKey } from "@n8n/design-system";
++import { loadLucideIconBody } from "@n8n/design-system/icons/lucide";
++import { i18nInstance } from "@n8n/i18n";
+ 
+-import { GlobalComponentsPlugin } from '@/app/plugins/components';
+-import { GlobalDirectivesPlugin } from '@/app/plugins/directives';
+-import { TelemetryPlugin } from '@/app/plugins/telemetry';
++import { GlobalComponentsPlugin } from "@/app/plugins/components";
++import { GlobalDirectivesPlugin } from "@/app/plugins/directives";
++import { TelemetryPlugin } from "@/app/plugins/telemetry";
+ 
+-import { registerShellCapabilities } from '@/app/capabilities.manifest';
+-import { registerComponentSlots } from '@/app/componentSlots.manifest';
+-import { installRenderTracker } from '@/app/dev/render-tracker';
+-import { registerEagerModals } from '@/app/modals.manifest';
+-import { registerModuleRoutes } from '@/app/moduleInitializer/moduleInitializer';
+-import { ChartJSPlugin } from '@/app/plugins/chartjs';
+-import { SentryPlugin } from '@/app/plugins/sentry';
+-import { registerVitePreloadErrorHandler } from '@/app/plugins/vitePreloadError';
+-import { registerUpgradeRedirectGuard } from '@/app/upgradeRedirectGuard.manifest';
+-import { useRootStore } from '@n8n/stores/useRootStore';
+-import { createPinia, PiniaVuePlugin } from 'pinia';
+-import { observeNativePanels } from './native-panel-layout.mjs';
+-import { createNativeSession } from './native-session.mjs';
++import { registerShellCapabilities } from "@/app/capabilities.manifest";
++import { registerComponentSlots } from "@/app/componentSlots.manifest";
++import { installRenderTracker } from "@/app/dev/render-tracker";
++import { registerEagerModals } from "@/app/modals.manifest";
++import { registerModuleRoutes } from "@/app/moduleInitializer/moduleInitializer";
++import { ChartJSPlugin } from "@/app/plugins/chartjs";
++import { SentryPlugin } from "@/app/plugins/sentry";
++import { registerVitePreloadErrorHandler } from "@/app/plugins/vitePreloadError";
++import { registerUpgradeRedirectGuard } from "@/app/upgradeRedirectGuard.manifest";
++import { useRootStore } from "@n8n/stores/useRootStore";
++import { createPinia, PiniaVuePlugin } from "pinia";
++import { observeNativePanels } from "./native-panel-layout.mjs";
++import { createNativeSession } from "./native-session.mjs";
+ 
+-import type { VueScanOptions } from 'z-vue-scan';
++import type { VueScanOptions } from "z-vue-scan";
+ 
+ registerVitePreloadErrorHandler();
+ const session = createNativeSession(createPinia, {
+-	routes: () => registerModuleRoutes(router),
+-	modals: registerEagerModals,
+-	slots: registerComponentSlots,
+-	capabilities: registerShellCapabilities,
+-	upgradeGuard: registerUpgradeRedirectGuard,
++    routes: () => registerModuleRoutes(router),
++    modals: registerEagerModals,
++    slots: registerComponentSlots,
++    capabilities: registerShellCapabilities,
++    upgradeGuard: registerUpgradeRedirectGuard,
+ });
+ 
+ export async function mount(element: HTMLElement, host: any) {
+-	session.prepare();
+-	host.sceneElement = element;
+-	host.disposing = false;
+-	host.worldCamera = shallowRef(Object.freeze({ ...host.camera }));
+-	host.objectOrderRef = shallowRef({ ...host.objectOrder });
+-	const panelTargets = shallowRef({ tools: host.toolsTarget, focus: host.focusTarget });
+-	Object.defineProperties(host, {
+-		toolsTarget: { configurable: true, get: () => panelTargets.value.tools },
+-		focusTarget: { configurable: true, get: () => panelTargets.value.focus },
+-	});
+-	host.setViewport = (camera: any) => {
+-		if (![camera.x, camera.y, camera.zoom].every(Number.isFinite) || camera.zoom <= 0)
+-			throw new Error('Invalid OS camera');
+-		host.camera = { ...camera };
+-		host.worldCamera.value = Object.freeze({ ...camera });
+-	};
+-	host.setObjectOrder = (order: Record<string, number>) => {
+-		host.objectOrderRef.value = { ...order };
+-	};
+-	if (host.worldTarget) {
+-		const worldStyle = document.createElement('style');
+-		worldStyle.textContent =
+-			':host{display:contents!important;position:static!important;transform:none!important;z-index:auto!important;isolation:auto!important;contain:none!important;overflow:visible!important;background:transparent!important}:host([hidden]){display:none!important}';
+-		host.worldTarget.getRootNode().appendChild(worldStyle);
+-		host.worldTarget.style.cssText =
+-			'display:contents;position:static;transform:none;z-index:auto;isolation:auto;contain:none;overflow:visible;pointer-events:none';
+-	}
+-	const originalVars = new Map<HTMLElement, Map<string, string>>();
+-	const originalThemes = new Map<HTMLElement, string | null>();
+-	const preferredTheme = window.matchMedia('(prefers-color-scheme: dark)');
+-	host.appearance = ref('light');
+-	const cssVars = new Map<string, string>();
+-	const surfaceHosts = () =>
+-		Array.from(
+-			new Set(
+-				[
+-					element,
+-					host.worldTarget,
+-					host.chromeTarget,
+-					host.toolsTarget,
+-					host.focusTarget,
+-					host.headerTarget,
+-					host.logsTarget,
+-					host.detailTarget,
+-					host.pickerTarget?.value,
+-					host.executionTarget?.value,
+-				]
+-					.filter(Boolean)
+-					.map(
+-						(target: HTMLElement) =>
+-							((target.getRootNode() as ShadowRoot).host as HTMLElement) || target,
+-					),
+-			),
+-		);
+-	const applySurfaceTheme = () => {
+-		const osTheme =
+-			host.theme ||
+-			document.documentElement.getAttribute('data-theme') ||
+-			document.body.getAttribute('data-theme') ||
+-			(document.documentElement.classList.contains('dark') ? 'dark' : 'system');
+-		host.appearance.value =
+-			osTheme === 'system' ? (preferredTheme.matches ? 'dark' : 'light') : osTheme;
+-		for (const target of surfaceHosts()) {
+-			if (!originalThemes.has(target))
+-				originalThemes.set(target, target.getAttribute('data-theme'));
+-			if (osTheme === 'system') target.removeAttribute('data-theme');
+-			else target.setAttribute('data-theme', osTheme);
+-		}
+-	};
+-	host.setTheme = (theme: string) => {
+-		host.theme = theme;
+-		applySurfaceTheme();
+-	};
+-	host.setCssVar = (name: string, value: string) => {
+-		cssVars.set(name, value);
+-		for (const target of surfaceHosts()) {
+-			if (!originalVars.has(target)) originalVars.set(target, new Map());
+-			const saved = originalVars.get(target)!;
+-			if (!saved.has(name)) saved.set(name, target.style.getPropertyValue(name));
+-			if (target.style.getPropertyValue(name) !== value) target.style.setProperty(name, value);
+-		}
+-	};
+-	const syncSurfaceStyles = () => {
+-		applySurfaceTheme();
+-		for (const [name, value] of cssVars) host.setCssVar(name, value);
+-	};
+-	host.setPanelTargets = (targets: { tools: HTMLElement | null; focus: HTMLElement | null }) => {
+-		panelTargets.value = targets;
+-		syncSurfaceStyles();
+-	};
+-	const themeObserver = new MutationObserver(applySurfaceTheme);
+-	themeObserver.observe(document.documentElement, {
+-		attributes: true,
+-		attributeFilter: ['data-theme', 'class'],
+-	});
+-	themeObserver.observe(document.body, {
+-		attributes: true,
+-		attributeFilter: ['data-theme', 'class'],
+-	});
+-	preferredTheme.addEventListener('change', applySurfaceTheme);
+-	applySurfaceTheme();
+-	const pinia = session.stores;
++    session.prepare();
++    host.sceneElement = element;
++    host.disposing = false;
++    host.worldCamera = shallowRef(Object.freeze({ ...host.camera }));
++    host.objectOrderRef = shallowRef({ ...host.objectOrder });
++    const panelTargets = shallowRef({ tools: host.toolsTarget, focus: host.focusTarget });
++    Object.defineProperties(host, {
++        toolsTarget: { configurable: true, get: () => panelTargets.value.tools },
++        focusTarget: { configurable: true, get: () => panelTargets.value.focus },
++    });
++    host.setViewport = (camera: any) => {
++        if (![camera.x, camera.y, camera.zoom].every(Number.isFinite) || camera.zoom <= 0)
++            throw new Error("Invalid OS camera");
++        host.camera = { ...camera };
++        host.worldCamera.value = Object.freeze({ ...camera });
++    };
++    host.setObjectOrder = (order: Record<string, number>) => {
++        host.objectOrderRef.value = { ...order };
++    };
++    if (host.worldTarget) {
++        const worldStyle = document.createElement("style");
++        worldStyle.textContent =
++            ":host{display:contents!important;position:static!important;transform:none!important;z-index:auto!important;isolation:auto!important;contain:none!important;overflow:visible!important;background:transparent!important}:host([hidden]){display:none!important}";
++        host.worldTarget.getRootNode().appendChild(worldStyle);
++        host.worldTarget.style.cssText =
++            "display:contents;position:static;transform:none;z-index:auto;isolation:auto;contain:none;overflow:visible;pointer-events:none";
++    }
++    const originalVars = new Map<HTMLElement, Map<string, string>>();
++    const originalThemes = new Map<HTMLElement, string | null>();
++    const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)");
++    host.appearance = ref("light");
++    const cssVars = new Map<string, string>();
++    const surfaceHosts = () =>
++        Array.from(
++            new Set(
++                [
++                    element,
++                    host.worldTarget,
++                    host.chromeTarget,
++                    host.toolsTarget,
++                    host.focusTarget,
++                    host.headerTarget,
++                    host.logsTarget,
++                    host.detailTarget,
++                    host.pickerTarget?.value,
++                    host.executionTarget?.value,
++                ]
++                    .filter(Boolean)
++                    .map((target: HTMLElement) => ((target.getRootNode() as ShadowRoot).host as HTMLElement) || target)
++            )
++        );
++    const applySurfaceTheme = () => {
++        const osTheme =
++            host.theme ||
++            document.documentElement.getAttribute("data-theme") ||
++            document.body.getAttribute("data-theme") ||
++            (document.documentElement.classList.contains("dark") ? "dark" : "system");
++        host.appearance.value = osTheme === "system" ? (preferredTheme.matches ? "dark" : "light") : osTheme;
++        for (const target of surfaceHosts()) {
++            if (!originalThemes.has(target)) originalThemes.set(target, target.getAttribute("data-theme"));
++            if (osTheme === "system") target.removeAttribute("data-theme");
++            else target.setAttribute("data-theme", osTheme);
++        }
++    };
++    host.setTheme = (theme: string) => {
++        host.theme = theme;
++        applySurfaceTheme();
++    };
++    host.setCssVar = (name: string, value: string) => {
++        cssVars.set(name, value);
++        for (const target of surfaceHosts()) {
++            if (!originalVars.has(target)) originalVars.set(target, new Map());
++            const saved = originalVars.get(target)!;
++            if (!saved.has(name)) saved.set(name, target.style.getPropertyValue(name));
++            if (target.style.getPropertyValue(name) !== value) target.style.setProperty(name, value);
++        }
++    };
++    const syncSurfaceStyles = () => {
++        applySurfaceTheme();
++        for (const [name, value] of cssVars) host.setCssVar(name, value);
++    };
++    host.setPanelTargets = (targets: { tools: HTMLElement | null; focus: HTMLElement | null }) => {
++        panelTargets.value = targets;
++        syncSurfaceStyles();
++    };
++    const themeObserver = new MutationObserver(applySurfaceTheme);
++    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
++    themeObserver.observe(document.body, { attributes: true, attributeFilter: ["data-theme", "class"] });
++    preferredTheme.addEventListener("change", applySurfaceTheme);
++    applySurfaceTheme();
++    const pinia = session.stores;
+ 
+-	const root = element.getRootNode() as ShadowRoot;
+-	host.querySelector = (selector: string) =>
+-		root.querySelector(selector) ??
+-		host.worldTarget?.querySelector(selector) ??
+-		host.detailTarget?.getRootNode()?.querySelector?.(selector) ??
+-		null;
+-	host.shouldHandleEvent = (event: Event) =>
+-		!host.documentMutation?.value &&
+-		event.composedPath().some((target) => surfaceHosts().includes(target as HTMLElement));
+-	const renderer = createRenderer({
+-		...nodeOps,
+-		patchProp,
+-		querySelector: (selector: string) =>
+-			root.querySelector(selector) ??
+-			host.detailTarget?.getRootNode()?.querySelector?.(selector) ??
+-			root.querySelector('#app-modals') ??
+-			host.detailTarget ??
+-			element,
+-	});
+-	const app = renderer.createApp(App);
++    const root = element.getRootNode() as ShadowRoot;
++    host.querySelector = (selector: string) =>
++        root.querySelector(selector) ??
++        host.worldTarget?.querySelector(selector) ??
++        host.detailTarget?.getRootNode()?.querySelector?.(selector) ??
++        null;
++    host.shouldHandleEvent = (event: Event) =>
++        !host.documentMutation?.value &&
++        event.composedPath().some((target) => surfaceHosts().includes(target as HTMLElement));
++    const renderer = createRenderer({
++        ...nodeOps,
++        patchProp,
++        querySelector: (selector: string) =>
++            root.querySelector(selector) ??
++            host.detailTarget?.getRootNode()?.querySelector?.(selector) ??
++            root.querySelector("#app-modals") ??
++            host.detailTarget ??
++            element,
++    });
++    const app = renderer.createApp(App);
+ 
+-	app.provide(IconBodyLoaderKey, loadLucideIconBody);
++    app.provide(IconBodyLoaderKey, loadLucideIconBody);
+ 
+-	app.use(SentryPlugin);
++    app.use(SentryPlugin);
+ 
+-	app.use(TelemetryPlugin);
+-	app.use(PiniaVuePlugin);
+-	app.use(GlobalComponentsPlugin);
+-	app.use(GlobalDirectivesPlugin);
+-	app.use(pinia);
+-	(useRootStore(pinia) as any).setNativeBaseUrl?.((window as any).BASE_PATH);
+-	app.use(router);
+-	app.use(i18nInstance);
+-	app.use(ChartJSPlugin);
++    app.use(TelemetryPlugin);
++    app.use(PiniaVuePlugin);
++    app.use(GlobalComponentsPlugin);
++    app.use(GlobalDirectivesPlugin);
++    app.use(pinia);
++    (useRootStore(pinia) as any).setNativeBaseUrl?.((window as any).BASE_PATH);
++    app.use(router);
++    app.use(i18nInstance);
++    app.use(ChartJSPlugin);
+ 
+-	// Opt-in component re-render counter for the canvas performance benchmark.
+-	// No-op unless the N8N_RENDER_TRACKING localStorage flag is set, so it is
+-	// inert for real users. Must run before mount so the mixin covers every
+-	// component.
+-	installRenderTracker(app);
++    // Opt-in component re-render counter for the canvas performance benchmark.
++    // No-op unless the N8N_RENDER_TRACKING localStorage flag is set, so it is
++    // inert for real users. Must run before mount so the mixin covers every
++    // component.
++    installRenderTracker(app);
+ 
+-	if (import.meta.env.VUE_SCAN) {
+-		const { default: VueScan } = await import('z-vue-scan');
+-		app.use<VueScanOptions>(VueScan, {
+-			enable: true,
+-		});
+-	}
++    if (import.meta.env.VUE_SCAN) {
++        const { default: VueScan } = await import("z-vue-scan");
++        app.use<VueScanOptions>(VueScan, {
++            enable: true,
++        });
++    }
+ 
+-	host.documentMutation = ref(false);
+-	host.managementOpen = ref(false);
+-	host.beginDocumentMutation = async () => {
+-		const state = host.getDocumentState?.();
+-		if (!state || state.dirty)
+-			throw new Error('Save local workflow edits before applying Hermes changes.');
+-		host.documentMutation.value = true;
+-		await nextTick();
+-		return state;
+-	};
+-	host.endDocumentMutation = () => {
+-		host.documentMutation.value = false;
+-	};
+-	const pickerPark = document.createElement('div');
+-	pickerPark.hidden = true;
+-	element.appendChild(pickerPark);
+-	host.pickerParked = ref(true);
+-	host.pickerTarget = ref(pickerPark);
+-	host.executionTarget = ref(null);
+-	host.setExecutionTarget = (target: HTMLElement | null) => {
+-		host.executionTarget.value = target;
+-		syncSurfaceStyles();
+-	};
+-	host.setPickerTarget = (target: HTMLElement | null) => {
+-		host.pickerParked.value = !target;
+-		host.pickerTarget.value = target || pickerPark;
+-		syncSurfaceStyles();
+-		if (target) {
+-			void nextTick(() => target.querySelector('input')?.focus());
+-		} else {
+-			useNodeCreatorStore(pinia).isCreateNodeActive = false;
+-		}
+-	};
+-	host.openPicker = async () => {
+-		if (host.managementOpen.value) {
+-			await router.push(host.editorPath || '/workflow/' + host.workflowId);
+-			if (!router.currentRoute.value.meta.nodeView) return;
+-		}
+-		const store = useNodeCreatorStore(pinia);
+-		if (!store.isCreateNodeActive) store.openNodeCreatorForRegularNodes(host.workflowId, 'canvas');
+-	};
+-	const stopPicker = watch(
+-		() => useNodeCreatorStore(pinia).isCreateNodeActive,
+-		(open) => {
+-			if (open) host.onInspector?.('nodes');
+-			else if (!host.pickerParked.value) host.onPickerClosed?.();
+-		},
+-		{ flush: 'sync' },
+-	);
+-	const stopDirty = watch(
+-		() => useUIStore(pinia).stateIsDirty,
+-		(dirty) => {
+-			if (!host.isReconcilingDocument) host.onDirty?.(dirty);
+-		},
+-		{ flush: 'sync' },
+-	);
+-	const stopRoute = router.afterEach((route, _from, failure) => {
+-		if (failure) return;
+-		if (route.meta.layout === 'workflow' && route.meta.nodeView) host.editorPath = route.fullPath;
+-		const id = String(route.params.workflowId || '');
+-		if (id && id !== 'new') host.workflowId = id;
+-		host.onRoute?.(route.fullPath, id);
+-	});
+-	const stopPanels = observeNativePanels(host);
+-	let disposed = false;
+-	const dispose = () => {
+-		if (disposed) return;
+-		disposed = true;
+-		host.disposing = true;
+-		stopPanels();
+-		stopDirty();
+-		stopPicker();
+-		stopRoute();
+-		app.unmount();
+-		pickerPark.remove();
+-		themeObserver.disconnect();
+-		preferredTheme.removeEventListener('change', applySurfaceTheme);
+-		for (const [target, vars] of originalVars)
+-			for (const [name, value] of vars)
+-				value ? target.style.setProperty(name, value) : target.style.removeProperty(name);
+-		for (const [target, theme] of originalThemes)
+-			theme == null
+-				? target.removeAttribute('data-theme')
+-				: target.setAttribute('data-theme', theme);
+-		if ((window as any).__KRONTERM_WORKFLOW_HOST__ === host)
+-			delete (window as any).__KRONTERM_WORKFLOW_HOST__;
+-	};
+-	try {
+-		await router.isReady();
+-		await router.replace(host.path || '/workflow/new');
+-		app.mount(element);
+-		host.navigate = (path: string) =>
+-			router.currentRoute.value.fullPath === path ? Promise.resolve() : router.push(path);
+-		return dispose;
+-	} catch (error) {
+-		dispose();
+-		throw error;
+-	}
++    host.documentMutation = ref(false);
++    host.managementOpen = ref(false);
++    host.beginDocumentMutation = async () => {
++        const state = host.getDocumentState?.();
++        if (!state || state.dirty) throw new Error("Save local workflow edits before applying Hermes changes.");
++        host.documentMutation.value = true;
++        await nextTick();
++        return state;
++    };
++    host.endDocumentMutation = () => {
++        host.documentMutation.value = false;
++    };
++    const pickerPark = document.createElement("div");
++    pickerPark.hidden = true;
++    element.appendChild(pickerPark);
++    host.pickerParked = ref(true);
++    host.pickerTarget = ref(pickerPark);
++    host.executionTarget = ref(null);
++    host.setExecutionTarget = (target: HTMLElement | null) => {
++        host.executionTarget.value = target;
++        syncSurfaceStyles();
++    };
++    host.setPickerTarget = (target: HTMLElement | null) => {
++        host.pickerParked.value = !target;
++        host.pickerTarget.value = target || pickerPark;
++        syncSurfaceStyles();
++        if (target) {
++            void nextTick(() => target.querySelector("input")?.focus());
++        } else {
++            useNodeCreatorStore(pinia).isCreateNodeActive = false;
++        }
++    };
++    host.openPicker = async () => {
++        if (host.managementOpen.value) {
++            await router.push(host.editorPath || "/workflow/" + host.workflowId);
++            if (!router.currentRoute.value.meta.nodeView) return;
++        }
++        const store = useNodeCreatorStore(pinia);
++        if (!store.isCreateNodeActive) store.openNodeCreatorForRegularNodes(host.workflowId, "canvas");
++    };
++    const stopPicker = watch(
++        () => useNodeCreatorStore(pinia).isCreateNodeActive,
++        (open) => {
++            if (open) host.onInspector?.("nodes");
++            else if (!host.pickerParked.value) host.onPickerClosed?.();
++        },
++        { flush: "sync" }
++    );
++    const stopDirty = watch(
++        () => useUIStore(pinia).stateIsDirty,
++        (dirty) => {
++            if (!host.isReconcilingDocument) host.onDirty?.(dirty);
++        },
++        { flush: "sync" }
++    );
++    const stopRoute = router.afterEach((route, _from, failure) => {
++        if (failure) return;
++        if (route.meta.layout === "workflow" && route.meta.nodeView) host.editorPath = route.fullPath;
++        const id = String(route.params.workflowId || "");
++        if (id && id !== "new") host.workflowId = id;
++        host.onRoute?.(route.fullPath, id);
++    });
++    const stopPanels = observeNativePanels(host);
++    let disposed = false;
++    const dispose = () => {
++        if (disposed) return;
++        disposed = true;
++        host.disposing = true;
++        stopPanels();
++        stopDirty();
++        stopPicker();
++        stopRoute();
++        app.unmount();
++        pickerPark.remove();
++        themeObserver.disconnect();
++        preferredTheme.removeEventListener("change", applySurfaceTheme);
++        for (const [target, vars] of originalVars)
++            for (const [name, value] of vars)
++                value ? target.style.setProperty(name, value) : target.style.removeProperty(name);
++        for (const [target, theme] of originalThemes)
++            theme == null ? target.removeAttribute("data-theme") : target.setAttribute("data-theme", theme);
++        if ((window as any).__KRONTERM_WORKFLOW_HOST__ === host) delete (window as any).__KRONTERM_WORKFLOW_HOST__;
++    };
++    try {
++        await router.isReady();
++        await router.replace(host.path || "/workflow/new");
++        app.mount(element);
++        host.navigate = (path: string) =>
++            router.currentRoute.value.fullPath === path ? Promise.resolve() : router.push(path);
++        return dispose;
++    } catch (error) {
++        dispose();
++        throw error;
++    }
+ }
+diff --git a/packages/frontend/editor-ui/src/kronterm-native-world.ts b/packages/frontend/editor-ui/src/kronterm-native-world.ts
+index 5657f1e2..0ca7762a 100644
+--- a/packages/frontend/editor-ui/src/kronterm-native-world.ts
++++ b/packages/frontend/editor-ui/src/kronterm-native-world.ts
+@@ -1,39 +1,37 @@
+ // Copyright 2026, KronTerm.
+ // SPDX-License-Identifier: Apache-2.0
+-import { getCurrentInstance, inject } from 'vue';
++import { getCurrentInstance, inject } from "vue";
+ export function worldHostForScope(): any {
+-	if (!getCurrentInstance() || inject('kronterm:surface-role', 'root') !== 'workflow') return null;
+-	const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
+-	return host?.worldTarget && host?.viewportTarget ? host : null;
++    if (!getCurrentInstance() || inject("kronterm:surface-role", "root") !== "workflow") return null;
++    const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    return host?.worldTarget && host?.viewportTarget ? host : null;
+ }
+ export function worldHostForElement(element: any): any {
+-	const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
+-	if (!host?.worldTarget || !host?.viewportTarget || !element) return null;
+-	const root = element.getRootNode?.();
+-	if (
+-		element.closest?.('.kronterm-passive-scene') ||
+-		host.worldTarget.contains(element) ||
+-		root === host.worldTarget.getRootNode()
+-	)
+-		return host;
+-	return null;
++    const host = (window as any).__KRONTERM_WORKFLOW_HOST__;
++    if (!host?.worldTarget || !host?.viewportTarget || !element) return null;
++    const root = element.getRootNode?.();
++    if (
++        element.closest?.(".kronterm-passive-scene") ||
++        host.worldTarget.contains(element) ||
++        root === host.worldTarget.getRootNode()
++    )
++        return host;
++    return null;
+ }
+ export function worldViewportRect(element: any): DOMRect {
+-	return (worldHostForElement(element)?.viewportTarget || element).getBoundingClientRect();
++    return (worldHostForElement(element)?.viewportTarget || element).getBoundingClientRect();
+ }
+ export function worldTransformPane(element: any): HTMLElement {
+-	return (worldHostForElement(element)?.worldTarget || element).querySelector(
+-		'.vue-flow__transformationpane',
+-	);
++    return (worldHostForElement(element)?.worldTarget || element).querySelector(".vue-flow__transformationpane");
+ }
+ export function worldScale(element: any, fallback: number): number {
+-	return worldHostForElement(element)?.worldCamera?.value?.zoom || fallback;
++    return worldHostForElement(element)?.worldCamera?.value?.zoom || fallback;
+ }
+ export function requestWorldCamera(host: any, camera: any): Promise<boolean> {
+-	if (!host || host.disposing) return Promise.resolve(false);
+-	host.onCameraIntent?.({ camera: { x: camera.x, y: camera.y, zoom: camera.zoom } });
+-	return Promise.resolve(true);
++    if (!host || host.disposing) return Promise.resolve(false);
++    host.onCameraIntent?.({ camera: { x: camera.x, y: camera.y, zoom: camera.zoom } });
++    return Promise.resolve(true);
+ }
+ export function worldNodeOrder(host: any, id: string, fallback: number): number {
+-	return host?.objectOrderRef?.value?.[`workflow:${host.workflowId}:${id}`] ?? fallback;
++    return host?.objectOrderRef?.value?.[`workflow:${host.workflowId}:${id}`] ?? fallback;
+ }
+diff --git a/packages/frontend/editor-ui/src/kronterm-native.css b/packages/frontend/editor-ui/src/kronterm-native.css
+index 556ae87e..b35a5989 100644
+--- a/packages/frontend/editor-ui/src/kronterm-native.css
++++ b/packages/frontend/editor-ui/src/kronterm-native.css
+@@ -1,100 +1,100 @@
+ .kronterm-passive-scene {
+-	background: transparent !important;
+-	pointer-events: none !important;
++    background: transparent !important;
++    pointer-events: none !important;
+ }
+ .kronterm-passive-scene .vue-flow__pane,
+ .kronterm-passive-scene .vue-flow__container,
+ .kronterm-passive-scene .vue-flow__nodes {
+-	pointer-events: none;
++    pointer-events: none;
+ }
+ .kronterm-passive-scene .vue-flow__node,
+ .kronterm-passive-scene .vue-flow__node *,
+ .kronterm-passive-scene .vue-flow__handle {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ .kronterm-passive-scene .vue-flow__edges,
+ .kronterm-passive-scene .vue-flow__edge {
+-	pointer-events: none;
++    pointer-events: none;
+ }
+ .kronterm-passive-scene .vue-flow__edge-path,
+ .kronterm-passive-scene .vue-flow__edge-interaction {
+-	pointer-events: stroke;
++    pointer-events: stroke;
+ }
+ .kronterm-passive-scene .vue-flow__edge-labels > *,
+ .kronterm-passive-scene [data-workflow-controls],
+ .kronterm-passive-scene button {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ .kronterm-canvas-controls {
+-	position: absolute;
+-	inset: 0 0 calc(var(--kronterm-workflow-logs-height, 44px) + 8px);
+-	pointer-events: none;
++    position: absolute;
++    inset: 0 0 calc(var(--kronterm-workflow-logs-height, 44px) + 8px);
++    pointer-events: none;
+ }
+ .kronterm-canvas-controls > * {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ .kronterm-expand-node-editor {
+-	position: absolute;
+-	right: 68px;
+-	top: 7px;
+-	width: 32px;
+-	height: 32px;
+-	z-index: 2;
+-	border: 0;
+-	border-radius: 6px;
+-	cursor: pointer;
+-	color: var(--color--text);
+-	background: var(--color--background);
+-	font-size: 18px;
++    position: absolute;
++    right: 68px;
++    top: 7px;
++    width: 32px;
++    height: 32px;
++    z-index: 2;
++    border: 0;
++    border-radius: 6px;
++    cursor: pointer;
++    color: var(--color--text);
++    background: var(--color--background);
++    font-size: 18px;
+ }
+ .kronterm-native-root #app-modals {
+-	pointer-events: none;
++    pointer-events: none;
+ }
+-.kronterm-native-root [role='dialog'],
++.kronterm-native-root [role="dialog"],
+ .kronterm-native-root .el-overlay,
+ .kronterm-native-root .el-popper {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ 
+ .kronterm-focus-portal {
+-	position: absolute;
+-	right: 8px;
+-	top: 90px;
+-	bottom: 8px;
+-	pointer-events: none;
++    position: absolute;
++    right: 8px;
++    top: 90px;
++    bottom: 8px;
++    pointer-events: none;
+ }
+ .kronterm-focus-portal > * {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ .kronterm-native-modal-root {
+-	position: absolute;
+-	inset: 0;
+-	pointer-events: none;
++    position: absolute;
++    inset: 0;
++    pointer-events: none;
+ }
+ .kronterm-native-modal-root .el-overlay,
+ .kronterm-native-modal-root .el-overlay-dialog {
+-	position: absolute;
+-	inset: 0;
+-	pointer-events: auto;
++    position: absolute;
++    inset: 0;
++    pointer-events: auto;
+ }
+ 
+ .kronterm-add-controls {
+-	position: absolute;
+-	inset: calc(var(--kronterm-workflow-header-height, 92px) + 8px) 0 44px;
+-	pointer-events: none;
++    position: absolute;
++    inset: calc(var(--kronterm-workflow-header-height, 92px) + 8px) 0 44px;
++    pointer-events: none;
+ }
+ .kronterm-add-controls > * {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ .kronterm-execution-controls,
+ .kronterm-minimap-controls {
+-	position: absolute;
+-	inset: 0 0 calc(var(--kronterm-workflow-logs-height, 44px) + 8px);
+-	pointer-events: none;
++    position: absolute;
++    inset: 0 0 calc(var(--kronterm-workflow-logs-height, 44px) + 8px);
++    pointer-events: none;
+ }
+ .kronterm-execution-controls button,
+ .kronterm-minimap-controls > * {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ 
+ .kronterm-world-scene,
+@@ -102,37 +102,37 @@
+ .kronterm-world-scene .vue-flow__transformationpane,
+ .kronterm-world-scene .vue-flow__nodes,
+ .kronterm-world-scene .vue-flow__edge-labels {
+-	display: contents !important;
+-	position: static !important;
+-	transform: none !important;
+-	z-index: auto !important;
+-	isolation: auto !important;
+-	contain: none !important;
+-	overflow: visible !important;
+-	pointer-events: none !important;
++    display: contents !important;
++    position: static !important;
++    transform: none !important;
++    z-index: auto !important;
++    isolation: auto !important;
++    contain: none !important;
++    overflow: visible !important;
++    pointer-events: none !important;
+ }
+ .kronterm-world-scene .vue-flow__node,
+ .kronterm-world-scene .vue-flow__node *,
+ .kronterm-world-scene .vue-flow__handle {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ .kronterm-world-scene .vue-flow__edge-path,
+ .kronterm-world-scene .vue-flow__edge-interaction {
+-	pointer-events: stroke;
++    pointer-events: stroke;
+ }
+ .kronterm-world-scene .vue-flow__edge-labels > * {
+-	pointer-events: auto;
++    pointer-events: auto;
+ }
+ 
+ .kronterm-world-scene svg.vue-flow__edges {
+-	position: absolute !important;
+-	top: 0;
+-	left: 0;
+-	width: 1px;
+-	height: 1px;
+-	overflow: visible !important;
+-	z-index: 0 !important;
+-	pointer-events: none;
++    position: absolute !important;
++    top: 0;
++    left: 0;
++    width: 1px;
++    height: 1px;
++    overflow: visible !important;
++    z-index: 0 !important;
++    pointer-events: none;
+ }
+ 
+ .kronterm-world-scene[hidden],
+@@ -140,173 +140,55 @@
+ .kronterm-world-scene .vue-flow__transformationpane[hidden],
+ .kronterm-world-scene .vue-flow__nodes[hidden],
+ .kronterm-world-scene .vue-flow__edge-labels[hidden] {
+-	display: none !important;
++    display: none !important;
+ }
+ 
+ /* The footer has one compact row; expanded logs alone reserve additional canvas height. */
+-.kronterm-canvas-controls {
+-	inset: auto;
+-	left: 12px;
+-	bottom: 52px;
+-	width: max-content;
+-}
+-.kronterm-canvas-controls .vue-flow__controls {
+-	position: static;
+-	margin: 0;
+-	transform: none;
+-}
+-.kronterm-execution-controls {
+-	inset: auto;
+-	left: 12px;
+-	bottom: 24px;
+-	width: max-content;
+-	height: 32px;
+-}
+-.kronterm-execution-controls > div {
+-	position: static;
+-	inset: auto;
+-	width: max-content !important;
+-	container-type: normal !important;
+-}
+-.kronterm-execution-controls > div > div {
+-	position: static !important;
+-	inset: auto !important;
+-	transform: none !important;
+-	min-height: 32px;
+-	justify-content: flex-start !important;
+-	width: max-content !important;
+-}
+-:host([data-workflow-tool-rail]) .kronterm-add-controls {
+-	position: static;
+-	inset: auto;
+-}
+-:host([data-workflow-tool-rail]) .kronterm-add-controls > [role='group'] {
+-	position: static !important;
+-	inset: auto !important;
+-	margin: 0 !important;
+-	border: 0;
+-	box-shadow: none;
+-	background: transparent;
+-}
+-[data-workspace-widget-entry]:hover {
+-	background: var(--color--background--light-3);
+-}
+-[data-workspace-widget-entry]:focus-visible {
+-	outline: 2px solid var(--color--primary);
+-	outline-offset: -2px;
+-}
+-[data-test-id='executions-sidebar'] {
+-	position: relative !important;
+-	inset: auto !important;
+-	width: 100% !important;
+-	height: 100% !important;
+-	max-width: none !important;
+-	border: 0 !important;
+-}
++.kronterm-canvas-controls {inset:auto;left:12px;bottom:52px;width:max-content;}
++.kronterm-canvas-controls .vue-flow__controls {position:static;margin:0;transform:none;}
++.kronterm-execution-controls {inset:auto;left:12px;bottom:24px;width:max-content;height:32px;}
++.kronterm-execution-controls>div {position:static;inset:auto;width:max-content!important;container-type:normal!important;}
++.kronterm-execution-controls>div>div {position:static!important;inset:auto!important;transform:none!important;min-height:32px;justify-content:flex-start!important;width:max-content!important;}
++:host([data-workflow-tool-rail]) .kronterm-add-controls {position:static;inset:auto;}
++:host([data-workflow-tool-rail]) .kronterm-add-controls>[role="group"] {position:static!important;inset:auto!important;margin:0!important;border:0;box-shadow:none;background:transparent;}
++[data-workspace-widget-entry]:hover {background:var(--color--background--light-3);}
++[data-workspace-widget-entry]:focus-visible {outline:2px solid var(--color--primary);outline-offset:-2px;}
++[data-test-id="executions-sidebar"] {position:relative!important;inset:auto!important;width:100%!important;height:100%!important;max-width:none!important;border:0!important;}
+ 
+-:host([data-workflow-tool-rail]) .kronterm-canvas-controls {
+-	position: static;
+-	inset: auto;
+-	width: auto;
+-}
+-:host([data-workflow-tool-rail]) .kronterm-canvas-controls [role='group'] {
+-	flex-direction: column;
+-	align-items: stretch;
+-	padding: 0;
+-	border: 0;
+-	box-shadow: none;
+-	background: transparent;
+-}
+-:host([data-workflow-tool-rail]) button {
+-	width: 32px !important;
+-	height: 32px !important;
+-	min-height: 32px !important;
+-	padding: 0 !important;
+-}
+-.kronterm-focus-portal {
+-	top: 0;
+-	right: 0;
+-	bottom: auto;
+-	width: min(340px, 100%);
+-	height: min(280px, 42vh);
+-	overflow: auto;
+-}
+-.kronterm-focus-portal [data-test-id='focus-sidebar'] {
+-	width: 100% !important;
+-	max-width: 100%;
+-}
+-.kronterm-focus-portal [data-test-id='focus-sidebar'] > div {
+-	width: 100% !important;
+-	min-width: 0 !important;
+-}
+-.kronterm-focus-portal [data-test-id='focus-panel'] {
+-	font-size: 12px;
+-}
+-.kronterm-workflow-logs [data-test-id^='logs-overview-h'] {
+-	font-size: 12px;
+-}
+ 
+-:host([data-workflow-tool-rail]) [data-workflow-slot-root] {
+-	display: flex;
+-	align-items: center;
+-	gap: 4px;
+-	height: auto;
+-}
+-:host([data-workflow-tool-rail]) .kronterm-canvas-controls [role='group'],
+-:host([data-workflow-tool-rail]) .kronterm-add-controls > [role='group'] {
+-	flex-direction: row;
+-}
+-:host([data-workflow-tool-rail]) button {
+-	color: var(--kronterm-canvas-tool-color, #18181b) !important;
+-}
+-:host([data-workflow-tool-rail]) {
+-	width: max-content !important;
+-}
+-:host([data-workflow-tool-rail]) [data-workflow-slot-root] {
+-	width: max-content;
+-	container-type: normal;
+-}
++:host([data-workflow-tool-rail]) .kronterm-canvas-controls {position:static;inset:auto;width:auto;}
++:host([data-workflow-tool-rail]) .kronterm-canvas-controls [role="group"] {flex-direction:column;align-items:stretch;padding:0;border:0;box-shadow:none;background:transparent;}
++:host([data-workflow-tool-rail]) button {width:32px!important;height:32px!important;min-height:32px!important;padding:0!important;}
++.kronterm-focus-portal {top:0;right:0;bottom:auto;width:min(340px,100%);height:min(280px,42vh);overflow:auto;}
++.kronterm-focus-portal [data-test-id="focus-sidebar"] {width:100%!important;max-width:100%;}
++.kronterm-focus-portal [data-test-id="focus-sidebar"]>div {width:100%!important;min-width:0!important;}
++.kronterm-focus-portal [data-test-id="focus-panel"] {font-size:12px;}
++.kronterm-workflow-logs [data-test-id^="logs-overview-h"] {font-size:12px;}
++
++:host([data-workflow-tool-rail]) [data-workflow-slot-root] {display:flex;align-items:center;gap:4px;height:auto;}
++:host([data-workflow-tool-rail]) .kronterm-canvas-controls [role="group"],
++:host([data-workflow-tool-rail]) .kronterm-add-controls>[role="group"] {flex-direction:row;}
++:host([data-workflow-tool-rail]) button {color:var(--kronterm-canvas-tool-color,#18181b)!important;}
++:host([data-workflow-tool-rail]) {width:max-content!important;}
++:host([data-workflow-tool-rail]) [data-workflow-slot-root] {width:max-content;container-type:normal;}
+ :host(.os-canvas-focus-slot) .kronterm-focus-portal {
+-	position: relative;
+-	inset: auto;
+-	width: 100%;
+-	height: 100%;
+-}
+-:host(.os-canvas-focus-slot) [data-workflow-slot-root] {
+-	position: relative;
+-	height: 100%;
++    position: relative;
++    inset: auto;
++    width: 100%;
++    height: 100%;
+ }
++:host(.os-canvas-focus-slot) [data-workflow-slot-root] {position:relative;height:100%;}
+ :host(.os-canvas-focus-slot) [data-workflow-node-editor] {
+-	inset: 0 !important;
+-	width: 100% !important;
+-	height: 100% !important;
+-	max-width: 100% !important;
+-}
+-:host(.os-canvas-focus-slot)
+-	[data-workflow-slot-root]:has([data-workflow-node-editor])
+-	.kronterm-focus-portal {
+-	display: none;
+-}
+-[data-test-id='sticky'] {
+-	border-radius: 2px 2px 12px 2px;
+-	box-shadow:
+-		0 2px 3px rgb(0 0 0 / 0.12),
+-		0 12px 18px -12px rgb(0 0 0 / 0.4);
+-	background-image: linear-gradient(
+-		180deg,
+-		rgb(255 255 255 / 0.22),
+-		transparent 28%,
+-		rgb(0 0 0 / 0.04)
+-	);
+-}
+-[data-test-id='sticky']::after {
+-	content: '';
+-	position: absolute;
+-	right: 0;
+-	bottom: 0;
+-	width: 16px;
+-	height: 16px;
+-	background: linear-gradient(135deg, rgb(255 255 255 / 0.45) 50%, rgb(0 0 0 / 0.12) 51%);
+-	clip-path: polygon(100% 0, 100% 100%, 0 100%);
+-	pointer-events: none;
++    inset:0!important;width:100%!important;height:100%!important;max-width:100%!important;
++}
++:host(.os-canvas-focus-slot) [data-workflow-slot-root]:has([data-workflow-node-editor]) .kronterm-focus-portal {display:none;}
++[data-test-id="sticky"] {
++    border-radius:2px 2px 12px 2px;
++    box-shadow:0 2px 3px rgb(0 0 0 / .12),0 12px 18px -12px rgb(0 0 0 / .4);
++    background-image:linear-gradient(180deg,rgb(255 255 255 / .22),transparent 28%,rgb(0 0 0 / .04));
++}
++[data-test-id="sticky"]::after {
++    content:"";position:absolute;right:0;bottom:0;width:16px;height:16px;
++    background:linear-gradient(135deg,rgb(255 255 255 / .45) 50%,rgb(0 0 0 / .12) 51%);
++    clip-path:polygon(100% 0,100% 100%,0 100%);pointer-events:none;
+ }
+diff --git a/packages/frontend/editor-ui/src/kronterm-native.ts b/packages/frontend/editor-ui/src/kronterm-native.ts
+index aecf4ba8..e67b4901 100644
+--- a/packages/frontend/editor-ui/src/kronterm-native.ts
++++ b/packages/frontend/editor-ui/src/kronterm-native.ts
+@@ -1,29 +1,27 @@
+ let activeDispose: (() => void) | undefined;
+ let mounting: Promise<unknown> = Promise.resolve();
+ export function mountKronTermWorkflow(element: HTMLElement, host: any) {
+-	const next = mounting.then(async () => {
+-		activeDispose?.();
+-		const nativeWindow = window as any;
+-		nativeWindow.__KRONTERM_WORKFLOW_HOST__ = host;
+-		nativeWindow.BASE_PATH = host.backendUrl.endsWith('/')
+-			? host.backendUrl
+-			: host.backendUrl + '/';
+-		localStorage.setItem('n8n-browserId', host.browserId);
+-		const { mount } = await import('./kronterm-native-bootstrap');
+-		const dispose = await mount(element, host);
+-		let disposed = false;
+-		const cleanup = () => {
+-			if (disposed) return;
+-			disposed = true;
+-			dispose();
+-			if (activeDispose === cleanup) activeDispose = undefined;
+-		};
+-		activeDispose = cleanup;
+-		return cleanup;
+-	});
+-	mounting = next.then(
+-		() => undefined,
+-		() => undefined,
+-	);
+-	return next;
++    const next = mounting.then(async () => {
++        activeDispose?.();
++        const nativeWindow = window as any;
++        nativeWindow.__KRONTERM_WORKFLOW_HOST__ = host;
++        nativeWindow.BASE_PATH = host.backendUrl.endsWith("/") ? host.backendUrl : host.backendUrl + "/";
++        localStorage.setItem("n8n-browserId", host.browserId);
++        const { mount } = await import("./kronterm-native-bootstrap");
++        const dispose = await mount(element, host);
++        let disposed = false;
++        const cleanup = () => {
++            if (disposed) return;
++            disposed = true;
++            dispose();
++            if (activeDispose === cleanup) activeDispose = undefined;
++        };
++        activeDispose = cleanup;
++        return cleanup;
++    });
++    mounting = next.then(
++        () => undefined,
++        () => undefined
++    );
++    return next;
+ }

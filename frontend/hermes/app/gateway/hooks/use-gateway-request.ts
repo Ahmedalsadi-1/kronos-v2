@@ -6,6 +6,7 @@ import type { HermesGateway } from '@hermes/hermes'
 import { $gateway, ensureActiveGatewayOpen, isActivePrimary } from '@hermes/store/gateway'
 import { $activeGatewayProfile } from '@hermes/store/profile'
 import { $gatewayState, setConnection } from '@hermes/store/session'
+import { $sessionStates } from '@hermes/store/session-states'
 
 export function useGatewayRequest() {
   const gatewayState = useStore($gatewayState)
@@ -109,6 +110,13 @@ export function useGatewayRequest() {
 
       if (!gateway) {
         throw new Error('KronOS gateway unavailable')
+      }
+
+      const sessionId = params.session_id
+      const computerManager = window.hermesDesktop?.krontermSurfaces?.computerManager
+      if (method === 'prompt.submit' && typeof sessionId === 'string' && computerManager) {
+        const storedId = $sessionStates.get()[sessionId]?.storedSessionId
+        await computerManager.access({ sessionIds: storedId && storedId !== sessionId ? [sessionId, storedId] : [sessionId] })
       }
 
       try {

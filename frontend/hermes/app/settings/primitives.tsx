@@ -1,4 +1,14 @@
-import type { ReactNode } from "react";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 
 import { Badge } from "@hermes/components/ui/badge";
 import { Button } from "@hermes/components/ui/button";
@@ -10,14 +20,44 @@ import { cn } from "@hermes/lib/utils";
 
 import { PAGE_INSET_X } from "../layout-constants";
 
+type SettingsAnchor = { id: string; title: string; element: HTMLElement };
+const SettingsOutlineContext = createContext<(anchor: SettingsAnchor) => () => void>(null);
+
 // `bare` drops the page gutters + tall bottom pad for embedding in a tighter
 // surface (e.g. the boot-failure recovery card owns its own padding).
 export function SettingsContent({ children, bare = false }: { children: ReactNode; bare?: boolean }) {
+    const [anchors, setAnchors] = useState<SettingsAnchor[]>([]);
+    const register = useCallback((anchor: SettingsAnchor) => {
+        setAnchors((current) => [...current, anchor]);
+        return () => setAnchors((current) => current.filter((item) => item.id !== anchor.id));
+    }, []);
     return (
-        <section data-settings-content="" className="min-h-0 flex-1 overflow-hidden">
-            <div className={cn("h-full min-h-0 overflow-y-auto", bare ? "px-5 pb-6" : cn("pb-20", PAGE_INSET_X))}>
-                {children}
+        <section data-settings-content="" className="settings-content-layout min-h-0 flex-1 overflow-hidden">
+            <div
+                className={cn(
+                    "settings-content-scroll mx-auto h-full min-h-0 w-full max-w-4xl overflow-y-auto",
+                    bare ? "px-5 pb-6" : cn("pb-20", PAGE_INSET_X)
+                )}
+            >
+                <SettingsOutlineContext.Provider value={register}>{children}</SettingsOutlineContext.Provider>
             </div>
+            {!bare && anchors.length > 1 && (
+                <nav aria-label="On this page" className="settings-page-outline hidden">
+                    <p>On this page</p>
+                    {anchors.map((anchor) => (
+                        <button
+                            type="button"
+                            key={anchor.id}
+                            onClick={() => {
+                                anchor.element.scrollIntoView({ block: "start" });
+                                anchor.element.focus({ preventScroll: true });
+                            }}
+                        >
+                            {anchor.title}
+                        </button>
+                    ))}
+                </nav>
+            )}
         </section>
     );
 }
@@ -42,12 +82,15 @@ export function SectionHeading({
     title: string;
 }) {
     return (
-        <div className="mb-2.5 flex items-center gap-2 pt-2 text-[length:var(--conversation-text-font-size)] font-medium">
+        <h2
+            data-settings-section-heading=""
+            className="mb-3 flex items-center gap-2 border-b border-border pb-3 pt-2 text-[13px] font-medium"
+        >
             <Icon className="size-4 shrink-0 text-muted-foreground" />
             <span>{title}</span>
             {meta && <Pill>{meta}</Pill>}
             {aside && <div className="ml-auto flex min-w-0 items-center">{aside}</div>}
-        </div>
+        </h2>
     );
 }
 
@@ -67,10 +110,17 @@ export function SettingsSection({
     meta?: string;
     title: string;
 }) {
+    const id = useId();
+    const element = useRef<HTMLElement>(null);
+    const register = useContext(SettingsOutlineContext);
+    const anchor = useMemo(() => ({ id, title }), [id, title]);
+    useEffect(() => {
+        if (register && element.current) return register({ ...anchor, element: element.current });
+    }, [anchor, register]);
     return (
-        <section className="mb-6">
+        <section ref={element} id={id} tabIndex={-1} aria-label={title} className="settings-section mb-8">
             <SectionHeading aside={aside} icon={icon} meta={meta} title={title} />
-            {children}
+            <div data-settings-group="">{children}</div>
         </section>
     );
 }
@@ -126,11 +176,11 @@ export function ListRow({
         // Container-queried, not viewport-queried: the label/control split keys on
         // the row's own pane width, so a narrow detail column (messaging, split
         // views) stacks instead of squishing the label against minmax(15rem,…).
-        <div className={cn("@container", className)}>
+        <div data-settings-row="" data-settings-wide={wide || undefined} className={cn("@container", className)}>
             <div
                 className={cn(
-                    "grid gap-3 py-3",
-                    !wide && "@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center"
+                    "grid gap-4 py-4",
+                    action && !wide && "@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center"
                 )}
             >
                 <div className="min-w-0">
@@ -200,7 +250,7 @@ export function ListRowSkeleton({ wide = false }: { wide?: boolean }) {
         <div className="@container">
             <div
                 className={cn(
-                    "grid gap-3 py-3",
+                    "grid gap-4 py-4",
                     !wide && "@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center"
                 )}
             >

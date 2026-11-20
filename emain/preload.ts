@@ -19,6 +19,13 @@ contextBridge.exposeInMainWorld("api", {
     openBotDesktop: (botId: string) => ipcRenderer.invoke("open-bot-desktop", botId),
     openAgentWorkspace: () => ipcRenderer.invoke("open-agent-workspace"),
     openKronosSignIn: () => ipcRenderer.send("open-kronos-sign-in"),
+    getKronosAccountStatus: () => ipcRenderer.invoke("kronos-account-status"),
+    signOutKronosAccount: () => ipcRenderer.invoke("kronos-account-sign-out"),
+    onKronosAccountChanged: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on("kronos-account-changed", listener);
+        return () => ipcRenderer.removeListener("kronos-account-changed", listener);
+    },
     onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => {
         const listener = (_event, direction: unknown) => {
             if (direction === "up" || direction === "down") callback(direction);
@@ -92,6 +99,11 @@ contextBridge.exposeInMainWorld("api", {
         return () => ipcRenderer.removeListener("productivity-state", handler);
     },
     browserAccount: (input) => ipcRenderer.invoke("browser-account", input),
+    browserMigration: (command: import("../frontend/types/browser-migration").BrowserMigrationCommand) =>
+        ipcRenderer.invoke("browser-migration", command),
+    importBrowserExtension: (guestId: number) => ipcRenderer.invoke("browser-import-extension", guestId),
+    browserSearchSuggestions: (query: string) => ipcRenderer.invoke("browser-search-suggestions", query),
+    browserSiteSettings: (input: import("../frontend/types/browser-site-settings").BrowserSiteSettingsCommand) => ipcRenderer.invoke("browser-site-settings", input),
     browserNavigationHistory: (guestId, snapshot) =>
         ipcRenderer.invoke("browser-navigation-history", guestId, snapshot),
     browserGrab: (input) => ipcRenderer.invoke("browser-grab", input),
@@ -287,6 +299,7 @@ contextBridge.exposeInMainWorld("api", {
     takeOverLinuxDesktop: (desktopId) => ipcRenderer.invoke("linux-desktops:takeover", desktopId),
     resumeLinuxDesktop: (desktopId, expectedGeneration) =>
         ipcRenderer.invoke("linux-desktops:resume", { desktopId, expectedGeneration }),
+    resolveIPhonePreviewTarget: () => ipcRenderer.invoke("computer-targets:iphone-preview"),
     listComputerTargets: () => ipcRenderer.invoke("computer-targets:list"),
     startComputerTargetSession: (targetId: string, expectedGeneration: number) =>
         ipcRenderer.invoke("computer-targets:connect", { targetId, expectedGeneration }),
@@ -390,6 +403,14 @@ contextBridge.exposeInMainWorld("api", {
 
     // ── Audio / Voice Engine IPC ─────────────────────────────────────
     audioTranscribeFile: (file: string) => ipcRenderer.invoke("audio-transcribe-file", file),
+    runPenAgent: (id, mode, messages, selection) => ipcRenderer.invoke("pen-agent-experiment", id, mode, messages, selection),
+    cancelPenAgent: (id) => ipcRenderer.send("pen-agent-cancel", id),
+    onPenAgentDelta: (callback) => {
+        const listener = (_event, id, delta) => callback(id, delta);
+        ipcRenderer.on("pen-agent-delta", listener);
+        return () => ipcRenderer.removeListener("pen-agent-delta", listener);
+    },
+    audioPenTinyVoca: (text: string) => ipcRenderer.invoke("audio-pen-tiny-voca", text),
     audioStart: () => ipcRenderer.invoke("audio-start"),
     audioShutdown: () => ipcRenderer.send("audio-shutdown"),
     audioStartListening: () => ipcRenderer.send("audio-start-listening"),

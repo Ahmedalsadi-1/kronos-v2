@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { editN8nDraft, validateN8nDraft } from "../../emain/n8n-builder.ts";
+import { makeN8nExecutionDraft } from "../../emain/n8n-execution-draft.ts";
 import { registerN8nTools, setN8nWorkflowBridge } from "../../mcp-kron-term/dist/n8n-tools.js";
 
 export async function verifyNativeOSWorkflow(origin, cookie, types) {
@@ -130,5 +131,81 @@ export async function verifyNativeOSWorkflow(origin, cookie, types) {
   console.log(
     `Canonical workflow document → saved typed connection → chat-tool rename → real n8n execution ${run.executionId}: answer=42.`
   );
+  const broken = await api("/rest/workflows", "POST", {
+    name: "Failed mapping smoke",
+    nodes: [
+      graph.nodes.find((entry) => entry.name === "Start"),
+      {
+        ...node,
+        id: "order",
+        name: "Read order",
+        position: [230, 180],
+        parameters: {
+          assignments: { assignments: [{ id: "order-id", name: "orderId", type: "number", value: 123 }] },
+          options: {},
+        },
+      },
+      {
+        ...node,
+        parameters: {
+          assignments: { assignments: [{ id: "answer", name: "answer", type: "number", value: "not a number" }] },
+          options: {},
+        },
+      },
+    ],
+    connections: {
+      Start: { main: [[{ node: "Read order", type: "main", index: 0 }]] },
+      "Read order": { main: [[{ node: node.name, type: "main", index: 0 }]] },
+    },
+    settings: { executionOrder: "v1" },
+  });
+  const failingRun = await api(`/rest/workflows/${broken.id}/run`, "POST", { triggerToStartFrom: { name: "Start" } });
+  let failed;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    failed = await api(`/rest/executions/${failingRun.executionId}?includeData=true`);
+    if (["success", "error", "crashed", "canceled"].includes(failed.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  assert.equal(failed.status, "error");
+  if (typeof failed.data === "string")
+    failed.data = createRequire(new URL("./upstream/packages/cli/bin/n8n", import.meta.url))("flatted").parse(failed.data);
+  const { draft, runnable } = makeN8nExecutionDraft(failingRun.executionId, failed.workflowData, failed.data);
+  assert.ok(runnable);
+  const reproduction = await api("/rest/workflows", "POST", draft);
+  assert.notEqual(reproduction.id, broken.id);
+  assert.ok(!reproduction.activeVersionId);
+  assert.deepEqual(reproduction.pinData, { "Recorded input": [{ json: { orderId: 123 } }] });
+  assert.equal((await api(`/rest/workflows/${broken.id}`)).name, broken.name);
+  const fixed = editN8nDraft(reproduction, [{
+    action: "update-node",
+    name: node.name,
+    parameters: {
+      assignments: { assignments: [{ id: "answer", name: "answer", type: "number", value: "={{ $json.orderId }}" }] },
+      options: {},
+    },
+  }]);
+  await api(`/rest/workflows/${reproduction.id}`, "PATCH", {
+    name: fixed.name,
+    nodes: fixed.nodes,
+    connections: fixed.connections,
+    settings: fixed.settings,
+    versionId: reproduction.versionId,
+    expectedChecksum: reproduction.checksum,
+  });
+  const replay = await api(`/rest/workflows/${reproduction.id}/run`, "POST", {
+    triggerToStartFrom: { name: "Recorded input" },
+  });
+  let replayed;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    replayed = await api(`/rest/executions/${replay.executionId}?includeData=true`);
+    if (["success", "error", "crashed", "canceled"].includes(replayed.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  assert.equal(replayed.status, "success", JSON.stringify(replayed).slice(0, 1500));
+  if (typeof replayed.data === "string")
+    replayed.data = createRequire(new URL("./upstream/packages/cli/bin/n8n", import.meta.url))("flatted").parse(replayed.data);
+  assert.equal(replayed.data.resultData.runData[node.name][0].data.main[0][0].json.answer, 123);
+  assert.equal(replayed.data.resultData.runData["Read order"], undefined);
+  console.log("Reproduced a real failed mapping, corrected it, and reran the recorded input without its upstream node.");
   return workflowId;
 }

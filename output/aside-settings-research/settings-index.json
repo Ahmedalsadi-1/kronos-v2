@@ -1,0 +1,641 @@
+[
+  {
+    "path": "account",
+    "title": "Account",
+    "sections": [
+      "Sync",
+      "Profile",
+      "Danger zone",
+      "Devices"
+    ],
+    "fields": [
+      {
+        "title": "Delete account",
+        "description": "Permanently delete your account and all associated data"
+      },
+      {
+        "title": "Browser data recovery",
+        "description": ""
+      },
+      {
+        "title": "Avatar",
+        "description": ""
+      },
+      {
+        "title": "Your name",
+        "description": ""
+      },
+      {
+        "title": "Email",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "agents",
+    "title": "Agents",
+    "sections": [
+      "Chat",
+      "Computer Use",
+      "Agent runtime",
+      "Sandbox",
+      "File permissions",
+      "Tool permissions"
+    ],
+    "fields": [
+      {
+        "title": "Computer Use",
+        "description": "Let tasks read and control apps on this computer."
+      },
+      {
+        "title": "Completion sound",
+        "description": "Play a sound when agents finish or need attention"
+      },
+      {
+        "title": "Current version",
+        "description": ""
+      },
+      {
+        "title": "Clean up agent tabs",
+        "description": "Automatically close tabs Aside used for tasks"
+      },
+      {
+        "title": "Task notifications",
+        "description": ""
+      },
+      {
+        "title": "Access permission",
+        "description": "Read and write permission for agents."
+      },
+      {
+        "title": "Follow-up behavior",
+        "description": "Queue follow-ups while Aside runs or steer the current run."
+      },
+      {
+        "title": "Messages access",
+        "description": "Let Aside read your iMessages and send messages you approve."
+      },
+      {
+        "title": "Enable sandbox",
+        "description": "Aside runs commands in a sandbox, which keeps its work limited to the files and folders you allow."
+      },
+      {
+        "title": "Ask Aside on tab switch",
+        "description": "When you switch tabs, start a new chat or keep the current chat."
+      }
+    ]
+  },
+  {
+    "path": "appearance",
+    "title": "Appearance",
+    "sections": [
+      "Appearance",
+      "Tabs",
+      "Keyboard shortcuts"
+    ],
+    "fields": [
+      {
+        "title": "Theme",
+        "description": "Choose how Aside looks"
+      },
+      {
+        "title": "Tab style",
+        "description": ""
+      },
+      {
+        "title": "Shrink tabs to fit",
+        "description": "Tabs shrink to fit as the tab bar fills up."
+      },
+      {
+        "title": "Zoom level",
+        "description": ""
+      },
+      {
+        "title": "Customize sidebar",
+        "description": "Choose which sections appear above your tabs."
+      },
+      {
+        "title": "Tab switcher order",
+        "description": "Choose how tabs are ordered when switching."
+      },
+      {
+        "title": "Advanced",
+        "description": ""
+      },
+      {
+        "title": "Recent chats in sidebar",
+        "description": "How many recent chats to show in the sidebar."
+      },
+      {
+        "title": "Close inactive tabs after",
+        "description": "Close inactive tabs without deleting their history"
+      },
+      {
+        "title": "Customize Tidy Tabs",
+        "description": ""
+      },
+      {
+        "title": "New tab position",
+        "description": "Choose where new tabs are added in the sidebar."
+      },
+      {
+        "title": "Transparency",
+        "description": ""
+      },
+      {
+        "title": "Extension shortcuts",
+        "description": "Manage shortcuts for Aside extensions"
+      }
+    ]
+  },
+  {
+    "path": "archived-chats",
+    "title": "Archived chats",
+    "sections": [],
+    "fields": []
+  },
+  {
+    "path": "billing",
+    "title": "Plan & Usage",
+    "sections": [
+      "Plan",
+      "Credits",
+      "Aside credits usage"
+    ],
+    "fields": [
+      {
+        "title": "Auto-reload",
+        "description": ""
+      },
+      {
+        "title": "Invite your friends to Aside",
+        "description": "You both get 100 credits after signup"
+      },
+      {
+        "title": "Share a free week of Aside Pro with friends",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "channels",
+    "title": "Channels",
+    "sections": [
+      "Personal Assistants",
+      "Messengers"
+    ],
+    "fields": [
+      {
+        "title": "Add",
+        "description": ""
+      },
+      {
+        "title": "Access permission",
+        "description": "Set who can use this bot to run browser tasks."
+      },
+      {
+        "title": "Require mentions in threads",
+        "description": "Require an @mention for the bot to respond in a thread or topic."
+      },
+      {
+        "title": "Follow-up behavior",
+        "description": "Queue follow-ups while Aside runs or steer the current run."
+      },
+      {
+        "title": "Reconnect",
+        "description": "Use this when messages stop arriving."
+      },
+      {
+        "title": "Disconnect",
+        "description": "You can reconnect later by adding this again."
+      },
+      {
+        "title": "No paired people",
+        "description": "Approved people will appear here."
+      }
+    ]
+  },
+  {
+    "path": "developers",
+    "title": "Developers",
+    "sections": [
+      "Skill & MCP",
+      "Remote Control",
+      "FAQs",
+      "Settings"
+    ],
+    "fields": [
+      {
+        "title": "Aside Skills",
+        "description": "Agent apps share local runtime skills; custom profiles and remote hosts need separate setup"
+      },
+      {
+        "title": "Save sessions",
+        "description": "Keep CLI and MCP agent sessions in the chat list."
+      },
+      {
+        "title": "Default profile",
+        "description": "Use the current account\u2019s first browser profile or choose a specific one."
+      }
+    ]
+  },
+  {
+    "path": "general",
+    "title": "General",
+    "sections": [
+      "Preferences",
+      "Import",
+      "About Aside"
+    ],
+    "fields": [
+      {
+        "title": "Default search engine",
+        "description": ""
+      },
+      {
+        "title": "New tab mode",
+        "description": "Open new tabs in Search or Ask"
+      },
+      {
+        "title": "Auto Picture-in-Picture",
+        "description": ""
+      },
+      {
+        "title": "Screenshot",
+        "description": ""
+      },
+      {
+        "title": "Spell check",
+        "description": ""
+      },
+      {
+        "title": "Browser",
+        "description": ""
+      },
+      {
+        "title": "Background service",
+        "description": ""
+      },
+      {
+        "title": "Invite your friends to Aside",
+        "description": "You both get 100 credits after signup"
+      },
+      {
+        "title": "Share a free week of Aside Pro with friends",
+        "description": ""
+      },
+      {
+        "title": "Aside account",
+        "description": ""
+      },
+      {
+        "title": "Import bookmarks",
+        "description": ""
+      },
+      {
+        "title": "Import from another browser",
+        "description": ""
+      },
+      {
+        "title": "Preferred languages",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "lasso",
+    "title": "Lasso",
+    "sections": [
+      "Text selection",
+      "Lasso selection"
+    ],
+    "fields": [
+      {
+        "title": "Enable on text selection",
+        "description": "Drag text click the blue dot."
+      },
+      {
+        "title": "Enable on lasso selection",
+        "description": ""
+      },
+      {
+        "title": "Hotkey",
+        "description": ""
+      },
+      {
+        "title": "Add shortcut",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "memories/context-awareness",
+    "title": "Context Awareness",
+    "sections": [
+      "Capture",
+      "Summaries",
+      "History"
+    ],
+    "fields": [
+      {
+        "title": "Enable Context Awareness",
+        "description": "Capture your activity on this device."
+      },
+      {
+        "title": "Pause capturing",
+        "description": ""
+      },
+      {
+        "title": "Capture typed text",
+        "description": "Save the sentences you type. Aside never stores keystrokes or password fields."
+      },
+      {
+        "title": "Allow Screen Recording",
+        "description": "When a page has no readable text, read it from the screen. Only the text is kept."
+      },
+      {
+        "title": "Denylist",
+        "description": "Aside never captures what you do in these apps and websites."
+      },
+      {
+        "title": "Retention",
+        "description": "Aside deletes raw captures after this many days. Summaries stay."
+      },
+      {
+        "title": "Summary model",
+        "description": ""
+      },
+      {
+        "title": "Default model",
+        "description": "The last used model becomes the default for new chat"
+      }
+    ]
+  },
+  {
+    "path": "memories",
+    "title": "Memory",
+    "sections": [],
+    "fields": []
+  },
+  {
+    "path": "mini-popup",
+    "title": "Mini popup",
+    "sections": [],
+    "fields": [
+      {
+        "title": "Keyboard shortcut",
+        "description": ""
+      },
+      {
+        "title": "Enable Mini popup",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "model",
+    "title": "Models",
+    "sections": [
+      "Providers",
+      "Task models"
+    ],
+    "fields": [
+      {
+        "title": "Image generation model",
+        "description": ""
+      },
+      {
+        "title": "Connect",
+        "description": ""
+      },
+      {
+        "title": "Default model",
+        "description": "The last used model becomes the default for new chat"
+      }
+    ]
+  },
+  {
+    "path": "password",
+    "title": "Passwords",
+    "sections": [
+      "Password managers",
+      "Aside Vault",
+      "General",
+      "Data management",
+      "Autofill",
+      "Danger zone"
+    ],
+    "fields": [
+      {
+        "title": "Connections are unavailable",
+        "description": ""
+      },
+      {
+        "title": "Previous connections could not be imported",
+        "description": ""
+      },
+      {
+        "title": "Connect external password manager",
+        "description": ""
+      },
+      {
+        "title": "Aside Vault is locked",
+        "description": "Unlock your Aside vault to manage its settings."
+      },
+      {
+        "title": "Set up Aside Vault",
+        "description": "Choose an unlock password and save a recovery key for your Aside vault."
+      },
+      {
+        "title": "Auto lock",
+        "description": "Lock access again after inactivity"
+      },
+      {
+        "title": "Access policy for AI agents",
+        "description": "AI agents can access the vault when enabled"
+      },
+      {
+        "title": "Periodic password verification",
+        "description": "Require your password periodically to unlock"
+      },
+      {
+        "title": "Import",
+        "description": "Bring passwords in from another service"
+      },
+      {
+        "title": "Export",
+        "description": "Download your credentials as CSV or JSON"
+      },
+      {
+        "title": "Enable Autofill",
+        "description": "Automatically fill in passwords on websites"
+      },
+      {
+        "title": "Disable in incognito",
+        "description": "Do not show autofill, suggestions, or save prompts in incognito windows"
+      },
+      {
+        "title": "Auto-submit after Autofill",
+        "description": "Submit login forms after filling saved credentials"
+      },
+      {
+        "title": "Allow on insecure sites",
+        "description": "Show suggestions on insecure protocols"
+      },
+      {
+        "title": "Excluded domains",
+        "description": "Disable autofill on these domains"
+      },
+      {
+        "title": "Recovery key",
+        "description": "Replace it if you lost the file or it may have been exposed"
+      },
+      {
+        "title": "Vaults",
+        "description": ""
+      },
+      {
+        "title": "Cloud sync",
+        "description": ""
+      },
+      {
+        "title": "Clear vault data",
+        "description": "Delete all stored passwords and vault data"
+      },
+      {
+        "title": "Use default password manager",
+        "description": "Use built-in, AI-native password manager"
+      }
+    ]
+  },
+  {
+    "path": "plugins/mcps",
+    "title": "MCPs",
+    "sections": [
+      "Servers",
+      "Presets"
+    ],
+    "fields": [
+      {
+        "title": "Connect",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "plugins/skills",
+    "title": "Skills",
+    "sections": [],
+    "fields": []
+  },
+  {
+    "path": "privacy",
+    "title": "Security & Privacy",
+    "sections": [
+      "Browsing history",
+      "Privacy",
+      "Adblock"
+    ],
+    "fields": [
+      {
+        "title": "Ads privacy",
+        "description": "Manage ad topics, site-suggested ads, and ad measurement"
+      },
+      {
+        "title": "Site settings",
+        "description": "Manage site permissions (location, camera, pop-ups, and more)"
+      },
+      {
+        "title": "Advanced",
+        "description": "Manage DNS, SSL certificates and Safe Browsing settings"
+      },
+      {
+        "title": "Delete browsing history",
+        "description": "Delete history, cookies, cache, and more"
+      },
+      {
+        "title": "View browsing history",
+        "description": ""
+      },
+      {
+        "title": "Help improve Aside",
+        "description": "Share crash reports, bug reports, and usage statistics."
+      },
+      {
+        "title": "Allow third-party cookies",
+        "description": "Used for embedded content, ads, and tracking by websites."
+      },
+      {
+        "title": "Block ads and trackers",
+        "description": ""
+      },
+      {
+        "title": "Manage filters",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "projects",
+    "title": "Projects",
+    "sections": [
+      "Projects",
+      "Archived"
+    ],
+    "fields": [
+      {
+        "title": "Create",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "routines",
+    "title": "Routines",
+    "sections": [
+      "My routines"
+    ],
+    "fields": [
+      {
+        "title": "Create",
+        "description": ""
+      },
+      {
+        "title": "Computer Use",
+        "description": "Let tasks read and control apps on this computer."
+      }
+    ]
+  },
+  {
+    "path": "statistics",
+    "title": "Statistics",
+    "sections": [
+      "Overview",
+      "Activity heatmap"
+    ],
+    "fields": [
+      {
+        "title": "Personal",
+        "description": ""
+      },
+      {
+        "title": "Agent",
+        "description": ""
+      },
+      {
+        "title": "Features",
+        "description": ""
+      },
+      {
+        "title": "Archived",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "path": "general?open_send_feedback=1",
+    "title": "Send feedback",
+    "sections": [],
+    "fields": []
+  }
+]

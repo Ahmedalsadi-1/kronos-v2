@@ -374,3 +374,226 @@
 .kt-device-workspace-bar .kt-device-farm-size input {
     width: 56px;
 }
+
+.kt-device-workspace-host.is-side-panel .kt-device-workspace {
+    --device-surface: light-dark(#fff, #181818);
+    --device-control: light-dark(#f9f9f9, #1c1c1c);
+    --device-control-hover: light-dark(#ececec, #292929);
+    --device-separator: light-dark(#e7e7e7, #2b2b2b);
+    --kt-label: var(--kt-text-primary, light-dark(#202020, #eee));
+    width: 100%;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    gap: 0;
+    color-scheme: inherit;
+    background: var(--device-surface);
+}
+
+.is-side-panel .kt-device-workspace-bar {
+    flex-wrap: nowrap;
+    padding: 8px;
+    border-bottom: 1px solid var(--device-separator);
+}
+
+.is-side-panel .kt-device-workspace.is-single .kt-device-workspace-bar > label:first-child {
+    flex-basis: 0;
+}
+
+.is-side-panel .kt-device-workspace-bar select {
+    padding-inline: 8px;
+    background: var(--device-control);
+}
+
+.kt-device-panel-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.is-side-panel .kt-device-workspace :is(.kt-device-panel-tools button, .kt-device-panel-settings) {
+    flex: none;
+    border-color: transparent;
+    background: transparent;
+    min-width: 30px;
+    min-height: 30px;
+    padding: 0;
+}
+
+.is-side-panel .kt-device-workspace :is(.kt-device-panel-tools button, .kt-device-panel-settings):hover:not(:disabled) {
+    background: var(--device-control-hover);
+}
+
+.is-side-panel .kt-device-content {
+    flex: 1;
+}
+
+.is-side-panel .kt-device-grid {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.is-side-panel .kt-device-tile {
+    justify-content: center;
+    gap: 0;
+    min-height: 0;
+    padding: 12px 12px 38px;
+}
+
+.is-side-panel .kt-device-workspace.is-single .kt-device-live:not([hidden]) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    container-type: size;
+}
+
+.is-side-panel .kt-device-workspace.is-single .kt-computers,
+.is-side-panel .kt-device-workspace.is-single .kt-computers-screen,
+.is-side-panel .kt-device-workspace.is-single .kt-computers-phone-stage {
+    height: 100%;
+    min-height: 0;
+    container-type: size;
+}
+
+.is-side-panel .kt-device-workspace.is-single .kt-phone-frame:not(.kt-phone-frame-adaptive) {
+    width: min(420px, 100cqw, calc(100cqh * 380 / 830));
+}
+
+.is-side-panel .kt-device-workspace.is-single .kt-phone-frame-ios:not(.kt-phone-frame-adaptive) {
+    width: min(420px, 100cqw, calc(100cqh * 433 / 882));
+}
+
+.is-side-panel .kt-device-workspace.is-single .kt-phone-frame-adaptive {
+    width: min(420px, calc(100cqw - 12px), calc((100cqh - 12px) * var(--device-aspect)));
+}
+
+.is-side-panel .kt-device-workspace.has-settings .kt-device-grid {
+    margin-right: 0;
+}
+
+.is-side-panel .kt-device-settings {
+    top: auto;
+    right: 8px;
+    bottom: 40px;
+    max-height: calc(100% - 48px);
+    border: 1px solid var(--device-separator);
+    border-radius: var(--kt-radius-control, 8px);
+    background: var(--device-surface);
+}
+
+.kt-device-panel-settings {
+    position: absolute;
+    right: 8px;
+    bottom: 4px;
+}
+
+.kt-device-panel-empty {
+    position: absolute;
+    inset: 48px 0;
+    z-index: 1;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 12px;
+    padding: 12px;
+    text-align: center;
+    background: var(--device-surface);
+}
+
+.kt-device-panel-empty > span {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--device-control-hover);
+}
+
+.kt-device-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex: none;
+    padding: 6px 8px;
+    border-top: 1px solid var(--device-separator);
+    font-size: 12px;
+}
+
+.kt-device-panel-copy-error {
+    position: absolute;
+    inset: auto 8px 8px;
+    z-index: 10;
+    padding: 8px;
+    border-radius: 8px;
+    background: var(--device-surface);
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel {
+    --android-preview-width: min(calc(100cqw - 96px), calc((100cqh - 136px) * 0.46));
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-workspace {
+    container-type: normal;
+    padding: 24px 72px 0 24px;
+    background: light-dark(#f8f8fa, #0a0a0b);
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-workspace-bar {
+    width: var(--android-preview-width);
+    align-self: center;
+    min-height: 48px;
+    margin-bottom: 12px;
+    border: 1px solid var(--device-separator);
+    border-radius: 24px;
+    background: var(--device-control);
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-workspace-bar select {
+    border: 0;
+    background: transparent;
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-tile {
+    justify-content: start;
+    padding: 0;
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-content {
+    position: static;
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-panel-settings {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: auto;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--device-separator);
+    border-radius: 10px;
+    background: var(--device-control);
+}
+
+.pen-chat-dock-page:is([data-app="android"], [data-app="iphone"]) .is-side-panel .kt-device-panel-footer {
+    justify-content: center;
+    border-top: 0;
+}
+
+.kt-device-offscreen {
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    background: light-dark(#f8f8fa, #111214);
+    color: light-dark(#202020, #eee);
+}
+.kt-device-offscreen strong { font-size: 16px; line-height: 1.4; }
+.kt-device-offscreen small, .kt-device-offscreen [role="status"] { font-size: 12px; line-height: 1.5; opacity: .7; }
+.kt-device-starting-spinner { animation: device-starting-spin 1s linear infinite; }
+@keyframes device-starting-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .kt-device-starting-spinner { animation: none; }
+}

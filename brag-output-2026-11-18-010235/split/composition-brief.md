@@ -1,0 +1,3 @@
+# Split Decision production brief
+
+18 seconds in landscape at 1920 × 1080, 30 fps. The native capture in graphite-follow/composition/assets/tabs-retimed.mp4 provides both previews and the final split. Tab splitting is implemented by frontend/app/tab/widget-tabs-layout.tsx. The film moves from a two-color split title to two asymmetric editorial compositions, then a single large recording. Use ink #151515, vermilion #e84231 and warm paper #fff6e7. Set large titles in Inter heavy. Match the large opening seam to the actual pane separator. Source crops keep the active tab strip and hover cards readable. Finish on the existing KronOS wordmark. Poster uses the settled split title.

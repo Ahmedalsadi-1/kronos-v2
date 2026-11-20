@@ -1,0 +1,10 @@
+{
+  "samples_ms": [
+    530,
+    191,
+    356
+  ],
+  "median_ms": 356,
+  "raw_bytes": 10368016,
+  "compressed_bytes": 861859
+}

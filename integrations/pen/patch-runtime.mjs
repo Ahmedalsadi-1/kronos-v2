@@ -52,6 +52,43 @@ const MiniChatComponent = `function KronosMiniChat({manager,conversation,models}
   });
 }`;
 
+export function patchPenChatDefault(source) {
+  const label = 'id:"sidebar.chatFullscreen.backToCanvas",defaultMessage:"Back to canvas"';
+  if (!source.includes(label)) return source;
+  const reset = '(0,X.useEffect)(()=>{tw&&!tU&&tk(!1)},[tw,tU]);';
+  if (source.split(label).length !== 2 || source.split(reset).length !== 2)
+    throw new Error("The Pen full-screen chat lifecycle changed.");
+  return source
+    .replace(label, 'id:"kronos.chat.openCanvas",defaultMessage:"Open canvas"')
+    .replace(reset, reset + `
+      const kronosChatStarted=(0,X.useRef)(false);
+      const [kronosFloating,setKronosFloating]=(0,X.useState)(false);
+      (0,X.useEffect)(()=>{
+        const change=event=>setKronosFloating(event.detail===true);
+        window.addEventListener("kronos:chat-presentation",change);
+        return()=>window.removeEventListener("kronos:chat-presentation",change);
+      },[]);
+      (0,X.useEffect)(()=>{
+        if(!window.__kronosV2)return;
+        const showCanvas=()=>{tk(false);ti(false);setKronosFloating(false);};
+        window.addEventListener("kronos:canvas-chat",showCanvas);
+        return()=>window.removeEventListener("kronos:canvas-chat",showCanvas);
+      },[tk,ti]);
+      (0,X.useEffect)(()=>{
+        if(!window.__kronosV2||!tW)return;
+        const show=()=>tk(true);
+        window.__kronosShowFullChat=show;
+        return()=>{if(window.__kronosShowFullChat===show)delete window.__kronosShowFullChat;};
+      },[tk,tW]);
+      (0,X.useEffect)(()=>{
+        if(window.__kronosV2&&tW&&!kronosChatStarted.current){
+          kronosChatStarted.current=true;
+          tk(true);
+        }
+      },[tW]);
+    `);
+}
+
 export function patchPenPresentationChat(source) {
   const flag = "tP=!ey&&!tm&&!tg;";
   if (!source.includes(flag)) return source;
@@ -59,7 +96,7 @@ export function patchPenPresentationChat(source) {
     [flag, 'tP=!ey&&!tm&&!tg,kronosPresentChat=!!window.__kronosV2&&!!th?.currentSlide;'],
     ['(!tP||tT&&!j)&&"hidden",!F&&"invisible")}),as??', '(!tP&&!kronosPresentChat||tT&&!j)&&"hidden",!F&&"invisible")}),as??'],
     ['C&&tP&&(0,D.jsx)(xh,{onToggleDesignMode:tq,onToggleLayerList:tO,sidebarVisible:tr,', 'C&&(tP||kronosPresentChat)&&(0,D.jsx)(xh,{presentationChat:kronosPresentChat,onToggleDesignMode:tq,onToggleLayerList:tO,sidebarVisible:tr&&!kronosPresentChat,'],
-    ['inputRef:t,sidebarVisible:tr,fullscreen:tU,agentPanelRequest:v', 'inputRef:t,sidebarVisible:tr&&!kronosPresentChat,fullscreen:tU&&!kronosPresentChat,agentPanelRequest:v'],
+    ['inputRef:t,sidebarVisible:tr,fullscreen:tU,agentPanelRequest:v', 'inputRef:t,sidebarVisible:tr&&!kronosPresentChat&&!kronosFloating,fullscreen:tU&&!kronosPresentChat&&!kronosFloating,agentPanelRequest:v'],
     ['chatFullscreen:tU,onChatSurfaceLiftedChange:tM', 'chatFullscreen:tU&&!kronosPresentChat,onChatSurfaceLiftedChange:tM'],
     ['"data-pencil-allow-canvas-clipboard":!0,children:[(0,D.jsx)("div",{"aria-hidden":"true",className:(0,e9.cn)("absolute inset-y-0 left-0 w-16', '"data-pencil-allow-canvas-clipboard":!0,hidden:e.presentationChat,children:[(0,D.jsx)("div",{"aria-hidden":"true",className:(0,e9.cn)("absolute inset-y-0 left-0 w-16'],
     ['"--left-panel-width":tr?"calc(var(--sidebar-width) + 8px)":"0px"', '"--left-panel-width":tr&&!kronosPresentChat?"calc(var(--sidebar-width) + 8px)":"0px"'],
@@ -86,6 +123,31 @@ export function patchPenMiniChat(source) {
     .replace(SpotlightChildren, () =>
       SpotlightChildren.replace("children:[", 'children:[window.__kronosSubmitAgent&&!Z&&!z&&"bottom-center"===em&&A?.messages.length>0&&(0,D.jsx)(KronosMiniChat,{manager:e,conversation:A,models:N.allSupportedModels},A.id),')
     );
+}
+
+export function patchPenWorkspaceSidebar(source) {
+  const start = "function uL({children:e,besideBubble:t,abovePanel:a})";
+  if (!source.includes(start)) return source;
+  const from = source.indexOf(start);
+  const to = source.indexOf("}let uT=", from) + 1;
+  if (!to || source.split(start).length !== 2) throw new Error("The Pen history island changed.");
+  let sidebar = source.slice(from, to);
+  const replace = (anchor, replacement) => {
+    if (sidebar.split(anchor).length !== 2) throw new Error("The Pen sidebar markup changed.");
+    sidebar = sidebar.replace(anchor, () => replacement);
+  };
+  replace('[c,u]=(0,X.useState)(!0);', `[c,u]=(0,X.useState)(!0);
+    (0,X.useEffect)(()=>{
+      if(!window.__kronosV2)return;
+      const toggle=()=>d(open=>!open);
+      window.addEventListener("kronos:toggle-sidebar",toggle);
+      return()=>window.removeEventListener("kronos:toggle-sidebar",toggle);
+    },[]);`);
+  replace('t||d(!1)', 't||window.__kronosV2||d(!1)');
+  replace('ref:r,className:', 'ref:r,"data-kronos-history-docked":window.__kronosV2&&l?true:void 0,className:');
+  replace('b]}),e({onPicked:()=>{c||d(!1)},onClose:m})',
+    'b]}),window.__kronosV2&&(0,D.jsx)("div",{"data-kronos-sidebar-browser":true}),window.__kronosV2&&(0,D.jsx)("div",{"data-kronos-sidebar-tabs":true}),e({onPicked:()=>{if(!window.__kronosV2&&!c)d(!1)},onClose:m}),window.__kronosV2&&(0,D.jsx)("div",{"data-kronos-sidebar-footer":true})');
+  return source.slice(0, from) + sidebar + source.slice(to);
 }
 
 export function patchPenChatHistory(source) {
@@ -191,11 +253,13 @@ export function patchPenChatHistory(source) {
 function patchPenSpotlightDrag(source) {
   const composer = 'onMouseLeave:ep.onMouseLeave,children:[ey&&';
   if (!source.includes(composer)) return source;
+  const input = 'C&&(0,D.jsx)("div",{className:(0,e9.cn)("relative z-10 flex min-h-[42px]';
   const geometry = 'd.set({left:a.left-s.left,clearance:s.bottom-a.top+8})';
   const observer = 'r.observe(e,{attributes:!0,attributeFilter:["style"]})';
-  if ([composer, geometry, observer].some((anchor) => source.split(anchor).length !== 2))
+  if ([composer, input, geometry, observer].some((anchor) => source.split(anchor).length !== 2))
     throw new Error("The Pen spotlight drag anchors changed.");
   return source
+    .replace(input, input.replace('{className:', '{"data-kronos-pen-island-bar":true,className:'))
     .replace(composer, 'onMouseLeave:ep.onMouseLeave,children:[window.__kronosSubmitAgent&&!Z&&!z&&"bottom-center"===em&&(0,D.jsx)("button",{type:"button","data-kronos-pen-drag-chat":true,"aria-label":"Drag chat to detach or dock",title:"Drag to move chat. Double-click to dock.",children:(0,D.jsx)("span",{"aria-hidden":true})}),ey&&')
     .replace(geometry, 'd.set(e.hasAttribute("data-kronos-floating-chat")?void 0:{left:a.left-s.left,clearance:s.bottom-a.top+8})')
     .replace(observer, 'r.observe(e,{attributes:!0,attributeFilter:["style","data-kronos-floating-chat"]})');
@@ -207,14 +271,18 @@ function patchPenComposerControls(source) {
   const toolbar = 'children:[(0,s.jsxs)(Z,{open:eM,onOpenChange:e_';
   const input = 'input:ac?ap:void 0,inputRef:ei,editorRef:er,';
   const fallback = 'children:[(0,D.jsx)("textarea",{ref:k,rows:1,className:"block field-sizing-content';
-  if ([props, toolbar, input, fallback].some((anchor) => source.split(anchor).length !== 2))
+  const attachmentList = 'au=eu.length>0&&(0,s.jsx)("div",{className:';
+  if ([props, toolbar, input, fallback, attachmentList].some((anchor) => source.split(anchor).length !== 2))
     throw new Error("The Pen composer controls changed.");
   const resume = 'resume:result=>{const key="hermes:"+result.sessionId;const chat=e.conversations.get(key)??e.createNewConversation(key);if(!chat.isRunning){chat.title=result.title;chat.messages=result.messages;e.conversations.set(key,chat);}e.selectConversation(key);},';
   return source
+    .replace(attachmentList, attachmentList.replace("className:", '"data-kronos-composer-attachments":window.__kronosV2?true:void 0,role:"group","aria-label":"Attachments",className:'))
     .replace(props, 'kronosControls:kronosControls,statusIndicator:U,agentMultiplier:H')
-    .replace(toolbar, 'children:[window.__kronosSubmitAgent&&kronosControls?.id&&(0,s.jsx)("div",{"data-kronos-pen-composer-controls":kronosControls.id,ref:element=>{if(element)element.kronosControls=kronosControls;}}),(0,s.jsxs)(Z,{open:eM,onOpenChange:e_')
+    .replace(toolbar, 'children:[window.__kronosV2&&kronosControls?.attach&&(0,s.jsxs)("button",{type:"button","data-kronos-attach-files":true,onClick:()=>kronosControls.attach(),"aria-label":"Attach files",title:"Attach files",children:[(0,s.jsx)("svg",{"aria-hidden":true,width:14,height:14,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.7,children:(0,s.jsx)("path",{d:"M21 11.5l-8.8 8.8a5 5 0 0 1-7.1-7.1l9.2-9.2a3 3 0 0 1 4.2 4.2l-9.2 9.2a1 1 0 0 1-1.4-1.4l8.5-8.5"})}),(0,s.jsx)("span",{children:"Attach files"})]}),window.__kronosSubmitAgent&&kronosControls?.id&&(0,s.jsx)("div",{"data-kronos-pen-composer-controls":kronosControls.id,ref:element=>{if(element)element.kronosControls=kronosControls;}}),(0,s.jsxs)(Z,{open:eM,onOpenChange:e_')
     .replace(input, input + `kronosControls:{
       id:a,
+      attach:tX,
+      addFiles:files=>tY(files),
       ${resume}
       insert:text=>er.current?.chain().focus().insertContent({type:"text",text}).run(),
       send:text=>{const {agentMultiplier,parallelMode,agentModels}=eG(e,{parallelMode:tx,parallelAgentModels:tf});tk.current({text,agentMultiplier,parallelMode,agentModels,designCount:tF,iterateMode:tA,skillNames:(0,r.nUe)(text)});tI(1);},
@@ -454,13 +522,16 @@ export function patchPenRuntime(source) {
   if (source.includes(ComposerSignIn)) {
     if (source.split(ComposerSignIn).length !== 2) throw new Error("The Pen composer submission changed.");
     const limit = "maxParallelAgents:g=eT,";
+    const composer = "className:X},Z){let J=";
+    const agentButtons = "Array.from({length:eT},(e,t)=>t+1)";
     const models = '"side-by-side"===Y&&H>1&&';
     const parallelField = 'disabled:E||!n,className:"min-w-0 space-y-2';
-    if ([limit, models, parallelField].some((anchor) => source.split(anchor).length !== 2))
+    if ([limit, composer, agentButtons, models, parallelField].some((anchor) => source.split(anchor).length !== 2))
       throw new Error("The Pen run settings changed.");
     source = source
       .replace(limit, 'maxParallelAgents:kronosPlanLimit=eT,')
-      .replace('className:X},Z){let J=', 'className:X},Z){const g=window.__kronosSubmitAgent?eT:kronosPlanLimit;let J=')
+      .replace(composer, 'className:X},Z){const g=window.__kronosSubmitAgent?5:kronosPlanLimit;let J=')
+      .replace(agentButtons, 'Array.from({length:window.__kronosSubmitAgent?$:eT},(e,t)=>t+1)')
       .replace(models, '!window.__kronosSubmitAgent&&' + models)
       .replace(parallelField, 'disabled:window.__kronosSubmitAgent?!!E:E||!n,className:"min-w-0 space-y-2')
       .replace(ComposerSignIn, ComposerSignIn.replace("!ty", "!ty&&!window.__kronosSubmitAgent"))
@@ -480,8 +551,9 @@ export function patchPenRuntime(source) {
     source = source.replace(SlideFrameCheck, WorkspaceSlideFrameCheck);
     slidesPatched = true;
   }
+  source = patchPenChatDefault(source);
   const withMiniChat = patchPenMiniChat(source);
-  const withChatHistory = patchPenChatHistory(withMiniChat);
+  const withChatHistory = patchPenWorkspaceSidebar(patchPenChatHistory(withMiniChat));
   const withWorkerSlot = patchPenComposerControls(patchPenWorkerSlot(patchPenSpotlightDrag(withChatHistory)));
   const withLibraryTabs = patchPenLibraryTabs(withWorkerSlot);
   const withWorkspaces = patchPenPresentationChat(patchPenInspectorSlot(patchPenWorkspaceDashboard(withLibraryTabs)));

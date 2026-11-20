@@ -47,6 +47,7 @@ export type HermesSurfaceContext = {
     sandboxComputerMode?: "sandbox" | "hybrid";
     agentRuntime?: "hermes";
     delegationScope?: "sandbox" | "widgets" | "inherit";
+    deviceOnly?: boolean;
     toolSessionId?: string;
     nativeCallerId?: string;
     workflowRunId?: string;
@@ -148,7 +149,7 @@ async function resolveManagedHermesLauncher(binary: string): Promise<string> {
     return existingExecutable(candidate) ?? binary;
 }
 
-async function resolveHermesBinary(): Promise<string> {
+export async function resolveHermesBinary(): Promise<string> {
     const homeDir = os.homedir();
     const executable = process.platform === "win32" ? "hermes.exe" : "hermes";
     const preparedRoot = path.join(homeDir, ".kronterm", "runtimes", "hermes-0.22.5");

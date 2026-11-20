@@ -4,7 +4,7 @@
 import { ClientService, ObjectService, WindowService, WorkspaceService } from "@/app/store/services";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { fireAndForget } from "@/util/util";
-import { BaseWindow, BaseWindowConstructorOptions, dialog, globalShortcut, ipcMain, screen } from "electron";
+import { BaseWindow, BaseWindowConstructorOptions, dialog, globalShortcut, ipcMain, screen, webContents } from "electron";
 import { globalEvents } from "emain/emain-events";
 import path from "path";
 import { debounce } from "throttle-debounce";
@@ -154,12 +154,26 @@ export class WaveBrowserWindow extends BaseWindow {
 
         console.log("create win", waveWindow.oid);
         const winBounds = calculateWindowBounds(waveWindow.winsize, waveWindow.pos, settings);
+        const comparison = isDev ? process.env.KRONOS_COMPARE_AGENT : undefined;
+        const compare = comparison === "pi" || comparison === "hermes" || comparison === "opencode" || comparison === "sequential";
+        if (compare) {
+            const area = screen.getPrimaryDisplay().workArea;
+            const half = Math.floor(area.width / (comparison === "sequential" ? 1 : process.env.KRONOS_COMPARE_THREE ? 3 : 2));
+            const column = comparison === "hermes" ? 1 : comparison === "opencode" ? 2 : 0;
+            Object.assign(winBounds, {
+                x: area.x + column * half,
+                y: area.y,
+                width: half,
+                height: area.height,
+            });
+        }
         const winOpts: BaseWindowConstructorOptions = {
             x: winBounds.x,
             y: winBounds.y,
             width: winBounds.width,
             height: winBounds.height,
-            minWidth: MinWindowWidth,
+            minWidth: compare ? Math.min(winBounds.width, MinWindowWidth) : MinWindowWidth,
+            ...(compare && { title: comparison === "sequential" ? "KronOS — Harness comparison" : comparison === "pi" ? "KronOS — Pi" : comparison === "hermes" ? "KronOS — Hermes" : "KronOS — OpenCode" }),
             minHeight: MinWindowHeight,
             show: false,
         };
@@ -220,7 +234,14 @@ export class WaveBrowserWindow extends BaseWindow {
         this.actionQueue = [];
         this.waveWindowId = waveWindow.oid;
         this.workspaceId = waveWindow.workspaceid;
-        installOSOverviewGestures(this, () => this.activeTabView?.webContents);
+        installOSOverviewGestures(this, () => this.activeTabView?.webContents, process.platform, (direction) => {
+            const guest = webContents.getFocusedWebContents();
+            if (!guest || guest.isDestroyed() || guest.getType() !== "webview" ||
+                guest.hostWebContents !== this.activeTabView?.webContents) return;
+            const history = guest.navigationHistory;
+            if (direction === "left" && history.canGoBack()) history.goBack();
+            if (direction === "right" && history.canGoForward()) history.goForward();
+        });
         this.allLoadedTabViews = new Map<string, WaveTabView>();
         const winBoundsPoller = setInterval(() => {
             if (this.isDestroyed()) {

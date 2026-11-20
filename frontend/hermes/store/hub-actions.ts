@@ -5,6 +5,7 @@ import { queryClient } from '@hermes/lib/query-client'
 import { invalidateSlashCompletions } from '@hermes/lib/slash-completion-cache'
 import { upsertDesktopActionTask } from '@hermes/store/activity'
 import { $activeGatewayProfile, normalizeProfileKey } from '@hermes/store/profile'
+import { reloadInstalledSkills } from '@hermes/store/reload-installed-skills'
 
 const POLL_MS = 1200
 
@@ -92,7 +93,7 @@ async function runHubAction(
       }
 
       upsertDesktopActionTask(status)
-      $hubActions.setKey(key, { kind, running: status.running, lines: status.lines })
+      $hubActions.setKey(key, { kind, running: true, lines: status.lines })
 
       if (!status.running) {
         exitCode = status.exit_code
@@ -109,13 +110,23 @@ async function runHubAction(
       $hubInstalledOverride.setKey(key, kind !== 'uninstall')
     }
 
-    // Refresh the hub's installed map AND the Capabilities Skills list — a hub
-    // (un)install adds/removes a skill, so its count/rows must update too.
-    void queryClient.invalidateQueries({ queryKey: HUB_SOURCES_KEY })
-    void queryClient.invalidateQueries({ queryKey: SKILLS_LIST_KEY })
-    // …and the composer's `/` list, which caches the command catalog for an
-    // hour and would otherwise keep offering the skill we just removed.
-    invalidateSlashCompletions()
+    if (exitCode !== 0) {
+      throw new Error(`Skill ${kind} failed (exit ${exitCode ?? 'unknown'}). See the installation log.`)
+    }
+
+    try {
+      await reloadInstalledSkills(profile)
+      if (!switched()) {
+        const current = $hubActions.get()[key]
+        if (current) $hubActions.setKey(key, { ...current, lines: [...current.lines, 'Skills reloaded. Ready to use.'] })
+      }
+    } catch (error) {
+      throw new Error(`The skill change was saved, but hot reload did not complete: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: HUB_SOURCES_KEY })
+      void queryClient.invalidateQueries({ queryKey: SKILLS_LIST_KEY })
+      invalidateSlashCompletions()
+    }
   } catch (err) {
     // A profile switch points the next poll at the new backend, which 404s the
     // old action name — that's an abandonment, not a failure, so swallow it

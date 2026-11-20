@@ -1,0 +1,73 @@
+[data-island-game-controls] {
+    padding: 8px;
+    border-bottom: 1px solid var(--border, currentColor);
+    font-size: 12px;
+    max-height: min(460px, 60vh);
+    overflow: auto;
+}
+
+[data-island-game-controls] :is(h2, div) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0;
+}
+
+[data-island-game-controls] h2 {
+    font-weight: 600;
+}
+
+[data-island-game-controls] p {
+    margin: 4px 0;
+}
+
+[data-island-game-controls] button {
+    min-width: 28px;
+    min-height: 28px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--border, currentColor);
+    color: inherit;
+    background: transparent;
+    padding: 4px 6px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+[data-island-game-controls] button:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+[data-island-game-controls] button[aria-pressed="true"] {
+    background: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+[data-island-game-controls] label {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+    margin-block: 5px;
+}
+
+[data-island-game-controls] fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+[data-island-game-controls] input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    cursor: pointer;
+}
+
+[data-island-game-controls] button:disabled {
+    opacity: 0.45;
+}
+
+[data-island-game-controls] button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+}

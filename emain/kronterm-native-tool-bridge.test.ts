@@ -99,6 +99,41 @@ describe("audited tool transports", () => {
         );
     });
 
+    test("opens Hermes file previews in the chat dock only when full chat is active", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab", agentRuntime: "hermes" }));
+        const rpc = vi.mocked(ElectronWshClient.wshRpcCall);
+        rpc.mockResolvedValueOnce(JSON.stringify({ penchatmode: "tabs" }));
+        rpc.mockResolvedValueOnce(JSON.stringify({ success: true, message: "Showing file in the right panel." }));
+        await expect(bridge.openPath("/project/index.ts")).resolves.toContain("right panel");
+        expect(rpc).toHaveBeenLastCalledWith(
+            "workspacesurfacecontrol",
+            expect.objectContaining({ action: "spatial.openFile", file: "/project/index.ts" }),
+            expect.objectContaining({ route: "tab:tab" })
+        );
+        rpc.mockResolvedValueOnce(JSON.stringify({ penchatmode: "canvas" }));
+        rpc.mockResolvedValueOnce("block:preview");
+        await expect(bridge.openPath("/project/index.ts")).resolves.toContain("block:preview");
+        expect(rpc).toHaveBeenLastCalledWith("createblock", expect.objectContaining({ tabid: "tab" }), {});
+    });
+
+    test("creates a live Hermes browser tab in the background during full chat", async () => {
+        const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab", agentRuntime: "hermes" }));
+        const rpc = vi.mocked(ElectronWshClient.wshRpcCall);
+        rpc.mockResolvedValueOnce(JSON.stringify({ penchatmode: "tabs" }));
+        rpc.mockResolvedValueOnce("block:browser");
+        await expect(bridge.openWeb("https://example.com/", true, true)).resolves.toContain("block:browser");
+        expect(rpc).toHaveBeenLastCalledWith(
+            "createblock",
+            expect.objectContaining({
+                tabid: "tab",
+                focused: false,
+                magnified: false,
+                blockdef: { meta: { view: "web", url: "https://example.com/", "os:chatdock": "browser" } },
+            }),
+            {}
+        );
+    });
+
     test("passes directory options and distinguishes empty files from missing paths", async () => {
         const bridge = new KronTermNativeToolBridge(() => ({ tabId: "tab" }));
         const rpc = vi.mocked(ElectronWshClient.wshRpcCall);
@@ -156,6 +191,7 @@ test("a swarm browser can use its RPC pipeline and stops if its partition change
         if (command === "widgetsnapshot") return { elements: [] };
         if (command === "captureblockscreenshot") return "image";
         if (command === "webselector") return ["<main>content</main>"];
+        if (command === "workspacesurfacecontrol") return JSON.stringify({ success: true });
         return { success: true };
     });
     try {

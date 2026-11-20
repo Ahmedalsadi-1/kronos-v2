@@ -1,0 +1,1 @@
+A restaurant result, its annotation, and the KronOS Agent prompt that started the search.

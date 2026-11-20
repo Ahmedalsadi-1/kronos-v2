@@ -1,3 +1,8 @@
+import {
+    DesktopSettingsSection,
+    DesktopSettingsSections,
+    isDesktopSettingsSection,
+} from "@/app/view/hermes/desktop-settings-sections";
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -10,7 +15,7 @@ import {
     KronTermSettingsHostProvider,
     type HermesSettingsSavedDetail,
 } from "@hermes/app/settings/kronterm-settings-host";
-import { PenCanvasSettings } from "@hermes/app/settings/pen-canvas-settings";
+import { BASE_SETTINGS_VIEWS } from "@hermes/app/settings/views";
 import { RootTooltipProvider } from "@hermes/components/ui/tooltip";
 import { I18nProvider } from "@hermes/i18n";
 import { queryClient } from "@hermes/lib/query-client";
@@ -42,12 +47,13 @@ export function HermesSettingsContent({
         const request = (method: "get_settings" | "set_settings", params?: Record<string, unknown>) =>
             requestPenEditor(tabId, method, params);
         return {
-            sections: [
-                { id: "visual", label: "Workspace" },
-                { id: "canvas", label: "Canvas" },
-            ],
+            sections: [...DesktopSettingsSections, { id: "visual", label: "Desktop controls" }],
             renderSection: (sectionId: string) =>
-                sectionId === "canvas" ? <PenCanvasSettings request={request} /> : <OSWorkspaceControls />,
+                isDesktopSettingsSection(sectionId) ? (
+                    <DesktopSettingsSection sectionId={sectionId} canvasRequest={request} />
+                ) : (
+                    <OSWorkspaceControls />
+                ),
             renderAppearance: () => <WorkspaceWallpaperSettings />,
         };
     }, [tabId]);
@@ -61,7 +67,7 @@ export function HermesSettingsContent({
                             <MemoryRouter
                                 initialEntries={[
                                     initialSection
-                                        ? `/settings?tab=kronterm:${encodeURIComponent(initialSection)}`
+                                        ? `/settings?tab=${encodeURIComponent(BASE_SETTINGS_VIEWS.includes(initialSection as (typeof BASE_SETTINGS_VIEWS)[number]) ? initialSection : `kronterm:${initialSection}`)}`
                                         : "/settings",
                                 ]}
                             >

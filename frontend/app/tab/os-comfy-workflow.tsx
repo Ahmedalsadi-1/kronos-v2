@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getApi } from "@/store/global";
-import { comfyOrigin } from "@/types/comfyui";
+import { pinComfyOutput } from "@/app/view/rendercomparison/render-comparison";
+import { comfyOrigin, type ComfyJob, type ComfyRenderRef, type ComfyWorkflow } from "@/types/comfyui";
 import { WorkflowPickerResults } from "@hermes/app/workflows/workflow-picker-results";
 import { $comfyControlsOpen } from "@hermes/lib/kronterm-sidebar";
 import { $workflowPickerComfyTarget, $workflowPickerSource, closeWorkflowPicker } from "@hermes/store/command-palette";
@@ -135,6 +136,12 @@ export function OSComfyWorkflow({
 }) {
     const [address, setAddress] = useState("http://127.0.0.1:8188");
     const [origin, setOrigin] = useState("");
+    const [engineOrigin, setEngineOrigin] = useState("");
+    const [renderJob, setRenderJob] = useState<ComfyJob>();
+    const [renderPreview, setRenderPreview] = useState<{ render: ComfyRenderRef; data: string; digest: string }>();
+    const [renderSubmitting, setRenderSubmitting] = useState(false);
+    const [renderPinning, setRenderPinning] = useState(false);
+    const [renderPinned, setRenderPinned] = useState(false);
     const [status, setStatus] = useState<"idle" | "loading" | "ready">("idle");
     const [error, setError] = useState("");
     const [copied, setCopied] = useState(false);
@@ -359,6 +366,56 @@ export function OSComfyWorkflow({
     }, [tabId]);
 
     const report = (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason));
+    const runRender = async () => {
+        if (renderSubmitting || !engineOrigin) return;
+        setRenderSubmitting(true);
+        setRenderJob(undefined);
+        setRenderPreview(undefined);
+        setRenderPinned(false);
+        setError("");
+        try {
+            const workflow = await editor.current?.exportPrompt() as ComfyWorkflow;
+            if (!workflow) throw new Error("Open a KronRender workflow first.");
+            const { job } = await getApi().comfyUiRequest({ action: "submit", origin: engineOrigin, workflow });
+            if (!job) throw new Error("KronRender did not return a job ID.");
+            setRenderJob(job);
+        } catch (reason) {
+            report(reason);
+        } finally {
+            setRenderSubmitting(false);
+        }
+    };
+    const renderJobId = renderJob?.id;
+    const renderOrigin = renderJob?.origin;
+    useEffect(() => {
+        if (!renderJobId || !renderOrigin) return;
+        let stopped = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const update = async () => {
+            try {
+                const { jobs } = await getApi().comfyUiRequest({ action: "refresh", origin: renderOrigin, id: renderJobId });
+                if (stopped || !jobs?.[0]) return;
+                const job = jobs[0];
+                setRenderJob(job);
+                if (["queued", "running", "cancel-requested"].includes(job.status) ||
+                    (job.status === "unknown" && Date.now() - job.createdAt < 15000)) {
+                    timer = setTimeout(update, 2500);
+                } else if (job.status === "completed" && job.images[0]) {
+                    const render = { origin: renderOrigin, id: renderJobId, image: job.images[0] };
+                    const result = await getApi().comfyUiRequest({ action: "image", ...render });
+                    if (!stopped && result.imageData && result.previewDigest)
+                        setRenderPreview({ render, data: result.imageData, digest: result.previewDigest });
+                }
+            } catch (reason) {
+                if (!stopped) setError(reason instanceof Error ? reason.message : String(reason));
+            }
+        };
+        void update();
+        return () => {
+            stopped = true;
+            clearTimeout(timer);
+        };
+    }, [renderJobId, renderOrigin]);
     const connect = useCallback(async () => {
         if (connecting.current || status !== "idle") return;
         connecting.current = true;
@@ -371,6 +428,7 @@ export function OSComfyWorkflow({
             void loadWorkflowEditor<ComfyBundle>("comfy-native").catch(() => {});
             const { editorUrl } = await getApi().comfyUiRequest({ action: "editor", origin: url });
             if (!editorUrl) throw new Error("KronRender editor could not connect.");
+            setEngineOrigin(url);
             setOrigin(editorUrl);
         } catch (reason) {
             setStatus("idle");
@@ -567,6 +625,27 @@ export function OSComfyWorkflow({
                     <button className={button} onClick={() => void editor.current?.run().catch(report)}>
                         Run
                     </button>
+                    <button className={button} disabled={renderSubmitting || renderPinning} onClick={() => void runRender()}>
+                        {renderSubmitting ? "Queuing…" : "Run for comparison"}
+                    </button>
+                    {renderJob && (
+                        <div className="flex w-full flex-wrap items-center gap-2 border-t border-white/10 pt-2">
+                            {renderPreview && <img src={renderPreview.data} alt="Latest KronRender output" className="h-12 w-12 rounded object-cover" />}
+                            <span role="status" className="text-xs">
+                                {renderJob.error || (renderPinned ? "Pinned to canvas" : `Latest render · ${renderJob.status}`)}
+                            </span>
+                            {renderPreview && !renderPinned && (
+                                <button className={button} disabled={renderPinning || renderSubmitting}
+                                    onClick={() => {
+                                        setRenderPinning(true);
+                                        void pinComfyOutput(tabId, renderPreview.render, renderPreview.digest)
+                                            .then(() => setRenderPinned(true)).catch(report).finally(() => setRenderPinning(false));
+                                    }}>
+                                    {renderPinning ? "Pinning…" : "Pin to canvas"}
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <input
                         ref={fileInput}
                         hidden

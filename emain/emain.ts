@@ -4,14 +4,18 @@
 import { RpcApi } from "@/app/store/wshclientapi";
 import * as electron from "electron";
 import { globalEvents } from "emain/emain-events";
+import { mkdir } from "node:fs/promises";
 import path from "path";
 import { sprintf } from "sprintf-js";
 import * as services from "../frontend/app/store/services";
+import { CurrentOnboardingVersion } from "../frontend/types/onboarding-version";
 import { initElectronWshrpc, shutdownWshrpc } from "../frontend/app/store/wshrpcutil-base";
 import { fireAndForget } from "../frontend/util/util";
 import { stopAllAgentManagers } from "./acp";
 import { AuthKey, configureAuthKeyRequestInjection } from "./authkey";
 import { installBackgroundLaunchPolicy } from "./background-launch";
+import { browserBookmarksDirectory, restoreBrowserExtensions } from "./browser/browser-migration";
+import { watchBrowserSession } from "./browser/browser-site-settings";
 import { installBrowserElementTool } from "./browser-element-tool";
 import { ensureKronRender, stopKronRender } from "./comfyui-runtime";
 import {
@@ -63,8 +67,10 @@ import {
 import { ElectronWshClient, initElectronWshClient } from "./emain-wsh";
 import { HermesRuntime } from "./hermes-runtime";
 import { KronosCodeRuntime } from "./kronoscode-runtime";
-import { openKronosTestSignIn } from "./kronos-signin";
+import { openKronosSignIn, waitForKronosStartupSignIn } from "./kronos-signin";
+import { isKronosAccountConfigured } from "./kronos-auth";
 import { getLaunchSettings } from "./launchsettings";
+import { focusStartupOnboarding, runStartupOnboarding } from "./startup-onboarding";
 import { ensureKronosSkillDirectory } from "./shared-skill-roots";
 import { configureAutoUpdater, updater } from "./updater";
 import { activateExistingWorkspace } from "./workspace-activation";
@@ -75,6 +81,7 @@ const electronApp = electron.app;
 installBackgroundLaunchPolicy();
 
 let confirmQuit = true;
+let startupWorkspaceReleased = false;
 
 const waveDataDir = getWaveDataDir();
 const waveConfigDir = getWaveConfigDir();
@@ -107,6 +114,7 @@ function handleWSEvent(evtMsg: WSEventType) {
     fireAndForget(async () => {
         console.log("handleWSEvent", evtMsg?.eventtype);
         if (evtMsg.eventtype == "electron:newwindow") {
+            if (!startupWorkspaceReleased) return;
             console.log("electron:newwindow", evtMsg.data);
             const windowId: string = evtMsg.data;
             const windowData: WaveWindow = (await services.ObjectService.GetObject("window:" + windowId)) as WaveWindow;
@@ -274,7 +282,7 @@ function hideWindowWithCatch(window: WaveBrowserWindow) {
 }
 
 electronApp.on("window-all-closed", () => {
-    if (getGlobalIsRelaunching()) {
+    if (!startupWorkspaceReleased || getGlobalIsRelaunching()) {
         return;
     }
     if (unamePlatform !== "darwin") {
@@ -448,6 +456,7 @@ async function appMain() {
     }
     const allowedWebviewPreloads = [path.join(getElectronAppBasePath(), "preload", "preload-webview.cjs")];
     electronApp.on("web-contents-created", (_event, contents) => {
+        if (contents.getType() === "webview") watchBrowserSession(contents.session);
         if (process.env.VITE_ENABLE_REACT_GRAB !== "false" && contents.getType() === "webview") {
             contents.on("dom-ready", () => {
                 void installBrowserElementTool(contents).catch((error) =>
@@ -468,11 +477,18 @@ async function appMain() {
     });
     electronApp.on("second-instance", (_event, argv, workingDirectory) => {
         console.log("second-instance event, argv:", argv, "workingDirectory:", workingDirectory);
+        if (!startupWorkspaceReleased) {
+            focusStartupOnboarding();
+            return;
+        }
         fireAndForget(async () => {
             if (!activateExistingWorkspace(getAllWaveWindows(), focusedWaveWindow)) await createNewWaveWindow();
         });
     });
     try {
+        await mkdir(browserBookmarksDirectory(), { recursive: true }).catch((error) => {
+            console.warn("Could not prepare the browser bookmarks directory", error.code);
+        });
         await runWaveSrv(handleWSEvent);
     } catch (error) {
         console.error("Local workspace startup failed", error);
@@ -508,6 +524,7 @@ async function appMain() {
         });
     }
     configureAuthKeyRequestInjection(electron.session.defaultSession);
+    await restoreBrowserExtensions();
     initIpcHandlers();
     void ensureKronRender().catch((error) => console.log("KronRender startup:", error.message));
 
@@ -530,11 +547,43 @@ async function appMain() {
     if (fullConfig?.settings?.["app:confirmquit"] != null) {
         confirmQuit = fullConfig.settings["app:confirmquit"];
     }
+    const startupPreviewRoot = isDev
+        ? process.env.KRONOS_STARTUP_PREVIEW_ROOT
+        : path.join(process.resourcesPath, "onboarding");
+    if (startupPreviewRoot) {
+        try {
+            const clientData = await services.ClientService.GetClientData();
+            if (!clientData.tosagreed) {
+                const finished = await runStartupOnboarding(startupPreviewRoot, async (parent) => {
+                    await waitForKronosStartupSignIn(parent);
+                    await RpcApi.SetMetaCommand(ElectronWshClient, {
+                        oref: "client:" + clientData.oid,
+                        meta: { "onboarding:lastversion": CurrentOnboardingVersion },
+                    });
+                    await services.ClientService.AgreeTos();
+                });
+                if (!finished) {
+                    electronApp.quit();
+                    return;
+                }
+            }
+        } catch (error) {
+            recordDiagnostic("main", error);
+            electron.dialog.showErrorBox("KronOS setup could not open", "Check the local onboarding files and restart KronOS.");
+            electronApp.quit();
+            return;
+        }
+    }
+    if (!startupPreviewRoot && isKronosAccountConfigured()) {
+        const clientData = await services.ClientService.GetClientData();
+        if (!clientData.tosagreed) await waitForKronosStartupSignIn();
+    }
+    startupWorkspaceReleased = true;
     ensureHotSpareTab(fullConfig);
     await relaunchBrowserWindows(fullConfig);
     if (process.env.KRONOS_TEST_SIGN_IN === "1") {
         const parent = getAllWaveWindows().find((window) => window.isVisible());
-        if (parent) openKronosTestSignIn(parent);
+        if (parent) openKronosSignIn(parent);
     }
     setTimeout(runActiveTimer, 5000); // start active timer, wait 5s just to be safe
     setTimeout(sendDisplaysTDataEvent, 5000);

@@ -1,3 +1,4 @@
+import { reloadInstalledSkills } from '@hermes/store/reload-installed-skills'
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import type * as React from 'react'
@@ -269,6 +270,11 @@ export function SkillsView({
   const [selectedToolset, setSelectedToolset] = useState<string | null>(null)
 
   const refreshCapabilities = useCallback(async () => {
+    try {
+      await reloadInstalledSkills(scopeProfile)
+    } catch (error) {
+      notifyError(error, 'Could not reload skills')
+    }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: SKILLS_QUERY_KEY }),
       queryClient.invalidateQueries({ queryKey: TOOLSETS_QUERY_KEY })

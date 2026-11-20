@@ -1212,7 +1212,7 @@ export class TabClient extends WshClient {
         const tabId = globalStore.get(atoms.staticTabId);
         if (data.action === "hud.mode" && data.presentation === "exclusive" &&
             getWorkspaceSurfaceModeProvider(tabId)?.snapshot()?.osview === "kronos-v2") {
-            return JSON.stringify({ success: false, message: "Use the workspace view selector to leave KronOS v2." });
+            return JSON.stringify({ success: false, message: "Exclusive HUD mode is unavailable in KronOS v2." });
         }
         if (data.action === "hud.launch") {
             if (!kronTermHudController.getSnapshot().active) throw new Error("KronOS HUD mode is not active");
@@ -1272,8 +1272,8 @@ export class TabClient extends WshClient {
             return JSON.stringify({ ...hudResult, snapshot: this.makeWorkspaceSurfaceSnapshot() }, null, 2);
         }
         if (data.action === "set_presentation") {
-            if (data.presentation !== "os" && getWorkspaceSurfaceModeProvider(tabId)?.snapshot()?.osview === "kronos-v2") {
-                return JSON.stringify({ success: false, message: "Use the workspace view selector to leave KronOS v2." });
+            if (data.presentation !== "os") {
+                return JSON.stringify({ success: false, message: "KronOS v2 is the only workspace view." });
             }
             if (!isWorkspacePresentation(data.presentation)) {
                 throw new Error(`Invalid workspace presentation: ${data.presentation}`);
@@ -1582,6 +1582,7 @@ export class TabClient extends WshClient {
             osgroups: modeState?.groups,
             ospresentations: modeState?.presentations,
             osview: modeState?.osview,
+            penchatmode: modeState?.penchatmode,
             layouttree: presentation === "widgets" ? layoutModel?.treeState.rootNode : undefined,
             blocks,
             capabilities: {

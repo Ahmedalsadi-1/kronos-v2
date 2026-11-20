@@ -1,7 +1,6 @@
 import Logo from "@/app/asset/logo.svg?url";
 import { WorkspaceService } from "@/app/store/services";
 import { DesktopGrabControl } from "@/app/workspace/kronterm-hud-controls";
-import { Menu } from "@base-ui/react/menu";
 import { $workflowSidebarMode } from "@hermes/app/workflows/workflow-context";
 import { $workflowPickerSource, closeWorkflowPicker } from "@hermes/store/command-palette";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -22,11 +21,21 @@ import { OSPenCanvasActions } from "./os-pen-canvas-actions";
 import { KronOSV2AgentFollowPauseEvent } from "./os-kronos-v2-agent-pointer-event";
 import { KronOSV2AgentPointer } from "./os-kronos-v2-agent-pointer";
 import { KronOSV2LayerControls } from "./os-kronos-v2-layer-controls";
+import {
+    FloatingIslandTitle,
+    FloatingIslandView,
+    IslandGameControls,
+    IslandLauncher,
+    IslandModelTools,
+    floatingIslandModels,
+} from "@/app/view/floatingisland/floating-island";
 import { getKronOSV2Widget, keepKronOSV2View, updateKronOSV2Widgets } from "./os-kronos-v2-widgets";
 import { samePenCamera, type PenCamera, type PenViewport } from "./os-pen-camera";
 import { type PenLiveWidget, type PenWidgetGeometry, type PenWidgetSnapshot } from "./os-pen-widgets";
+import { getMobilePreviewPlatform, isPenChatDockApp, PenChatDockMeta } from "./os-pen-chat-dock-model";
+import { usePenChatPresentation } from "./os-pen-chat-presentation";
 import { OSPenEditor } from "./os-pen-editor";
-import { activePenCanvasTabAtom, requestPenEditor, savePenEditorIfReady, type PenEditorMethod } from "./os-pen-editor-bridge";
+import { activePenCanvasTabAtom, requestPenEditor, type PenEditorMethod } from "./os-pen-editor-bridge";
 import { readPenLayerPatch, type PenDrawingTool } from "./os-pen-import";
 import { OSPenPanel } from "./os-pen-panel";
 import { type PenProjectDocument } from "./os-pen-project";
@@ -52,22 +61,20 @@ import {
     type PersistentBlockSurfaceInput,
 } from "@/app/block/persistent-block";
 import { AppIcon } from "@/app/components/app-icon";
+import { KronOSSignInButton } from "@/app/components/ui/kronos-sign-in-button";
 import {
     SystemButton,
     SystemMaterial,
-    SystemSegmentedControl,
     SystemToolbar,
     SystemUIProvider,
     SystemWindowFrame,
     useSystemAppearance,
 } from "@/app/components/system-ui";
 import {
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Focus,
     FolderOpen,
-    Grid2X2,
     Hand,
     Link2,
     Maximize2,
@@ -107,6 +114,7 @@ import { CompactDeviceBlocksAtom, getSingleDeviceWorkspaceWidth } from "@/app/vi
 import { submitToHermes } from "@/app/view/hermes/hermes-quick-submit";
 import { hermesSurfaceController } from "@/app/view/hermes/hermes-surface-controller";
 import { classifyMedia } from "@/app/view/medialibrary/media-library-utils";
+import { openRenderComparison } from "@/app/view/rendercomparison/render-comparison";
 import {
     comfyWorkflowOpenAtom,
     OSSessionFocusEvent,
@@ -121,7 +129,6 @@ import { atoms, getApi, getBlockComponentModel, getSettingsKeyAtom } from "@/sto
 import { WebViewModel } from "@/view/webview/webview";
 import * as services from "@/store/services";
 import * as WOS from "@/store/wos";
-import { systemMaterialVariables } from "@/types/system-materials";
 import { getModelPreviewFormat } from "@/util/model-preview";
 import { isMacOS } from "@/util/platformutil";
 import { cn } from "@/util/util";
@@ -219,6 +226,7 @@ import {
     isCanvasPasteTarget,
     isLocalCanvasFilePath,
 } from "./workspace-canvas-files";
+import { findNonOverlappingCanvasRect } from "./workspace-canvas-utils";
 
 // The shell refinements must follow the legacy compact-chrome rules.
 import "./os-shell-polish.css";
@@ -595,7 +603,8 @@ const OSBlockWindow = memo(
             document.addEventListener("contextmenu", onContextMenu, true);
             return () => document.removeEventListener("contextmenu", onContextMenu, true);
         }, [canvasWidget, descriptor.view, showWindowMenu, toolbarHost]);
-        const windowButtons = phoneWindow ? null : (
+        const framelessIsland = penWidget && descriptor.view === FloatingIslandView;
+        const windowButtons = phoneWindow || framelessIsland ? null : (
             <div
                 className={cn(
                     "os-window-lights",
@@ -762,7 +771,7 @@ const OSBlockWindow = memo(
                         </div>
                     </div>
                 </SystemWindowFrame>
-                {canvasWidget && (selected || multiSelected) && (
+                {canvasWidget && !framelessIsland && (selected || multiSelected) && (
                     <>
                         <span className="os-canvas-widget-selection" aria-hidden="true" />
                         <span
@@ -802,17 +811,13 @@ export function OSModeShell({
     blocks,
     collapsedIds,
     showCollapsedDock,
-    sceneKind,
-    activeBlockId,
     osView,
-    onSetOSView,
     onFocusApp,
     onWorkspace,
     onCreateWorkspace,
     onRestore,
     onPinResource,
     onShowApps,
-    onFreeform,
 }: {
     hasComfyPanels?: boolean;
     systemControlsSlot?: HTMLElement | null;
@@ -821,27 +826,20 @@ export function OSModeShell({
     blocks: BlockDescriptor[];
     collapsedIds: string[];
     showCollapsedDock: boolean;
-    sceneKind: OSModeState["scene"]["kind"];
-    activeBlockId: string | undefined;
     osView: KronTermOSView;
-    onSetOSView: (view: KronTermOSView) => Promise<boolean>;
     onFocusApp: (blockId: string) => void;
     onWorkspace: (id: string) => void;
     onCreateWorkspace: () => void;
     onRestore: (blockId: string) => void;
     onPinResource: (resource: OSResourceReference) => void;
     onShowApps: () => void;
-    onFreeform: () => void;
 }) {
     const designView = osView === "design" || osView === "kronos-v2";
-    const viewLabel = { canvas: "KronOS", design: "Design", "kronos-v2": "KronOS v2", file: "Files" }[osView];
     const shellTabId = useAtomValue(atoms.staticTabId);
     const isFullScreen = useAtomValue(atoms.isFullScreen);
     const shellRef = useRef<HTMLDivElement>(null);
-    const appearance = useSystemAppearance();
     const [activeSystemCenter, setActiveSystemCenter] = useState<SystemCenterTarget>();
     const [settingsSection, setSettingsSection] = useState<string>();
-    const [viewMenuOpen, setViewMenuOpen] = useState(false);
     const sidebarOpen = useStore($sidebarOpen);
     const inspectorOpen = useStore($krontermInspectorOpen);
     const hudMode = useSyncExternalStore(
@@ -873,7 +871,6 @@ export function OSModeShell({
         const handleSystemCenterOpen = (event: Event) => {
             const center = (event as CustomEvent<{ center?: SystemCenterTarget }>).detail?.center;
             if (center !== "activity" && center !== "control") return;
-            setViewMenuOpen(false);
             setSettingsSection((event as CustomEvent<{ section?: string }>).detail?.section);
             setActiveSystemCenter(center);
         };
@@ -961,6 +958,7 @@ export function OSModeShell({
                         className={systemControlsSlot ? undefined : "os-shell-right"}
                         aria-label={osView === "kronos-v2" ? "Workspace controls" : "System controls"}
                     >
+                        <KronOSSignInButton showName />
                         <SystemButton
                             type="button"
                             size="small"
@@ -969,6 +967,7 @@ export function OSModeShell({
                                 setActiveSystemCenter(undefined);
                                 toggleCommandCenter();
                             }}
+                            data-pen-chat-hide=""
                             aria-label="Open Command Center"
                             title="Command Center (Command+Shift+Space)"
                         >
@@ -982,6 +981,7 @@ export function OSModeShell({
                                 size="small"
                                 className="os-shell-icon"
                                 selected={activeSystemCenter === "control"}
+                                data-pen-chat-hide=""
                                 aria-label="Open Hermes Settings"
                                 title="Hermes Settings"
                             >
@@ -1000,158 +1000,17 @@ export function OSModeShell({
                                     : "Enter KronOS HUD mode"
                             }
                             aria-pressed={hudMode.active && !hudMode.keepWorkspaceVisible}
+                            data-pen-chat-hide=""
                             title="KronOS HUD mode"
                         >
                             <PanelBottom />
                         </SystemButton>
-                        <SystemSegmentedControl className="os-view-selector" aria-label="Workspace view">
-                            <Menu.Root modal={false} open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
-                                <Menu.Trigger
-                                    type="button"
-                                    onDragOver={(event) => {
-                                        if (
-                                            event.dataTransfer.types.includes(OSAppDragMimeType) ||
-                                            event.dataTransfer.types.includes(OSResourceDragMimeType)
-                                        ) {
-                                            event.preventDefault();
-                                            event.dataTransfer.dropEffect = "copy";
-                                        }
-                                    }}
-                                    onDrop={(event) => {
-                                        const resource = readOSResourceDragPayload(event.dataTransfer);
-                                        if (resource != null) {
-                                            event.preventDefault();
-                                            onPinResource(resource);
-                                            setViewMenuOpen(false);
-                                            return;
-                                        }
-                                        const payload = readOSAppDragPayload(event.dataTransfer);
-                                        if (payload?.blockId == null) return;
-                                        event.preventDefault();
-                                        onRestore(payload.blockId);
-                                        if (osView !== "kronos-v2") void onSetOSView("canvas");
-                                        onFocusApp(payload.blockId);
-                                        setViewMenuOpen(false);
-                                    }}
-                                    aria-expanded={viewMenuOpen}
-                                    aria-haspopup="menu"
-                                    aria-label={`Workspace view: ${viewLabel}`}
-                                >
-                                    {osView === "file" ? <FolderOpen /> : <Grid2X2 />}
-                                    <span className="os-view-selector-label">{viewLabel}</span>
-                                    <ChevronDown />
-                                </Menu.Trigger>
-                                <Menu.Portal container={shellRef.current}>
-                                    <Menu.Positioner sideOffset={8} align="end" style={{ zIndex: 5000, pointerEvents: "auto" }}>
-                                        <Menu.Popup
-                                            className="os-view-menu"
-                                            style={{
-                                                ...systemMaterialVariables(appearance),
-                                                position: "relative",
-                                                top: "auto",
-                                                right: "auto",
-                                                background: "var(--kt-popover)",
-                                            }}
-                                        >
-                                            <Menu.RadioGroup
-                                                value={
-                                                    designView
-                                                        ? osView
-                                                        : osView === "file"
-                                                        ? "files"
-                                                        : sceneKind === "freeform"
-                                                          ? "canvas"
-                                                          : "carousel"
-                                                }
-                                            >
-                                                <Menu.RadioItem
-                                                    render={<button type="button" />}
-                                                    nativeButton
-                                                    value="carousel"
-                                                    closeOnClick
-                                                    onDragOver={(event) => {
-                                                        if (event.dataTransfer.types.includes(OSAppDragMimeType)) {
-                                                            event.preventDefault();
-                                                            event.dataTransfer.dropEffect = "move";
-                                                        }
-                                                    }}
-                                                    onDrop={(event) => {
-                                                        const payload = readOSAppDragPayload(event.dataTransfer);
-                                                        if (payload?.blockId == null) return;
-                                                        event.preventDefault();
-                                                        onRestore(payload.blockId);
-                                                        if (osView !== "kronos-v2") void onSetOSView("canvas");
-                                                        onFocusApp(payload.blockId);
-                                                        setViewMenuOpen(false);
-                                                    }}
-                                                    onClick={async () => {
-                                                        if (!(await onSetOSView("canvas"))) return;
-                                                        const blockId =
-                                                            activeBlockId ??
-                                                            blocks.find((block) => !collapsedIds.includes(block.blockId))
-                                                                ?.blockId;
-                                                        if (blockId) onFocusApp(blockId);
-                                                        setViewMenuOpen(false);
-                                                    }}
-                                                >
-                                                    <Grid2X2 />
-                                                    <span>Window carousel</span>
-                                                </Menu.RadioItem>
-                                                <Menu.RadioItem
-                                                    render={<button type="button" />}
-                                                    nativeButton
-                                                    value="canvas"
-                                                    closeOnClick
-                                                    onClick={async () => {
-                                                        if (!(await onSetOSView("canvas"))) return;
-                                                        onFreeform();
-                                                        setViewMenuOpen(false);
-                                                    }}
-                                                >
-                                                    <Grid2X2 />
-                                                    <span>KronOS</span>
-                                                </Menu.RadioItem>
-                                                <Menu.RadioItem
-                                                    render={<button type="button" />}
-                                                    nativeButton
-                                                    value="design"
-                                                    closeOnClick
-                                                    onClick={() => onSetOSView("design")}
-                                                >
-                                                    <ShapeSquare />
-                                                    <span>Design</span>
-                                                </Menu.RadioItem>
-                                                <Menu.RadioItem
-                                                    render={<button type="button" />}
-                                                    nativeButton
-                                                    value="kronos-v2"
-                                                    closeOnClick
-                                                    onClick={() => onSetOSView("kronos-v2")}
-                                                >
-                                                    <ShapeSquare />
-                                                    <span>KronOS v2</span>
-                                                </Menu.RadioItem>
-                                                <Menu.RadioItem
-                                                    render={<button type="button" />}
-                                                    nativeButton
-                                                    value="files"
-                                                    closeOnClick
-                                                    onClick={() => onSetOSView("file")}
-                                                >
-                                                    <FolderOpen />
-                                                    <span>Files</span>
-                                                </Menu.RadioItem>
-                                            </Menu.RadioGroup>
-                                        </Menu.Popup>
-                                    </Menu.Positioner>
-                                </Menu.Portal>
-                            </Menu.Root>
-                        </SystemSegmentedControl>
                         <SystemButton
                             type="button"
                             size="small"
                             className="os-shell-icon os-all-apps-button"
                             onClick={onShowApps}
+                            data-pen-chat-hide=""
                             aria-label="Show all apps"
                         >
                             <LayoutGrid />
@@ -1170,6 +1029,7 @@ export function OSModeShell({
                                       : "Show files and changes"
                             }
                             aria-expanded={inspectorOpen}
+                            data-pen-chat-hide=""
                             aria-controls={penChat ? "kronos-pen-workspace-inspector" : "kronterm-right-inspector"}
                             selected={inspectorOpen}
                             title={penChat || hasComfyPanels ? "Workspace inspector" : "Files and changes"}
@@ -1189,7 +1049,6 @@ export function OSModeShell({
                         onClose={() => setActiveSystemCenter(undefined)}
                         onPinResource={onPinResource}
                         onFocusBlock={(blockId) => {
-                            if (osView !== "kronos-v2") void onSetOSView("canvas");
                             onFocusApp(blockId);
                             setActiveSystemCenter(undefined);
                         }}
@@ -1306,9 +1165,20 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         kronTermHudController.getSnapshot
     );
     const allBlockIds = tabData.blockids ?? [];
-    const blockIds = hudMode.active
-        ? allBlockIds.filter((blockId) => !kronTermHudController.isIsland(blockId))
-        : allBlockIds;
+    const chatDockTabsAtom = useMemo(() => atom((get) => allBlockIds.flatMap((id) => {
+        const block = get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", id)));
+        const app = block?.meta?.[PenChatDockMeta];
+        if (!isPenChatDockApp(app)) return [];
+        const meta = block.meta as MetaType & { "web:title"?: string };
+        const title = app === "browser"
+            ? meta["web:title"]?.trim() || meta.url
+            : app === "files" ? meta.file?.split("/").filter(Boolean).at(-1) : undefined;
+        return [{ id, app, title, url: app === "browser" ? meta.url : undefined, partition: app === "browser" ? meta["web:partition"] as string : undefined, path: app === "files" ? meta.file : undefined, mobilePreview: app === "browser" ? getMobilePreviewPlatform(meta.url) : undefined }];
+    })), [allBlockIds]);
+    const dedicatedChatDockTabs = useAtomValue(chatDockTabsAtom);
+    const blockIds = allBlockIds.filter((blockId) =>
+        (!hudMode.active || !kronTermHudController.isIsland(blockId))
+    );
     const blockIdsKey = blockIds.join(":");
     const [state, setState] = useState<OSModeState>(() =>
         makeInitialOSModeState(tabData, blockIds, resolvedViewsByBlockId(blockIds.map(readBlockDescriptor)))
@@ -1371,8 +1241,15 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         plane.style.setProperty("--pen-camera-zoom", String(camera.zoom));
         syncPersistentBlockGeometry(viewportRef.current);
     }, []);
-    const [penWidgetsReady, setPenWidgetsReady] = useState(false);
+    const {
+        fullChat: penFullChat,
+        setFullChat: setPenFullChat,
+        widgetsReady: penWidgetsReady,
+        updateWidgetsReady: setPenWidgetsReady,
+    } = usePenChatPresentation();
     const [penOverlayOpen, setPenOverlayOpen] = useState(false);
+    const [penChatDockActive, setPenChatDockActive] = useState<string>();
+    const [penChatDockFocus, setPenChatDockFocus] = useState<{ id: string; background?: boolean }>();
     const [penPresentation, setPenPresentation] = useState<{ active: boolean; blockId?: string }>({ active: false });
     const updatePenPresentation = useCallback((active: boolean, blockId?: string) => {
         setPenPresentation((current) =>
@@ -1874,22 +1751,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
         [leavePenWidget, returnToPenCanvas, setAndPersist, setPenWidgetVisible, updatePenWidget]
     );
 
-    const setOSView = useCallback(async (view: KronTermOSView) => {
-        const previous = stateRef.current.view;
-        if (previous === view) return true;
-        if ((previous === "design" && view === "kronos-v2") || previous === "kronos-v2") {
-            try {
-                await savePenEditorIfReady(tabId);
-            } catch (error) {
-                setCanvasHint(error instanceof Error ? error.message : "Could not save the Pen canvas.");
-                return false;
-            }
-        }
-        if (stateRef.current.view !== previous) return stateRef.current.view === view;
-        setAndPersist((current) => reduceOSModeState(current, { type: "os.view.set", view }), false, true);
-        return true;
-    }, [setAndPersist, tabId]);
-
     useEffect(() => {
         const rect = viewportRef.current?.getBoundingClientRect();
         if (rect == null || rect.width < 1 || rect.height < 1) return;
@@ -1948,6 +1809,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 text: resource.name,
                 resource: resource.resource,
                 color: "slate",
+                render: resource.render,
             };
             setAndPersist((current) => ({
                 ...current,
@@ -2818,12 +2680,24 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             return resolved && widget ? [{ ...widget, title }] : [];
         });
     }, [kronosV2, descriptors, state.windows, state.kronosV2Widgets]);
+    const chatDockTabs = useMemo(() => [
+        ...dedicatedChatDockTabs.map((tab) => ({ ...tab, canvas: kronosV2 })),
+        ...(kronosV2 ? descriptors.filter(({ blockId, resolved }) =>
+            resolved && !dedicatedChatDockTabs.some((tab) => tab.id === blockId) &&
+            getKronOSV2Widget(state, blockId)?.visible
+        ).map(({ blockId, title, view }) => ({
+            id: blockId,
+            app: view === "web" ? "browser" as const : view === "term" ? "terminal" as const : "widget" as const,
+            title,
+            canvas: true,
+        })) : []),
+    ], [dedicatedChatDockTabs, kronosV2, descriptors, state.windows, state.kronosV2Widgets]);
     const penWidgetsById = useMemo(() => new Map(penWidgets?.map((widget) => [widget.blockId, widget])), [penWidgets]);
     const penFocusedWidget = !penPresentation.active && penWidgetsById.get(penActiveWidget)?.visible
         ? penActiveWidget
         : undefined;
     const followPenAgentPointer = (point: { x: number; y: number }) => {
-        if (penAgentFollowPaused.current || !penViewport || penFocusedWidget || penPresentation.active || penOverlayOpen) return;
+        if (penAgentFollowPaused.current || !penViewport || penFocusedWidget || penPresentation.active || penOverlayOpen || penFullChat) return;
         const canvas = viewportRef.current?.getBoundingClientRect();
         if (!canvas) return;
         const centerX = penViewport.x + penViewport.width / 2;
@@ -2837,7 +2711,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
     const penSlideWidget = penPresentation.active && penWidgetsById.get(penPresentation.blockId)?.visible
         ? penPresentation.blockId
         : undefined;
-    const penLivePlaneVisible = !!penViewport && penWidgetsReady && !penOverlayOpen &&
+    const penLivePlaneVisible = !!penViewport && penWidgetsReady && !penOverlayOpen && !penFullChat &&
         (!penPresentation.active || !!penSlideWidget);
     const workflowGraphVisible = workflowCanvasVisible && (!kronosV2 || (penLivePlaneVisible && !penFocusedWidget && !penPresentation.active));
     const renderCamera = useMemo(() => {
@@ -2911,6 +2785,64 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
 
     const [penSystemControlsSlot, setPenSystemControlsSlot] = useState<HTMLElement | null>(null);
     const [penRenderControlsSlot, setPenRenderControlsSlot] = useState<HTMLElement | null>(null);
+    const [penIslandControlsSlot, setPenIslandControlsSlot] = useState<HTMLElement | null>(null);
+    const [launchingIsland, setLaunchingIsland] = useState(false);
+    const [islandFitId, setIslandFitId] = useState<string>();
+    const islandId = descriptors.find(({ view }) => view === FloatingIslandView)?.blockId;
+    const islandModels = useAtomValue(floatingIslandModels);
+    const islandModel = penLivePlaneVisible && penWidgetsById.get(islandId)?.visible &&
+        (!penFocusedWidget || penFocusedWidget === islandId) && !penPresentation.active
+        ? islandModels.get(islandId)
+        : undefined;
+    const openFloatingIsland = async () => {
+        if (launchingIsland) return;
+        setLaunchingIsland(true);
+        try {
+            const blockId = islandId ?? WOS.splitORef(await RpcApi.CreateBlockCommand(TabRpcClient, {
+                tabid: tabId,
+                blockdef: { meta: { view: FloatingIslandView, "frame:title": FloatingIslandTitle } },
+            }))[1];
+            if (stateRef.current.view !== "kronos-v2") return;
+            setAndPersist((current) => {
+                const existing = islandId && getKronOSV2Widget(current, blockId);
+                const camera = penCameraRef.current;
+                const width = 960;
+                const height = 480;
+                const widget = existing || findNonOverlappingCanvasRect(
+                    {
+                        width,
+                        height,
+                        x: ((penViewport ? penViewport.x + penViewport.width / 2 : viewport.width / 2) - camera.x)
+                            / camera.zoom - width / 2,
+                        y: ((penViewport ? penViewport.y + penViewport.height / 2 : viewport.height / 2) - camera.y)
+                            / camera.zoom - height / 2,
+                    },
+                    [
+                        ...penWidgets.filter((widget) => widget.visible && widget.blockId !== blockId),
+                        ...current.objects,
+                    ]
+                );
+                const kronosV2Widgets = updateKronOSV2Widgets(current.kronosV2Widgets, [
+                    { ...widget, blockId, visible: true },
+                ]);
+                return { ...current, kronosV2Widgets };
+            }, true);
+            returnToPenCanvas();
+            $krontermInspectorOpen.set(true);
+            setIslandFitId(blockId);
+        } catch (error) {
+            setCanvasHint(error instanceof Error ? error.message : "Could not open Floating Island.");
+        } finally {
+            setLaunchingIsland(false);
+        }
+    };
+    useEffect(() => {
+        if (!kronosV2 || !penLivePlaneVisible || !penIslandControlsSlot?.isConnected || !islandFitId) return;
+        const widget = penWidgetsById.get(islandFitId);
+        if (!widget?.visible) return;
+        setPenRequestedCamera(fitSpatialViewportToBounds(widget, penViewport, 28, 1));
+        setIslandFitId(undefined);
+    }, [islandFitId, kronosV2, penIslandControlsSlot, penLivePlaneVisible, penViewport, penWidgetsById]);
     const attachPenRenderControls = useCallback((slot: HTMLElement | null) => {
         setPenRenderControlsSlot(slot);
         if (slot) setComfyWorkflowOpen(true);
@@ -3466,8 +3398,9 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                 snapshot: () => ({
                     presentation: "os",
                     osview: stateRef.current.view,
+                    penchatmode: stateRef.current.view === "kronos-v2" ? (penFullChat ? "tabs" : "canvas") : undefined,
                     selectedblockid: stateRef.current.view === "kronos-v2"
-                        ? penActiveWidgetRef.current ?? penInputWidgetRef.current
+                        ? penFullChat ? penChatDockActive ?? penChatDockFocus?.id : penActiveWidgetRef.current ?? penInputWidgetRef.current
                         : stateRef.current.windows[stateRef.current.selectedEntityId ?? ""]
                           ? stateRef.current.selectedEntityId
                           : undefined,
@@ -3515,11 +3448,74 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     ),
                 }),
                 control: async (rawInput) => {
-                    const validationError = validateOSSurfaceControl(stateRef.current, rawInput);
-                    if (validationError) return { success: false, message: validationError };
                     const input = resolveOSControlAction(rawInput);
                     const inKronOSV2 = stateRef.current.view === "kronos-v2";
+                    if (inKronOSV2 && penFullChat && ["focus", "spatial.focus", "os.widget.input"].includes(input.action) &&
+                        chatDockTabs.some(({ id }) => id === input.blockid)) {
+                        const background = input.presentation !== "foreground";
+                        setPenChatDockFocus({ id: input.blockid, background });
+                        return { success: true, message: background ? "Selected chat tab in the background." : "Focused right-side chat tab." };
+                    }
+                    if (inKronOSV2 && penFullChat &&
+                        ["focus", "spatial.focus", "os.widget.input"].includes(input.action) &&
+                        allBlockIds.includes(input.blockid)) {
+                        const ref = WOS.makeORef("block", input.blockid);
+                        const block = globalStore.get(WOS.getWaveObjectAtom<Block>(ref));
+                        const app = block?.meta?.view === "web" ? "browser" :
+                            block?.meta?.view === "term" ? "terminal" :
+                            block?.meta?.view === "preview" ? "files" : undefined;
+                        if (app) {
+                            await RpcApi.SetMetaCommand(TabRpcClient, {
+                                oref: ref, meta: { [PenChatDockMeta]: app } as MetaType,
+                            });
+                            const background = input.presentation !== "foreground";
+                            setPenChatDockFocus({ id: input.blockid, background });
+                            return { success: true, message: background ? "Prepared the widget in the chat dock." : "Opened the widget in the chat side panel." };
+                        }
+                    }
+                    if (inKronOSV2 && penFullChat && input.action === "spatial.open" && input.view === "web" && input.text) {
+                        let url: URL;
+                        try {
+                            url = new URL(input.text);
+                        } catch {
+                            return { success: false, message: "A browser URL is required." };
+                        }
+                        if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+                            return { success: false, message: "An HTTP or HTTPS browser URL is required." };
+                        }
+                        const existing = chatDockTabs.find(({ id, app }) =>
+                            app === "browser" &&
+                            globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", id)))?.meta?.url === url.href
+                        );
+                        const id = existing?.id ?? WOS.splitORef(await RpcApi.CreateBlockCommand(TabRpcClient, {
+                            tabid: tabId,
+                            blockdef: { meta: { view: "web", url: url.href, [PenChatDockMeta]: "browser" } as MetaType },
+                        }))[1];
+                        setPenChatDockFocus({ id, background: input.presentation !== "foreground" });
+                        return { success: true, message: `block:${id}` };
+                    }
+                    if (inKronOSV2 && penFullChat && input.action === "spatial.openFile") {
+                        if (!input.file?.startsWith("/")) return { success: false, message: "An absolute file path is required." };
+                        const existing = chatDockTabs.find(({ id, app }) =>
+                            app === "files" &&
+                            globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", id)))?.meta?.file === input.file
+                        );
+                        const id = existing?.id ?? WOS.splitORef(await RpcApi.CreateBlockCommand(TabRpcClient, {
+                            tabid: tabId,
+                            blockdef: { meta: { view: "preview", file: input.file, [PenChatDockMeta]: "files" } as MetaType },
+                        }))[1];
+                        if (existing) {
+                            const model = getBlockComponentModel(id)?.viewModel as import("@/app/view/preview/preview-model").PreviewModel;
+                            if (model?.refreshVersion) globalStore.set(model.refreshVersion, (version) => version + 1);
+                        }
+                        const background = input.presentation !== "foreground";
+                        setPenChatDockFocus({ id, background });
+                        return { success: true, message: background ? `Prepared a preview of ${input.file} in the background (block:${id}).` : `Showing ${input.file} in the right panel (block:${id}).` };
+                    }
+                    const validationError = validateOSSurfaceControl(stateRef.current, rawInput);
+                    if (validationError) return { success: false, message: validationError };
                     if (inKronOSV2 && input.action === "os.widget.input") {
+                        if (penFullChat) return { success: false, message: "Return to Canvas to interact with this widget." };
                         const widget = getKronOSV2Widget(stateRef.current, input.blockid);
                         if (!widget) return { success: false, message: "OS window not found." };
                         setPenWidgetVisible(input.blockid, true);
@@ -3536,8 +3532,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         if (penActiveWidgetRef.current || outsideViewport) setPenActiveWidget(input.blockid);
                         return { success: true, message: "Widget ready for input on the Pen canvas." };
                     }
-                    if (inKronOSV2 && input.action === "spatial.switchWorkspace")
-                        return { success: false, message: "Use the workspace view selector to leave KronOS v2." };
                     if (inKronOSV2 && (input.action.startsWith("os.tabs.") || input.action === "spatial.detach"))
                         return { success: false, message: "KronOS v2 widgets are individual Pen frames. Use Pen’s layer and layout tools to organize them." };
                     if (input.action === "os.design.editor") {
@@ -3623,7 +3617,10 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         ) {
                             return { success: false, message: "File card coordinates must be finite." };
                         }
-                        const id = pinResource(canvasFileResource(input.file, input.text), { x: input.x, y: input.y });
+                        const id = pinResource(
+                            { ...canvasFileResource(input.file, input.text), render: input.render },
+                            { x: input.x, y: input.y }
+                        );
                         return { success: true, message: `Pinned canvas file ${id}.` };
                     }
                     if (input.action === "os.tabs.group") {
@@ -3687,21 +3684,24 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                         return { success: true, message: `Opening ${input.appname ?? input.appid}.` };
                     }
                     if (input.action === "os.view.set" || input.action === "spatial.setWidgetPresentation") {
-                        if (stateRef.current.view === "kronos-v2")
-                            return { success: false, message: "Use the workspace view selector to leave KronOS v2." };
-                        if (
-                            input.presentation !== "canvas" &&
-                            input.presentation !== "design" &&
-                            input.presentation !== "kronos-v2" &&
-                            input.presentation !== "file"
-                        ) {
-                            return { success: false, message: "Presentation must be canvas, design, kronos-v2, or file." };
-                        }
-                        dispatch({ type: "os.view.set", view: input.presentation });
-                        return { success: true, message: `KronOS switched to ${input.presentation}.` };
+                        return input.presentation === "kronos-v2"
+                            ? { success: true, message: "KronOS v2 is active." }
+                            : { success: false, message: "KronOS v2 is the only workspace view." };
                     }
                     if (input.action === "spatial.openFile") {
                         if (!input.file) return { success: false, message: "File path is required." };
+                        if (input.view === "preview") {
+                            if (!isLocalCanvasFilePath(input.file))
+                                return { success: false, message: "An absolute local image path is required." };
+                            const ref = await RpcApi.CreateBlockCommand(TabRpcClient, {
+                                tabid: tabId,
+                                blockdef: { meta: { view: "preview", file: input.file } },
+                            });
+                            const [, blockId] = WOS.splitORef(ref);
+                            if (stateRef.current.view === "kronos-v2") setPenActiveWidget(blockId);
+                            else dispatch({ type: "os.window.focus", blockId });
+                            return { success: true, message: `Opened image widget ${blockId}.` };
+                        }
                         openKrontermFile(input.file);
                         return { success: true, message: `Opening ${input.file}.` };
                     }
@@ -3712,6 +3712,13 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     if (input.action === "focus" || input.action === "spatial.focus") {
                         if (!input.blockid || !stateRef.current.windows[input.blockid])
                             return { success: false, message: "OS window not found." };
+                        if (inKronOSV2) {
+                            if (penFullChat)
+                                return { success: false, message: "This widget is on Canvas. Return to Canvas to focus it." };
+                            setPenWidgetVisible(input.blockid, true);
+                            setPenActiveWidget(input.blockid);
+                            return { success: true, message: "Focused widget on the Pen canvas." };
+                        }
                         dispatch({ type: "os.view.set", view: "canvas" });
                         dispatch({
                             type: input.action === "spatial.focus" ? "spatial.focus" : "os.window.focus",
@@ -3868,6 +3875,11 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
             handleClose,
             leavePenWidget,
             penViewport,
+            penFullChat,
+            penChatDockActive,
+            penChatDockFocus,
+            allBlockIds,
+            chatDockTabs,
             pinResource,
             placeWindow,
             setPenWidgetVisible,
@@ -4203,7 +4215,6 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                     blocks={descriptors}
                     collapsedIds={blockIds.filter((id) => state.windows[id]?.collapsed)}
                     showCollapsedDock={state.view === "canvas" && (!desktopWidgetsEnabled || viewport.width <= 900)}
-                    sceneKind={state.scene.kind}
                     onWorkspace={(workspaceId) => {
                         if (stateRef.current.view !== "kronos-v2") void getApi().switchWorkspace(workspaceId);
                     }}
@@ -4218,10 +4229,7 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             setCanvasHint(error instanceof Error ? error.message : "Could not open the Workspace dashboard.");
                         });
                     }}
-                    onFreeform={() => dispatch({ type: "spatial.freeform" })}
-                    activeBlockId={activeBlockId}
                     osView={state.view}
-                    onSetOSView={setOSView}
                     onFocusApp={(blockId) => {
                         dispatch({ type: "os.view.set", view: "canvas" });
                         dispatch({ type: "spatial.focus", blockId });
@@ -4522,11 +4530,25 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             onWidgetInteract={kronosV2 ? interactWithPenWidget : undefined}
                             onCanvasInteraction={kronosV2 ? leavePenWidget : undefined}
                             onOverlay={kronosV2 ? setPenOverlayOpen : undefined}
+                            chatDockTabs={chatDockTabs}
+                            chatDockFocus={penChatDockFocus}
+                            onChatDockActive={setPenChatDockActive}
+                            onOpenActivityWidget={kronosV2 ? (id) => {
+                                if (!chatDockTabs.some((tab) => tab.id === id)) {
+                                    if (!descriptors.some((block) => block.blockId === id && block.resolved) ||
+                                        !getKronOSV2Widget(stateRef.current, id)) return false;
+                                    setPenWidgetVisible(id, true);
+                                }
+                                setPenChatDockFocus({ id });
+                                return true;
+                            } : undefined}
+                            onFullChat={kronosV2 ? setPenFullChat : undefined}
                             onPresentation={kronosV2 ? updatePenPresentation : undefined}
                             context={penContext}
                             onToolsSlot={kronosV2 ? setPenToolsSlot : undefined}
                             onSystemControlsSlot={setPenSystemControlsSlot}
                             onRenderControlsSlot={attachPenRenderControls}
+                            onIslandControlsSlot={kronosV2 ? setPenIslandControlsSlot : undefined}
                             onRenderLibrary={(library) => {
                                 if (library === "nodes" || library === "models") {
                                     setAndPersist(activateOSWorkflowCanvas);
@@ -4593,6 +4615,17 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                             </div>
                         </details>,
                         penToolsSlot
+                    )}
+                    {kronosV2 && penToolsSlot?.isConnected && createPortal(
+                        <>
+                            <IslandLauncher busy={launchingIsland} onOpen={openFloatingIsland} />
+                            <IslandModelTools model={islandModel} />
+                        </>,
+                        penToolsSlot
+                    )}
+                    {kronosV2 && penIslandControlsSlot?.isConnected && islandModel && createPortal(
+                        <IslandGameControls model={islandModel} />,
+                        penIslandControlsSlot
                     )}
                     {systemLayerEnabled && kronOSCanvasVisible && (
                         <>
@@ -4908,6 +4941,14 @@ function OSModeView({ tabId, tabData }: { tabId: string; tabData: Tab }) {
                                                 onDelete={deleteObject}
                                                 onTextChange={(id, text) => updateObject(id, { text })}
                                                 onOpenResource={openResource}
+                                                onCreateVariants={(source) => {
+                                                    void openRenderComparison(tabId, source.resource, source.render)
+                                                        .then((ref) => {
+                                                            const [, id] = WOS.splitORef(ref);
+                                                            if (stateRef.current.view === "kronos-v2") setPenActiveWidget(id);
+                                                        })
+                                                        .catch((failure) => setCanvasHint(String(failure)));
+                                                }}
                                                 onOpenCanvasEntry={openCanvasFolderEntry}
                                             />
                                         ))}

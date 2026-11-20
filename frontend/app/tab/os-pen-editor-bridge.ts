@@ -18,6 +18,7 @@ export const PenEditorMethods = [
     "set_context",
     "agent_reply",
     "show_chat",
+    "stage_image_review",
     "show_workspaces",
     "focus_canvas",
     "get_tools",
@@ -33,8 +34,11 @@ export const PenEditorMethods = [
 export type PenEditorMethod = (typeof PenEditorMethods)[number];
 type PenFrameMethod =
     | PenEditorMethod
+    | "stage_chat_selection"
     | "agent_workers"
+    | "show_full_chat"
     | "composer_voice_update"
+    | "composer_agent_timing"
     | "resume_hermes_chat"
     | "composer_completions"
     | "composer_sandbox_update"

@@ -6472,3 +6472,10 @@ body::before {
         transform: none;
     }
 }
+
+
+.agent-workspace-views {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    background: #09192f;
+}

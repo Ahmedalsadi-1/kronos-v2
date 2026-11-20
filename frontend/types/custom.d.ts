@@ -238,6 +238,10 @@ declare global {
         reducedMotion: boolean;
     };
 
+    type PenModelSelection = { provider?: string; model?: string; reasoning?: string };
+
+    type PenAgentToolUpdate = { id: string; name: string; done: boolean; input?: unknown; failed?: boolean; output?: string };
+
     type ElectronApi = {
         projectRoomCommand: (command: import("./project-room").ProjectRoomCommand) => Promise<import("./project-room").ProjectRoomState>; // project-room-command
         getDiagnosticReport: () => Promise<import("./diagnostics").DiagnosticReport>; // get-diagnostic-report
@@ -251,6 +255,9 @@ declare global {
         ) => Promise<{ botId: string; workspaceId: string; tabId: string; blockIds: string[] }>;
         openAgentWorkspace: () => Promise<{ origin: string; parentOrigin: string }>;
         openKronosSignIn: () => void;
+        getKronosAccountStatus: () => Promise<import("./kronos-account").AccountStatus>;
+        signOutKronosAccount: () => Promise<import("./kronos-account").AccountStatus>;
+        onKronosAccountChanged: (callback: () => void) => () => void;
         onOSOverviewGesture: (callback: (direction: "up" | "down") => void) => () => void; // os-overview-gesture
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -316,9 +323,20 @@ declare global {
         onProductivityState: (callback: (state: import("./productivity").ProductivityState) => void) => () => void; // productivity-state
         desktopGrab: (operationId: string) => Promise<import("./desktop-grab").DesktopGrabResult>;
         cancelDesktopGrab: (operationId: string) => Promise<void>;
+        browserSessions: (
+            command: import("./browser-sessions").BrowserSessionsCommand
+        ) => Promise<import("./browser-sessions").BrowserSessionInfo[]>; // browser-sessions
         browserAccount: (
             input: import("./browser-account").BrowserAccountCommand
         ) => Promise<import("./browser-account").BrowserAccountState>;
+        browserMigration: (
+            command: import("./browser-migration").BrowserMigrationCommand
+        ) => Promise<import("./browser-migration").BrowserMigrationResult>;
+        importBrowserExtension: (guestId: number) => Promise<string | null>;
+        browserSearchSuggestions: (query: string) => Promise<string[]>;
+        browserSiteSettings: (
+            input: import("./browser-site-settings").BrowserSiteSettingsCommand
+        ) => Promise<import("./browser-site-settings").BrowserSiteSettings>;
         browserNavigationHistory: (
             guestId: number,
             snapshot?: import("./browser-navigation").BrowserNavigationSnapshot
@@ -521,6 +539,7 @@ declare global {
             desktopId: string,
             expectedGeneration: number
         ) => Promise<ComputerTargetsResult<LinuxDesktop>>;
+        resolveIPhonePreviewTarget: () => Promise<ComputerTargetsResult<ComputerTarget>>;
         listComputerTargets: () => Promise<ComputerTargetsResult<ComputerTarget[]>>;
         startComputerTargetSession: (
             targetId: string,
@@ -718,6 +737,10 @@ declare global {
             file: string
         ) => Promise<{ segments: { start: number; end: number; text: string }[]; language?: string }>;
         audioStart: () => Promise<boolean>;
+        runPenAgent: (id: string, mode: "voice" | "pi" | "opencode" | "codex", messages: { role: "user" | "assistant"; content: string }[], selection?: PenModelSelection) => Promise<"done" | "hermes">;
+        cancelPenAgent: (id: string) => void;
+        onPenAgentDelta: (callback: (id: string, delta: string | PenAgentToolUpdate) => void) => () => void;
+        audioPenTinyVoca: (text: string) => Promise<ArrayBuffer>;
         audioShutdown: () => void;
         audioStartListening: () => void;
         audioStopListening: () => void;

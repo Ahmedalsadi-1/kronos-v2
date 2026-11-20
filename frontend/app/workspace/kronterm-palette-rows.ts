@@ -6,7 +6,6 @@
 // never sees them.
 
 import { createBlock, getApi } from "@/app/store/global";
-import { publishWorkspacePresentation } from "@/app/tab/workspace-presentation";
 import { registry } from "@hermes/contrib/registry";
 import { isKronTermWidgetHost } from "@hermes/lib/kronterm-host";
 
@@ -39,22 +38,6 @@ function registerKronTermPaletteRows(): void {
             },
         },
     ]);
-    registry.registerMany(
-        (["tabs", "widgets", "os"] as const).map((presentation) => ({
-            id: `kronterm.presentation.${presentation}`,
-            area: "palette" as const,
-            data: {
-                id: `kronterm.presentation.${presentation}`,
-                label:
-                    presentation === "os"
-                        ? "Open OS Mode"
-                        : `Switch to ${presentation[0].toUpperCase()}${presentation.slice(1)} Mode`,
-                detail: () => "Switch the workspace presentation",
-                keywords: ["presentation", "layout", "mode", "switch", presentation],
-                run: () => publishWorkspacePresentation(presentation),
-            },
-        }))
-    );
 }
 
 export { registerKronTermPaletteRows };

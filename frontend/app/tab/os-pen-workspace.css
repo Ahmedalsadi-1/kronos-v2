@@ -156,6 +156,20 @@
     pointer-events: none;
 }
 
+.os-mode-root.view-kronos-v2 .os-window[data-view="floating-island"].kt-system-material {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    min-width: 0;
+    min-height: 0;
+}
+
+.view-kronos-v2 .os-window[data-view="floating-island"] :is(.os-window-content, .os-window-surface) {
+    background: transparent !important;
+    border-radius: 0;
+}
+
 .view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-focused] .os-window-focus-exit {
     inset: auto 4px 4px auto;
     display: grid;
@@ -178,4 +192,11 @@
 
 .view-kronos-v2 .os-kronos-live-plane[data-kronos-v2-presenting] .os-browser-navigation {
     pointer-events: auto;
+}
+
+/* Reserve the enlarged address field height so the live page cannot cover the toolbar. */
+.view-kronos-v2 .os-browser-navigation .os-contextual-toolbar [data-browser-companion] .webview-navigation {
+    height: 70px;
+    min-height: 70px;
+    padding-block: 8px;
 }

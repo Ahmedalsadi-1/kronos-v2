@@ -207,10 +207,10 @@ export class ComputersController {
         }
     }
 
-    private async readFrame(session: ComputerTargetSession, generation: number) {
+    private async readFrame(session: ComputerTargetSession, generation: number, failures = 0) {
         if (this.disposed || generation != this.streamGeneration) return;
         if (typeof document != "undefined" && document.hidden) {
-            this.frameTimer = setTimeout(() => void this.readFrame(session, generation), 1000);
+            this.frameTimer = setTimeout(() => void this.readFrame(session, generation, failures), 1000);
             return;
         }
         try {
@@ -232,6 +232,10 @@ export class ComputersController {
             this.frameTimer = setTimeout(() => void this.readFrame(session, generation), 100);
         } catch (error) {
             if (generation != this.streamGeneration) return;
+            if (session.targetId.startsWith("android-") && failures < 3) {
+                this.frameTimer = setTimeout(() => void this.readFrame(session, generation, failures + 1), 250);
+                return;
+            }
             this.disconnect();
             this.update({ error: error instanceof Error ? error.message : "Device disconnected." });
         }

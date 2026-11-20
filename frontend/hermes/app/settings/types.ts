@@ -5,6 +5,11 @@ import type { IconComponent } from "@hermes/lib/icons";
 import type { EnvVarInfo } from "@hermes/types/hermes";
 
 export type SettingsView =
+    | "kronrender"
+    | "kronflow"
+    | "integrations"
+    | "quick-entry"
+    | "companion"
     | "about"
     | "billing"
     | "connections"
@@ -15,6 +20,7 @@ export type SettingsView =
     | "keys"
     | "notifications"
     | "plugins"
+    | "skills"
     | "providers"
     | "sessions"
     | `kronterm:${string}`

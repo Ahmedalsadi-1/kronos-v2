@@ -31,7 +31,9 @@ const ViewIconMap: Record<string, string> = {
     blenderproject: "cube",
     medialibrary: "folder-open",
     imagestudio: "image",
+    rendercomparison: "images",
     gamestudio: "gamepad",
+    "floating-island": "gamepad",
     personal: "list-check",
     help: "circle-question",
     hermes: "robot",
@@ -75,7 +77,9 @@ export function blockViewToName(view: string): string {
     if (view == "blenderproject") return "Blender Project";
     if (view == "medialibrary") return "Files";
     if (view == "imagestudio") return "Image Studio";
+    if (view == "rendercomparison") return "KronRender Variants";
     if (view == "gamestudio") return "Game Studio";
+    if (view == "floating-island") return "Floating Island";
     if (view == "personal") return "Tasks & Focus";
     if (view == "term") {
         return "Terminal";

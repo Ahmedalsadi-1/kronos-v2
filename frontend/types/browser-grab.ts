@@ -70,6 +70,7 @@ export type BrowserGrabTarget = {
     htmlSnippet: string;
     attributes: Record<string, string>;
     accessibility: BrowserGrabAccessibility;
+    annotationPoint?: { x: number; y: number };
     rectViewport: BrowserGrabRect;
     rectPage: BrowserGrabRect;
     computedStyles: BrowserGrabComputedStyles;

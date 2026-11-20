@@ -5,11 +5,10 @@ const WorkspacePresentationValues = ["widgets", "tabs", "canvas", "os", "web"] a
 
 type WorkspacePresentation = (typeof WorkspacePresentationValues)[number];
 
-const WorkspacePresentations = ["widgets", "tabs", "os"] as const;
-type ActiveWorkspacePresentation = (typeof WorkspacePresentations)[number];
+const WorkspacePresentations: readonly WorkspacePresentation[] = ["os"];
+type ActiveWorkspacePresentation = "os";
 
 const LayoutModeStorageKey = "kronterm:layoutmode";
-const WebReturnPresentationStorageKey = "kronterm:web-return-layout";
 const LayoutModeChangedEvent = "kronterm:layoutmode-changed";
 
 function isWorkspacePresentation(value: unknown): value is WorkspacePresentation {
@@ -17,95 +16,30 @@ function isWorkspacePresentation(value: unknown): value is WorkspacePresentation
 }
 
 function normalizeWorkspacePresentation(value: unknown): ActiveWorkspacePresentation | undefined {
-    if (value === "canvas") return "os";
-    if (value === "web" || value === "browsermode") return "tabs";
-    return WorkspacePresentations.find((presentation) => presentation === value);
+    return isWorkspacePresentation(value) || value === "browsermode" ? "os" : undefined;
 }
 
-function readWorkspacePresentation(value: WorkspacePresentation = "os"): ActiveWorkspacePresentation {
-    const fallback = normalizeWorkspacePresentation(value) ?? "os";
-    if (typeof window === "undefined") {
-        return fallback;
-    }
-    const live = normalizeWorkspacePresentation((window as any).__krontermLayoutMode);
-    if (live) {
-        return live;
-    }
-    try {
-        return normalizeWorkspacePresentation(window.localStorage.getItem(LayoutModeStorageKey)) ?? fallback;
-    } catch {
-        return fallback;
-    }
+function readWorkspacePresentation(_previous?: WorkspacePresentation): WorkspacePresentation {
+    return "os";
 }
 
-function readWebReturnPresentation(): Exclude<WorkspacePresentation, "web"> {
-    try {
-        const stored = normalizeWorkspacePresentation(window.localStorage.getItem(WebReturnPresentationStorageKey));
-        if (stored) return stored;
-    } catch {
-        // Keep the in-memory selection when storage is unavailable.
-    }
+function readWebReturnPresentation(): ActiveWorkspacePresentation {
     return "os";
 }
 
 function publishWorkspacePresentation(value: unknown): ActiveWorkspacePresentation {
-    const presentation = normalizeWorkspacePresentation(value);
-    if (!presentation) {
+    if (!normalizeWorkspacePresentation(value)) {
         throw new Error(`Unsupported workspace presentation: ${String(value)}`);
     }
-    if (typeof window === "undefined") {
-        return presentation;
-    }
-    const previous = readWorkspacePresentation();
-    (window as any).__krontermLayoutMode = presentation;
-    try {
-        window.localStorage.setItem(LayoutModeStorageKey, presentation);
-    } catch {
-        // The live in-memory value remains authoritative when storage is unavailable.
-    }
-    if (previous !== presentation) {
-        window.dispatchEvent(new CustomEvent(LayoutModeChangedEvent, { detail: { mode: presentation } }));
-    }
-    return presentation;
+    return "os";
 }
 
-function subscribeWorkspacePresentation(callback: () => void): () => void {
-    if (typeof window === "undefined") {
-        return () => {};
-    }
-    const handleChanged = (event: Event) => {
-        const value = (event as CustomEvent<{ mode?: unknown }>).detail?.mode;
-        const presentation = normalizeWorkspacePresentation(value);
-        if (presentation) {
-            (window as any).__krontermLayoutMode = presentation;
-        }
-        callback();
-    };
-    const handleStorage = (event: StorageEvent) => {
-        if (event.key !== LayoutModeStorageKey) {
-            return;
-        }
-        const presentation = normalizeWorkspacePresentation(event.newValue);
-        if (presentation) {
-            (window as any).__krontermLayoutMode = presentation;
-        }
-        callback();
-    };
-    window.addEventListener(LayoutModeChangedEvent, handleChanged);
-    window.addEventListener("storage", handleStorage);
-    return () => {
-        window.removeEventListener(LayoutModeChangedEvent, handleChanged);
-        window.removeEventListener("storage", handleStorage);
-    };
+function subscribeWorkspacePresentation(_callback: () => void): () => void {
+    return () => {};
 }
 
-function getAdjacentWorkspacePresentation(current: WorkspacePresentation, direction: -1 | 1): WorkspacePresentation {
-    const currentIndex = WorkspacePresentations.indexOf(normalizeWorkspacePresentation(current));
-    if (currentIndex === -1) {
-        return direction === 1 ? "widgets" : "os";
-    }
-    const nextIndex = (currentIndex + direction + WorkspacePresentations.length) % WorkspacePresentations.length;
-    return WorkspacePresentations[nextIndex];
+function getAdjacentWorkspacePresentation(_current: WorkspacePresentation, _direction: -1 | 1): WorkspacePresentation {
+    return "os";
 }
 
 export {

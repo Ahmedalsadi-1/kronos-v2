@@ -62,6 +62,11 @@ const config = {
     ],
     extraResources: [
         {
+            from: "assets/onboarding",
+            to: "onboarding",
+            filter: ["aside-demo/index.html", "aside-demo/states/**/*", "aside-screens/*.png"],
+        },
+        {
             from: "dist/bin",
             to: "app.asar.unpacked/dist/bin",
             filter: ["wavesrv.${arch}*", "wsh*"],
@@ -205,7 +210,20 @@ const config = {
             NSAppleEventsUsageDescription: "A CLI application running in KronOS wants to use AppleScript.",
         },
     },
+    dmg: {
+        title: "Install ${productName}",
+        icon: path.join(__dirname, "build/kronos.icns"),
+        background: path.join(__dirname, "build/dmg/background.png"),
+        window: { width: 400, height: 490 },
+        iconSize: 96,
+        iconTextSize: 13,
+        contents: [
+            { x: 200, y: 134, type: "file" },
+            { x: 200, y: 347, type: "link", path: "/Applications" },
+        ],
+    },
     linux: {
+        icon: path.join(__dirname, "build/icons"),
         artifactName: "${name}-${platform}-${arch}-${version}.${ext}",
         category: "TerminalEmulator",
         executableName: pkg.name,
@@ -226,6 +244,7 @@ const config = {
         afterInstall: "build/deb-postinstall.tpl",
     },
     win: {
+        icon: path.join(__dirname, "build/icon.ico"),
         target: ["nsis", "msi", "zip"],
         signtoolOptions: windowsShouldSign && {
             signingHashAlgorithms: ["sha256"],
@@ -263,6 +282,10 @@ const config = {
             win32: "kronos_agent_harness.dll",
         }[context.electronPlatformName];
         const requiredResources = [
+            "onboarding/aside-demo/index.html",
+            "onboarding/aside-demo/states/kronos-logo.svg",
+            "onboarding/aside-demo/states/kronos-gmail-preview.svg",
+            "onboarding/aside-screens/splash.png",
             "mcp-kron-term/dist/native-proxy.js",
             "mcp-kron-term/dist/native-bridge.js",
             "hermes-plugins/kronterm-tools/plugin.yaml",

@@ -65,6 +65,7 @@ export function installSubagentSurfaceSource(capture: (activity: LiveAgentSurfac
             if (!ready) return;
             const snapshot: SubagentSurfaceSnapshot = {
                 imageUrl,
+                blockId: latest?.blockid,
                 title: latest?.appname ?? latest?.surface,
                 detail: latest?.detail,
                 filepath: latest?.filepath,
@@ -87,6 +88,7 @@ export function installSubagentSurfaceSource(capture: (activity: LiveAgentSurfac
         const canCapture = () =>
             !disposed &&
             target.live !== false &&
+            target.capture !== false &&
             !swarmFinished &&
             !document.hidden &&
             !!(latest?.blockid || /^(vm|device):/.test(latest?.surfaceid ?? ""));
@@ -128,6 +130,7 @@ export function installSubagentSurfaceSource(capture: (activity: LiveAgentSurfac
             }
         };
         const accept = (activity: LiveAgentSurfaceActivity) => {
+            if (target.since != null && activity.timestamp < target.since) return;
             const event = activity;
             if (target.swarm) {
                 if (swarmFinished || !matchesWorker(activity)) return;

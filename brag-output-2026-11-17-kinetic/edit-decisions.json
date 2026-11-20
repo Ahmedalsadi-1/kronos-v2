@@ -1,0 +1,134 @@
+[
+  {
+    "clip": "tabs",
+    "source": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-real-demos/sources/demo-1.mov",
+    "segments": [
+      {
+        "in": 3,
+        "out": 9,
+        "speed": 1,
+        "duration": 6.0
+      },
+      {
+        "in": 9,
+        "out": 12,
+        "speed": 1.5,
+        "duration": 2.0
+      },
+      {
+        "in": 12,
+        "out": 18,
+        "speed": 3,
+        "duration": 2.0
+      },
+      {
+        "in": 18,
+        "out": 20.8,
+        "speed": 1.4,
+        "duration": 2
+      }
+    ]
+  },
+  {
+    "clip": "vm",
+    "source": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-real-demos/sources/demo-5.mov",
+    "segments": [
+      {
+        "in": 0,
+        "out": 8,
+        "speed": 4,
+        "duration": 2.0
+      },
+      {
+        "in": 8,
+        "out": 11,
+        "speed": 1,
+        "duration": 3.0
+      },
+      {
+        "in": 11,
+        "out": 14,
+        "speed": 3,
+        "duration": 1.0
+      },
+      {
+        "in": 14,
+        "out": 24,
+        "speed": 5,
+        "duration": 2.0
+      },
+      {
+        "in": 24,
+        "out": 28,
+        "speed": 2,
+        "duration": 2.0
+      }
+    ]
+  },
+  {
+    "clip": "canvas",
+    "source": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-real-demos/sources/demo-2.mov",
+    "segments": [
+      {
+        "in": 0,
+        "out": 4,
+        "speed": 1,
+        "duration": 4.0
+      },
+      {
+        "in": 4,
+        "out": 10,
+        "speed": 3,
+        "duration": 2.0
+      }
+    ]
+  },
+  {
+    "clip": "browser",
+    "source": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-real-demos/sources/demo-3.mov",
+    "segments": [
+      {
+        "in": 10,
+        "out": 24,
+        "speed": 4,
+        "duration": 3.5
+      }
+    ]
+  },
+  {
+    "clip": "annotate",
+    "source": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-real-demos/sources/demo-4.mov",
+    "segments": [
+      {
+        "in": 2,
+        "out": 5,
+        "speed": 1.5,
+        "duration": 2.0
+      },
+      {
+        "in": 5,
+        "out": 9,
+        "speed": 4,
+        "duration": 1.0
+      }
+    ]
+  },
+  {
+    "clip": "design",
+    "source": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-real-demos/sources/demo-6.mov",
+    "segments": [
+      {
+        "in": 0,
+        "out": 3,
+        "speed": 1.5,
+        "duration": 2.0
+      },
+      {
+        "in": 3,
+        "out": 8.8,
+        "speed": 2.9,
+        "duration": 2.0000000000000004
+      }
+    ]
+  }
+]

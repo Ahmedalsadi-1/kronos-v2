@@ -1,0 +1,46 @@
+@import "../hermes/styles.css";
+:root {
+    --dt-background: #181818;
+    --dt-foreground: #e9e9e9;
+    --dt-muted-foreground: #999;
+    --dt-border: #303030;
+    --dt-input: #252525;
+    --dt-ring: #999;
+    --dt-primary: #ddd;
+    --dt-primary-foreground: #181818;
+    --dt-destructive: #ed8a8a;
+    --dt-font-sans: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    --ui-sidebar-surface-background: #141414;
+    --ui-text-tertiary: #999;
+    --conversation-text-font-size: 13px;
+    --conversation-caption-font-size: 12px;
+    --conversation-caption-line-height: 1.6;
+    --dt-secondary: #292929;
+    --dt-secondary-foreground: #ddd;
+    --radius-scalar: 1;
+}
+body {
+    margin: 0;
+    background: #0e0e0e;
+    color: var(--dt-foreground);
+    font-family: var(--dt-font-sans);
+}
+.preview-shell {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    height: calc(100dvh - 64px);
+    max-width: 1100px;
+    margin: 32px auto;
+    border: 1px solid var(--dt-border);
+    background: var(--dt-background);
+}
+@media (max-width: 760px) {
+    .preview-shell {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100dvh;
+        margin: 0;
+        border: 0;
+    }
+}
+@source "../hermes";

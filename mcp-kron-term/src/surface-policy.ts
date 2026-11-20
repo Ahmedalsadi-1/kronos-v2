@@ -3,9 +3,11 @@ import type { SurfaceCapability } from "./wsh-bridge.js";
 export function isToolAllowedBySurfaceCapability(name: string, capability?: SurfaceCapability): boolean {
     if (name.startsWith("swarm_")) return !capability?.delegationScope && capability?.hostMode !== "web-fullscreen";
     if (name.startsWith("comfyui_"))
-        return capability?.hostMode !== "web-fullscreen" &&
+        return (
+            capability?.hostMode !== "web-fullscreen" &&
             (!capability?.delegationScope || capability.delegationScope === "inherit") &&
-            (!capability?.sandboxComputerId || capability.sandboxComputerMode === "hybrid");
+            (!capability?.sandboxComputerId || capability.sandboxComputerMode === "hybrid")
+        );
     if (capability?.delegationScope === "sandbox")
         return (
             name.startsWith("sandbox_vm_") ||
@@ -47,6 +49,7 @@ export function isToolAllowedBySurfaceCapability(name: string, capability?: Surf
                 "canvas_",
                 "lsp_",
                 "n8n_",
+                "device_",
             ].some((prefix) => name.startsWith(prefix))
         );
     }

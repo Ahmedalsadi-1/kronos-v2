@@ -1,0 +1,1 @@
+A page, a frame, and the canvas around it. A design study in KronOS.

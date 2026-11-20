@@ -25,7 +25,7 @@ interface QuickEntryBridgeParams {
     startFreshSessionDraft: () => void;
     submitText: (
         text: string,
-        options?: { attachments: ComposerAttachment[]; displayText?: string }
+        options?: { attachments: ComposerAttachment[]; displayText?: string; sessionId?: string; storedSessionId?: string }
     ) => Promise<unknown> | unknown;
 }
 
@@ -74,7 +74,7 @@ export function useQuickEntryBridge({ startFreshSessionDraft, submitText, cancel
     useEffect(() => {
         if (!isKronTermWidgetHost()) return;
         return registerCanvasChatSubmit(
-            async (text, displayText) => submitTextRef.current(text, { attachments: [], displayText }),
+            async (text, displayText, attachments = [], sessionId, storedSessionId) => submitTextRef.current(text, { attachments, displayText, sessionId, storedSessionId }),
             async () => cancelRef.current?.()
         );
     }, []);

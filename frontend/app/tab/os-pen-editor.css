@@ -39,7 +39,8 @@
     font-size: 13px;
     color: var(--kt-label-secondary, #aaa);
 }
-.os-pen-editor button {
+.os-pen-editor-alert button,
+.os-pen-editor-startup button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -50,7 +51,8 @@
     background: var(--accent-color, #7161dd);
     color: white;
 }
-.os-pen-editor button:focus-visible {
+.os-pen-editor-alert button:focus-visible,
+.os-pen-editor-startup button:focus-visible {
     outline: 2px solid var(--accent-color, #8875ff);
     outline-offset: 2px;
 }
@@ -96,13 +98,8 @@
     box-shadow: 0 12px 40px #0006;
 }
 
-.pen-hermes-dialog.subagent-theater {
-    width: min(960px, calc(100vw - 32px));
-    height: min(680px, calc(100dvh - 64px));
-}
-
 .pen-hermes-dialog .subagent-theater-header {
-    min-height: 48px;
+    min-height: 40px;
     padding: 0 12px;
     border-bottom: 1px solid var(--kt-stroke, #3b3b3f);
     background: transparent;
@@ -113,7 +110,7 @@
 }
 
 .pen-hermes-dialog .subagent-theater-feed {
-    background: transparent;
+    background: var(--kt-content, #252527);
 }
 
 .pen-hermes-dialog .subagent-theater-surface {

@@ -81,6 +81,7 @@ export type OSCanvasObject = SpatialRect & {
     appId?: string;
     agentSessionId?: string;
     artifactId?: string;
+    render?: import("@/types/comfyui").ComfyRenderRef;
 };
 
 export type OSModeState = {
@@ -295,6 +296,7 @@ function normalizeSeedObjects(objects: any[] | undefined): OSCanvasObject[] {
             appId: object.appId,
             agentSessionId: object.agentSessionId,
             artifactId: object.artifactId,
+            render: object.render,
         }));
 }
 
@@ -342,12 +344,7 @@ export function migrateOSModeState(stored: Partial<OSModeState> | undefined): Pa
         ),
         objects: stored.objects == null ? undefined : normalizeSeedObjects(stored.objects),
         scene: stored.scene ?? { kind: "freeform" },
-        view:
-            stored.view === "file" || (stored as { widgetPresentation?: string }).widgetPresentation === "file"
-                ? "file"
-                : (stored.view === "design" || stored.view === "kronos-v2")
-                  ? stored.view
-                  : "canvas",
+        view: "kronos-v2",
     };
 }
 
@@ -432,12 +429,7 @@ export function makeInitialOSModeState(
             desktopLayout: stored?.desktopLayout ?? "focused",
             previousScene: stored?.previousScene,
             selectedEntityId: stored?.selectedEntityId,
-            view:
-                stored?.view === "file" || (stored as { widgetPresentation?: string })?.widgetPresentation === "file"
-                    ? "file"
-                    : (stored?.view === "design" || stored?.view === "kronos-v2")
-                      ? stored.view
-                      : "canvas",
+            view: "kronos-v2",
         },
         blockIds
     );
@@ -788,11 +780,6 @@ export function reduceOSModeState(state: OSModeState, action: OSSpatialAction): 
                 },
             },
         };
-    }
-    if (action.type === "os.view.set" || action.type === "spatial.setWidgetPresentation") {
-        const view = action.type === "os.view.set" ? action.view : action.presentation;
-        if (state.view === view) return state;
-        return { ...state, view };
     }
     return state;
 }

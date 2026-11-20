@@ -43,6 +43,7 @@ export function BrowserNavigationRow({
     reloadIcon = "rotate-right",
     reloadLabel = "Reload",
     beforeAddress,
+    groupHistory,
     children,
 }: {
     addressSlot: React.ReactNode;
@@ -50,11 +51,11 @@ export function BrowserNavigationRow({
     reloadIcon?: string;
     reloadLabel?: string;
     beforeAddress?: React.ReactNode;
+    groupHistory?: boolean;
     children?: React.ReactNode;
 }) {
-    return (
-        <div className="webview-navigation" role="toolbar" aria-label="Browser navigation">
-            {controls?.loading ? <div className="webview-loading-bar" aria-hidden="true" /> : null}
+    const history = (
+        <>
             {controls?.goBack ? (
                 <BrowserNavButton
                     ariaLabel="Back"
@@ -81,7 +82,17 @@ export function BrowserNavigationRow({
                     title={reloadLabel}
                 />
             ) : null}
-            {beforeAddress}
+        </>
+    );
+    return (
+        <div className="webview-navigation" role="toolbar" aria-label="Browser navigation">
+            {controls?.loading ? <div className="webview-loading-bar" aria-hidden="true" /> : null}
+            {groupHistory ? (
+                <div className="webview-navigation-left">
+                    <div className="webview-history-controls">{history}</div>
+                    {beforeAddress}
+                </div>
+            ) : <>{history}{beforeAddress}</>}
             <div
                 className="webview-omnibox"
                 onClick={(event) => {
@@ -92,18 +103,27 @@ export function BrowserNavigationRow({
             >
                 {addressSlot}
             </div>
-            {children}
+            {groupHistory ? <div className="webview-navigation-right">{children}</div> : children}
         </div>
     );
 }
 
 export const BrowserNavigationControlRow = BrowserNavigationRow;
 
-export function BrowserChromeToolbar({ children, preview }: { children: React.ReactNode; preview?: boolean }) {
+export function BrowserChromeToolbar({
+    children,
+    preview,
+    companion,
+}: {
+    children: React.ReactNode;
+    preview?: boolean;
+    companion?: boolean;
+}) {
     return (
         <div
             className="webview-browser-chrome"
             data-browser-preview={preview || undefined}
+            data-browser-companion={companion || undefined}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onPointerDown={(event) => event.stopPropagation()}
         >

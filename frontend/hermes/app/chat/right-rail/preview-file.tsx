@@ -38,6 +38,8 @@ import { setPreviewDirty } from '@hermes/store/preview-edit'
 import { $connection, $currentCwd } from '@hermes/store/session'
 import { notifyWorkspaceChanged } from '@hermes/store/workspace-events'
 
+import { savePreviewDraft } from './preview-save'
+
 const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
 const SOURCE_CHUNK_LINES = 200
@@ -882,30 +884,23 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
     setSaveError(null)
 
     try {
-      // Stale-on-disk guard: re-read what's on disk now and compare to the
-      // snapshot the user started from. If something changed underneath (an
-      // agent edit, an external save), don't clobber it silently — surface the
-      // choice. `force` is the user picking "overwrite" from that banner.
-      if (!force) {
-        try {
-          const current = await readTextPreview(filePath)
-
-          if (!current.binary && (current.text ?? '') !== baselineRef.current) {
-            setConflict(true)
-            setSaving(false)
-
-            return
-          }
-        } catch {
-          // Couldn't re-read for the check — fall through and attempt the write.
-        }
+      const draft = draftRef.current
+      const result = await savePreviewDraft({
+        baseline: baselineRef.current,
+        draft,
+        force,
+        read: () => readTextPreview(filePath),
+        write: content => writeDesktopFileText(filePath, content)
+      })
+      if (result === 'conflict') {
+        setConflict(true)
+        return
       }
-
-      await writeDesktopFileText(filePath, draftRef.current)
-      baselineRef.current = draftRef.current
-      setDirty(false)
+      baselineRef.current = draft
+      const hasNewEdits = draftRef.current !== draft
+      setDirty(hasNewEdits)
       setConflict(false)
-      setEditing(false)
+      if (!hasNewEdits) setEditing(false)
       notifyWorkspaceChanged()
       setSelfReload(n => n + 1)
     } catch (error) {

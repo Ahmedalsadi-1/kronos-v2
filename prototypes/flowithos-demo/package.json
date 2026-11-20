@@ -1,0 +1,22 @@
+{
+    "name": "flowithos-local-demo",
+    "private": true,
+    "version": "1.0.0",
+    "main": "main.cjs",
+    "scripts": {
+        "start": "vite build && electron .",
+        "build": "vite build"
+    },
+    "dependencies": {
+        "cheerio": "1.0.0-rc.12",
+        "lucide-react": "1.31.0",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "yaml": "2.9.0",
+        "ipaddr.js": "1.9.1"
+    },
+    "devDependencies": {
+        "electron": "41.10.5",
+        "vite": "6.4.3"
+    }
+}

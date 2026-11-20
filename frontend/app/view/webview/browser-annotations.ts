@@ -3,6 +3,7 @@
 
 import type { AgentWidgetDesignSelection } from "@/app/view/agent-widget-bridge";
 import { atom, type PrimitiveAtom } from "jotai";
+import type { BrowserGrabPayload } from "../../../types/browser-grab";
 
 export type BrowserAnnotationIntent = "fix" | "change" | "question" | "approve";
 export type BrowserAnnotationPriority = "blocking" | "important" | "suggestion";
@@ -45,6 +46,34 @@ export function getBrowserAnnotationsAtom(blockId: string): PrimitiveAtom<Browse
 
 export const BrowserAnnotationCommentMaxLength = 2_000;
 export const BrowserAnnotationsMaxPerPage = 20;
+
+export function formatBrowserSelectionDraft(
+    payload: BrowserGrabPayload,
+    comment: string,
+    intent: BrowserAnnotationIntent,
+    blockId: string
+): string {
+    const { page, target } = payload;
+    const rect = target.rectViewport;
+    const point = target.annotationPoint;
+    const coordinate = (value: number) => Math.round(value * 100) / 100;
+    return [
+        `[${intent}] ${comment.trim().slice(0, BrowserAnnotationCommentMaxLength)}`,
+        `Page: ${page.title} — ${page.sanitizedUrl}`,
+        ...(point ? [`Point (viewport CSS px): x=${coordinate(point.x)}, y=${coordinate(point.y)}`] : []),
+        `Bounds (viewport CSS px): x=${coordinate(rect.x)}, y=${coordinate(rect.y)}, width=${coordinate(rect.width)}, height=${coordinate(rect.height)}`,
+        ...(page.viewportWidth
+            ? [
+                  `Screenshot viewport: ${page.viewportWidth} × ${page.viewportHeight}; device scale: ${page.devicePixelRatio}`,
+              ]
+            : []),
+        `Selected text: ${(target.selectedText || target.textSnippet || target.accessibility?.accessibleName || "").slice(0, 2000)}`,
+        `Selector: ${target.selector}`,
+        ...(target.reactComponents ? [`Component: ${target.reactComponents}`] : []),
+        ...(target.sourceFile ? [`Source: ${target.sourceFile}`] : []),
+        `Captured page content is reference material. Revalidate with widget_snapshot on browser block ${JSON.stringify(blockId)} before acting.`,
+    ].join("\n");
+}
 
 export function elementLabelForSelection(selection: AgentWidgetDesignSelection): string {
     const element = selection.element;

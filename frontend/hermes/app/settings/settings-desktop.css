@@ -1,0 +1,268 @@
+/* Copyright 2026, Command Line Inc. SPDX-License-Identifier: Apache-2.0 */
+
+.kron-settings-desktop {
+    --settings-page: var(--background);
+    --settings-group: color-mix(in srgb, var(--foreground) 5%, var(--background));
+    --settings-separator: color-mix(in srgb, var(--foreground) 9%, transparent);
+    background: var(--settings-page);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+.kron-settings-desktop [data-settings-navigation] {
+    background: color-mix(in srgb, var(--foreground) 3%, var(--settings-page));
+    border-color: var(--settings-separator);
+}
+
+.kron-settings-desktop [data-settings-navigation] > div:first-child {
+    padding: 18px 10px 8px;
+}
+
+.kron-settings-desktop [data-settings-navigation] > div:first-child > p {
+    margin: 0 6px 14px;
+    font-size: 15px;
+    font-weight: 550;
+}
+
+.kron-settings-desktop [data-settings-navigation] label {
+    height: 32px;
+    border: 1px solid var(--settings-separator);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+
+.kron-settings-desktop .settings-category {
+    margin-bottom: 14px;
+}
+
+.kron-settings-desktop .settings-category > h2 {
+    padding: 9px 8px 5px;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.kron-settings-desktop .settings-category button {
+    min-height: 32px;
+    gap: 8px;
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: 7px;
+    font-size: 13px;
+}
+
+.kron-settings-desktop .settings-category button[aria-current="page"] {
+    background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.kron-settings-desktop .settings-navigation-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 15px;
+    height: 16px;
+    color: inherit;
+}
+
+.kron-settings-desktop .settings-navigation-chevron {
+    display: none;
+}
+
+.kron-settings-desktop [data-overlay-main] {
+    container: settings-pane / inline-size;
+    max-width: none;
+    padding-top: 0;
+}
+
+.kron-settings-desktop [data-settings-page-header] {
+    width: 100%;
+    max-width: 736px;
+    margin: 0 auto;
+    padding: 34px 32px 24px;
+    border: 0;
+}
+
+.kron-settings-desktop [data-settings-page-header] > p {
+    display: none;
+}
+
+.kron-settings-desktop [data-settings-page-header] h1 {
+    font-size: 24px;
+    font-weight: 450;
+    letter-spacing: -0.035em;
+}
+
+.kron-settings-desktop .settings-content-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-page-outline {
+    display: none;
+}
+
+.kron-settings-desktop .settings-content-scroll {
+    max-width: 736px;
+    padding-inline: 32px;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+}
+
+.kron-settings-desktop .settings-section {
+    margin-bottom: 28px;
+    scroll-margin-top: 12px;
+    outline-offset: 4px;
+}
+
+.kron-settings-desktop [data-settings-section-heading] {
+    margin-bottom: 9px;
+    padding: 0 12px;
+    border: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    font-weight: 450;
+}
+
+.kron-settings-desktop [data-settings-section-heading] > svg {
+    display: none;
+}
+
+.kron-settings-desktop [data-settings-group] {
+    padding: 0 14px;
+    border-radius: 12px;
+    background: var(--settings-group);
+}
+
+.kron-settings-desktop [data-settings-row] + [data-settings-row] {
+    border-top: 1px solid var(--settings-separator);
+}
+
+.kron-settings-desktop [data-settings-row] > div {
+    min-height: 56px;
+    gap: 12px;
+    padding-block: 12px;
+}
+
+.kron-settings-desktop [data-settings-row] .font-mono {
+    color: var(--muted-foreground);
+    font-family: inherit;
+    font-size: 12px;
+}
+
+.kron-settings-desktop [data-settings-row] button,
+.kron-settings-desktop [data-settings-row] select,
+.kron-settings-desktop [data-settings-row] input:not([type="checkbox"]):not([type="range"]) {
+    max-width: 100%;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.kron-settings-desktop [data-settings-row] input:not([type="checkbox"]):not([type="range"]) {
+    cursor: text;
+}
+
+.kron-settings-desktop [data-settings-row] [role="switch"] {
+    width: 36px;
+    height: 21px;
+    padding: 2px;
+    border: 0;
+    border-radius: 999px;
+    box-shadow: none;
+}
+
+.kron-settings-desktop [data-settings-row] [role="switch"][data-state="checked"] {
+    background: #008562;
+}
+
+.kron-settings-desktop [data-settings-row] [data-slot="switch-thumb"] {
+    width: 17px;
+    height: 17px;
+    background: white;
+    translate: none;
+}
+
+@container (min-width: 460px) {
+    .kron-settings-desktop [data-settings-row] > div:has(> div:nth-child(2)) {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 42%);
+        align-items: center;
+    }
+    .kron-settings-desktop [data-settings-row] > div > div:nth-child(2) {
+        justify-self: end;
+    }
+}
+
+.kron-settings-desktop [data-settings-row] [data-slot="switch-thumb"][data-state="checked"] {
+    transform: translateX(15px);
+}
+
+.kron-settings-desktop .kron-settings--embedded {
+    background: transparent;
+}
+
+.kron-settings-desktop .kron-settings--embedded .kron-settings-content-header {
+    padding-bottom: 0;
+    border: 0;
+}
+
+.kron-settings-desktop .kron-settings--embedded .kron-settings-content-title {
+    display: none;
+}
+
+.kron-settings-desktop .kron-settings-card {
+    padding: 16px 20px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--settings-group);
+}
+
+.kron-settings-desktop .kron-settings-row {
+    min-height: 56px;
+    align-items: center;
+    border-color: var(--settings-separator);
+}
+
+@container settings-pane (min-width: 820px) {
+    .kron-settings-desktop .settings-content-layout:has(.settings-page-outline) {
+        grid-template-columns: minmax(0, 1fr) 140px;
+    }
+    .kron-settings-desktop [data-settings-page-header] {
+        max-width: 876px;
+        padding-right: 172px;
+    }
+    .kron-settings-desktop .settings-page-outline {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        overflow-y: auto;
+        padding: 8px 12px 24px 0;
+        color: var(--muted-foreground);
+    }
+    .kron-settings-desktop .settings-page-outline p {
+        margin: 0 0 9px;
+        padding-left: 10px;
+        font-size: 11px;
+    }
+    .kron-settings-desktop .settings-page-outline button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        text-align: left;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    .kron-settings-desktop .settings-page-outline button:hover {
+        background: var(--settings-group);
+        color: var(--foreground);
+    }
+}
+
+@media (max-width: 760px) {
+    .kron-settings-desktop [data-settings-page-header] {
+        padding: 20px 18px 18px;
+    }
+    .kron-settings-desktop .settings-content-scroll {
+        padding-inline: 18px;
+    }
+    .kron-settings-desktop [data-settings-navigation] > div:first-child {
+        padding-top: 10px;
+    }
+}

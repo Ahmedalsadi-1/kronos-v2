@@ -160,7 +160,16 @@ export class WaveTabView extends WebContentsView {
         const wcId = this.webContents.id;
         wcIdToWaveTabMap.set(wcId, this);
         if (isDevVite) {
-            this.webContents.loadURL(`${process.env.ELECTRON_RENDERER_URL}/index.html`);
+            const url = new URL(`${process.env.ELECTRON_RENDERER_URL}/index.html`);
+            const agent = process.env.KRONOS_COMPARE_AGENT;
+            if (agent === "pi" || agent === "hermes" || agent === "opencode" || agent === "codex" || agent === "sequential") {
+                url.searchParams.set("compareAgent", agent);
+                const start = process.env.KRONOS_COMPARE_START;
+                if (start && /^\d{13}$/.test(start)) url.searchParams.set("compareStart", start);
+                const project = process.env.KRONOS_COMPARE_PROJECT;
+                if (project) url.searchParams.set("compareProject", project);
+            }
+            this.webContents.loadURL(url.href);
         } else {
             this.webContents.loadFile(path.join(getElectronAppBasePath(), "frontend", "index.html"));
         }

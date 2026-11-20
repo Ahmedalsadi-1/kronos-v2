@@ -1,5 +1,4 @@
 import { globalStore } from "@/app/store/jotaiStore";
-import { publishAgentWidgetDesignSelection } from "@/app/view/agent-widget-bridge";
 import {
     browserSelectionContext,
     browserSelectionPrompt,
@@ -8,6 +7,8 @@ import {
 import { getApi } from "@/store/global";
 import { atom, type PrimitiveAtom } from "jotai";
 import type { BrowserGrabPayload } from "../../../types/browser-grab";
+import { formatBrowserSelectionDraft } from "./browser-annotations";
+import { stageBrowserSelectionInChat } from "./browser-chat-selection";
 import { getBrowserResearchStore } from "./browser-research-store";
 
 export type BrowserGrabIntent = "grab" | "annotate" | "style";
@@ -52,7 +53,7 @@ export class BrowserGrabController {
         globalStore.set(this.error, "");
         globalStore.set(this.intent, comment ? null : intent);
         globalStore.set(this.selection, payload);
-        if (comment.trim()) this.publishAnnotation(payload, comment, "change");
+        if (comment.trim()) this.stageAnnotation(payload, comment, "change");
     }
 
     async setIntent(intent: BrowserGrabIntent): Promise<void> {
@@ -74,7 +75,11 @@ export class BrowserGrabController {
                         `window.__KRONTERM_BROWSER_ELEMENT_TOOL__?.setIntent(${JSON.stringify(intent)}) === true`
                     )
                     .catch(() => false);
-                if (ready || generation !== this.generation) return;
+                if (generation !== this.generation) return;
+                if (ready) {
+                    if (intent === "annotate") guest.focus();
+                    return;
+                }
             }
             if (!intent) return;
             this.guestId = guest?.getWebContentsId();
@@ -170,34 +175,30 @@ export class BrowserGrabController {
     annotate(comment: string, intent: "fix" | "change" | "question" | "approve"): void {
         const payload = globalStore.get(this.selection);
         if (!payload || !comment.trim()) return;
-        this.publishAnnotation(payload, comment, intent);
-        void this.rearm();
+        this.stageAnnotation(payload, comment, intent);
     }
 
-    private publishAnnotation(
+    private stageAnnotation(
         payload: BrowserGrabPayload,
         comment: string,
         intent: "fix" | "change" | "question" | "approve"
     ): void {
-        const target = payload.target;
-        publishAgentWidgetDesignSelection({
-            blockId: this.blockId,
-            url: payload.page.sanitizedUrl,
-            element: {
-                ref: target.selector,
-                role: target.accessibility?.role ?? target.tagName,
-                name: target.accessibility?.accessibleName ?? target.textSnippet,
-                ...target.rectViewport,
-                focusable: false,
-                visible: true,
-                selector: target.selector,
-                tagName: target.tagName,
-                componentName: target.reactComponents,
-            },
-            comment: comment.slice(0, 2000),
-            annotationIntent: intent,
-            grabPayload: { ...payload, screenshot: null },
-        });
+        const generation = this.generation;
+        const guestId = this.guestId;
+        void (async () => {
+            const screenshot = await getApi().captureBrowserPage({ guestId });
+            if (!this.currentSelection(generation, guestId, payload)) return;
+            if (!screenshot?.dataUrl) throw new Error("Could not capture the browser. Please retry the selection.");
+            await stageBrowserSelectionInChat({
+                target: "current",
+                text: formatBrowserSelectionDraft(payload, comment, intent, this.blockId),
+                images: [{ filename: "browser-selection.png", dataUrl: screenshot.dataUrl }],
+            });
+            if (!this.currentSelection(generation, guestId, payload)) return;
+            globalStore.set(this.selection, null);
+            globalStore.set(this.intent, null);
+            globalStore.set(this.message, "Screenshot and browser context added to chat");
+        })().catch((error) => this.fail(generation, error));
     }
 
     async rearm(): Promise<void> {

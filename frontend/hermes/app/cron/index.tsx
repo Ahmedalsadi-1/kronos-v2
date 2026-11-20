@@ -645,7 +645,12 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
   }
 
   return (
-    <Panel closeLabel={c.close} onClose={onClose}>
+    <Panel
+      className="pen-hermes-dialog @container/cron h-[29rem] max-h-full max-w-[42rem] rounded-none"
+      closeLabel={c.close}
+      compact
+      onClose={onClose}
+    >
       <PanelHeader subtitle={c.count(totalCount)} title={c.title} />
       <div className="px-4 py-2">
         <Button className="cursor-pointer" onClick={() => navigate('/workflows')} size="sm" variant="outline">
@@ -667,8 +672,9 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
           title={c.emptyTitleNew}
         />
       ) : (
-        <PanelBody>
+        <PanelBody className="gap-3 min-[47.5rem]:gap-3 @max-[34rem]/cron:flex-col! @min-[34rem]/cron:flex-row">
           <PanelList
+            className="@max-[34rem]/cron:w-full! @max-[34rem]/cron:max-h-[40%]! @min-[34rem]/cron:w-44! @min-[34rem]/cron:max-h-none!"
             onSearchChange={setQuery}
             searchHints={jobs
               .map(jobTitle)

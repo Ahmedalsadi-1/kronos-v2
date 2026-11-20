@@ -163,6 +163,10 @@ export function registerComputerTargetTools(server: McpServer): void {
             .max(128)
             .describe("Authenticated nativeCallerId of the existing bot/subagent; does not spawn an agent"),
     };
+    const observation = {
+        ...MutatingTarget,
+        observationId: z.string().uuid().describe("Fresh observationId from device_observe for this target"),
+    };
     const fleet = {
         devices: z
             .array(z.object(assignment))
@@ -175,8 +179,7 @@ export function registerComputerTargetTools(server: McpServer): void {
         concurrency: z.number().int().min(1).max(4).default(2),
     };
     const step = {
-        ...MutatingTarget,
-        observationId: z.string().uuid(),
+        ...observation,
         action: z.enum(["tap", "type", "key", "back", "home", "swipe", "rotate"]),
         x: z.number().min(0).max(1).optional(),
         y: z.number().min(0).max(1).optional(),
@@ -218,8 +221,17 @@ export function registerComputerTargetTools(server: McpServer): void {
         ],
         [
             "device_observe",
-            "Capture an assigned phone and issue a caller-bound, single-use observation valid for 30 seconds. Inspect the image before device_step.",
+            "Capture the selected simulator or phone by exact targetId. Returns a screenshot and an observationId valid for one device_step within 30 seconds. Use device_pick_element for accessibility details at a point in the image.",
             { targetId: TargetId },
+        ],
+        [
+            "device_pick_element",
+            "Inspect the accessible element at a point on a fresh device_observe image. Returns its role, label, identifier, and normalized bounds when available. Does not tap or consume the observation.",
+            {
+                ...observation,
+                x: z.number().min(0).lt(1),
+                y: z.number().min(0).lt(1),
+            },
         ],
         [
             "device_step",
@@ -267,6 +279,7 @@ export function registerComputerTargetTools(server: McpServer): void {
                     "device_identity",
                     "device_batch_status",
                     "device_observe",
+                    "device_pick_element",
                 ].includes(name),
                 destructiveHint: false,
                 idempotentHint: false,

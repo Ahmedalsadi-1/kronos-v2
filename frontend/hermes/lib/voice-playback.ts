@@ -21,13 +21,8 @@ let currentAudio: HTMLAudioElement | null = null
 let currentStop: (() => void) | null = null
 let sequence = 0
 
-// A shared, lazily-created AudioContext used only to nudge the browser's
-// autoplay state out of "suspended". A wake-word-started voice turn has no
-// preceding user gesture, so the first HTMLAudioElement.play() can be rejected
-// with NotAllowedError. resume()-ing a context is the documented way to recover
-// once the app is allowed to make sound; on Electron chat windows the
-// no-user-gesture-required policy means this is already unlocked, so this is a
-// cheap no-op fallback for other surfaces.
+// Pen prepares this context during the voice-button gesture so later speech
+// can play after the browser's transient user activation expires.
 let unlockCtx: AudioContext | null = null
 
 async function unlockAutoplay(): Promise<void> {
@@ -42,13 +37,17 @@ async function unlockAutoplay(): Promise<void> {
     return
   }
 
-  if (!unlockCtx) {
+  if (!unlockCtx || unlockCtx.state === 'closed') {
     unlockCtx = new Ctor()
   }
 
   if (unlockCtx.state === 'suspended') {
     await unlockCtx.resume()
   }
+}
+
+export function primeVoicePlayback() {
+  void unlockAutoplay().catch(() => undefined)
 }
 
 function currentState(
@@ -68,6 +67,7 @@ function currentState(
 export interface VoicePlaybackOptions {
   messageId?: string | null
   source: VoicePlaybackSource
+  synthesize?: (text: string) => Promise<ArrayBuffer>
 }
 
 export function stopVoicePlayback() {
@@ -141,6 +141,107 @@ export interface SpeechStreamSession {
    *             text through `playSpeechText` instead.
    */
   done: Promise<'done' | 'fallback'>
+}
+
+function openLocalSpeechStream(
+  synthesize: NonNullable<VoicePlaybackOptions['synthesize']>,
+  options: VoicePlaybackOptions
+): SpeechStreamSession {
+  const prepared = unlockCtx?.state !== 'closed' ? unlockCtx : null
+  const context = prepared ?? new AudioContext({ latencyHint: 'interactive' })
+  const motion = scheduledSpeechMotion(context)
+  const sources = new Set<AudioBufferSourceNode>()
+  let text = ''
+  let finished = false
+  let settled = false
+  let started = false
+  let pending = 0
+  let nextStartAt = 0
+  let queue = Promise.resolve()
+  let resolveDone: (value: 'done' | 'fallback') => void
+  const done = new Promise<'done' | 'fallback'>(resolve => { resolveDone = resolve })
+
+  const settle = (outcome: 'done' | 'fallback') => {
+    if (settled) return
+    settled = true
+    currentStop = null
+    motion.stop()
+    for (const source of sources) {
+      source.onended = null
+      source.stop()
+    }
+    sources.clear()
+    if (!prepared) void context.close().catch(() => undefined)
+    resolveDone(outcome)
+  }
+  const drain = () => {
+    if (finished && pending === 0 && sources.size === 0) settle(started ? 'done' : 'fallback')
+  }
+  currentStop = () => settle('done')
+  const outputReady = context.resume()
+  void outputReady.catch(() => settle('fallback'))
+
+  const flushPhrases = () => {
+    while (text.trim()) {
+      const sentence = /[.!?…]["')\]]*(?=\s|$)|\n\n/.exec(text)
+      const maxLength = started ? 120 : 76
+      const softBreak = /\s(?=\S*$)/.exec(text.slice(0, maxLength))
+      const limit = text.length >= maxLength ? softBreak?.index || maxLength : 0
+      const boundary = sentence ? sentence.index + sentence[0].length : 0
+      const end = boundary && (!limit || boundary <= limit) ? boundary : limit || (finished ? text.length : 0)
+      if (!end) break
+
+      const phrase = sanitizeTextForSpeech(text.slice(0, end))
+      text = text.slice(end).trimStart()
+      if (!phrase) continue
+      pending++
+      queue = queue.then(async () => {
+        if (settled) return
+        const bytes = await synthesize(phrase)
+        if (settled) return
+        const buffer = await context.decodeAudioData(bytes)
+        await outputReady
+        if (settled) return
+
+        const source = context.createBufferSource()
+        source.buffer = buffer
+        source.connect(context.destination)
+        const at = Math.max(context.currentTime + 0.035, nextStartAt)
+        sources.add(source)
+        source.onended = () => {
+          sources.delete(source)
+          drain()
+        }
+        motion.schedule(buffer.getChannelData(0), buffer.sampleRate, at)
+        source.start(at)
+        nextStartAt = at + buffer.duration
+        if (!started) {
+          started = true
+          setVoicePlaybackState(currentState('speaking', options))
+        }
+      }).catch(() => {
+        if (!started) settle('fallback')
+        else finished = true
+      }).finally(() => {
+        pending--
+        drain()
+      })
+    }
+  }
+  return {
+    append(delta) {
+      if (finished || settled) return
+      text += delta
+      flushPhrases()
+    },
+    finish() {
+      if (finished || settled) return
+      finished = true
+      flushPhrases()
+      drain()
+    },
+    done
+  }
 }
 
 /**
@@ -329,19 +430,22 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
  * whole-text `playSpeechText`.
  */
 export async function startSpeechStream(options: VoicePlaybackOptions): Promise<null | SpeechStreamSession> {
-  const wsUrl = await resolveSpeakStreamUrl()
+  const wsUrl = options.synthesize ? null : await resolveSpeakStreamUrl()
 
-  if (!wsUrl) {
+  if (!wsUrl && !options.synthesize) {
     return null
   }
 
   stopVoicePlayback()
   setVoicePlaybackState(currentState('preparing', options))
 
-  const session = openSpeechStream(wsUrl, options)
+  const playbackSequence = sequence
+  const session = options.synthesize
+    ? openLocalSpeechStream(options.synthesize, options)
+    : openSpeechStream(wsUrl!, options)
 
   void session.done.then(outcome => {
-    if (outcome === 'done') {
+    if (outcome === 'done' && playbackSequence === sequence) {
       setVoicePlaybackState(currentState('idle'))
     }
   })

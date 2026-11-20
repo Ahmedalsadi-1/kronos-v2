@@ -5,12 +5,18 @@ import { app, ipcMain } from "electron";
 import type { ComputerTargetsResult } from "../frontend/types/computer-targets";
 import { ComputerTargetSessions } from "./computer-target-sessions";
 import { getComputerTargetsRuntime } from "./computer-targets-runtime";
+import { startAndroidPreviewServer } from "./device-simulator/android/android-preview-server";
+import { ensureIPhonePreview } from "./device-simulator/iphone-preview";
 import { isTrustedNativeHudSender } from "./emain-hud";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 
 export function registerComputerTargetsIpc(): void {
     const runtime = getComputerTargetsRuntime();
     const sessions = new ComputerTargetSessions(runtime);
+    const androidPreview = startAndroidPreviewServer(runtime);
+    androidPreview.server.on("error", (error) => console.error("Android preview on port 3201:", error.message));
+    app?.once("before-quit", androidPreview.close);
+    app?.once("before-quit", () => runtime.stopAndroidVideoStreams());
     const owners = new Set<number>();
     app?.on("before-quit", () => void sessions.dispose());
     const handle = <T>(channel: string, callback: (input: unknown, owner: number) => Promise<T>) =>
@@ -42,6 +48,7 @@ export function registerComputerTargetsIpc(): void {
             }
         });
     handle("computer-targets:list", () => runtime.list());
+    handle("computer-targets:iphone-preview", () => ensureIPhonePreview());
     handle("computer-targets:action", (input) => runtime.perform(input));
     handle("computer-targets:pick", (input) => runtime.pickElement(input));
     handle("computer-targets:takeover", (input) => runtime.takeOver(input));

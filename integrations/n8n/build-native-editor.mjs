@@ -15,6 +15,10 @@ for (const [source, target] of [
   ["native-panel-layout.mjs", "native-panel-layout.mjs"],
 ])
   fs.copyFileSync(path.join(root, "editor", source), path.join(editor, "src", target));
+fs.copyFileSync(
+  path.join(root, "editor/KronTermExecutions.vue"),
+  path.join(editor, "src/app/layouts/KronTermExecutions.vue")
+);
 const routerFile = path.join(editor, "src/app/router.ts");
 let router = fs.readFileSync(routerFile, "utf8");
 router = router.replace("createRouter, createWebHistory,", "createRouter, createMemoryHistory, createWebHistory,");

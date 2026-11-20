@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Welcome to KronOS</title>
+<style>
+@font-face { font-family:Inter; src:url("./states/inter-variable.woff2") format("woff2"); font-weight:100 900; font-display:swap }
+html { color-scheme:light }
+html,body { margin:0; min-height:100%; background:#f6f6f6; color:#171717 }
+main { filter:grayscale(1) brightness(.965) }
+body { min-height:100dvh; display:grid; place-items:center; font:15px/1.5 system-ui,sans-serif }
+[hidden] { display:none!important }
+.screen { position:relative; width:min(1440px, 100vw, 160dvh); aspect-ratio:8/5 }
+.screen { container-type:inline-size }
+.screen #capture { display:block; width:100%; height:100%; user-select:none }
+.welcome-art {
+  position:absolute;
+  inset:.888889% .555556% .888889% 32.335%;
+  display:none;
+  overflow:hidden;
+  border-radius:1.18cqw;
+  background-color:#dedfe1;
+  background-image:linear-gradient(153deg,#ffffffbf 0%,#f0f1f3a6 52%,#ffffffd9 100%),url("./states/liquid-chrome.png");
+  background-size:cover;
+  background-position:center;
+  pointer-events:none;
+}
+[data-step="welcome"] .welcome-art { display:block }
+.welcome-window {
+  position:absolute;
+  left:3.86%;
+  top:16.29%;
+  width:var(--window-width,142%);
+  aspect-ratio:var(--window-aspect,1494/1200);
+  overflow:hidden;
+  border-radius:1cqw;
+  box-shadow:0 .9cqw 2.5cqw #17171745;
+}
+.welcome-window img {
+  position:absolute;
+  left:var(--image-left,-3.7483%);
+  top:var(--image-top,-3.1667%);
+  width:var(--image-width,107.4967%);
+  max-width:none;
+  height:auto;
+  display:block;
+}
+.art-picker {
+  position:absolute;
+  bottom:2.2%;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  pointer-events:none;
+}
+.art-picker button {
+  display:grid;
+  place-items:center;
+  width:clamp(14px,1.38cqw,19px);
+  height:clamp(22px,2.1cqw,30px);
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:#fff;
+  text-shadow:0 1px 3px #111;
+  cursor:pointer;
+  pointer-events:auto;
+}
+.art-picker button[data-art]::before {
+  content:"";
+  width:clamp(5px,.52cqw,8px);
+  aspect-ratio:1;
+  border-radius:50%;
+  background:#fff8;
+  box-shadow:0 0 2px #111;
+}
+.art-picker button[aria-pressed="true"]::before {
+  width:clamp(7px,.67cqw,10px);
+  background:#fff;
+}
+.art-picker button:focus-visible { outline:2px solid #fff; outline-offset:-2px }
+.welcome-action,.demo-input.welcome-email { border-radius:.55cqw; font:500 1cqw Inter,system-ui,sans-serif }
+.hotspot.welcome-action { background:#878787; color:#fff }
+.hotspot.welcome-google { background:#ececec; color:#171717 }
+.welcome-google strong { margin-right:.45cqw }
+.welcome-github svg { width:1.1cqw; height:1.1cqw; margin-right:.45cqw; vertical-align:-.18cqw; fill:currentColor }
+.demo-input.welcome-email { border:1px solid #dedede; background:#fff }
+.welcome-email::placeholder { color:#989898 }
+.controls { position:absolute; inset:0; pointer-events:none }
+.hotspot { position:absolute; padding:0; border:0; border-radius:4px; background:transparent; cursor:pointer; pointer-events:auto; touch-action:manipulation }
+.choice-image { position:absolute; pointer-events:none }
+.brand-patch { position:absolute; display:flex; align-items:center; background:#fff; color:#17191a; font-family:Inter,system-ui,sans-serif; pointer-events:none; white-space:nowrap }
+.brand-copy { color:#616161; font-size:1.165cqw; letter-spacing:-.012cqw; line-height:1 }
+
+.welcome-headline,.step-headline { margin:0; font:550 2.24cqw/1.1 Inter,system-ui,sans-serif; letter-spacing:-.07cqw }
+.welcome-headline { align-items:flex-start; padding-top:.38cqw; box-sizing:border-box; white-space:pre-line }
+.step-headline { justify-content:center }
+.import-panel { flex-direction:column; justify-content:center; gap:.9cqw; font-size:1.1cqw }
+.browser-choices { display:flex; gap:.65cqw; pointer-events:auto }
+.browser-choices button,.bookmark-picker {
+  color:inherit; background:#f3f3f3; border:1px solid #d4d4d4; border-radius:.65cqw;
+  min-height:2.65cqw; padding:.45cqw .9cqw; font:inherit; cursor:pointer; pointer-events:auto;
+}
+.browser-choices button { display:grid; place-items:center; width:4.1cqw; height:4.1cqw; padding:0 }
+.browser-choices img { width:2.55cqw; height:2.55cqw; object-fit:contain }
+.browser-choices button[aria-pressed="true"] { background:#242424; color:#fff; border-color:#242424 }
+.bookmark-picker:focus-within { outline:2px solid #171717; outline-offset:2px }
+.import-status { margin:0; min-height:1.65cqw; color:#595959 }
+.gmail-preview {
+  display:flex; flex-direction:column; gap:.8cqw; box-sizing:border-box; padding:1.65cqw 1.45cqw;
+  border-radius:1.05cqw; overflow:hidden; font:500 1.12cqw/1.35 Inter,system-ui,sans-serif;
+  background:linear-gradient(136deg,#9e9e9e 0%,#b4b4b4 30%,#e1e1e1 66%,#c4c4c4 100%);
+}
+.gmail-preview .gmail-prompt,.gmail-preview .gmail-response { margin:0 }
+.gmail-prompt,.gmail-response { padding:.65cqw .8cqw; border-radius:.9cqw }
+.gmail-prompt { align-self:flex-end; max-width:78%; background:#171717; color:#fff }
+.gmail-response { align-self:flex-start; background:#fff; margin-top:1.1cqw }
+.gmail-inbox { display:block; width:100%; border-radius:.9cqw; box-shadow:0 2px 9px #0002 }
+.password-nav { background:#ececec; color:#171717; border-radius:.55cqw; font:500 1cqw Inter,system-ui,sans-serif }
+.password-nav[data-primary] { background:#171717; color:#fff }
+.dialog-copy { font-size:1cqw }
+.centered-copy { justify-content:center }
+.brand-setting { font-size:1.11cqw; font-weight:550; letter-spacing:-.02cqw; line-height:1 }
+.welcome-wordmark { gap:.38cqw; font-size:1.58cqw; font-weight:650; letter-spacing:-.04cqw }
+.welcome-wordmark .completion-logo { width:1.85cqw; height:1.85cqw }
+.password-title { margin:0; font-size:2.22cqw; font-weight:550; line-height:1; letter-spacing:-.055cqw }
+.vault-name { gap:.4cqw; font-size:1.11cqw; font-weight:550; line-height:1 }
+.vault-info { color:#656565; font-size:1.03cqw }
+.provider-name { gap:.48cqw; font-size:1.11cqw; font-weight:570; line-height:1 }
+.provider-badge { background:#e9f4ff; color:#006dc4; border-radius:.55cqw; padding:.15cqw .35cqw; font-size:.80cqw; font-weight:530 }
+.completion-logo { display:block; width:100%; height:100% }
+.demo-input,.demo-select { position:absolute; pointer-events:auto; box-sizing:border-box; border:0; padding:0 .85cqw; border-radius:4px; background:transparent; color:#171717; font: .965cqw system-ui,sans-serif }
+.demo-input:not(:placeholder-shown),.demo-select.selected { background:#fff }
+.demo-select { appearance:none; color:transparent }
+.demo-select.selected { color:#171717 }
+.demo-input:focus-visible,.demo-select:focus-visible { outline:2px solid #0876d3; outline-offset:2px }
+.hotspot:focus-visible { outline:2px solid #0876d3; outline-offset:3px }
+.finished { margin:24px; text-align:center }
+.finished button { font:inherit; padding:8px 14px; cursor:pointer }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0 }
+</style>
+</head>
+<body>
+<main>
+  <section class="screen" aria-label="KronOS onboarding">
+    <img id="capture" src="/aside-screens/splash.png" width="1440" height="900" alt="KronOS welcome and sign-in" draggable="false">
+    <div class="welcome-art">
+      <div class="welcome-window">
+        <img src="./states/kronos-welcome.png" width="1606" height="1312" alt="KronOS workspace showing a terminal, browser, device preview, and Hermes" draggable="false">
+      </div>
+      <div class="art-picker" role="group" aria-label="Welcome slideshow">
+      </div>
+    </div>
+    <div class="controls" id="controls"></div>
+  </section>
+  <section class="finished" id="finished" hidden aria-labelledby="finished-title">
+    <h1 id="finished-title" tabindex="-1">Demo complete</h1>
+    <p id="result"></p>
+    <button id="restart" type="button">Restart onboarding</button>
+  </section>
+  <p id="announcement" class="sr-only" aria-live="polite"></p>
+</main>
+<script>
+const imageSize = { width: 1440, height: 900 };
+const backButton = [28, 833, 56, 35];
+const nextButton = [1338, 833, 73, 35];
+
+const screens = {
+  welcome: { image:"splash", title:"Welcome and sign-in", controls:[] },
+  import: {
+    image: "import-browser", title: "Browser import picker",
+    controls: [
+      ["Skip", "overview", [1279, 833, 49, 35]],
+      ["Next", "overview", nextButton, true]
+    ]
+  },
+  overview: {
+    image: "glance", title: "Website capabilities overview",
+    controls: [
+      ["Back", "import", backButton],
+      ["Next", "passwords", nextButton, true]
+    ]
+  },
+  passwords: {
+    image: "import-password", title: "Password setup",
+    controls: [
+      ["Back", "overview", backButton],
+      ["Skip", "ai", [593, 833, 49, 35]],
+      ["Continue", "ai", [652, 833, 101, 35], true]
+    ]
+  },
+  ai: {
+    image: "ai", title: "AI provider selection",
+    controls: [
+      ["Back", "passwords", backButton],
+      ["Show more options", "providers", [650, 562, 140, 35]],
+      ["Connect", "agents", [1314, 833, 97, 35], true]
+    ]
+  },
+  providers: {
+    image: "ai-options", title: "More AI providers",
+    controls: [
+      ["Close more options", "ai", [908, 284, 32, 28]]
+    ]
+  },
+  agents: {
+    image: "agents", title: "Agent tool setup",
+    controls: [
+      ["Back", "ai", backButton],
+      ["Skip", "complete", [1270, 833, 49, 35]],
+      ["Install", "complete", [1329, 833, 82, 35], true]
+    ]
+  },
+  complete: {
+    image: "done", title: "Setup complete",
+    controls: [
+      ["Get started", "finished", [662, 833, 116, 35], true]
+    ]
+  }
+};
+
+const primaryProviders = [
+  ["KronOS", [498, 333, 444, 68], null],
+  ["ChatGPT", [498, 401, 444, 68], "ai-chatgpt"],
+  ["Claude", [498, 469, 444, 68], "ai-claude"]
+];
+
+const moreProviders = [
+  ["Muse Code", "ai-muse", 365, [739, 509, 143, 32], [665, 509, 64, 32], 335, "Sign in with Meta"],
+  ["Grok", "ai-grok", 405, [798, 519, 84, 33], [728, 519, 63, 33], 325, "Connect"],
+  ["Kimi Code", "ai-kimi", 445, [798, 558, 84, 34], [728, 558, 63, 34], 285, "Connect"],
+  ["GitHub Copilot", "ai-copilot", 485, [798, 519, 84, 33], [728, 519, 63, 33], 325, "Connect"],
+  ["MiMo Token Plan", "ai-mimo", 525, [826, 566, 56, 34], [756, 566, 63, 34], 278, "Submit"],
+  ["Use your own API key", "ai-api-key", 565]
+];
+
+const apiProviders = ["Anthropic", "OpenAI", "Meta", "OpenRouter", "OpenCode Zen", "OpenCode Go", "Qwen Token Plan", "Vercel AI Gateway"];
+const settings = [
+  ["default-browser", "Set KronOS as your default browser", 182, 205],
+  ["dock", "Add KronOS to Dock", 250, 273],
+  ["diagnostics", "Help improve KronOS", 318, 341]
+];
+const dialogNames = new Set([...moreProviders.map((entry) => entry[1]), "agent-others"]);
+if (window.kronosAccount) document.title = "Sign in to KronOS";
+let emailCodeSent = false;
+let welcomeAuthBusy = false;
+const statePath = "./states/";
+const windowCapture = { size:[1530,1050], bounds:[56,38,1418,938], zoom:119 };
+const welcomeArts = {
+  iphone: { file:"kronos-welcome-iphone.png", label:"iPhone and Web", size:[1606,1312], bounds:[56,38,1494,1200], zoom:109 },
+  motion: { ...windowCapture, file:"welcome-motion.gif", label:"Canvas screen recording", animated:true },
+  web: { ...windowCapture, file:"welcome-web-workspace.png", label:"Browser workspace" },
+  voice: { ...windowCapture, file:"welcome-voice.png", label:"Voice mode" },
+  "orbit-agent": { ...windowCapture, file:"welcome-orbit-agent.png", label:"Orbit canvas with KronOS Agent" },
+  canvas: { file:"kronos-welcome.png", label:"Canvas overview", size:[1606,1312], bounds:[56,38,1494,1200], zoom:109 },
+  devices: { ...windowCapture, file:"kronos-welcome-devices.png", label:"Canvas and devices", bounds:[440,38,1034,938], zoom:86 }
+};
+const artOrder = Object.keys(welcomeArts);
+const welcomeWindow = document.querySelector(".welcome-window");
+const welcomeImage = welcomeWindow.querySelector("img");
+const artPicker = document.querySelector(".art-picker");
+const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
+const artButtons = artOrder.map((name) => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.art = name;
+  button.setAttribute("aria-label", "Show " + welcomeArts[name].label);
+  button.title = welcomeArts[name].label;
+  artPicker.append(button);
+  return button;
+});
+let slideshowTimer;
+const requestedArt = new URLSearchParams(location.search).get("art");
+let activeArt = Object.hasOwn(welcomeArts, requestedArt) ? requestedArt : artOrder[0];
+let renderedArt;
+let gifPlayback = 0;
+const screen = document.querySelector(".screen");
+const capture = document.getElementById("capture");
+const controls = document.getElementById("controls");
+const finished = document.getElementById("finished");
+const announcement = document.getElementById("announcement");
+const result = document.getElementById("result");
+let openedFromKeyboard = false;
+let selectedProvider = "KronOS";
+let connectedProvider = "";
+let passwordChoice = "vault";
+let demoEmail = "";
+let selectedBrowser = "Safari";
+let bookmarkImportStatus = "";
+let importedBookmarks = [];
+let finishSettings = new Set(settings.map(([id]) => id));
+const regions = new Map();
+
+function currentStep() {
+  const step = location.hash.slice(1);
+  return step === "finished" || Object.hasOwn(screens, step) || dialogNames.has(step) ? step : "welcome";
+}
+
+function go(step, keyboard = false) {
+  openedFromKeyboard = keyboard;
+  location.hash = step;
+}
+
+function position(element, [x, y, width, height]) {
+  element.style.left = (100 * x / imageSize.width) + "%";
+  element.style.top = (100 * y / imageSize.height) + "%";
+  element.style.width = (100 * width / imageSize.width) + "%";
+  element.style.height = (100 * height / imageSize.height) + "%";
+  return element;
+}
+
+function brandPatch(tag, className, rect, label) {
+  const element = document.createElement(tag);
+  element.className = "brand-patch " + className;
+  if (label) element.textContent = label;
+  controls.append(position(element, rect));
+  return element;
+}
+
+
+function renderBrowserImport() {
+  brandPatch("div", "brand-copy centered-copy", [455, 105, 530, 50],
+    "Choose a browser and open its exported bookmarks file.");
+  const panel = brandPatch("div", "import-panel", [415, 390, 610, 187]);
+  const choices = document.createElement("div");
+  choices.className = "browser-choices";
+  choices.setAttribute("role", "group");
+  choices.setAttribute("aria-label", "Browser to import from");
+  const picker = document.createElement("label");
+  picker.className = "bookmark-picker";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.className = "sr-only";
+  fileInput.accept = ".html,.htm,text/html";
+  const pickerText = document.createElement("span");
+  picker.append(fileInput, pickerText);
+  const status = document.createElement("p");
+  status.className = "import-status";
+  status.setAttribute("role", "status");
+  status.textContent = bookmarkImportStatus;
+  const browsers = ["Safari", "Arc", "Firefox", "Chrome"];
+  const browserButtons = browsers.map((name) => {
+    const choice = document.createElement("button");
+    choice.type = "button";
+    choice.setAttribute("aria-label", name);
+    choice.title = name;
+    const icon = new Image();
+    icon.alt = "";
+    icon.src = statePath + name.toLowerCase() + ".png";
+    choice.append(icon);
+    choice.addEventListener("click", () => {
+      selectedBrowser = name;
+      updateSelection();
+    });
+    choices.append(choice);
+    return choice;
+  });
+
+  function updateSelection() {
+    pickerText.textContent = "Open " + selectedBrowser + " bookmarks file";
+    browserButtons.forEach((choice) => choice.setAttribute("aria-pressed", String(choice.title === selectedBrowser)));
+  }
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const browser = selectedBrowser;
+    fileInput.disabled = true;
+    try {
+      if (file.size > 8 * 1024 * 1024) throw new Error("Bookmarks file exceeds 8 MB");
+      const template = document.createElement("template");
+      template.innerHTML = await file.text();
+      const bookmarks = new Map();
+      for (const link of template.content.querySelectorAll("a[href]")) {
+        const url = URL.canParse(link.getAttribute("href")) ? new URL(link.getAttribute("href")) : null;
+        if (url && (url.protocol === "https:" || url.protocol === "http:")) bookmarks.set(url.href, link.textContent.trim());
+      }
+      if (currentStep() !== "import" || !panel.isConnected) return;
+      bookmarkImportStatus = bookmarks.size
+        ? "Imported " + bookmarks.size + (bookmarks.size === 1 ? " bookmark" : " bookmarks") + " from " + browser + " into this preview."
+        : "This file contains no web bookmarks.";
+      importedBookmarks = [...bookmarks];
+    } catch {
+      if (currentStep() !== "import" || !panel.isConnected) return;
+      bookmarkImportStatus = "Couldn’t read that file. Choose an HTML bookmarks export under 8 MB.";
+      importedBookmarks = [];
+    } finally {
+      fileInput.value = "";
+      fileInput.disabled = false;
+    }
+    status.textContent = bookmarkImportStatus;
+    updateBookmarkList();
+  });
+  const details = document.createElement("details");
+  details.style.pointerEvents = "auto";
+  const summary = document.createElement("summary");
+  summary.textContent = "Preview imported bookmarks";
+  const list = document.createElement("ul");
+
+  function updateBookmarkList() {
+    details.hidden = importedBookmarks.length === 0;
+    list.replaceChildren(...importedBookmarks.slice(0, 5).map(([url, label]) => {
+      const item = document.createElement("li");
+      item.textContent = label || url;
+      return item;
+    }));
+  }
+
+  details.append(summary, list);
+  panel.append(choices, picker, status, details);
+  updateSelection();
+  updateBookmarkList();
+}
+
+function renderGmailPreview() {
+  const panel = position(document.createElement("aside"), [783, 9, 648, 881]);
+  panel.className = "gmail-preview";
+  panel.style.position = "absolute";
+  panel.setAttribute("aria-label", "Example Gmail task");
+  const prompt = document.createElement("p");
+  prompt.className = "gmail-prompt";
+  prompt.textContent = "Please sign into my Gmail and check what I have to do.";
+  const response = document.createElement("p");
+  response.className = "gmail-response";
+  response.textContent = "I’ll check your inbox for action items.";
+  const inbox = new Image();
+  inbox.className = "gmail-inbox";
+  inbox.alt = "Example Gmail inbox with sample messages";
+  inbox.src = statePath + "kronos-gmail-preview.svg";
+  panel.append(prompt, response, inbox);
+  controls.append(panel);
+}
+
+function chooseArt(name, updateUrl = false) {
+  activeArt = name;
+  if (updateUrl) {
+    const url = new URL(location.href);
+    url.searchParams.set("art", name);
+    history.replaceState(null, "", url);
+  }
+  renderWelcomeArt();
+}
+
+function scheduleSlideshow() {
+  clearTimeout(slideshowTimer);
+  if (motionPreference.matches || document.hidden || currentStep() !== "welcome") return;
+  slideshowTimer = setTimeout(() => {
+    const next = (artOrder.indexOf(activeArt) + 1) % artOrder.length;
+    chooseArt(artOrder[next]);
+  }, 5500);
+}
+
+function renderWelcomeArt() {
+  const name = activeArt;
+  const { file, label, size, bounds, zoom, animated } = welcomeArts[name];
+  const [x, y, width, height] = bounds;
+  welcomeWindow.style.setProperty("--window-width", zoom + "%");
+  welcomeWindow.style.setProperty("--window-aspect", width + "/" + height);
+  welcomeWindow.style.setProperty("--image-left", (-100 * x / width) + "%");
+  welcomeWindow.style.setProperty("--image-top", (-100 * y / height) + "%");
+  welcomeWindow.style.setProperty("--image-width", (100 * size[0] / width) + "%");
+  welcomeImage.width = size[0];
+  welcomeImage.height = size[1];
+  if (name !== renderedArt) {
+    const source = animated
+      ? motionPreference.matches ? "welcome-motion-poster.png" : file + "?play=" + ++gifPlayback
+      : file;
+    welcomeImage.src = statePath + source;
+    renderedArt = name;
+  }
+  welcomeImage.alt = label;
+  artButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.art === name)));
+  scheduleSlideshow();
+}
+
+function markLogo(container, alt = "") {
+  const logo = new Image();
+  logo.className = "completion-logo";
+  logo.alt = alt;
+  logo.src = statePath + "kronos-logo.svg";
+  container.prepend(logo);
+}
+
+function button(label, rect, run, primary = false) {
+  const control = document.createElement("button");
+  control.type = "button";
+  control.className = "hotspot";
+  control.setAttribute("aria-label", label);
+  if (primary) control.dataset.primary = "";
+  control.addEventListener("click", (event) => run(event.detail === 0));
+  controls.append(position(control, rect));
+  return control;
+}
+
+function choose(label, rect, pressed, update) {
+  const control = button(label, rect, (keyboard) => {
+    update();
+    render();
+    controls.querySelectorAll(".hotspot").forEach((item) => {
+      if (item.getAttribute("aria-label") === label) item.focus({ focusVisible: keyboard });
+    });
+  });
+  control.setAttribute("aria-pressed", String(pressed));
+}
+
+function navigation([label, target, rect, primary]) {
+  const control = button(label, rect, (keyboard) => {
+    if (label === "Connect") connectedProvider = selectedProvider;
+    go(target, keyboard);
+  }, primary);
+  if (currentStep() === "passwords" && label !== "Back") {
+    control.classList.add("password-nav");
+    control.textContent = primary ? label + " ↵" : label;
+  }
+}
+
+function textInput(label, rect, options = {}) {
+  const input = document.createElement("input");
+  input.className = "demo-input";
+  if (options.className) input.classList.add(options.className);
+  input.setAttribute("aria-label", label);
+  input.placeholder = options.placeholder ?? " ";
+  input.autocomplete = "off";
+  if (options.password) input.type = "password";
+  if (options.value != null) input.value = options.value;
+  if (options.onInput) input.addEventListener("input", () => options.onInput(input.value));
+  if (options.onEnter) input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") options.onEnter();
+  });
+  controls.append(position(input, rect));
+}
+
+function regionPicker(step, rect, values) {
+  const select = document.createElement("select");
+  select.className = "demo-select";
+  select.setAttribute("aria-label", "Region");
+  for (const value of values) select.add(new Option(value));
+  select.value = regions.get(step) ?? values[0];
+  select.classList.toggle("selected", select.value !== values[0]);
+  select.addEventListener("change", () => {
+    regions.set(step, select.value);
+    select.classList.toggle("selected", select.value !== values[0]);
+  });
+  controls.append(position(select, rect));
+}
+
+function connect(provider, keyboard) {
+  connectedProvider = provider;
+  go("agents", keyboard);
+}
+
+function providerDialog(step) {
+  const close = (rect) => button("Close", rect, (keyboard) => go("providers", keyboard));
+  if (step === "ai-api-key") {
+    apiProviders.forEach((name, index) => {
+      button(name, [544, 326 + 40 * index, 350, 40], (keyboard) => connect(name + " (API key)", keyboard));
+    });
+    close([876, 243, 32, 30]);
+    return "Choose an API provider";
+  }
+  const [provider, , , confirm, cancel, top, label] = moreProviders.find((entry) => entry[1] === step);
+  close([876, top + 4, 32, 30]);
+  const subscriptionDescriptions = {
+    "ai-grok": ["Grok", 414],
+    "ai-kimi": ["Kimi", 375],
+    "ai-copilot": ["GitHub", 414]
+  };
+  if (Object.hasOwn(subscriptionDescriptions, step)) {
+    const [name, y] = subscriptionDescriptions[step];
+    brandPatch("div", "brand-copy dialog-copy", [549, y - 2, 344, 21], "KronOS uses your subscription to access " + name);
+  }
+  if (step === "ai-kimi") {
+    regionPicker(step, [549, 472, 340, 34], ["International (default)", "China"]);
+  }
+  if (step === "ai-mimo") {
+    regionPicker(step, [549, 436, 340, 32], ["Singapore (SGP)", "China"]);
+    textInput("Demo API key", [550, 502, 340, 35], { password: true, onEnter: () => connect(provider, true) });
+  }
+  button("Cancel", cancel, (keyboard) => go("providers", keyboard));
+  button(label, confirm, (keyboard) => connect(provider, keyboard), true);
+  return "Connect with " + provider;
+}
+
+function render() {
+  clearTimeout(slideshowTimer);
+  const step = currentStep();
+  if (step !== "welcome") renderedArt = undefined;
+  document.body.dataset.step = step;
+  const keyboard = openedFromKeyboard;
+  openedFromKeyboard = false;
+  screen.hidden = step === "finished";
+  finished.hidden = !screen.hidden;
+  if (step === "finished") {
+    announcement.textContent = "Demo complete";
+    const enabled = settings.filter(([id]) => finishSettings.has(id)).map(([, label]) => label);
+    result.textContent = [
+      connectedProvider && "Demo provider: " + connectedProvider + ".",
+      enabled.length ? "Selected preferences: " + enabled.join(", ") + "." : "All setup preferences off."
+    ].filter(Boolean).join(" ");
+    document.getElementById("finished-title").focus();
+    return;
+  }
+
+  controls.replaceChildren();
+  const view = screens[step];
+  let title = view?.title;
+  let source = view ? "/aside-screens/" + view.image + ".png" : statePath + step + ".png";
+
+  switch (step) {
+    case "welcome": {
+      renderWelcomeArt();
+      const wordmark = brandPatch("div", "welcome-wordmark", [26, 26, 135, 34], "KronOS");
+      markLogo(wordmark);
+      brandPatch("h1", "welcome-headline", [24, 78, 424, 129],
+        "Canvas, browser, terminal,\nand AI agents in one\nworkspace.");
+      brandPatch("div", "", [0, 686, 466, 193]);
+      const welcomeSignIn = async (provider, key) => {
+        if (!window.kronosSetup && !window.kronosAccount) { go("import", key); return; }
+        if (welcomeAuthBusy) return;
+        welcomeAuthBusy = true;
+        controls.querySelectorAll("button").forEach(button => { button.disabled = true; });
+        try {
+          if (window.kronosAccount) {
+            const command = provider !== "email" ? {action:"provider", provider}
+              : emailCodeSent ? {action:"verify-code", code:demoEmail} : {action:"send-code", email:demoEmail};
+            const status = await window.kronosAccount(command);
+            if (status.account) { window.close(); return; }
+            if (command.action === "send-code") {
+              emailCodeSent = true;
+              demoEmail = "";
+              render();
+              const message = brandPatch("p", "brand-copy", [28, 650, 410, 35], "Enter the code from your email.");
+              message.setAttribute("role", "status");
+            }
+            return;
+          }
+          if (await window.kronosSetup.signIn(provider)) go("import", key);
+        } catch (error) {
+          let message = document.getElementById("welcome-auth-error");
+          if (!message) {
+            message = brandPatch("p", "brand-copy", [28, 650, 410, 35]);
+            message.id = "welcome-auth-error";
+            message.setAttribute("role", "alert");
+          }
+          message.textContent = error.message.replace(/^Error invoking remote method '[^']+': Error: /, "");
+        } finally {
+          welcomeAuthBusy = false;
+          controls.querySelectorAll("button").forEach(button => { button.disabled = false; });
+        }
+      };
+      textInput("Email", [28, 692, 410, 40], {
+        className: "welcome-email",
+        placeholder: emailCodeSent ? "Enter your sign-in code" : "e.g. john@example.com",
+        value: demoEmail,
+        onInput: (value) => { demoEmail = value; },
+        onEnter: () => welcomeSignIn("email", true)
+      });
+      const continueButton = button("Continue", [28, 741, 410, 39], (key) => welcomeSignIn("email", key), true);
+      continueButton.classList.add("welcome-action");
+      continueButton.textContent = emailCodeSent ? "Verify code" : "Continue";
+      const githubButton = button("Continue with GitHub", [28, 785, 410, 39], (key) => welcomeSignIn("github", key));
+      githubButton.classList.add("welcome-action", "welcome-google", "welcome-github");
+      githubButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.62 1.22 3.26.93.1-.73.39-1.22.71-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.01-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.15a10.8 10.8 0 0 1 5.64 0c2.15-1.46 3.1-1.15 3.1-1.15.61 1.55.23 2.7.11 2.98.72.78 1.16 1.78 1.16 3.01 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.03.76 2.08v3.11c0 .3.2.65.77.54A11.25 11.25 0 0 0 12 .75Z"/></svg>Continue with GitHub';
+      const googleButton = button("Continue with Google", [28, 829, 410, 39], (key) => welcomeSignIn("google", key));
+      googleButton.classList.add("welcome-action", "welcome-google");
+      const logo = document.createElement("strong");
+      logo.textContent = "G";
+      logo.setAttribute("aria-hidden", "true");
+      googleButton.append(logo, "Continue with Google");
+      break;
+    }
+    case "import":
+      renderBrowserImport();
+      break;
+    case "overview":
+      brandPatch("h1", "step-headline", [450, 54, 540, 48], "Infinite integrations automatically");
+      brandPatch("div", "brand-copy centered-copy", [465, 130, 510, 22], "KronOS just uses websites and accounts directly, just like you do.");
+      break;
+    case "passwords": {
+      renderGmailPreview();
+      brandPatch("div", "brand-copy", [36, 86, 342, 22], "KronOS securely fills in your login details");
+      brandPatch("h1", "password-title", [36, 31, 305, 51], "Let KronOS sign in");
+      const vaultLabel = "Import credentials to KronOS Vault";
+      const vault = brandPatch("div", "vault-name", [317, 403, 306, 24], vaultLabel);
+      vault.setAttribute("aria-hidden", "true");
+      const info = document.createElement("span");
+      info.className = "vault-info";
+      info.textContent = "ⓘ";
+      vault.append(info);
+      if (passwordChoice === "manager") source = statePath + "password-manager.png";
+      choose(vaultLabel, [299, 390, 442, 68], passwordChoice === "vault", () => { passwordChoice = "vault"; });
+      choose("Connect my password manager", [299, 458, 442, 68], passwordChoice === "manager", () => { passwordChoice = "manager"; });
+      break;
+    }
+    case "ai": {
+      brandPatch("div", "brand-copy centered-copy", [420, 107, 600, 22], "Use KronOS’s built-in plan, or connect a subscription you already have.");
+      markLogo(brandPatch("div", "", [512, 351, 24, 28]));
+      const provider = brandPatch("div", "provider-name", [547, 342, 174, 26], "KronOS");
+      const badge = document.createElement("span");
+      badge.className = "provider-badge";
+      badge.textContent = "Recommended";
+      provider.append(badge);
+      for (const [name, rect, variant] of primaryProviders) {
+        if (selectedProvider === name && variant) source = statePath + variant + ".png";
+        choose(name, rect, selectedProvider === name, () => { selectedProvider = name; });
+      }
+      break;
+    }
+    case "providers":
+      for (const [provider, destination, y] of moreProviders) {
+        button(provider, [512, y, 416, 40], (key) => go(destination, key));
+      }
+      break;
+    case "agents":
+      brandPatch("h1", "step-headline", [330, 54, 780, 48], "Give your agents the OS-worthy workspace");
+      brandPatch("div", "brand-copy centered-copy", [495, 107, 450, 22], "Install the KronOS CLI and browser skill to");
+      button("Other agents", [910, 387, 178, 144], (key) => go("agent-others", key));
+      break;
+    case "agent-others":
+      title = "Other agents";
+      brandPatch("div", "brand-copy dialog-copy", [550, 320, 338, 21], "KronOS CLI and the browser skill will be installed");
+      button("Close", [876, 272, 32, 29], (key) => go("agents", key));
+      button("Done", [835, 576, 50, 33], (key) => go("agents", key), true);
+      break;
+    case "complete": {
+      markLogo(brandPatch("div", "", [696, 54, 48, 48]), "KronOS");
+      for (const [id, label, rowY, patchY] of settings) {
+        brandPatch("div", "brand-setting", [518, rowY + 13, 318, 22], label).setAttribute("aria-hidden", "true");
+        const enabled = finishSettings.has(id);
+        if (!enabled) {
+          const patch = new Image();
+          patch.src = statePath + "off-" + id + ".png";
+          patch.className = "choice-image";
+          patch.alt = "";
+          controls.append(position(patch, [902, patchY, 22, 22]));
+        }
+        choose(label, [498, rowY, 444, 68], enabled, () => {
+          if (enabled) finishSettings.delete(id);
+          else finishSettings.add(id);
+        });
+      }
+      break;
+    }
+    default:
+      if (!view) title = providerDialog(step);
+  }
+
+  capture.src = source;
+  capture.alt = "KronOS onboarding. " + title + ".";
+  view?.controls.forEach(navigation);
+  announcement.textContent = title;
+  if (keyboard) (controls.querySelector("[data-primary]") ?? controls.firstElementChild)?.focus();
+}
+
+for (const button of artButtons) {
+  button.addEventListener("click", () => {
+    renderedArt = undefined;
+    chooseArt(button.dataset.art, true);
+  });
+}
+document.addEventListener("visibilitychange", scheduleSlideshow);
+motionPreference.addEventListener("change", () => {
+  renderedArt = undefined;
+  if (currentStep() === "welcome") renderWelcomeArt();
+});
+document.getElementById("restart").addEventListener("click", (event) => {
+  selectedProvider = "KronOS";
+  connectedProvider = "";
+  passwordChoice = "vault";
+  demoEmail = "";
+  selectedBrowser = "Safari";
+  bookmarkImportStatus = "";
+  importedBookmarks = [];
+  finishSettings = new Set(settings.map(([id]) => id));
+  regions.clear();
+  go("welcome", event.detail === 0);
+});
+window.addEventListener("hashchange", render);
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const step = currentStep();
+  if (step === "providers") go("ai", true);
+  else if (step === "agent-others") go("agents", true);
+  else if (dialogNames.has(step)) go("providers", true);
+});
+for (const view of Object.values(screens)) {
+  const preload = new Image();
+  preload.src = "/aside-screens/" + view.image + ".png";
+}
+for (const asset of ["ai-chatgpt", "ai-claude", "password-manager", "agent-others", ...moreProviders.map((entry) => entry[1]), ...settings.map(([id]) => "off-" + id)]) {
+  const preload = new Image();
+  preload.src = statePath + asset + ".png";
+}
+render();
+</script>
+</body>
+</html>

@@ -26,6 +26,7 @@ import {
 } from "./qemu-provision";
 import { QemuVncBridge } from "./qemu-vnc-bridge";
 import { DATA_DIR } from "./upstream/openmaus/kronterm-adapter";
+import { VmHistoryStore } from "./vm-history";
 import { isManagedQemu } from "./vm-process";
 
 const VmId = "linux-vm:ubuntu";
@@ -47,6 +48,7 @@ const Actions = new Set([
     "key",
     "scroll",
     "exec",
+    "history",
 ]);
 
 export class QemuLinuxDesktopRuntime {
@@ -387,6 +389,7 @@ export class QemuLinuxDesktopRuntime {
                 : action.action === "pick-element"
                   ? action.expectedGeneration !== this.generation
                   : action.action !== "screenshot" &&
+                    !(action.action === "history" && action.historyAction === "list") &&
                     (this.owner !== "user" || action.expectedGeneration !== this.generation)
         )
             throw new Error("Control changed. Refresh and wait for desktop assignment or takeover.");
@@ -519,12 +522,54 @@ export class QemuLinuxDesktopRuntime {
     private async execute(action: LinuxDesktopAction, agent: boolean): Promise<LinuxDesktopActionResult> {
         this.check(action, agent);
         if (this.busy) throw new Error("Linux VM is busy.");
+        if (action.action === "scroll" && action.deltaX && action.deltaY) {
+            if (![action.deltaX, action.deltaY].every((value) => Number.isFinite(value) && Math.abs(value) <= 10000))
+                throw new Error("Invalid scroll.");
+            await this.execute({ ...action, deltaY: 0 }, agent);
+            return this.execute({ ...action, deltaX: 0 }, agent);
+        }
         this.busy = true;
         try {
             const changesLifecycle = ["prepare", "create", "start", "stop", "remove"].includes(action.action);
             if (!changesLifecycle && action.action !== "screenshot" && action.action !== "pick-element")
                 this.scheduleIdle();
             if (changesLifecycle) this.invalidateStatus();
+            if (action.action === "history") {
+                const running = Boolean(await this.pid());
+                this.check(action, agent);
+                if (running) {
+                    try {
+                        await stat(join(this.directory, "qmp.sock"));
+                    } catch {
+                        throw new Error(
+                            "Restart this VM once to enable live checkpoints, or stop it for disk-only history."
+                        );
+                    }
+                }
+                const history = new VmHistoryStore(this.directory, this.runner);
+                let result;
+                const check = () => this.check(action, agent);
+                if (action.historyAction === "list") result = await history.list(running);
+                else if (action.historyAction === "create") result = await history.create(action.label, running, check);
+                else if (action.historyAction === "restore") {
+                    try {
+                        result = await history.restore(action.checkpointId, running, check);
+                    } finally {
+                        // A lost monitor reply or metadata failure can follow a successful restore.
+                        this.generation++;
+                        rememberComputerControl(this.vmId, {
+                            owner: this.owner,
+                            agentId: this.assignedAgentId,
+                            generation: this.generation,
+                        });
+                        this.guestHealth = undefined;
+                        this.resetViewer();
+                        if (running) await this.runner("ssh", ["-O", "exit", ...this.sshArgs()], 5000).catch(() => {});
+                        this.invalidateStatus();
+                    }
+                } else throw new Error("Unknown history action.");
+                return { desktop: (await this.list())[0], history: result };
+            }
             if (action.action === "prepare") await this.prepare(() => this.check(action, agent));
             else if (action.action === "create" || action.action === "start") {
                 if (!(await this.pid())) {
@@ -547,7 +592,7 @@ export class QemuLinuxDesktopRuntime {
                 if (pid) {
                     try {
                         await this.ssh("sudo systemd-run --on-active=1s --quiet /usr/bin/systemctl poweroff", 5000);
-                    } catch (error) {
+                    } catch {
                         this.check(action, agent);
                         if (this.guestHealth) throw new Error("Could not shut down the guest. Try Stop VM again.");
                         if ((await this.pid()) === pid) {

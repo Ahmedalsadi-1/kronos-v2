@@ -1,5 +1,6 @@
 export interface SubagentSurfaceSnapshot {
     imageUrl?: string;
+    blockId?: string;
     targetKey?: string;
     title?: string;
     detail?: string;
@@ -11,6 +12,8 @@ export interface SubagentSurfaceTarget {
     id: string;
     sessionId?: string;
     live?: boolean;
+    capture?: boolean;
+    since?: number;
     swarm?: boolean;
 }
 

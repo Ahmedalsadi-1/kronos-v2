@@ -8,10 +8,24 @@ import {
     elementLabelForSelection,
     formatAnnotationPrompt,
     formatAnnotationsBundle,
+    formatBrowserSelectionDraft,
     makeBrowserAnnotation,
     type BrowserAnnotation,
 } from "./browser-annotations";
 import type { AgentWidgetDesignSelection } from "@/app/view/agent-widget-bridge";
+
+it("pastes readable selected text and screenshot coordinates without raw page data", () => {
+    const draft = formatBrowserSelectionDraft({
+        page: { title: "Example", sanitizedUrl: "https://example.com", viewportWidth: 800, viewportHeight: 600, devicePixelRatio: 2 },
+        target: { selector: "#title", annotationPoint: { x: 125.125, y: 60 }, rectViewport: { x: 100, y: 40, width: 200, height: 50 }, selectedText: "Selected passage", textSnippet: "Other page text", htmlSnippet: "private DOM" },
+        screenshot: { dataUrl: "private pixels" },
+    } as any, "Change this title", "change", "browser-one");
+    expect(draft).toContain("Point (viewport CSS px): x=125.13, y=60");
+    expect(draft).toContain("Selected text: Selected passage");
+    expect(draft).toContain("Screenshot viewport: 800 × 600; device scale: 2");
+    expect(draft).toContain('browser block "browser-one"');
+    expect(draft).not.toContain("private");
+});
 
 function makeSelection(overrides: Partial<AgentWidgetDesignSelection["element"]> = {}): AgentWidgetDesignSelection {
     return {

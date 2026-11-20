@@ -128,3 +128,25 @@ test("draft recipes focus the exact compose field before typing and require clic
         assert.equal(appWorkflow("draft", surface, new Set([...required, click])).ready, true);
     }
 });
+
+test("finds coding, browser interaction, and VM tools using task vocabulary", () => {
+    const catalog = [
+        { name: "lsp_diagnostics", description: "Get diagnostics", annotations: { readOnlyHint: true } },
+        { name: "widget_click", description: "Click a current element" },
+        { name: "sandbox_vm_exec", description: "Execute a command in the assigned guest" },
+        { name: "device_tap", description: "Tap the assigned device" },
+    ];
+    for (const [query, expected] of [
+        ["coding diagnostics", "lsp_diagnostics"],
+        ["browser click", "widget_click"],
+        ["virtual machine command", "sandbox_vm_exec"],
+        ["emulators tap", "device_tap"],
+    ]) {
+        assert.deepEqual(
+            searchTools(catalog, query).tools.map((tool) => tool.name),
+            [expected]
+        );
+    }
+    assert.equal(searchTools(catalog, "browser click", { readOnly: true }).total, 0);
+    assert.equal(searchTools(catalog.slice(0, 2), "virtual machine command").total, 0);
+});

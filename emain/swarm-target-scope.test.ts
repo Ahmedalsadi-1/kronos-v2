@@ -70,6 +70,15 @@ describe("swarm target grants", () => {
             assertSwarmToolCall(context, "device_tap", { targetId: "phone", expectedGeneration: 7 })
         ).not.toThrow();
         expect(isSwarmToolAllowed(context, "device_assign")).toBe(false);
+        expect(() => assertSwarmToolCall(context, "device_observe", { targetId: "phone" })).not.toThrow();
+        for (const name of ["device_step", "device_pick_element"]) {
+            expect(isSwarmToolAllowed(context, name)).toBe(true);
+            expect(() =>
+                assertSwarmToolCall(context, name, { targetId: "phone", expectedGeneration: 7 })
+            ).not.toThrow();
+            expect(() => assertSwarmToolCall(context, name, { targetId: "other", expectedGeneration: 7 })).toThrow();
+            expect(() => assertSwarmToolCall(context, name, { targetId: "phone", expectedGeneration: 6 })).toThrow();
+        }
     });
 
     test("pins the chosen VM in hybrid mode and rejects extra VMs in exclusive Computer mode", () => {

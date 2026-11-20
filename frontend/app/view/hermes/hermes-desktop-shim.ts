@@ -492,8 +492,6 @@ const shim: Window["hermesDesktop"] = {
         },
         launchWorkspace: async (action) => {
             if (["widgets", "tabs", "canvas", "os"].includes(action)) {
-                publishWorkspacePresentation(action as "widgets" | "tabs" | "canvas" | "os");
-                await RpcApi.SetConfigCommand(TabRpcClient, { "app:layoutmode": action });
                 return;
             }
             if (action === "activity" || action === "control") {

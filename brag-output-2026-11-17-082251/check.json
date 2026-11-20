@@ -1,0 +1,1235 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 1
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 13,
+    "findings": [
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 3.631,
+        "selector": "div.stage > div:nth-of-type(2)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 76,
+          "top": 58,
+          "right": 178.05,
+          "bottom": 94,
+          "width": 102.05,
+          "height": 36
+        },
+        "containerSelector": "div.hook > div:nth-of-type(1)",
+        "text": "KronOS",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 76,
+          "y": 58,
+          "width": 102.05,
+          "height": 36
+        },
+        "firstSeen": 3.631,
+        "lastSeen": 3.771,
+        "occurrences": 2,
+        "heldMs": 140.0000000000001,
+        "times": [
+          3.631,
+          3.771
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 3.631,
+        "selector": "div.stage > div:nth-of-type(3)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 1517.78,
+          "top": 66,
+          "right": 1844,
+          "bottom": 86,
+          "width": 326.22,
+          "height": 20
+        },
+        "containerSelector": "div.hook > div:nth-of-type(2)",
+        "text": "ONE CONNECTED WORKSPACE",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1517.78,
+          "y": 66,
+          "width": 326.22,
+          "height": 20
+        },
+        "firstSeen": 3.631,
+        "lastSeen": 3.771,
+        "occurrences": 2,
+        "heldMs": 140.0000000000001,
+        "times": [
+          3.631,
+          3.771
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 11.872,
+        "selector": "#caption-canvas",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 76,
+          "top": 136.1,
+          "right": 752,
+          "bottom": 205.1,
+          "width": 676,
+          "height": 69
+        },
+        "containerSelector": "div.site-nav > span:nth-of-type(1)",
+        "text": "Then open the whole canvas.",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 76,
+          "y": 136.1,
+          "width": 676,
+          "height": 69
+        },
+        "firstSeen": 11.872,
+        "lastSeen": 12.291,
+        "occurrences": 3,
+        "heldMs": 419.00000000000045,
+        "times": [
+          11.872,
+          12.011,
+          12.291
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 1.389,
+        "selector": "div.small",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 145,
+          "top": 1270,
+          "right": 580.25,
+          "bottom": 1298,
+          "width": 435.25,
+          "height": 28
+        },
+        "containerSelector": "#film",
+        "text": "ONE CONNECTED WORKSPACE",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 218
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 145,
+          "y": 1270,
+          "width": 435.25,
+          "height": 28
+        },
+        "firstSeen": 1.389,
+        "lastSeen": 20.833,
+        "occurrences": 8,
+        "heldMs": 0,
+        "times": [
+          1.389,
+          4.167,
+          6.944,
+          9.722,
+          12.5,
+          15.278,
+          18.056,
+          20.833
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 1.389,
+        "selector": "div.beta",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 145,
+          "top": 2057,
+          "right": 297.06,
+          "bottom": 2085,
+          "width": 152.06,
+          "height": 28
+        },
+        "containerSelector": "#film",
+        "text": "PRIVATE BETA",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 1005
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 145,
+          "y": 2057,
+          "width": 152.06,
+          "height": 28
+        },
+        "firstSeen": 1.389,
+        "lastSeen": 20.833,
+        "occurrences": 8,
+        "heldMs": 0,
+        "times": [
+          1.389,
+          4.167,
+          6.944,
+          9.722,
+          12.5,
+          15.278,
+          18.056,
+          20.833
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 8.24,
+        "selector": "span.typed",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 468,
+          "top": 485.87,
+          "right": 854.23,
+          "bottom": 524.87,
+          "width": 386.23,
+          "height": 39
+        },
+        "containerSelector": "div.site-button",
+        "text": "Build my launch workspace.",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 468,
+          "y": 485.87,
+          "width": 386.23,
+          "height": 39
+        },
+        "firstSeen": 8.24,
+        "lastSeen": 8.24,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          8.24
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.648,
+        "selector": "div.terminal > p:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 212.77,
+          "top": 705.96,
+          "right": 286.46,
+          "bottom": 725,
+          "width": 73.69,
+          "height": 19.04
+        },
+        "containerSelector": "div.small",
+        "text": "~/launch $ preview",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 212.77,
+          "y": 705.96,
+          "width": 73.69,
+          "height": 19.04
+        },
+        "firstSeen": 21.648,
+        "lastSeen": 21.648,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.648
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.648,
+        "selector": "div.terminal > p:nth-of-type(1) > em:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 150.12,
+          "top": 705.96,
+          "right": 212.77,
+          "bottom": 725,
+          "width": 62.65,
+          "height": 19.04
+        },
+        "containerSelector": "div.small",
+        "text": "~/launch",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 150.12,
+          "y": 705.96,
+          "width": 62.65,
+          "height": 19.04
+        },
+        "firstSeen": 21.648,
+        "lastSeen": 21.648,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.648
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.788,
+        "selector": "div.bottom-note",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 76,
+          "top": 1008,
+          "right": 403.08,
+          "bottom": 1032,
+          "width": 327.08,
+          "height": 24
+        },
+        "containerSelector": "div.beta",
+        "text": "CHAT → PREVIEW → CANVAS",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 76,
+          "y": 1008,
+          "width": 327.08,
+          "height": 24
+        },
+        "firstSeen": 21.788,
+        "lastSeen": 21.788,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.788
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "div.site-title",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 640.4,
+          "top": 323.8,
+          "right": 870.53,
+          "bottom": 423.97,
+          "width": 230.13,
+          "height": 100.17
+        },
+        "containerSelector": "div.wordmark",
+        "text": "A little space. A big idea.",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 640.4,
+          "y": 323.8,
+          "width": 230.13,
+          "height": 100.17
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "div.site-tag",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 640.4,
+          "top": 433.02,
+          "right": 816.99,
+          "bottom": 448.66,
+          "width": 176.59,
+          "height": 15.64
+        },
+        "containerSelector": "div.wordmark",
+        "text": "Your next chapter starts here.",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 640.4,
+          "y": 433.02,
+          "width": 176.59,
+          "height": 15.64
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "div.site-button",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 656.72,
+          "top": 483.6,
+          "right": 757.85,
+          "bottom": 496.52,
+          "width": 101.13,
+          "height": 12.92
+        },
+        "containerSelector": "div.wordmark",
+        "text": "Explore the project ↗",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 656.72,
+          "y": 483.6,
+          "width": 101.13,
+          "height": 12.92
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "div.vm-code",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 196.36,
+          "top": 350.32,
+          "right": 323.04,
+          "bottom": 370.04,
+          "width": 126.68,
+          "height": 19.72
+        },
+        "containerSelector": "div.wordmark",
+        "text": "workspace ready ~/launch ▸ run preview",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 196.36,
+          "y": 350.32,
+          "width": 126.68,
+          "height": 19.72
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "div.vm-code > b:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 196.36,
+          "top": 379.56,
+          "right": 292.47,
+          "bottom": 398.6,
+          "width": 96.11,
+          "height": 19.04
+        },
+        "containerSelector": "div.wordmark",
+        "text": "▸ run preview",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 196.36,
+          "y": 379.56,
+          "width": 96.11,
+          "height": 19.04
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "div.panel-foot > span:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 148.76,
+          "top": 498.56,
+          "right": 283.47,
+          "bottom": 517.6,
+          "width": 134.71,
+          "height": 19.04
+        },
+        "containerSelector": "div.wordmark",
+        "text": "Sandbox computer",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 148.76,
+          "y": 498.56,
+          "width": 134.71,
+          "height": 19.04
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 21.927,
+        "selector": "span.status",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 463.94,
+          "top": 498.56,
+          "right": 540.44,
+          "bottom": 517.6,
+          "width": 76.5,
+          "height": 19.04
+        },
+        "containerSelector": "div.wordmark",
+        "text": "● Running",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply. Decoration nobody needs to read can take data-layout-ignore.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 463.94,
+          "y": 498.56,
+          "width": 76.5,
+          "height": 19.04
+        },
+        "firstSeen": 21.927,
+        "lastSeen": 21.927,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          21.927
+        ]
+      }
+    ],
+    "duration": 25,
+    "samples": [
+      1.389,
+      4.167,
+      6.944,
+      9.722,
+      12.5,
+      15.278,
+      18.056,
+      20.833,
+      23.611
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 16,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.389,
+      6.944,
+      12.5,
+      18.056,
+      23.611
+    ],
+    "checked": 112,
+    "passed": 112
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 2,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Create, plan or research...\" (4 words) is on screen 1.16 s (±0.01 s), under its 1.27 s floor: hold it about 0.5 s + 0.3 s a word (1.70 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Create, plan or research...",
+        "selector": "div.placeholder",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 476.61,
+          "y": 508.37,
+          "width": 311.05000000000007,
+          "height": 33.39999999999998
+        },
+        "time": 3.836,
+        "words": 4,
+        "seconds": 1.164,
+        "floorSeconds": 1.275,
+        "measured": [
+          {
+            "time": 3.5,
+            "opacity": null,
+            "heightPx": null
+          },
+          {
+            "time": 3.625,
+            "opacity": null,
+            "heightPx": null
+          },
+          {
+            "time": 3.75,
+            "opacity": null,
+            "heightPx": null
+          },
+          {
+            "time": 3.875,
+            "opacity": 0.71,
+            "heightPx": 33
+          },
+          {
+            "time": 4,
+            "opacity": 0.94,
+            "heightPx": 34
+          },
+          {
+            "time": 4.125,
+            "opacity": 0.98,
+            "heightPx": 34
+          },
+          {
+            "time": 4.25,
+            "opacity": 1,
+            "heightPx": 34
+          },
+          {
+            "time": 4.5,
+            "opacity": 1,
+            "heightPx": 34
+          },
+          {
+            "time": 4.625,
+            "opacity": 1,
+            "heightPx": 34
+          },
+          {
+            "time": 4.75,
+            "opacity": 1,
+            "heightPx": 34
+          },
+          {
+            "time": 4.875,
+            "opacity": 1,
+            "heightPx": 34
+          },
+          {
+            "time": 5,
+            "opacity": 0.34,
+            "heightPx": 34
+          },
+          {
+            "time": 5.125,
+            "opacity": null,
+            "heightPx": null
+          },
+          {
+            "time": 5.25,
+            "opacity": null,
+            "heightPx": null
+          }
+        ]
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 55 text elements stay under it for 0.5 s or more, the smallest \"Explore the project ↗\" at 10 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Explore the project ↗",
+        "selector": "div.site-button",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 523.72,
+          "y": 453.53,
+          "width": 145.48,
+          "height": 18.59
+        },
+        "time": 8.375,
+        "times": [
+          0,
+          3.75,
+          4.25,
+          8.375,
+          8.375,
+          8.375,
+          8.375,
+          8.375,
+          8.375,
+          8.375,
+          8.375,
+          12.25,
+          12.25,
+          12.25,
+          12.25,
+          12.25,
+          12.25,
+          12.375,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.5,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          12.75,
+          13,
+          13,
+          13,
+          13,
+          13,
+          13,
+          13,
+          13,
+          13.25,
+          13.25,
+          13.25,
+          13.25,
+          13.875,
+          21.625,
+          21.75
+        ],
+        "fontPx": 10.2,
+        "floorPx": 28,
+        "seconds": 13.625,
+        "elements": [
+          {
+            "selector": "div.site-button",
+            "text": "Explore the project ↗",
+            "fontPx": 10.2,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.site-nav > span:nth-of-type(1)",
+            "text": "STUDIO / 01",
+            "fontPx": 10.88,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.site-nav > span:nth-of-type(2)",
+            "text": "ABOUT WORK CONTACT",
+            "fontPx": 10.88,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.site-tag",
+            "text": "Your next chapter starts here.",
+            "fontPx": 12.92,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.vm-code > span:nth-of-type(1)",
+            "text": "~/launch",
+            "fontPx": 12.92,
+            "time": 12.25,
+            "seconds": 9.75
+          },
+          {
+            "selector": "#bots > div:nth-of-type(2) > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Project context attached",
+            "fontPx": 13.58,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "#bots > div:nth-of-type(2) > small:nth-of-type(1)",
+            "text": "Ready",
+            "fontPx": 13.58,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "#bots > div:nth-of-type(3) > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Tools connected",
+            "fontPx": 13.58,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "#bots > div:nth-of-type(3) > small:nth-of-type(1)",
+            "text": "Ready",
+            "fontPx": 13.58,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "#connections > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "SSH",
+            "fontPx": 13.94,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "#connections > div:nth-of-type(3) > span:nth-of-type(1)",
+            "text": "MCP",
+            "fontPx": 13.94,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "#connections > div:nth-of-type(4) > span:nth-of-type(1)",
+            "text": "Linked",
+            "fontPx": 13.94,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "div.open",
+            "text": "Open canvas",
+            "fontPx": 14.28,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.terminal > p:nth-of-type(1)",
+            "text": "$ preview",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.terminal > p:nth-of-type(1) > em:nth-of-type(1)",
+            "text": "~/launch",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.terminal > p:nth-of-type(2)",
+            "text": "Opening workspace preview...",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "p.status",
+            "text": "✓ Ready",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.terminal > div:nth-of-type(1)",
+            "text": "index.html",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.terminal > div:nth-of-type(1) > span:nth-of-type(1)",
+            "text": "Open",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.terminal > div:nth-of-type(2)",
+            "text": "launch-notes.md",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.terminal > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Open",
+            "fontPx": 15.24,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "#connections > div:nth-of-type(5)",
+            "text": "One workspace. Shared context.",
+            "fontPx": 15.27,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "span.selected",
+            "text": "Preview",
+            "fontPx": 15.64,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.tabs > span:nth-of-type(2)",
+            "text": "Files",
+            "fontPx": 15.64,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.tabs > span:nth-of-type(3)",
+            "text": "Terminal",
+            "fontPx": 15.64,
+            "time": 8.375,
+            "seconds": 13.625
+          },
+          {
+            "selector": "div.vm-code > b:nth-of-type(1)",
+            "text": "▸ run preview",
+            "fontPx": 15.64,
+            "time": 12.25,
+            "seconds": 9.75
+          },
+          {
+            "selector": "div.panel-foot > span:nth-of-type(1)",
+            "text": "Sandbox computer",
+            "fontPx": 15.64,
+            "time": 12.25,
+            "seconds": 9.75
+          },
+          {
+            "selector": "span.status",
+            "text": "● Running",
+            "fontPx": 15.64,
+            "time": 12.25,
+            "seconds": 9.75
+          },
+          {
+            "selector": "#connections > div:nth-of-type(2) > b:nth-of-type(1)",
+            "text": "Remote workspace",
+            "fontPx": 15.93,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "#connections > div:nth-of-type(3) > b:nth-of-type(1)",
+            "text": "Tool servers",
+            "fontPx": 15.93,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "#connections > div:nth-of-type(4) > b:nth-of-type(1)",
+            "text": "Project room",
+            "fontPx": 15.93,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "div.workflow > span:nth-of-type(1)",
+            "text": "Plan",
+            "fontPx": 16.29,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "div.workflow > span:nth-of-type(2)",
+            "text": "Build",
+            "fontPx": 16.29,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "div.workflow > span:nth-of-type(3)",
+            "text": "Review",
+            "fontPx": 16.29,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "div.vm-code",
+            "text": "workspace ready",
+            "fontPx": 16.32,
+            "time": 12.25,
+            "seconds": 9.75
+          },
+          {
+            "selector": "div.tool-tabs > span:nth-of-type(1)",
+            "text": "Terminal",
+            "fontPx": 16.57,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.tool-tabs > span:nth-of-type(2)",
+            "text": "Files",
+            "fontPx": 16.57,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.tool-tabs > span:nth-of-type(3)",
+            "text": "Browser",
+            "fontPx": 16.57,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "div.hook > div:nth-of-type(2)",
+            "text": "BRING IT TOGETHER",
+            "fontPx": 17,
+            "time": 0,
+            "seconds": 3.875
+          },
+          {
+            "selector": "div.stage > div:nth-of-type(3)",
+            "text": "ONE CONNECTED WORKSPACE",
+            "fontPx": 17,
+            "time": 3.75,
+            "seconds": 18.25
+          },
+          {
+            "selector": "div.memory-body > span:nth-of-type(1)",
+            "text": "Project context",
+            "fontPx": 17.57,
+            "time": 13.25,
+            "seconds": 8.75
+          },
+          {
+            "selector": "div.memory-body > span:nth-of-type(2)",
+            "text": "Preferences",
+            "fontPx": 17.57,
+            "time": 13.25,
+            "seconds": 8.75
+          },
+          {
+            "selector": "div.memory-body > span:nth-of-type(3)",
+            "text": "Saved knowledge",
+            "fontPx": 17.57,
+            "time": 13.25,
+            "seconds": 8.75
+          },
+          {
+            "selector": "#bots > div:nth-of-type(2) > div:nth-of-type(2) > b:nth-of-type(1)",
+            "text": "Research bot",
+            "fontPx": 18.33,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "#bots > div:nth-of-type(3) > div:nth-of-type(2) > b:nth-of-type(1)",
+            "text": "Build bot",
+            "fontPx": 18.33,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "div.bottom-note",
+            "text": "CHAT → PREVIEW → CANVAS",
+            "fontPx": 20,
+            "time": 13.875,
+            "seconds": 8.125
+          },
+          {
+            "selector": "span.typed",
+            "text": "Build my launch workspace.",
+            "fontPx": 21.76,
+            "time": 12.25,
+            "seconds": 9.75
+          },
+          {
+            "selector": "div.small",
+            "text": "ONE CONNECTED WORKSPACE",
+            "fontPx": 23,
+            "time": 21.625,
+            "seconds": 3.375
+          },
+          {
+            "selector": "div.beta",
+            "text": "PRIVATE BETA",
+            "fontPx": 23,
+            "time": 21.75,
+            "seconds": 3.25
+          },
+          {
+            "selector": "#memory > div:nth-of-type(1) > strong:nth-of-type(1)",
+            "text": "Memory",
+            "fontPx": 23.42,
+            "time": 13.25,
+            "seconds": 8.75
+          },
+          {
+            "selector": "#tools > div:nth-of-type(1) > strong:nth-of-type(1)",
+            "text": "Your tools",
+            "fontPx": 23.86,
+            "time": 12.75,
+            "seconds": 9.25
+          },
+          {
+            "selector": "#connections > div:nth-of-type(1) > strong:nth-of-type(1)",
+            "text": "Connections",
+            "fontPx": 23.9,
+            "time": 13,
+            "seconds": 9
+          },
+          {
+            "selector": "#bots > div:nth-of-type(1) > strong:nth-of-type(1)",
+            "text": "Bots & workflows",
+            "fontPx": 24.44,
+            "time": 12.5,
+            "seconds": 9.5
+          },
+          {
+            "selector": "#vms > div:nth-of-type(1) > strong:nth-of-type(1)",
+            "text": "Virtual machines",
+            "fontPx": 24.48,
+            "time": 12.375,
+            "seconds": 9.625
+          },
+          {
+            "selector": "div.composer-label",
+            "text": "START WITH A CONVERSATION",
+            "fontPx": 25,
+            "time": 4.25,
+            "seconds": 3.75
+          }
+        ]
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 200
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "52f1bede-737c-4692-8028-0c63927f8a17",
+    "revision": "fbc27910-ffa6-4ef8-8a04-62af6216a4db",
+    "report": "/Users/albsheralsadi/kronterm/brag-output-2026-11-17-082251/composition/.hyperframes/artifacts/checks/52f1bede-737c-4692-8028-0c63927f8a17.json",
+    "attribution": "recorded-revision"
+  },
+  "_meta": {
+    "version": "0.9.61",
+    "latestVersion": "0.9.61",
+    "updateAvailable": false,
+    "checkedAt": "2026-11-17T13:26:47.822Z",
+    "skillsOutdated": 4,
+    "skillsMissing": 2
+  }
+}

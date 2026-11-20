@@ -1047,7 +1047,8 @@ export class KronTermNativeToolBridge extends WshBridge {
 
     async focusBlock(targetBlockId: string): Promise<string> {
         const target = this.assertBlockScope(targetBlockId);
-        await this.workspaceSurfaceControl({ action: "focus", blockId: target });
+        const result = JSON.parse(await this.workspaceSurfaceControl({ action: "focus", blockId: target }));
+        if (result.success === false) throw new Error(result.message || "Could not focus widget.");
         return `focused block:${target}`;
     }
 
@@ -1063,7 +1064,7 @@ export class KronTermNativeToolBridge extends WshBridge {
             blockdef: { meta: { ...meta, view } },
             magnified: Boolean(magnified),
             ephemeral: Boolean(ephemeral),
-            focused: true,
+            focused: !meta["os:chatdock"],
         });
         return `block created: ${String(result)}`;
     }
@@ -1107,19 +1108,28 @@ export class KronTermNativeToolBridge extends WshBridge {
 
     async openWeb(url: string, magnified?: boolean, newSurface = false): Promise<string> {
         const normalizedUrl = normalizeBrowserUrl(url);
-        if (!newSurface && !magnified) {
+        const penChat = this.context().agentRuntime === "hermes" &&
+            (await this.workspaceSurfaceSnapshot().then((snapshot) => JSON.parse(snapshot)).catch(() => undefined))
+                ?.penchatmode === "tabs";
+        if (!newSurface && (!magnified || penChat)) {
             const blocks = JSON.parse(await this.listBlocks()) as Array<Record<string, any>>;
-            const existing =
-                blocks.find((entry) => entry.view === "web" && entry.focused) ??
-                blocks.find((entry) => entry.view === "web");
+            const browsers = blocks.filter((entry) =>
+                entry.view === "web" && (!penChat ||
+                    (entry.meta?.["os:chatdock"] === "browser" && entry.meta.url === normalizedUrl))
+            );
+            const existing = browsers.find((entry) => entry.focused) ?? browsers[0];
             const existingId = existing?.blockid ?? existing?.blockId;
             if (typeof existingId === "string" && existingId) {
                 await this.navigateWeb(existingId, normalizedUrl);
-                await this.focusBlock(existingId);
+                if (!penChat) await this.focusBlock(existingId);
                 return `reused block block:${existingId}`;
             }
         }
-        return this.createBlock("web", { url: normalizedUrl }, magnified);
+        return this.createBlock(
+            "web",
+            { url: normalizedUrl, ...(penChat ? { "os:chatdock": "browser" } : {}) },
+            !penChat && magnified
+        );
     }
 
     async navigateWeb(targetBlockId: string, url: string): Promise<string> {
@@ -1156,6 +1166,14 @@ export class KronTermNativeToolBridge extends WshBridge {
 
     async openPath(filePath: string, edit?: boolean, magnified?: boolean): Promise<string> {
         const absolutePath = path.resolve(filePath);
+        if (this.context().agentRuntime === "hermes" && !magnified && !edit) {
+            const snapshot = JSON.parse(await this.workspaceSurfaceSnapshot());
+            if (snapshot.penchatmode === "tabs") {
+                const result = JSON.parse(await this.workspaceSurfaceControl({ action: "spatial.openFile", file: absolutePath }));
+                if (!result.success) throw new Error(result.message || "Could not show file in chat.");
+                return result.message;
+            }
+        }
         return this.createBlock("preview", { file: absolutePath, ...(edit ? { edit: "true" } : {}) }, magnified);
     }
 

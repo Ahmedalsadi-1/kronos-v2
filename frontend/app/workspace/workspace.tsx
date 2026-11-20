@@ -314,7 +314,7 @@ const WorkspaceElem = memo(() => {
                                     <CenteredDiv>No Active Tab</CenteredDiv>
                                 ) : (
                                     <div className="relative flex h-full flex-row">
-                                        <TabContent key={tabId} tabId={tabId} noTopPadding={isMacOS()} />
+                                        <TabContent key={tabId} tabId={tabId} />
                                     </div>
                                 )}
                             </div>

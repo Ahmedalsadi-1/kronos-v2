@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { SaxesParser } from "saxes";
 import type { DeviceSelectedElement } from "../../../frontend/types/computer-targets";
+import { AndroidLiveStream } from "./android-live-stream";
 import { parseAdbDevices, parseWmSize } from "./vendor/orca/android/adb-devices";
 import { androidButtonKeycode, normalizedToDevicePixels } from "./vendor/orca/android/android-input-mapping";
 import { AndroidSdkPaths, discoverAndroidSdk } from "./vendor/orca/android/android-sdk-discovery";
@@ -71,6 +72,7 @@ export class AndroidSimulatorService {
     private readonly starts = new Map<string, Promise<AndroidSimulatorDevice>>();
     private discovery?: Promise<AndroidSimulatorDevice[]>;
     private readonly captures = new Map<string, Promise<string>>();
+    private readonly streams = new Map<string, AndroidLiveStream>();
     private inventory: AndroidSimulatorDevice[] = [];
     private inventoryUpdatedAt = 0;
     private screenSizes = new Map<string, { width: number; height: number; time: number }>();
@@ -100,12 +102,14 @@ export class AndroidSimulatorService {
         }));
     }
 
-    private async readInventory(): Promise<AndroidSimulatorDevice[]> {
+    private async readInventory(knownAvds?: string[]): Promise<AndroidSimulatorDevice[]> {
         if (!this.sdk) {
             return [];
         }
         const [avdOutput, deviceOutput] = await Promise.all([
-            this.run(this.sdk.emulator, ["-list-avds"]),
+            knownAvds
+                ? Promise.resolve(Buffer.from(knownAvds.join("\n")))
+                : this.run(this.sdk.emulator, ["-list-avds"]),
             this.run(this.sdk.adb, ["devices", "-l"]),
         ]);
         const devices = parseAdbDevices(deviceOutput.toString());
@@ -171,7 +175,9 @@ export class AndroidSimulatorService {
     }
 
     private async bootDevice(id: string): Promise<AndroidSimulatorDevice> {
-        const target = (await this.discover()).find((device) => device.id === id);
+        const inventory = await this.discover();
+        const knownAvds = inventory.flatMap((device) => (device.avdName ? [device.avdName] : []));
+        const target = inventory.find((device) => device.id === id);
         if (!target) {
             throw new Error("Android device no longer exists.");
         }
@@ -188,8 +194,12 @@ export class AndroidSimulatorService {
             "-cores",
             "2",
         ]);
-        for (let elapsed = 0; elapsed < this.bootTimeoutMs; elapsed += 1000) {
-            const current = (await this.discover()).find((device) => device.id === id && device.status === "booted");
+        let current: AndroidSimulatorDevice;
+        const deadline = performance.now() + this.bootTimeoutMs;
+        for (let elapsed = 0; elapsed < this.bootTimeoutMs && performance.now() < deadline; elapsed += 1000) {
+            current ??= (await this.readInventory(knownAvds)).find(
+                (device) => device.id === id && device.status === "booted"
+            );
             if (current?.serial) {
                 const completed = await this.run(this.sdk.adb, [
                     "-s",
@@ -224,6 +234,7 @@ export class AndroidSimulatorService {
         if (!device.serial.startsWith("emulator-")) {
             throw new Error("Only Android virtual devices can be shut down.");
         }
+        this.detachLive(id);
         await this.run(this.sdk.adb, emuKillArgs(device.serial));
         this.inventoryUpdatedAt = 0;
         this.screenSizes.delete(device.serial);
@@ -234,9 +245,33 @@ export class AndroidSimulatorService {
         const captureKey = JSON.stringify([id, device.serial, generation]);
         const active = this.captures.get(captureKey);
         if (active) return active;
-        const capture = this.capture(device.serial).finally(() => this.captures.delete(captureKey));
+        const capture = this.capture(device.serial).finally(() => {
+            if (this.captures.get(captureKey) === capture) this.captures.delete(captureKey);
+        });
         this.captures.set(captureKey, capture);
         return capture;
+    }
+
+    async subscribeVideo(
+        id: string,
+        listener: (packet: import("./android-live-stream").AndroidVideoPacket) => void
+    ): Promise<() => void> {
+        const device = await this.connected(id);
+        let stream = this.streams.get(id);
+        if (!stream || stream.isStopped) {
+            stream = new AndroidLiveStream(this.sdk.adb, device.serial);
+            this.streams.set(id, stream);
+        }
+        return stream.subscribe(listener);
+    }
+
+    detachLive(id: string): void {
+        this.streams.get(id)?.stop();
+        this.streams.delete(id);
+    }
+
+    stopVideoStreams(): void {
+        for (const id of this.streams.keys()) this.detachLive(id);
     }
 
     private async capture(serial: string): Promise<string> {
@@ -295,7 +330,7 @@ export class AndroidSimulatorService {
         const size =
             cached && Date.now() - cached.time < 5000
                 ? cached
-                : parseWmSize((await this.run(this.sdk.adb, ["-s", device.serial, "shell", "wm", "size"])).toString());
+                : await this.currentDisplaySize(device.serial);
         if (!size || size.width < 1 || size.height < 1) {
             throw new Error("Android display size is unavailable.");
         }
@@ -303,11 +338,38 @@ export class AndroidSimulatorService {
         return { device, size };
     }
 
+    private async currentDisplaySize(serial: string) {
+        const shell = ["-s", serial, "shell"];
+        const displays = await this.run(this.sdk.adb, [...shell, "dumpsys", "window", "displays"]);
+        const size = /\bcur=(\d+)x(\d+)/.exec(displays.toString());
+        if (size) return { width: Number(size[1]), height: Number(size[2]) };
+        return parseWmSize((await this.run(this.sdk.adb, [...shell, "wm", "size"])).toString());
+    }
+
+    async rotate(id: string, orientation: string): Promise<void> {
+        const rotations = { portrait: 0, "landscape-left": 1, "portrait-upside-down": 2, "landscape-right": 3 };
+        if (!Object.hasOwn(rotations, orientation)) throw new Error("Unsupported Android orientation.");
+        const device = await this.connected(id);
+        if (!device.avdName) throw new Error("Rotation is available for Android emulators.");
+        await this.run(this.sdk.adb, [
+            "-s", device.serial, "shell", "cmd", "window", "user-rotation", "lock", String(rotations[orientation]),
+        ]);
+        this.screenSizes.delete(device.serial);
+        this.invalidateCaptures(id);
+    }
+
+    private invalidateCaptures(id: string) {
+        for (const key of this.captures.keys()) {
+            if (JSON.parse(key)[0] === id) this.captures.delete(key);
+        }
+    }
+
     async tap(id: string, x: number, y: number): Promise<void> {
         validateCoordinate(x);
         validateCoordinate(y);
         const { device, size } = await this.screen(id);
         const pixel = normalizedToDevicePixels(x, y, size);
+        this.invalidateCaptures(id);
         await this.run(this.sdk.adb, ["-s", device.serial, "shell", "input", "tap", String(pixel.x), String(pixel.y)]);
     }
 
@@ -316,6 +378,7 @@ export class AndroidSimulatorService {
         const { device, size } = await this.screen(id);
         const from = normalizedToDevicePixels(x, y, size),
             to = normalizedToDevicePixels(endX, endY, size);
+        this.invalidateCaptures(id);
         await this.run(this.sdk.adb, [
             "-s",
             device.serial,
@@ -337,6 +400,7 @@ export class AndroidSimulatorService {
         const device = await this.connected(id);
         // adb shell joins arguments before remote parsing, so shell quoting is required even with execFile.
         const escaped = text.replace(/ /g, "%s").replace(/'/g, "'\\''");
+        this.invalidateCaptures(id);
         await this.run(this.sdk.adb, ["-s", device.serial, "shell", "input", "text", `'${escaped}'`]);
     }
 
@@ -359,11 +423,13 @@ export class AndroidSimulatorService {
         };
         if (!Object.hasOwn(keycodes, key)) throw new Error("Unsupported Android keyboard key.");
         const device = await this.connected(id);
+        this.invalidateCaptures(id);
         await this.run(this.sdk.adb, ["-s", device.serial, "shell", "input", "keyevent", String(keycodes[key])]);
     }
 
     async button(id: string, button: "home" | "back" | "recents"): Promise<void> {
         const device = await this.connected(id);
+        this.invalidateCaptures(id);
         await this.run(this.sdk.adb, [
             "-s",
             device.serial,

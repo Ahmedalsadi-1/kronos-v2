@@ -18,6 +18,13 @@ const QueryNoise = new Set([
     "use",
 ]);
 const QueryWords: Record<string, string> = {
+    coding: "code",
+    emulators: "emulator",
+    simulators: "simulator",
+    vms: "vm",
+    diagnostics: "diagnostic",
+    definitions: "definition",
+    references: "reference",
     files: "file",
     widgets: "widget",
     skills: "skill",

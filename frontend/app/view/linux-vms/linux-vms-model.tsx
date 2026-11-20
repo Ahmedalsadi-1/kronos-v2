@@ -1,11 +1,13 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useBlockClose } from "@/app/block/block-chrome-context";
 import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { SystemUIProvider } from "@/app/components/system-ui";
 import { uxCloseBlock } from "@/app/store/keymodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { PenChatDockMeta } from "@/app/tab/os-pen-chat-dock-model";
 import { WOS } from "@/store/global";
 import { atom, useAtomValue, type Atom } from "jotai";
 import { useEffect, useState } from "react";
@@ -44,6 +46,7 @@ export class LinuxVmsViewModel implements ViewModel {
 
 export function LinuxVmsView({ model, contentRef }: ViewComponentProps<LinuxVmsViewModel>) {
     const block = useAtomValue(model.blockAtom);
+    const closeOwnedBlock = useBlockClose();
     const kind = block?.meta?.["machine:kind"];
     const section: MachineSection = kind == "macos" || kind == "android" || kind == "iphone" ? kind : "desktop";
     const [settings, setSettings] = useState(Boolean(block?.meta?.["machine:settings"]));
@@ -83,8 +86,9 @@ export function LinuxVmsView({ model, contentRef }: ViewComponentProps<LinuxVmsV
                 ) : (
                     <LinuxVmsPanel
                         blockId={model.blockId}
-                        onCloseWidget={() => uxCloseBlock(model.blockId, () => model.nodeModel?.onClose())}
+                        onCloseWidget={closeOwnedBlock ?? (() => uxCloseBlock(model.blockId, () => model.nodeModel?.onClose()))}
                         initialSection={section}
+                        sidePanel={block?.meta?.[PenChatDockMeta] === section}
                         settings={settings}
                         targetId={block?.meta?.["machine:target"] as string}
                     />

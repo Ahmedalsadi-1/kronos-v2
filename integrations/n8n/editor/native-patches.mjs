@@ -276,10 +276,16 @@ const { setup: setupPostMessages`
       "return !ndvStore.value.activeNode && uiStore.activeModals.length === 0;",
       "return !(window as any).__KRONTERM_WORKFLOW_HOST__?.managementOpen?.value && !(window as any).__KRONTERM_WORKFLOW_HOST__?.documentMutation?.value && !ndvStore.value.activeNode && uiStore.activeModals.length === 0;"
     );
-    if (!value.includes("function onOpenChat() {\n    const nativeHost"))
+    const openChatStart = "function onOpenChat() {";
+    const openChatHook = "\n    const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;\n    if(nativeHost?.openChat) { nativeHost.openChat(); return; }";
+    value = value.replace(
+      `${openChatStart}${openChatHook}\n\tconst nativeHost =`,
+      `${openChatStart}\n\tconst nativeHost =`
+    );
+    if (!/function onOpenChat\(\) \{\s*const nativeHost =/.test(value))
       value = value.replace(
-        "function onOpenChat() {",
-        "function onOpenChat() {\n    const nativeHost = (window as any).__KRONTERM_WORKFLOW_HOST__;\n    if(nativeHost?.openChat) { nativeHost.openChat(); return; }"
+        openChatStart,
+        openChatStart + openChatHook
       );
     value = value.replace(
       '<div :class="$style.wrapper">',
@@ -584,8 +590,10 @@ const { setup: setupPostMessages`
       ':to="nativeWorkflowHost?.detailTarget || `#${APP_MODALS_ELEMENT_ID}`"',
       ":to=\"(nativeDetailsRole === 'workflow' && nativeWorkflowHost?.focusTarget) || nativeWorkflowHost?.detailTarget || `#${APP_MODALS_ELEMENT_ID}`\""
     );
-    value = value.replace(/(?:v-if="!nativeWorkflowHost" )+/g, "");
-    value = value.replace('data-test-id="ndv-backdrop"', 'v-if="!nativeWorkflowHost" data-test-id="ndv-backdrop"');
+    value = value.replace(
+      /(?:v-if="!nativeWorkflowHost"\s+)*data-test-id="ndv-backdrop"/g,
+      'v-if="!nativeWorkflowHost" data-test-id="ndv-backdrop"'
+    );
     value = value.replace(
       ':style="{ zIndex: APP_Z_INDEXES.NDV }"\n\t\t>',
       ":style=\"nativeWorkflowHost ? {zIndex: APP_Z_INDEXES.NDV, position: 'absolute', inset: nativeExpanded ? '8px' : 'auto 8px 8px auto', width: nativeExpanded ? 'calc(100% - 16px)' : 'min(1100px, calc(100% - 16px))', height: nativeExpanded ? 'calc(100% - 16px)' : 'min(680px, calc(100% - 16px))', pointerEvents: 'auto'} : { zIndex: APP_Z_INDEXES.NDV }\"\n\t\t>"

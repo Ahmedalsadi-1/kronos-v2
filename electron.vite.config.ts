@@ -41,6 +41,8 @@ export default defineConfig({
         define: {
             "process.env.WS_NO_BUFFER_UTIL": "true",
             "process.env.WS_NO_UTF_8_VALIDATE": "true",
+            "process.env.KRONOS_SUPABASE_URL": JSON.stringify(process.env.KRONOS_SUPABASE_URL ?? ""),
+            "process.env.KRONOS_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(process.env.KRONOS_SUPABASE_PUBLISHABLE_KEY ?? ""),
         },
     },
     preload: {
@@ -54,6 +56,8 @@ export default defineConfig({
                     "preload-webview": "emain/preload-webview.ts",
                     "preload-pet": "emain/preload-pet.ts",
                     "preload-overlay": "emain/preload-overlay.ts",
+                    "startup-onboarding": "emain/preload-startup-onboarding.ts",
+                    "kronos-signin": "emain/preload-kronos-signin.ts",
                 },
                 output: {
                     format: "cjs",

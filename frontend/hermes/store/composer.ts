@@ -18,6 +18,8 @@ export interface ComposerAttachment {
     previewUrl?: string;
     /** Transient captured pixels; staged through image.attach_bytes at submit. */
     imageDataUrl?: string;
+    /** Transient browser file bytes; staged through file.attach at submit. */
+    fileDataUrl?: string;
     /** Downscaled data URL for the attachment card and optimistic bubble only. */
     thumbnailUrl?: string;
     path?: string;

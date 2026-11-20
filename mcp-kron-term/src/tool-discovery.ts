@@ -8,6 +8,12 @@ export type DiscoverableTool = {
     annotations?: Record<string, unknown>;
 };
 
+const FamilySearchTerms: Partial<Record<KronTermToolFamilyId, string>> = {
+    lsp: "coding code language server",
+    sandbox: "sandbox virtual machine vm",
+    widget: "browser dom accessibility",
+};
+
 export function searchTools(
     tools: DiscoverableTool[],
     query: string,
@@ -28,7 +34,8 @@ export function searchTools(
         .map((tool) => {
             const name = tool.name.toLowerCase();
             const family = kronTermToolFamily(tool.name);
-            const text = `${name} ${tool.description ?? ""} ${family ?? ""} ${family ? KronTermToolFamilies[family].label : ""}`;
+            const targetTerms = name.startsWith("device_") ? "emulator simulator" : "";
+            const text = `${name} ${tool.description ?? ""} ${family ?? ""} ${family ? KronTermToolFamilies[family].label : ""} ${family ? (FamilySearchTerms[family] ?? "") : ""} ${targetTerms}`;
             const score =
                 (name === query.trim().toLowerCase() ? 100 : 0) +
                 terms.reduce((total, term) => total + (name.includes(term) ? 4 : 1), 0);

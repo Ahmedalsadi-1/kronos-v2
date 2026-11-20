@@ -15,6 +15,16 @@ const desktop = () =>
         controlGeneration: 7,
     }) as any;
 describe("delegated computer leases", () => {
+    test("device-only inherited workers do not require an unrelated VM and cannot acquire its tools", async () => {
+        const inspect = vi.fn(async () => { throw new Error("Start the virtual machine."); });
+        const policy = new DelegationPolicy(inspect);
+        const grant = await policy.prepare({ ...context, sandboxComputerMode: "hybrid" }, "inherit", 1,
+            ["device_observe", "device_step"], ["device_observe", "device_step", "sandbox_vm_exec", "terminal", "tool_search"]);
+        expect(inspect).not.toHaveBeenCalled();
+        expect(grant.tools).toEqual(["device_observe", "device_step", "tool_search"]);
+        expect((await policy.resolve(grant.token, "caller:1")).context.deviceOnly).toBe(true);
+        policy.finish(grant.token, undefined, "caller:1");
+    });
     test("validates readiness and required tools before issuing a lease", async () => {
         const vm = desktop();
         const policy = new DelegationPolicy(async () => vm);

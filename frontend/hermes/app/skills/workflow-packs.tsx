@@ -1,5 +1,7 @@
 import { queryClient } from "@hermes/lib/query-client";
+import { invalidateSlashCompletions } from "@hermes/lib/slash-completion-cache";
 import { notify, notifyError } from "@hermes/store/notifications";
+import { reloadInstalledSkills } from "@hermes/store/reload-installed-skills";
 import { useState } from "react";
 
 const WorkflowPacks = [
@@ -58,11 +60,12 @@ export function WorkflowPacksPicker({
                 timeoutMs: 135_000,
             });
             await queryClient.invalidateQueries({ queryKey: ["skills-list"] });
+            await reloadInstalledSkills(profile);
+            invalidateSlashCompletions();
             notify({
                 kind: "success",
                 title: `${pack.name} installed`,
-                message:
-                    "Use the skill controls above to enable or disable it. Start a new session to refresh capabilities.",
+                message: "Skills reloaded and ready to use. Use the controls above to enable or disable them.",
             });
             setSelected(undefined);
         } catch (error) {

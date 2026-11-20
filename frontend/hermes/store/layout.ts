@@ -488,7 +488,13 @@ export function toggleSidebarOpen() {
   }
 }
 
+function openSplitChatFiles(): boolean {
+  return typeof document !== 'undefined' &&
+    !document.dispatchEvent(new Event('kronos:open-chat-files', { cancelable: true }))
+}
+
 export function toggleFileBrowserOpen() {
+  if (openSplitChatFiles()) return
   if (revealNarrowPane(FILE_BROWSER_PANE_ID, 'toggle')) {
     return
   }
@@ -509,6 +515,7 @@ export function toggleFileBrowserOpen() {
 }
 
 export function setFileBrowserOpen(open: boolean) {
+  if (open && openSplitChatFiles()) return
   setPaneOpen(FILE_BROWSER_PANE_ID, open)
   revealNarrowPane(FILE_BROWSER_PANE_ID, open ? 'open' : 'close')
 }

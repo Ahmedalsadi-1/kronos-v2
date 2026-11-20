@@ -1,0 +1,103 @@
+/* Copyright 2026, Command Line Inc. SPDX-License-Identifier: Apache-2.0 */
+.os-hermes-settings-dialog[data-color-scheme="dark"] {
+    --dt-background: #1c1c1e;
+    --dt-foreground: #ececec;
+    --dt-card: #262628;
+    --dt-card-foreground: #d4d4d6;
+    --dt-popover: #262628;
+    --dt-popover-foreground: #d4d4d6;
+    --dt-primary: #d4d4d6;
+    --dt-primary-foreground: #1e1e1e;
+    --dt-ring: #85858a;
+    --ui-text-tertiary: #a1a1a6;
+    --ui-stroke-secondary: #3d3d41;
+    --dt-muted: #2c2c2f;
+    --dt-muted-foreground: #a1a1a6;
+    --dt-secondary: #2c2c2f;
+    --dt-secondary-foreground: #d4d4d6;
+    --dt-border: #3d3d41;
+    --dt-input: #3d3d41;
+    --dt-accent: #343437;
+    --dt-accent-foreground: #ededee;
+    --ui-sidebar-surface-background: #262628;
+    --ui-chat-surface-background: #1e1e1e;
+    --os-hermes-settings-surface: #1c1c1e;
+    color: #ececec;
+}
+.os-hermes-settings-dialog[data-color-scheme="dark"] .os-hermes-settings-titlebar {
+    background: transparent;
+    border-bottom: 0;
+    color: #d4d4d6;
+    min-height: 44px;
+    padding: 0 12px 0 18px;
+}
+.os-hermes-settings-dialog[data-color-scheme="dark"] .os-hermes-settings-body {
+    --os-hermes-settings-surface-opacity: 100%;
+    --os-hermes-settings-sidebar-opacity: 100%;
+    background: var(--os-hermes-settings-surface);
+}
+
+.os-hermes-settings-dialog[data-os-hermes-settings] {
+    overflow: hidden;
+    border: 6px solid color-mix(in srgb, var(--dt-foreground, var(--kt-label)) 15%, transparent);
+    border-radius: 30px;
+    background: var(--dt-background, var(--kt-content));
+    background-clip: padding-box;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--dt-foreground, var(--kt-label)) 20%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, var(--dt-foreground, var(--kt-label)) 8%, transparent),
+        0 24px 80px #00000040;
+    -webkit-backdrop-filter: blur(24px) saturate(115%);
+    backdrop-filter: blur(24px) saturate(115%);
+}
+.os-hermes-settings-dialog[data-os-hermes-settings] .os-hermes-settings-titlebar {
+    min-height: 42px;
+    padding: 0 12px 0 20px;
+    background: transparent;
+    border-bottom: 0;
+    color: var(--dt-foreground, var(--kt-label));
+    font-weight: 500;
+}
+.os-hermes-settings-dialog[data-os-hermes-settings] .os-hermes-settings-titlebar .kt-system-button {
+    border-radius: 50%;
+}
+.os-hermes-settings-dialog[data-os-hermes-settings] .os-hermes-settings-body {
+    border-radius: 0 0 23px 23px;
+    background: var(--dt-background, var(--kt-content));
+}
+.os-hermes-settings-dialog[data-reduced-transparency="true"],
+.os-hermes-settings-dialog[data-reduced-transparency="true"] [data-settings-navigation] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+.os-hermes-settings-dialog[data-reduced-transparency="true"] [data-settings-navigation] {
+    background: var(--settings-sidebar);
+}
+.os-hermes-settings-dialog[data-contrast="high"] {
+    --settings-separator: color-mix(in srgb, var(--dt-foreground, var(--kt-label)) 30%, transparent);
+    border-color: color-mix(
+        in srgb,
+        var(--dt-foreground, var(--kt-label)) 40%,
+        var(--dt-background, var(--kt-content))
+    );
+}
+@media (prefers-reduced-transparency: reduce) {
+    .os-hermes-settings-dialog[data-os-hermes-settings] {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+.os-hermes-settings-dialog[data-contrast="high"] .kron-settings-ios {
+    --settings-separator: color-mix(in srgb, var(--foreground) 30%, transparent);
+    --settings-highlight: color-mix(in srgb, var(--foreground) 18%, transparent);
+}
+.os-hermes-settings-dialog[data-reduced-motion="true"] .settings-category button {
+    transition: none;
+}
+.os-hermes-settings-dialog[data-os-hermes-settings] .kron-settings-ios [data-settings-navigation] {
+    background: linear-gradient(150deg, #ffffff0a, transparent 65%), var(--settings-sidebar);
+}
+.os-hermes-settings-dialog[data-reduced-transparency="true"] .kron-settings-ios [data-settings-navigation] {
+    background: var(--settings-sidebar);
+}

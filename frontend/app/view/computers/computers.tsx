@@ -7,8 +7,21 @@ import { uxCloseBlock } from "@/app/store/keymodel";
 import { AgentSurfaceCursor } from "@/app/view/agent-surface-cursor";
 import type { ComputerTargetSnapshot } from "@/types/computer-targets";
 import { useAtomValue } from "jotai";
-import { ArrowLeft, Camera, ExternalLink, Home, Keyboard, Power, RefreshCw, RotateCw, Smartphone } from "lucide-react";
+import {
+    ArrowLeft,
+    Camera,
+    Copy,
+    ExternalLink,
+    Home,
+    Keyboard,
+    MousePointer2,
+    Power,
+    RefreshCw,
+    RotateCw,
+    Smartphone,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { captureStillValid } from "./computer-selection";
 import { ComputerSelection } from "./computer-selection-panel";
 import type { ComputersViewModel } from "./computers-model";
@@ -21,10 +34,12 @@ export function ComputersPanel({
     state,
     controller,
     compact = false,
+    toolbarHost,
 }: {
     state: ComputersState;
     controller: ComputersController;
     compact?: boolean;
+    toolbarHost?: HTMLElement | null;
 }) {
     const textBuffer = useRef("");
     const textTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -68,6 +83,44 @@ export function ComputersPanel({
             clearTimeout(wheelTimer.current);
         };
     }, [state.selectedId]);
+    const selectScreen = (action: ScreenSelectorAction) => {
+        if (!snapshot || state.busy || state.connecting) return;
+        clearTimeout(textTimer.current);
+        clearTimeout(wheelTimer.current);
+        textBuffer.current = "";
+        wheelDelta.current = 0;
+        gestureStart.current = null;
+        setKeyboardOpen(false);
+        setSelection({ snapshot, action });
+    };
+    const [copyError, setCopyError] = useState("");
+    const copyScreen = async () => {
+        if (!snapshot?.imageDataUrl) return;
+        setCopyError("");
+        try {
+            if (!navigator.clipboard?.write || typeof ClipboardItem !== "function") throw new Error();
+            const png = new Promise<Blob>((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = image.naturalWidth;
+                    canvas.height = image.naturalHeight;
+                    const context = canvas.getContext("2d");
+                    if (!context) {
+                        reject(new Error("Screenshot is unavailable."));
+                        return;
+                    }
+                    context.drawImage(image, 0, 0);
+                    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Screenshot is unavailable."))));
+                };
+                image.onerror = () => reject(new Error("Screenshot is unavailable."));
+                image.src = snapshot.imageDataUrl;
+            });
+            await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        } catch {
+            setCopyError("Could not copy the screen.");
+        }
+    };
     return (
         <SystemMaterial
             className={compact ? "kt-computers kt-computers-compact" : "kt-computers"}
@@ -433,22 +486,54 @@ export function ComputersPanel({
                         )}
                     </div>
                 )}
-                {!selectionActive && snapshot?.imageDataUrl && running && (
-                    <ScreenSelectorToolbar
-                        title={`${target.name} element selector`}
-                        onSelect={(action) => {
-                            if (state.busy || state.connecting) return;
-                            clearTimeout(textTimer.current);
-                            clearTimeout(wheelTimer.current);
-                            textBuffer.current = "";
-                            wheelDelta.current = 0;
-                            gestureStart.current = null;
-                            setKeyboardOpen(false);
-                            setSelection({ snapshot, action });
-                        }}
-                    />
+                {!toolbarHost && !selectionActive && snapshot?.imageDataUrl && running && (
+                    <ScreenSelectorToolbar title={`${target.name} element selector`} onSelect={selectScreen} />
                 )}
             </section>
+            {toolbarHost &&
+                createPortal(
+                    <>
+                        <button
+                            aria-label="Home"
+                            title="Home"
+                            disabled={state.busy || !running || !can("home") || !!selectionActive}
+                            onClick={() => void controller.act("home")}
+                        >
+                            <Home size={15} />
+                        </button>
+                        <button
+                            aria-label="Copy screen"
+                            title="Copy screen"
+                            disabled={!snapshot?.imageDataUrl}
+                            onClick={() => void copyScreen()}
+                        >
+                            <Copy size={15} />
+                        </button>
+                        <button
+                            aria-label="Capture screenshot"
+                            title="Capture screenshot"
+                            disabled={state.busy || !running || !can("screenshot")}
+                            onClick={() => void controller.act("screenshot")}
+                        >
+                            <Camera size={15} />
+                        </button>
+                        <button
+                            aria-label="Select screen element"
+                            title="Select screen element"
+                            aria-pressed={!!selectionActive}
+                            disabled={state.busy || !running || !snapshot?.imageDataUrl}
+                            onClick={() => (selectionActive ? setSelection(null) : selectScreen("select"))}
+                        >
+                            <MousePointer2 size={15} />
+                        </button>
+                    </>,
+                    toolbarHost
+                )}
+            {copyError && (
+                <p className="kt-device-panel-copy-error" role="alert">
+                    {copyError}
+                </p>
+            )}
             {!compact && snapshot?.imageDataUrl && (
                 <div className="kt-computers-capture-label">
                     <span>{state.session ? "Live screen" : "Screen capture"}</span>

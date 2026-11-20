@@ -1,0 +1,10 @@
+{
+    "hermes": 950,
+    "desktop": 123,
+    "sources": [
+        "third_party/upstream/hermes-agent/hermes_cli/config_defaults.py",
+        "frontend/hermes/app/settings/constants.ts",
+        "schema/settings.json",
+        "pkg/wconfig/defaultconfig/settings.json"
+    ]
+}

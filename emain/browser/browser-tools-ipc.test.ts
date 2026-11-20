@@ -13,6 +13,7 @@ const electron = vi.hoisted(() => ({
     handlers: new Map<string, (...args: any[]) => any>(),
     writeImage: vi.fn(),
 }));
+vi.mock("../emain-platform", () => ({ getWaveConfigDir: () => "/unused" }));
 vi.mock("electron", () => ({
     webContents: { fromId: electron.fromId },
     ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => electron.handlers.set(name, handler) },

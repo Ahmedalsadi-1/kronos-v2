@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { browserAddressSuggestions } from "./browser-address-bar";
+import { browserAddressSuggestions, browserOmniboxSuggestions } from "./browser-address-bar";
 
 describe("browser address suggestions", () => {
     it("combines matching recent history with bookmarks, removing duplicate destinations", () => {
@@ -29,4 +29,17 @@ describe("browser address suggestions", () => {
             )
         ).toHaveLength(8);
     });
+});
+
+it("offers matching destinations and a search action even without saved history", () => {
+    const suggestions = browserOmniboxSuggestions("you", [], []);
+    expect(suggestions).toContainEqual({ url: "https://youtube.com", label: "YouTube" });
+    expect(suggestions.at(-1)).toEqual({ url: "you", label: "Search or navigate: you" });
+    expect(browserOmniboxSuggestions("an unusual query", [], []).at(-1)?.url).toBe("an unusual query");
+});
+
+it("does not recommend unrelated bookmarks", () => {
+    expect(browserAddressSuggestions("cats", [], [
+        { type: "url", suggestionid: "one", display: "Dogs", "url:url": "https://dogs.example" }
+    ])).toEqual([]);
 });

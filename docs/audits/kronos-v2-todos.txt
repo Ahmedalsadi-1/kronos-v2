@@ -1,0 +1,48 @@
+pkg/remote/conncontroller/conncontroller.go:577:	time.Sleep(300 * time.Millisecond) // TODO remove this sleep (but we need to wait until connserver is "ready")
+pkg/remote/conncontroller/conncontroller.go:849:		// TODO: in v0.12+ this should be removed.  we'll explicitly write a "false" into the connection object on successful connection
+pkg/remote/sshclient.go:770:	// TODO: Update if we decide to support PKCS11Provider and SecurityKeyProvider
+pkg/remote/sshclient.go:1104:	sshKeywords.SshUserKnownHostsFile = strings.Fields(rawUserKnownHostsFile) // TODO - smarter splitting escaped spaces and quotes
+pkg/remote/sshclient.go:1106:	sshKeywords.SshGlobalKnownHostsFile = strings.Fields(rawGlobalKnownHostsFile) // TODO - smarter splitting escaped spaces and quotes
+cmd/wsh/cmd/wshcmd-shell-win.go:26:	WriteStderr("not implemented/n")
+cmd/server/main-server.go:86:		// TODO deal with flush in progress
+cmd/server/main-server.go:492:	// TODO: rather than ensure this dir exists, we should let the editor recursively create parent dirs on save
+pkg/wshutil/wshadapter.go:53:	handler.SendResponseError(fmt.Errorf("command %q not implemented", handler.GetCommand()))
+pkg/wshutil/wshadapter.go:97:			handler.SendResponseError(fmt.Errorf("command not implemented %q", cmd))
+pkg/wslconn/wslconn.go:346:	time.Sleep(300 * time.Millisecond) // TODO remove this sleep (but we need to wait until connserver is "ready")
+pkg/wslconn/wslconn.go:569:		// TODO: in v0.12+ this should be removed.  we'll explicitly write a "false" into the connection object on successful connection
+pkg/wsl/wsl-unix.go:21:	return nil, fmt.Errorf("RegisteredDistros not implemented on this system")
+pkg/wsl/wsl-unix.go:25:	return d, false, fmt.Errorf("DefaultDistro not implemented on this system")
+pkg/wsl/wsl-unix.go:74:	return nil, fmt.Errorf("GetDistroCmd not implemented on this system")
+pkg/wsl/wsl-unix.go:78:	return nil, fmt.Errorf("GetDistro not implemented on this system")
+pkg/blockcontroller/tsunamicontroller.go:292:	return fmt.Errorf("tsunami controller send input not implemented")
+pkg/blockcontroller/shellcontroller.go:393:	// TODO better sync here (don't let two starts happen at the same times)
+pkg/blockcontroller/shellcontroller.go:635:		// TODO allow overriding remote shell path
+pkg/wshutil/wshrouter.go:48:// TODO maybe move the wps integration here instead of in wshserver
+pkg/jobmanager/jobcmd.go:179:// TODO set up a single input handler loop + queue so we dont need to hold the lock but still get synchronized in-order execution
+pkg/web/ws.go:358:				"eventtype": "rpc", // TODO don't hard code this (but def is in eventbus)
+pkg/wshrpc/wshserver/wshserver.go:1396:	// TODO: implement persistent history storage
+pkg/wshrpc/wshserver/wshserver.go:1401:	// TODO: implement persistent history storage
+pkg/wshrpc/wshserver/wshserver.go:1406:	// TODO: implement persistent history storage
+pkg/wshrpc/wshserver/wshserver.go:1411:	// TODO: implement persistent history storage
+pkg/wshrpc/wshserver/wshserver.go:1418:	// TODO: implement tab group storage
+pkg/wshrpc/wshserver/wshserver.go:1423:	// TODO: implement tab group storage
+pkg/wshrpc/wshserver/wshserver.go:1428:	// TODO: implement tab group storage
+pkg/wshrpc/wshserver/wshserver.go:1433:	// TODO: implement tab group storage
+pkg/wshrpc/wshserver/wshserver.go:1438:	// TODO: implement tab group storage
+pkg/shellexec/shellexec.go:252:		// TODO check quoting of cmdStr
+pkg/shellexec/shellexec.go:410:		// TODO check quoting of cmdStr
+pkg/faviconcache/faviconcache.go:180:// TODO store in blockstore
+frontend/app/store/wshclient.ts:102:        // TODO implement a timeout (setTimeout + sendResponse)
+frontend/hermes/app/session/hooks/use-prompt-actions/slash.ts:462:          // TODO: remove this compatibility fallback once every supported
+frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx:61:        // TODO: Implement popup
+frontend/app/view/vdom/vdom.tsx:364:    // TODO handle errors
+frontend/app/view/vdom/vdom-utils.tsx:10:// TODO support binding
+frontend/app/view/vdom/vdom-utils.tsx:78:        // TODO better error handling
+frontend/app/view/term/ijson.tsx:84:    // TODO fix this huge inline style
+frontend/app/view/term/fitaddon.ts:44:        // TODO: Remove reliance on private API
+frontend/app/view/term/fitaddon.ts:63:        // TODO: Remove reliance on private API
+frontend/app/view/preview/preview-model.tsx:26:// TODO drive this using config
+frontend/app/view/preview/preview-directory.tsx:832:            // TODO: mabe add a hover option?
+frontend/app/view/preview/csvview.tsx:40:// TODO remove parentRef dependency -- use own height
+frontend/hermes/app/chat/composer/status-stack/status-row.tsx:20:const TODO_GLYPHS: Record<Exclude<TodoStatus, 'in_progress' | 'pending'>, { icon: string; tone: string }> = {
+frontend/hermes/app/chat/composer/status-stack/status-row.tsx:56:    const glyph = TODO_GLYPHS[item.todoStatus]

@@ -1,0 +1,114 @@
+emain/computer-target-sessions.ts:28:    private sweepTimer: ReturnType<typeof setInterval>;
+emain/computer-target-sessions.ts:31:        this.sweepTimer = setInterval(() => {
+emain/agent-bot-desktop-bridge.ts:133:            this.syncTimer = setInterval(() => this.synchronize(), 5000);
+emain/acp/acp-transport.ts:84:        this.keepaliveTimer = setInterval(() => {
+emain/productivity-runtime.ts:10:let timer: ReturnType<typeof setInterval>;
+emain/productivity-runtime.ts:30:    timer = setInterval(() => {
+frontend/app/store/ws.ts:50:    private pingTimer: ReturnType<typeof setInterval>;
+frontend/app/store/ws.ts:65:        this.pingTimer = setInterval(() => this.sendPing(), 5000);
+emain/workflow-runtime.ts:19:let queueTimer: ReturnType<typeof setInterval>;
+emain/workflow-runtime.ts:39:    queueTimer = setInterval(() => {
+emain/emain-hud.ts:849:                surface.previewTimer = setInterval(() => void refreshNotchPreview(surface), NotchRefreshInterval);
+emain/emain-hud.ts:869:                surface.previewTimer = setInterval(() => void refreshNotchPreview(surface), NotchRefreshInterval);
+emain/updater.ts:129:            this.autoCheckInterval = setInterval(() => {
+emain/emain-pet.ts:393:    followCursorTimer = setInterval(followUserCursorWhileIdle, CursorFollowIntervalMs);
+emain/emain-window.ts:246:        const winBoundsPoller = setInterval(() => {
+emain/device-simulator/android/android-preview-server.ts:94:                const heartbeat = setInterval(() => {
+frontend/hermes/hooks/use-viewed-interval.ts:43:        intervalId = window.setInterval(() => callbackRef.current(), intervalMs)
+frontend/hermes/bot-sections/bot-sections.tsx:101:        const timer = setInterval(() => void poll(), 5000);
+frontend/hermes/sdk/index.ts:644: *  the app root, so their queries cache, dedupe, poll (`refetchInterval`), and
+frontend/hermes/store/updates.ts:729:let backgroundTimer: ReturnType<typeof setInterval> | null = null
+frontend/hermes/store/updates.ts:768:  backgroundTimer = setInterval(
+frontend/app/block/connstatusoverlay.tsx:77:            const interval = setInterval(updateElapsed, 1000);
+frontend/hermes/plugins/kanban/ui.tsx:101:    const id = window.setInterval(() => force(n => n + 1), 5_000)
+frontend/hermes/plugins/kronterm-surfaces/plugin.tsx:40:        refetchInterval: 1_200,
+frontend/hermes/plugins/kronterm-surfaces/plugin.tsx:47:        refetchInterval: expanded ? 1_500 : false,
+frontend/hermes/plugins/kronterm-surfaces/plugin.tsx:164:        refetchInterval: 1_500,
+frontend/hermes/plugins/kronterm-surfaces/plugin.tsx:263:        refetchInterval: 3_000,
+frontend/hermes/plugins/kanban/drawer.tsx:560:    refetchInterval: 30_000
+frontend/hermes/plugins/kanban/drawer.tsx:571:    refetchInterval: running ? 3_000 : 15_000
+frontend/hermes/components/onboarding/glyph.tsx:78:    const id = window.setInterval(() => {
+frontend/hermes/components/onboarding/glyph.tsx:107:    const id = window.setInterval(() => {
+frontend/hermes/plugins/kanban/board.tsx:1093:    refetchInterval: 60_000
+frontend/hermes/contrib/runtime-loader.ts:471:    const timer = window.setInterval(() => {
+frontend/hermes/store/onboarding.ts:627:        pollTimer = window.setInterval(() => void pollSession(provider, start, ctx), POLL_MS);
+frontend/hermes/plugins/kanban/plugin.tsx:49:    refetchInterval: 60_000
+frontend/hermes/components/pet/pet-bubble.tsx:126:    const id = window.setInterval(() => setLine((prev) => pick(spec.lines, prev)), 2600)
+frontend/hermes/components/pet/floating-pet.tsx:165:    const timer = window.setInterval(refresh, 1200)
+frontend/hermes/components/pet/floating-pet.tsx:316:    const timer = window.setInterval(pullIfVisible, petInfoPollIntervalMs(changeEventsAvailable, active))
+frontend/hermes/components/desktop-install-overlay.tsx:290:    const id = window.setInterval(() => setNow(Date.now()), 1000)
+frontend/app/onboarding/onboarding-command.tsx:28:        const typeInterval = setInterval(() => {
+frontend/app/onboarding/onboarding-command.tsx:42:        const cursorInterval = setInterval(() => {
+frontend/hermes/store/mcp-health.ts:47:let timer: ReturnType<typeof setInterval> | null = null
+frontend/hermes/store/mcp-health.ts:155:  timer = setInterval(queueSweep, CHECK_INTERVAL_MS)
+frontend/hermes/components/ui/decode-text.tsx:81:    const id = window.setInterval(() => {
+frontend/app/onboarding/onboarding-sandbox.tsx:26:        const interval = setInterval(() => {
+frontend/app/onboarding/onboarding-apps.tsx:25:        const interval = setInterval(() => {
+frontend/app/onboarding/fakechat.tsx:142:                    streamInterval = setInterval(() => {
+frontend/app/onboarding/fakechat.tsx:238:        const interval = setInterval(() => {
+frontend/app/app.tsx:196:        const ivId = setInterval(() => {
+frontend/hermes/lib/speech-motion.ts:30:    const timer = window.setInterval(() => {
+frontend/hermes/lib/speech-motion.ts:69:    const timer = window.setInterval(() => {
+frontend/app/onboarding/onboarding-layout-term.tsx:213:        const cursorInterval = setInterval(() => {
+frontend/hermes/app/pet-generate/components/hatch-preview.tsx:62:    const id = setInterval(() => setStateIndex(i => (i + 1) % rows.length), PREVIEW_STATE_MS)
+frontend/app/components/computer-use-status-card.tsx:27:        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+frontend/app/aipanel/improved-chat-input.tsx:878:                    const interval = setInterval(() => {
+frontend/app/aipanel/mcp-panel.tsx:126:        const timer = window.setInterval(refreshStatuses, 5000);
+frontend/app/workspace/native-browser-tools.tsx:19:        const timer = window.setInterval(lookup, 250);
+frontend/app/view/agent-control-indicator.tsx:37:        const timer = window.setInterval(() => setNow(Date.now()), Math.min(5_000, OSAgentPresenceStaleMs));
+frontend/hermes/app/hud/hud-shell.tsx:253:        const timer = setInterval(measure, 300);
+frontend/hermes/app/hud/hud-shell.tsx:351:        const probe = setInterval(measure, 500);
+frontend/hermes/app/hud/surface-islands.tsx:33:        refetchInterval: 1000,
+frontend/hermes/app/hud/surface-islands.tsx:34:        refetchIntervalInBackground: false,
+frontend/hermes/app/hud/surface-islands.tsx:50:        refetchInterval: expanded && surface ? 1500 : false,
+frontend/hermes/app/hud/surface-islands.tsx:51:        refetchIntervalInBackground: false,
+frontend/app/workspace/native-agent-progress.tsx:31:        const timer = window.setInterval(lookup, 1000);
+frontend/app/aipanel/airatelimitstrip.tsx:73:        const interval = setInterval(() => {
+frontend/app/workspace/use-native-notch-preview.ts:146:        const timer = window.setInterval(publish, 1000);
+frontend/hermes/components/ui/glyph-spinner.tsx:49:  // ticking a setInterval burns CPU for pixels nobody can see.
+frontend/hermes/components/ui/glyph-spinner.tsx:84:      timer = window.setInterval(() => {
+frontend/app/aipanel/kronos-chat-components.tsx:575:        const interval = window.setInterval(() => {
+frontend/app/view/appstream/appstream.tsx:311:            previewTimer = window.setInterval(capturePreview, 1000);
+frontend/hermes/app/productivity/index.tsx:83:        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+frontend/app/aipanel/floating-island.tsx:143:        const interval = setInterval(updateContext, 2000);
+frontend/hermes/app/contrib/hooks/use-background-sync.ts:329:  let intervalId = window.setInterval(run, batteryPollInterval(intervalMs, $onBattery.get()))
+frontend/hermes/app/contrib/hooks/use-background-sync.ts:333:    intervalId = window.setInterval(run, batteryPollInterval(intervalMs, onBattery))
+frontend/app/components/hermes-ui/chat/activity-timer.ts:54:        const id = window.setInterval(tick, 1000);
+frontend/hermes/app/contrib/hooks/use-native-notch.ts:97:        const timer = window.setInterval(refresh, 15_000);
+frontend/hermes/app/contrib/hooks/use-native-notch.ts:130:        const captionTimer = window.setInterval(publishCaption, 750);
+frontend/hermes/app/cron/index.tsx:922:    const intervalId = window.setInterval(
+frontend/hermes/app/gateway/hooks/use-gateway-boot.ts:488:    const keepaliveTimer = setInterval(() => {
+frontend/app/view/webview/browser-site-settings.tsx:58:        const timer = section === "downloads" ? window.setInterval(load, 1000) : undefined;
+frontend/hermes/app/messaging/index.tsx:237:    const id = window.setInterval(tick, 6000)
+frontend/hermes/app/contrib/panes.tsx:41:    refetchInterval: 5000
+frontend/app/workspace/personal-productivity.tsx:41:        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+frontend/hermes/app/skills/mcp-tab.tsx:1805:        const timer = window.setInterval(() => void poll(), LOG_POLL_MS);
+frontend/hermes/app/settings/billing/use-billing-state.ts:21:// the window is backgrounded — refetchIntervalInBackground defaults to false).
+frontend/hermes/app/settings/billing/use-billing-state.ts:25:  refetchInterval: 30_000,
+frontend/hermes/app/shell/hooks/use-status-snapshot.ts:46:        // Wait for both legs before scheduling the next refresh. setInterval
+frontend/hermes/app/right-sidebar/files/use-project-tree.ts:468:    const timer = window.setInterval(() => {
+frontend/hermes/app/shell/gateway-menu-panel.tsx:62:    const timer = window.setInterval(load, LOG_POLL_MS)
+frontend/app/workspace/native-file-workbench.tsx:79:        const timer = window.setInterval(find, 250);
+frontend/app/workspace/native-file-workbench.tsx:457:        let refreshTimer: ReturnType<typeof setInterval>;
+frontend/app/workspace/native-file-workbench.tsx:496:                    if (activity.phase === "running") refreshTimer = setInterval(refresh, 500);
+frontend/hermes/app/settings/memory/connect.tsx:21:  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+frontend/hermes/app/settings/memory/connect.tsx:86:    timer.current = setInterval(() => {
+frontend/app/view/imagestudio/imagestudio.tsx:139:        const timer = setInterval(() => {
+frontend/hermes/app/workflows/n8n-workflows.tsx:96:        const timer = setInterval(() => void read(), 5000);
+frontend/app/view/computers/device-workspace.tsx:111:        const timer = setInterval(refresh, 5000);
+frontend/app/view/rendercomparison/render-comparison.tsx:188:        const interval = setInterval(() => void model.refresh(), 4000);
+frontend/app/tab/workspace-canvas-workflows.tsx:77:    const [intervalMinutes, setIntervalMinutes] = useState(60);
+frontend/app/tab/workspace-canvas-workflows.tsx:957:                                        onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+frontend/hermes/app/chat/short-session-hang-repro.tsx:155:  window.setInterval(() => {
+frontend/app/tab/os-original-workflow.tsx:331:        const timer = setInterval(() => void refresh(), 1500);
+frontend/app/tab/os-web-navbar.tsx:54:        const timer = window.setInterval(publish, 1000);
+frontend/app/tab/widget-tabs-layout.tsx:579:            dragScrollTimerRef.current = window.setInterval(() => scrollTabs(direction), 260);
+frontend/app/tab/browser-tab-preview.tsx:50:        const timer = window.setInterval(capture, 5000);
+frontend/app/tab/chat-browser-tab.tsx:48:        const refresh = window.setInterval(capture, 5000);
+frontend/hermes/app/chat/sidebar/cron-jobs-section.tsx:145:    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+frontend/hermes/app/chat/sidebar/cron-jobs-section.tsx:411:    const intervalId = window.setInterval(
+frontend/hermes/app/chat/composer/hooks/use-voice-conversation.ts:605:                const feedTimer = window.setInterval(feed, 150);
+frontend/hermes/app/chat/composer/hooks/use-voice-conversation.ts:731:        const timer = window.setInterval(() => {
+frontend/hermes/app/chat/composer/status-stack/index.tsx:149:    const timer = setInterval(() => void refreshBackgroundProcesses(sessionId), BACKGROUND_POLL_MS)
+frontend/hermes/app/chat/composer/hooks/use-voice-recorder.ts:114:      intervalRef.current = window.setInterval(() => setElapsedSeconds((Date.now() - startedAtRef.current) / 1000), 250)
+frontend/hermes/app/chat/chat-swap-overlay.tsx:28:    const id = window.setInterval(() => setFrame(value => (value + 1) % FRAMES.length), 80)

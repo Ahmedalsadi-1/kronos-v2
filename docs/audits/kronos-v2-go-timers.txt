@@ -1,0 +1,14 @@
+pkg/remote/conncontroller/connmonitor.go:163:	ticker := time.NewTicker(5 * time.Second)
+pkg/remote/conncontroller/connmonitor.go:178:			case <-time.After(1 * time.Second):
+pkg/remote/conncontroller/conncontroller.go:714:			case <-time.After(100 * time.Millisecond):
+pkg/suggestion/filewalk.go:46:		ticker := time.NewTicker(60 * time.Second)
+cmd/wsh/cmd/wshcmd-connserver.go:108:		ticker := time.NewTicker(JobLogCleanupInterval)
+pkg/jobcontroller/jobcontroller.go:308:	ticker := time.NewTicker(1 * time.Minute)
+pkg/wshutil/wshrouter.go:402:		case <-time.After(30 * time.Millisecond):
+pkg/jobmanager/jobmanager.go:86:		ticker := time.NewTicker(1 * time.Hour)
+pkg/wslconn/wslconn.go:476:			case <-time.After(100 * time.Millisecond):
+pkg/aiusechat/tools_term.go:488:			ticker := time.NewTicker(500 * time.Millisecond)
+pkg/web/ws.go:248:	ticker := time.NewTicker(wsInitialPingTime)
+pkg/util/utilfn/streamtolines.go:32:	case <-time.After(timeout):
+pkg/wshrpc/wshserver/osautomations.go:220:			ticker := time.NewTicker(time.Minute)
+pkg/web/sse/ssehandler.go:138:	keepaliveTicker := time.NewTicker(SSEKeepaliveInterval)

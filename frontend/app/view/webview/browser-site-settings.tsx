@@ -37,8 +37,15 @@ export function BrowserSiteSettingsPanel({
     const [pending, setPending] = useState(false);
     useEffect(() => {
         let current = true;
+        let loading = false;
+        let invalidated = false;
         const load = async () => {
             if (!guestId) return;
+            if (loading) {
+                invalidated = true;
+                return;
+            }
+            loading = true;
             try {
                 if (section === "history") {
                     const next = await getApi().browserNavigationHistory(guestId);
@@ -49,16 +56,22 @@ export function BrowserSiteSettingsPanel({
                 }
             } catch (failure) {
                 if (current) setError(failure instanceof Error ? failure.message : "Could not read browser settings.");
+            } finally {
+                loading = false;
+                if (current && invalidated) {
+                    invalidated = false;
+                    void load();
+                }
             }
         };
         setError("");
         if (section === "history") setHistory(undefined);
         else setSettings(undefined);
+        const unsubscribe = section === "downloads" ? getApi().onBrowserDownloadsChanged?.(() => void load()) : undefined;
         void load();
-        const timer = section === "downloads" ? window.setInterval(load, 1000) : undefined;
         return () => {
             current = false;
-            if (timer) window.clearInterval(timer);
+            unsubscribe?.();
         };
     }, [guestId, section, url]);
 

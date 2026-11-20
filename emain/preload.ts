@@ -104,6 +104,13 @@ contextBridge.exposeInMainWorld("api", {
     importBrowserExtension: (guestId: number) => ipcRenderer.invoke("browser-import-extension", guestId),
     browserSearchSuggestions: (query: string) => ipcRenderer.invoke("browser-search-suggestions", query),
     browserSiteSettings: (input: import("../frontend/types/browser-site-settings").BrowserSiteSettingsCommand) => ipcRenderer.invoke("browser-site-settings", input),
+    onBrowserDownloadsChanged: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on("browser-downloads-changed", listener);
+        return () => ipcRenderer.removeListener("browser-downloads-changed", listener);
+    },
+    browserSessions: (input: import("../frontend/types/browser-sessions").BrowserSessionsCommand) =>
+        ipcRenderer.invoke("browser-sessions", input),
     browserNavigationHistory: (guestId, snapshot) =>
         ipcRenderer.invoke("browser-navigation-history", guestId, snapshot),
     browserGrab: (input) => ipcRenderer.invoke("browser-grab", input),

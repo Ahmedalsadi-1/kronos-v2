@@ -14,6 +14,7 @@ import {
 type BrowserSessionState = {
     rules: Map<string, BrowserSiteSettings["permissions"]>;
     downloads: (BrowserSiteSettings["downloads"][number] & { savePath?: string })[];
+    observers: Set<WebContents>;
 };
 
 const states = new WeakMap<Session, BrowserSessionState>();
@@ -26,8 +27,13 @@ function siteOrigin(value: string): string | null {
 export function watchBrowserSession(session: Session): BrowserSessionState {
     const existing = states.get(session);
     if (existing) return existing;
-    const state: BrowserSessionState = { rules: new Map(), downloads: [] };
+    const state: BrowserSessionState = { rules: new Map(), downloads: [], observers: new Set() };
     states.set(session, state);
+    const changed = () => {
+        for (const observer of state.observers) {
+            if (!observer.isDestroyed()) observer.send("browser-downloads-changed");
+        }
+    };
 
     const allowed = (contents: WebContents | null, permission: string, url: string) => {
         if (!BrowserSitePermissions.includes(permission as BrowserSitePermission)) return true;
@@ -55,9 +61,11 @@ export function watchBrowserSession(session: Session): BrowserSessionState {
         };
         state.downloads.unshift(row);
         state.downloads.length = Math.min(state.downloads.length, 100);
+        changed();
         item.on("updated", () => {
             row.received = item.getReceivedBytes();
             row.total = item.getTotalBytes();
+            changed();
         });
         item.once("done", (_event, status) => {
             row.received = item.getReceivedBytes();
@@ -65,13 +73,22 @@ export function watchBrowserSession(session: Session): BrowserSessionState {
             row.state = status;
             if (status === "completed") row.savePath = item.getSavePath();
             row.canReveal = Boolean(row.savePath);
+            changed();
         });
     });
     return state;
 }
 
-export function readBrowserSiteSettings(guest: WebContents, command: BrowserSiteSettingsCommand): BrowserSiteSettings {
+export function readBrowserSiteSettings(
+    guest: WebContents,
+    command: BrowserSiteSettingsCommand,
+    observer?: WebContents
+): BrowserSiteSettings {
     const state = watchBrowserSession(guest.session);
+    if (observer && !state.observers.has(observer)) {
+        state.observers.add(observer);
+        observer.once("destroyed", () => state.observers.delete(observer));
+    }
     if (command.revealDownloadId != null) {
         const download = state.downloads.find(({ id }) => id === command.revealDownloadId);
         if (!download?.savePath) throw new Error("This download has no saved file to show.");

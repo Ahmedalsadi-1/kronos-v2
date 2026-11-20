@@ -16,6 +16,7 @@ import { AuthKey, configureAuthKeyRequestInjection } from "./authkey";
 import { installBackgroundLaunchPolicy } from "./background-launch";
 import { browserBookmarksDirectory, restoreBrowserExtensions } from "./browser/browser-migration";
 import { watchBrowserSession } from "./browser/browser-site-settings";
+import { registerPrivateBrowserPartition } from "./browser/browser-sessions";
 import { installBrowserElementTool } from "./browser-element-tool";
 import { ensureKronRender, stopKronRender } from "./comfyui-runtime";
 import {
@@ -472,6 +473,8 @@ async function appMain() {
             if (!decision.allow) {
                 console.log("webview attach denied:", decision.reason);
                 attachEvent.preventDefault();
+            } else {
+                registerPrivateBrowserPartition(params.partition);
             }
         });
     });

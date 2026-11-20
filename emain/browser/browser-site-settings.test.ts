@@ -56,10 +56,51 @@ it("tracks download progress once per session and ignores application downloads"
     const browser = guest as unknown as WebContents;
     const { downloads } = readBrowserSiteSettings(browser, { guestId: 1 });
     expect(downloads).toEqual([
-        expect.objectContaining({ filename: "example.png", received: 20, total: 20, state: "completed", canReveal: true }),
+        expect.objectContaining({
+            filename: "example.png",
+            received: 20,
+            total: 20,
+            state: "completed",
+            canReveal: true,
+        }),
     ]);
     expect(downloads[0]).not.toHaveProperty("savePath");
     expect(() => readBrowserSiteSettings(browser, { guestId: 1, revealDownloadId: "/arbitrary/path" })).toThrow();
     readBrowserSiteSettings(browser, { guestId: 1, revealDownloadId: downloads[0].id });
     expect(showItemInFolder).toHaveBeenCalledExactlyOnceWith("/downloads/example.png");
+});
+
+it("notifies only observers of the download session and releases destroyed observers", () => {
+    const makeSession = () =>
+        Object.assign(new EventEmitter(), {
+            setPermissionCheckHandler: vi.fn(),
+            setPermissionRequestHandler: vi.fn(),
+        });
+    const session = makeSession();
+    const otherSession = makeSession();
+    const observer = Object.assign(new EventEmitter(), { send: vi.fn(), isDestroyed: () => false });
+    const other = Object.assign(new EventEmitter(), { send: vi.fn(), isDestroyed: () => false });
+    const guest = { session, getType: () => "webview", getURL: () => "https://example.test" } as unknown as WebContents;
+    const read = () => readBrowserSiteSettings(guest, { guestId: 1 }, observer as unknown as WebContents);
+    read();
+    read();
+    readBrowserSiteSettings(
+        { ...guest, session: otherSession } as unknown as WebContents,
+        { guestId: 2 },
+        other as unknown as WebContents
+    );
+    const item = Object.assign(new EventEmitter(), {
+        getFilename: () => "test.png",
+        getReceivedBytes: () => 10,
+        getTotalBytes: () => 20,
+    });
+    session.emit("will-download", {}, item, guest);
+    item.emit("updated");
+    item.emit("done", {}, "cancelled");
+    expect(observer.send.mock.calls).toEqual(Array.from({ length: 3 }, () => ["browser-downloads-changed"]));
+    expect(other.send).not.toHaveBeenCalled();
+    expect(observer.listenerCount("destroyed")).toBe(1);
+    observer.emit("destroyed");
+    item.emit("updated");
+    expect(observer.send).toHaveBeenCalledTimes(3);
 });

@@ -130,6 +130,7 @@ const previewElectronApi: ElectronApi = {
     importBrowserExtension: async () => null,
     browserSearchSuggestions: async () => [],
     browserSiteSettings: async () => ({ origin: null, permissions: {}, downloads: [] }),
+    onBrowserDownloadsChanged: () => () => {},
     browserNavigationHistory: async () => null,
     browserGrab: async (input) => ({ opId: input.opId, kind: "error", reason: "Native browser required" }),
     browserCancelGrab: async () => {},

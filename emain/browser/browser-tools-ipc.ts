@@ -2,14 +2,13 @@ import { clipboard, dialog, ipcMain, nativeImage, net, session, webContents, typ
 import type { BrowserAccountCommand } from "../../frontend/types/browser-account";
 import type { BrowserGrabRect, BrowserGrabScreenshot } from "../../frontend/types/browser-grab";
 import { GRAB_BUDGET } from "../../frontend/types/browser-grab";
-import { browserNavigationSnapshot } from "../../frontend/types/browser-navigation";
-import { readBrowserSiteSettings } from "./browser-site-settings";
-import type { BrowserSiteSettingsCommand } from "../../frontend/types/browser-site-settings";
-import { browserAccount } from "./browser-account";
-import { browserAccessibilitySnapshot } from "./browser-accessibility";
-import { BrowserGrabSessionController } from "./browser-grab-session-controller";
-import { buildGuestOverlayScript } from "./grab-guest-script";
 import { MigrationBrowsers, type BrowserMigrationCommand } from "../../frontend/types/browser-migration";
+import { browserNavigationSnapshot } from "../../frontend/types/browser-navigation";
+import type { BrowserSessionsCommand } from "../../frontend/types/browser-sessions";
+import type { BrowserSiteSettingsCommand } from "../../frontend/types/browser-site-settings";
+import { browserAccessibilitySnapshot } from "./browser-accessibility";
+import { browserAccount } from "./browser-account";
+import { BrowserGrabSessionController } from "./browser-grab-session-controller";
 import {
     getExtensionProfile,
     importBrowserBookmarks,
@@ -18,6 +17,9 @@ import {
     openExternalPasswordManager,
     removeMigratedExtension,
 } from "./browser-migration";
+import { manageBrowserSessions } from "./browser-sessions";
+import { readBrowserSiteSettings } from "./browser-site-settings";
+import { buildGuestOverlayScript } from "./grab-guest-script";
 
 export function ownedBrowserGuest(sender: WebContents, guestId: unknown): WebContents {
     if (!Number.isInteger(guestId) || sender.isDestroyed()) throw new Error("Browser guest unavailable");
@@ -132,6 +134,10 @@ export function parseBrowserCookies(json: unknown): Electron.CookiesSetDetails[]
 }
 
 export function registerBrowserToolsIpc(isTrusted: (sender: WebContents) => boolean): void {
+    ipcMain.handle("browser-sessions", (event, input: BrowserSessionsCommand) => {
+        if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
+        return manageBrowserSessions(event.sender, input);
+    });
     ipcMain.handle("browser-migration", async (event, command: BrowserMigrationCommand) => {
         const sender = event.sender;
         const frame = event.senderFrame;
@@ -151,13 +157,20 @@ export function registerBrowserToolsIpc(isTrusted: (sender: WebContents) => bool
             if (typeof command.browser !== "string" || !Object.hasOwn(MigrationBrowsers, command.browser)) {
                 throw new Error("Unknown source browser.");
             }
-            const installed = await importBrowserExtension(profile, command.browser, () =>
-                trusted() && !guest.isDestroyed() && guest.hostWebContents?.id === sender.id
+            const installed = await importBrowserExtension(
+                profile,
+                command.browser,
+                () => trusted() && !guest.isDestroyed() && guest.hostWebContents?.id === sender.id
             );
-            return { installed: installed ?? undefined, canceled: installed == null, extensions: listMigratedExtensions(profile) };
+            return {
+                installed: installed ?? undefined,
+                canceled: installed == null,
+                extensions: listMigratedExtensions(profile),
+            };
         }
         if (command.action === "remove") {
-            if (typeof command.id !== "string" || !/^[a-p]{32}$/.test(command.id)) throw new Error("Invalid extension ID.");
+            if (typeof command.id !== "string" || !/^[a-p]{32}$/.test(command.id))
+                throw new Error("Invalid extension ID.");
             await removeMigratedExtension(profile, command.id);
         }
         return { extensions: listMigratedExtensions(profile) };
@@ -195,17 +208,23 @@ export function registerBrowserToolsIpc(isTrusted: (sender: WebContents) => bool
             if (!response.ok) return [];
             const rows: unknown = await response.json();
             if (!Array.isArray(rows)) return [];
-            return [...new Set(rows.flatMap((row) => {
-                const phrase = row?.phrase;
-                return typeof phrase === "string" && phrase.length <= 120 && phrase.trim() ? [phrase.trim()] : [];
-            }))].slice(0, 5);
+            return [
+                ...new Set(
+                    rows.flatMap((row) => {
+                        const phrase = row?.phrase;
+                        return typeof phrase === "string" && phrase.length <= 120 && phrase.trim()
+                            ? [phrase.trim()]
+                            : [];
+                    })
+                ),
+            ].slice(0, 5);
         } catch {
             return [];
         }
     });
     ipcMain.handle("browser-site-settings", (event, input: BrowserSiteSettingsCommand) => {
         if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");
-        return readBrowserSiteSettings(ownedBrowserGuest(event.sender, input?.guestId), input);
+        return readBrowserSiteSettings(ownedBrowserGuest(event.sender, input?.guestId), input, event.sender);
     });
     ipcMain.handle("browser-account", (event, input: BrowserAccountCommand) => {
         if (!isTrusted(event.sender)) throw new Error("Untrusted browser caller");

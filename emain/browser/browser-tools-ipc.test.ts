@@ -12,7 +12,9 @@ const electron = vi.hoisted(() => ({
     fromId: vi.fn(),
     handlers: new Map<string, (...args: any[]) => any>(),
     writeImage: vi.fn(),
+    sessions: vi.fn(),
 }));
+vi.mock("./browser-sessions", () => ({ manageBrowserSessions: electron.sessions }));
 vi.mock("../emain-platform", () => ({ getWaveConfigDir: () => "/unused" }));
 vi.mock("electron", () => ({
     webContents: { fromId: electron.fromId },
@@ -24,6 +26,16 @@ vi.mock("electron", () => ({
 describe("browser guest ownership", () => {
     const sender = { id: 1, isDestroyed: () => false } as any;
     beforeEach(() => electron.fromId.mockReset());
+    it("wires browser session settings only for trusted workspace callers", async () => {
+        registerBrowserToolsIpc(() => false);
+        expect(() => electron.handlers.get("browser-sessions")({ sender }, { action: "list" })).toThrow("Untrusted");
+        expect(electron.sessions).not.toHaveBeenCalled();
+        registerBrowserToolsIpc(() => true);
+        electron.sessions.mockResolvedValueOnce([{ id: "work" }]);
+        const command = { action: "list" };
+        expect(await electron.handlers.get("browser-sessions")({ sender }, command)).toEqual([{ id: "work" }]);
+        expect(electron.sessions).toHaveBeenCalledWith(sender, command);
+    });
     it("only permits live webviews owned by the invoking window", () => {
         const guest = { isDestroyed: () => false, getType: () => "webview", hostWebContents: { id: 1 } };
         electron.fromId.mockReturnValue(guest);

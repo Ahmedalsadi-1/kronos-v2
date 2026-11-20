@@ -334,6 +334,7 @@ declare global {
         ) => Promise<import("./browser-migration").BrowserMigrationResult>;
         importBrowserExtension: (guestId: number) => Promise<string | null>;
         browserSearchSuggestions: (query: string) => Promise<string[]>;
+        onBrowserDownloadsChanged: (callback: () => void) => () => void;
         browserSiteSettings: (
             input: import("./browser-site-settings").BrowserSiteSettingsCommand
         ) => Promise<import("./browser-site-settings").BrowserSiteSettings>;

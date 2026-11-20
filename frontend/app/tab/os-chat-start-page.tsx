@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import KronosLogo from "@/app/asset/logo.svg?url";
 import { BorderBeam } from "border-beam";
 import {
     ArrowUp,
@@ -23,7 +24,6 @@ import {
     Type,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import KronosLogo from "@/app/asset/logo.svg";
 import "./os-chat-start-motion.css";
 import "./os-chat-start-page.css";
 import { ChromeBackground, makeChromeVariation } from "./os-chat-start-visuals";
@@ -140,7 +140,7 @@ export function OSChatStartPage({
             <div className="os-chat-start-content">
                 <header>
                     <h1>
-                        <KronosLogo role="img" aria-label="KronOS" />
+                        <img src={KronosLogo} alt="KronOS" width={43} height={43} />
                         OS is awake
                     </h1>
                     <p>With an active memory that evolves with every action to understand you better.</p>

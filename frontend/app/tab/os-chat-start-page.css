@@ -37,9 +37,10 @@
     letter-spacing: -1.6px;
     line-height: 1.15;
 }
-.os-chat-start-content h1 svg {
+.os-chat-start-content h1 img {
     width: 43px;
     height: 43px;
+    flex-shrink: 0;
 }
 .os-chat-start-content header p {
     margin: 0 0 28px;

@@ -4,53 +4,48 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 const Root = fileURLToPath(new URL("../", import.meta.url));
-const Source = await readFile(path.join(Root, "assets/branding/kronos-mark.svg"), "utf8");
-const Light = "#141414";
-const Dark = "#faf9f6";
-const Body = Source.match(/<svg[^>]*>([\s\S]*)<\/svg>/)[1];
-const svg = (fill, content = Body, viewBox = "0 0 288 288", width = 48, height = 48) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" fill="${fill}">${content}</svg>\n`;
-const Themed = svg(
-  "currentColor",
-  `<style>svg:root{color:${Light}}@media(prefers-color-scheme:dark){svg:root{color:${Dark}}}</style>${Body}`
-);
+const Compact = await readFile(path.join(Root, "assets/branding/kronos-mark.svg"), "utf8");
+const Expanded = await readFile(path.join(Root, "assets/branding/kronos-expanded.svg"), "utf8");
+const fixedTheme = (source, mode) =>
+  source.replace(
+    /<style>[\s\S]*?<\/style>/,
+    () =>
+      `<style>[class$="-art-light"]{display:${mode === "light" ? "inline" : "none"}}[class$="-art-dark"]{display:${mode === "dark" ? "inline" : "none"}}</style>`
+  );
 const save = async (file, data) => {
   const target = path.join(Root, file);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, data);
 };
-
 for (const file of [
   "frontend/app/asset/logo.svg",
   "website/public/assets/kronos-logo.svg",
+  "website/public/assets/kronos-compact.svg",
   "website/public/assets/product/kronterm-icon.svg",
   "docs/static/img/logo/kronterm-icon.svg",
   "assets/onboarding/aside-demo/states/kronos-logo.svg",
-]) {
-  await save(file, Themed);
-}
-await save("assets/branding/kronos-mark-light.svg", svg(Light));
-await save("assets/branding/kronos-mark-dark.svg", svg(Dark));
-await save("docs/static/img/logo/kronterm-icon-dark.svg", svg(Dark));
-await save(
+])
+  await save(file, Compact);
+for (const file of [
+  "frontend/app/asset/logo-expanded.svg",
+  "website/public/assets/kronos-expanded.svg",
   "website/public/assets/product/kronterm-logo.svg",
-  svg(
-    "currentColor",
-    `<style>svg:root{color:${Light}}@media(prefers-color-scheme:dark){svg:root{color:${Dark}}}</style><g transform="translate(0 2) scale(.333333)">${Body}</g><text x="106" y="70" font-family="Arial,sans-serif" font-size="61" font-weight="600">KronOS</text>`,
-    "0 0 370 100",
-    370,
-    100
-  )
-);
+])
+  await save(file, Expanded);
+for (const mode of ["light", "dark"]) {
+  await save(`assets/branding/kronos-mark-${mode}.svg`, fixedTheme(Compact, mode));
+  await save(`assets/branding/kronos-expanded-${mode}.svg`, fixedTheme(Expanded, mode));
+}
+await save("docs/static/img/logo/kronterm-icon-dark.svg", fixedTheme(Compact, "dark"));
 
-// The neutral tile keeps the installed icon legible on either desktop appearance.
-const AppIcon = svg(
-  Light,
-  `<rect x="64" y="64" width="896" height="896" rx="200" fill="${Dark}"/><g transform="translate(144 144) scale(2.555556)">${Body}</g>`,
-  "0 0 1024 1024",
-  1024,
-  1024
-);
+// Native icon formats have no theme switch; use the supplied purple center mark.
+const AppIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">${fixedTheme(
+  Compact,
+  "light"
+)
+  .replace("<svg ", '<svg x="64" y="64" ')
+  .replace(/width="[^"]*"/, 'width="896"')
+  .replace(/height="[^"]*"/, 'height="896"')}</svg>`;
 await save("assets/branding/kronos-app-icon.svg", AppIcon);
 const png = async (size) => sharp(Buffer.from(AppIcon)).resize(size, size).png().toBuffer();
 for (const size of [16, 32, 48, 64, 128, 256, 512, 1024]) {
@@ -97,4 +92,4 @@ icnsHeader.writeUInt32BE(8 + icnsChunks.reduce((sum, chunk) => sum + chunk.lengt
 const Icns = Buffer.concat([icnsHeader, ...icnsChunks]);
 await save("build/kronos.icns", Icns);
 await save("build/icon.icns", Icns);
-console.log("Generated KronOS 04-E website, app, and packaged icons.");
+console.log("Generated responsive KronOS chrome marks and packaged center icons.");

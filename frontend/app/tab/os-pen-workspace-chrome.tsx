@@ -1,6 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import ExpandedLogo from "@/app/asset/logo-expanded.svg?url";
+import CompactLogo from "@/app/asset/logo.svg?url";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { BrowserPinnedPages } from "@/app/view/webview/browser-library-menu";
@@ -13,7 +15,6 @@ import {
     Globe,
     GripHorizontal,
     MessageCircle,
-    PanelLeft,
     PanelRight,
     Plus,
     Settings,
@@ -390,7 +391,13 @@ export function OSPenWorkspaceChrome({
                         aria-expanded={sidebarOpen}
                         onClick={toggleSidebar}
                     >
-                        <PanelLeft size={16} />
+                        <img
+                            src={sidebarOpen ? ExpandedLogo : CompactLogo}
+                            alt=""
+                            width={sidebarOpen ? 58 : 20}
+                            height={20}
+                            draggable={false}
+                        />
                     </button>,
                     slots.title
                 )}

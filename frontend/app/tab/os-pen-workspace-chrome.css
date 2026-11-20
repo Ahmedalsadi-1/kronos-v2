@@ -16,6 +16,13 @@
 [data-kronos-sidebar-toggle] button:hover {
     background: color-mix(in srgb, currentColor 10%, transparent);
 }
+[data-kronos-sidebar-toggle] button[aria-expanded="true"] {
+    width: 68px;
+}
+[data-kronos-sidebar-toggle] button:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+}
 [data-titlebar-left] {
     z-index: 20;
     flex-shrink: 0;

@@ -1,16 +1,19 @@
 # KronOS identity
 
-`kronos-mark.svg` is the vector master of the selected 04-E folded cube.
-Its three filled shapes preserve the top diamond and interrupted ribbon.
-Use `currentColor` for inline marks; the standalone light and dark variants
-are black and warm white, respectively. Do not add strokes or fill the gaps.
+`kronos-mark.svg` is the compact center mark. `kronos-expanded.svg` is the
+three-shape expanded mark supplied for KronOS. Both contain the light theme
+purple artwork and dark theme silver artwork. Keep these masters together.
+The standalone `*-light.svg` and `*-dark.svg` files force one appearance.
 
-Run `node scripts/generate-brand-assets.mjs` from the repository root after
-changing the master. This refreshes the website favicon and product marks,
-shared desktop and launcher mark, onboarding mark, docs marks used in the
-app, PNG sizes, Windows ICO, and macOS ICNS. The installed icon uses a
-warm white tile so it remains visible on light and dark desktops.
+The OS sidebar uses the expanded mark while its workspace panel is open and
+the center mark when collapsed. About uses the expanded mark; compact app
+surfaces use the center mark.
 
-Deploy the website and rebuild the installers to distribute the new branding.
-Existing installed applications and published downloads keep their previous
-icons until replaced by a new build.
+Run `node scripts/generate-brand-assets.mjs` after updating the masters. It
+refreshes desktop, onboarding, documentation, website, PNG, ICO, and ICNS
+assets. Native app icons use the supplied purple center mark with transparent
+padding. Both `mac.icon` and `dmg.icon` in `electron-builder.config.cjs` point
+to `build/kronos.icns`.
+
+Rebuild installers to distribute the changed app icon. Published downloads
+and existing installed applications retain their icon until replaced.

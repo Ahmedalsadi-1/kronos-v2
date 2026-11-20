@@ -20,8 +20,6 @@ export function KronOSReleasePreview() {
         Array.from({ length: 8 }, (_, index) => ({ id: `space-${index + 1}`, name: `Project ${index + 1}` }))
     );
     const [feedback, setFeedback] = useState("Production shell and diagnostics with simulated workspace actions.");
-    const [view, setView] = useState<"file" | "canvas">("canvas");
-    const [scene, setScene] = useState<"freeform" | "focused" | "overview">("focused");
     return (
         <SystemAppearanceContext.Provider value={appearance}>
             <div
@@ -38,14 +36,8 @@ export function KronOSReleasePreview() {
                         blocks={[]}
                         collapsedIds={[]}
                         showCollapsedDock={false}
-                        sceneKind={scene}
-                        activeBlockId={undefined}
-                        osView={view}
-                        onSetOSView={(next) => {
-                            setView(next);
-                            setFeedback(`Switched to ${next}`);
-                        }}
-                        onFocusApp={() => setScene("focused")}
+                        osView="kronos-v2"
+                        onFocusApp={() => setFeedback("Application focused")}
                         onWorkspace={setWorkspace}
                         onCreateWorkspace={() =>
                             setWorkspaces((current) => [
@@ -55,14 +47,7 @@ export function KronOSReleasePreview() {
                         }
                         onRestore={() => {}}
                         onPinResource={() => setFeedback("Resource pinned")}
-                        onOverview={() => {
-                            setScene("overview");
-                            setFeedback("Overview opened");
-                        }}
-                        onFreeform={() => {
-                            setScene("freeform");
-                            setFeedback("Freeform canvas opened");
-                        }}
+                        onShowApps={() => setFeedback("Application launcher requested")}
                     />
                     <main
                         className="kron-settings"

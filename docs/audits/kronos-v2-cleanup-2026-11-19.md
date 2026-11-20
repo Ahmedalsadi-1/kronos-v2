@@ -1,6 +1,6 @@
 # KronOS V2 unused-source cleanup
 
-Date: November 19, 2026 (America/New_York).
+Started November 19; final verification completed November 20, 2026 (America/New_York).
 
 ## Result
 
@@ -66,8 +66,31 @@ The first post-cleanup run found a real missed dependency: the bundled bots plug
 reference scan expanded to include embedded adapters rather than excluding every folder named
 `upstream`. The renderer build then found that the Artifacts UI, in a gitignored source directory, still
 uses the pagination component. That component was also restored; the reference scan now includes
-gitignored renderer/main source explicitly. The same run also hit timing failures under concurrent
-builds/checks. No failing test
-was removed or loosened. Final post-cleanup test, TypeScript and build results are recorded when
-verification completes.
+gitignored renderer/main source explicitly. The generic `artifacts/` ignore rule was also
+excluding the two bundled Artifacts source files from Git. A scoped exception now keeps those
+existing runtime source files in version control without unignoring generated output elsewhere. The same run also hit timing failures under concurrent
+builds/checks. No failing test was removed or loosened.
+
+## Post-cleanup verification
+
+- After the bot screen was restored, the full run with four workers collected **427 suites / 2,202 tests**.
+  **425 suites / 2,200 tests passed** in that run. One test timed out and a newly added test
+  from concurrent work initially failed. Both passed in an isolated one-worker rerun
+  with their assertions unchanged: **2 suites / 2 tests passed**. No test files were deleted.
+- The bundled bots plugin's focused upstream integration tests passed after its screen was restored.
+- The final reference check includes ignored renderer/main source and embedded app adapters:
+  **120 removed files, zero remaining module consumers**.
+- Read-only inspection of the running V2 app confirmed its workspace, composer, tabs and controls
+  still rendered. It did not exercise every product feature or restart the user's active workspace.
+- Main and preload bundling completed in the build attempt. The renderer build is repeated with
+  the original code plugins and settings, omitting only image recompression: no images were changed
+  by this cleanup. This is source/bundle verification, not a signed installer or release build.
+- `npm run check:ts -- --incremental --tsBuildInfoFile /tmp/kronos-cleanup-final.tsbuildinfo`
+  **passed (exit 0)**. It also exposed obsolete layout props in the existing release preview;
+  that preview now uses the V2 shell contract and its current launcher callback.
+- Renderer code bundling **passed (exit 0)** with **22,779 modules transformed**. The normal
+  renderer code plugins/settings were retained; unchanged image recompression was omitted.
+  Main/preload bundling had already completed in the full build attempt. No signed installer
+  or published release was produced.
+
 No Go production source, database migration, saved workspace data or published installer was changed.

@@ -1089,7 +1089,7 @@
     {
       "file": "frontend/hermes/components/ui/pagination.tsx",
       "decision": "keep",
-      "reason": "used by Artifacts UI source in a gitignored directory; actual Vite build consumer",
+      "reason": "used by the Artifacts UI; its source directory was previously gitignored and is now tracked with a scoped exception",
       "incoming": [
         "frontend/hermes/app/artifacts/index.tsx"
       ],

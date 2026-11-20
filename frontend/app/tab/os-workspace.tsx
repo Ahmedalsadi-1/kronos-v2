@@ -1,3 +1,4 @@
+import ExpandedLogo from "@/app/asset/logo-expanded.svg?url";
 import Logo from "@/app/asset/logo.svg?url";
 import { WorkspaceService } from "@/app/store/services";
 import { DesktopGrabControl } from "@/app/workspace/kronterm-hud-controls";
@@ -895,7 +896,11 @@ export function OSModeShell({
                         <SystemButton
                             type="button"
                             size="small"
-                            className="os-shell-icon os-sidebar-toggle"
+                            className={
+                                sidebarOpen
+                                    ? "os-shell-icon os-sidebar-toggle os-sidebar-toggle-expanded"
+                                    : "os-shell-icon os-sidebar-toggle"
+                            }
                             selected={sidebarOpen}
                             aria-label={sidebarOpen ? "Hide left workspace panel" : "Show left workspace panel"}
                             aria-expanded={sidebarOpen}
@@ -908,7 +913,12 @@ export function OSModeShell({
                                 }
                             }}
                         >
-                            <img src={Logo} alt="" className="size-5" draggable={false} />
+                            <img
+                                src={sidebarOpen ? ExpandedLogo : Logo}
+                                alt=""
+                                className={sidebarOpen ? "h-5 w-auto" : "size-5"}
+                                draggable={false}
+                            />
                         </SystemButton>
                         <nav
                             className="os-workspaces"

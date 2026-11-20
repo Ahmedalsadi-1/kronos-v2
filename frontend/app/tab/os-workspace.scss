@@ -5839,3 +5839,8 @@ kt-system-ui .os-shell {
         height: var(--os-floating-controls-height);
     }
 }
+
+.os-mode-root .os-shell .os-sidebar-toggle.os-sidebar-toggle-expanded {
+    flex-basis: 68px;
+    width: 68px;
+}

@@ -19,7 +19,6 @@ block/
 ├── surface-chrome.ts             # Surface chrome helpers
 ├── widget-focus-utils.ts         # Widget focus utilities
 ├── folded-store.ts               # Folded-widget store
-├── block-context-ribbon.tsx      # Block context ribbon
 └── durable-session-flyover.tsx   # Durable SSH session flyover
 ```
 

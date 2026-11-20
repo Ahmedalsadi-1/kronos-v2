@@ -21,8 +21,7 @@ onboarding/
 ├── onboarding-upgrade.tsx      # Upgrade orchestrator
 ├── onboarding-upgrade-minor.tsx  # Minor version upgrades
 ├── onboarding-upgrade-patch.tsx  # Patch version upgrades
-├── onboarding-upgrade-v0*.tsx  # Version-specific upgrades
-└── fakechat.tsx                # Simulated chat for demo
+└── onboarding-upgrade-v0*.tsx  # Version-specific upgrades
 ```
 
 ## PATTERNS
@@ -42,13 +41,6 @@ Onboarding is a sequence of steps:
 3. Durable sessions
 4. Command introduction
 5. Star/feedback request
-
-## FAKE CHAT
-
-`fakechat.tsx` simulates AI chat for onboarding demo:
-- Pre-scripted messages
-- Typing animation
-- No real AI calls
 
 ## ADDING STEP
 

@@ -1,5 +1,8 @@
 # Rich Composer Integration Notes
 
+> Historical: the composer and panel described below were retired in the KronOS V2
+> cleanup. Use `IMPROVED_CHAT_README.md` for the current source locations.
+
 The rich composer is already integrated into KronTerm. This file replaces the original pre-integration walkthrough,
 whose example payloads and component boundaries no longer matched the running product.
 

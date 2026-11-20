@@ -11,10 +11,9 @@ Implements the five workspace presentations: tiled `widgets`, browser-style `tab
 | File | Purpose |
 | ---- | ------- |
 | `widget-tabs-layout.tsx` | Tiled splits presentation (widgets mode) |
-| `workspace-canvas.tsx` | Spatial canvas presentation |
-| `tabbar.tsx`, `tabbar-model.ts` | Tab strip state and rendering |
+| `tabbar.tsx` | Tab strip state and rendering |
 | `tabcontent.tsx` | Renders the focused block in tabs mode |
-| `tabgroup.tsx` | Tab group / split pane rendering |
+| `os-tab-groups.ts` | OS tab group state and actions |
 | `os-workspace.tsx`, `os-workspace-model.ts` | Kronarchy OS-style workspace shell |
 | `tabs-agent-workspace.ts` | Agent workspace integration in tabs mode |
 | `folded-widgets-bar.tsx` | Bar for folded widgets |

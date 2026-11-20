@@ -1,0 +1,1959 @@
+{
+  "total": 222,
+  "removed": 120,
+  "retained": 102,
+  "method": "Checked current code including gitignored renderer/main source, declarations, tests, previews, scripts, native/integration consumers including embedded app upstream adapters and literal module paths. Protected Vite glob plugins, standalone Hermes entries and their dependencies. Removal set is closed: no remaining scanned file imports a removed module.",
+  "files": [
+    {
+      "file": "frontend/hermes/debug/dev-only.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/debug/index.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/debug/dev-only.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/debug/dev-only.noop.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/debug/atom-churn.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/debug/watched-atoms.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/debug/watched-atoms.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/debug/index.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/debug/render-counter.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "tsconfig.json"
+      ],
+      "incoming": [
+        "frontend/hermes/debug/index.ts",
+        "tsconfig.json"
+      ]
+    },
+    {
+      "file": "frontend/hermes/debug/right-pane-probe.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/debug/index.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/debug/perf-live.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/debug/index.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/store/active-work.ts",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/hermes/main.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/bot-sections/model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/hermes/bot-sections/model.test.ts"
+      ],
+      "incoming": [
+        "frontend/hermes/bot-sections/bot-sections.tsx",
+        "frontend/hermes/bot-sections/model.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/bot-sections/bot-sections.tsx",
+      "decision": "keep",
+      "reason": "used by the bundled bot plugin through its embedded JavaScript implementation",
+      "incoming": [
+        "frontend/hermes/plugins/bots/upstream/hermes-bot-mode.js"
+      ],
+      "references": [
+        "frontend/hermes/plugins/bots/upstream/hermes-bot-mode.js"
+      ]
+    },
+    {
+      "file": "frontend/hermes/main.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "emain/emain-events.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "emain/emain-window.ts",
+        "emain/emain.ts"
+      ],
+      "incoming": [
+        "emain/emain-window.ts",
+        "emain/emain.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/computer/upstream/computer-viewer.js",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/hermes/computer/computer-widget.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/computer/computer-widget.tsx"
+      ]
+    },
+    {
+      "file": "emain/plugins/plugin-consent-fingerprint.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes-shared/billing-payment-method.test-d.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/util/previewutil.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/preview/preview-model-drafts.test.ts",
+        "frontend/app/view/preview/preview-model.tsx",
+        "frontend/app/view/preview/preview-directory.tsx"
+      ],
+      "incoming": [
+        "frontend/app/view/preview/preview-model-drafts.test.ts",
+        "frontend/app/view/preview/preview-model.tsx",
+        "frontend/app/view/preview/preview-directory.tsx"
+      ]
+    },
+    {
+      "file": "frontend/util/historyutil.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/preview/preview-model.tsx"
+      ],
+      "incoming": [
+        "frontend/app/view/preview/preview-model.tsx"
+      ]
+    },
+    {
+      "file": "frontend/util/ijson.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/components/haptics-provider.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/hermes/main.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/types/native-task-groups.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/types/custom.d.ts"
+      ],
+      "incoming": [
+        "frontend/types/custom.d.ts",
+        "frontend/app/tab/os-native-task-groups.tsx"
+      ]
+    },
+    {
+      "file": "frontend/types/developer-memory.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/components/pet/use-pet-roam.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/components/pet/roam-geometry.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/hermes/components/pet/use-pet-roam.ts",
+        "frontend/hermes/components/pet/roam-behavior.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/components/pet/pet-bubble.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/hermes/app/pet-overlay/pet-overlay-app.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/app/pet-overlay/pet-overlay-app.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/components/pet/roam-behavior.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/hermes/components/pet/use-pet-roam.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/tapflow/plugin.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/plugins/kronterm-surfaces/plugin.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/layout/lib/nodeRefMap.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/lib/clipboard.ts",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/hermes/main.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "emain/browser/browser-sessions.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "emain/emain.ts",
+        "emain/browser/browser-sessions.test.ts",
+        "emain/browser/browser-tools-ipc.ts",
+        "emain/browser/browser-tools-ipc.test.ts"
+      ],
+      "incoming": [
+        "emain/emain.ts",
+        "emain/browser/browser-sessions.test.ts",
+        "emain/browser/browser-tools-ipc.ts",
+        "emain/browser/browser-tools-ipc.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/onboarding/fakechat.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/layout/tests/model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/layout/tests/layoutTree.test.ts"
+      ],
+      "incoming": [
+        "frontend/layout/tests/layoutTree.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/ui.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/orchestration.tsx",
+        "frontend/hermes/plugins/kanban/board.tsx",
+        "frontend/hermes/plugins/kanban/plugin.tsx",
+        "frontend/hermes/plugins/kanban/drawer.tsx",
+        "frontend/hermes/plugins/kanban/model-override.tsx",
+        "frontend/hermes/plugins/kanban/board-switcher.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/orchestration.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/board.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/board.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/plugin.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/types.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/ui.tsx",
+        "frontend/hermes/plugins/kanban/orchestration.tsx",
+        "frontend/hermes/plugins/kanban/board.tsx",
+        "frontend/hermes/plugins/kanban/api.ts",
+        "frontend/hermes/plugins/kanban/drawer.tsx",
+        "frontend/hermes/plugins/kanban/board-switcher.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/plugin.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/api.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/ui.tsx",
+        "frontend/hermes/plugins/kanban/orchestration.tsx",
+        "frontend/hermes/plugins/kanban/board.tsx",
+        "frontend/hermes/plugins/kanban/plugin.tsx",
+        "frontend/hermes/plugins/kanban/drawer.tsx",
+        "frontend/hermes/plugins/kanban/board-switcher.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/drawer.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/board.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/i18n.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/ui.tsx",
+        "frontend/hermes/plugins/kanban/plugin.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/model-override.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/board.tsx",
+        "frontend/hermes/plugins/kanban/drawer.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/kanban/board-switcher.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/plugins/kanban/board.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/block/block-context-ribbon.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/block/agent-action-button.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/block/folded-store.ts",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/app/tab/vtab-block-tree.tsx"
+      ],
+      "incoming": [
+        "frontend/app/tab/vtab-block-tree.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/components/chat/terminal-output.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/app/hud/surface-islands.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/hud-surfaces.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/hud-surfaces.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/example/plugin.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/block/widget-focus-utils.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/block/widget-focus-utils.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/block/widget-focus-utils.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/components/dock-nav.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/dock-nav.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/dock-nav.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/hello-runtime/plugin.runtime.js",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/app/pet-overlay/pet-overlay-app.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/app/pet-overlay/overlay-root.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/pet-overlay/overlay-root.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/productivity/model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/hermes/app/productivity/model.test.ts"
+      ],
+      "incoming": [
+        "frontend/hermes/app/productivity/model.test.ts",
+        "frontend/hermes/app/productivity/index.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/productivity/index.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/productivity.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/productivity.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/hooks/use-debounced.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/popover.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/element/emojipalette.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/element/linkbutton.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/safari.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/panes.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/pane-shell/pane-shell.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/attribution.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/status-dot.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/notifications.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/chat/zoomable-image.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/workflows/saved-workflow-editor.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/improved-chat-input.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/improved-aipanel-input.tsx",
+        "frontend/app/aipanel/acp-chat-panel.tsx",
+        "frontend/app/aipanel/improved-chat-input-integration.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/acp-chat-controls.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/aipanel/acp-chat-controls.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/aipanel/acp-chat-panel.tsx",
+        "frontend/app/aipanel/acp-chat-controls.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/aipanel-contextmenu.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanelheader.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/improved-aipanel-input.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/aifeedbackbuttons.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aimessage.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/acp-tool-approval.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/acp-chat-panel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/use-acp-session.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/aipanel/use-acp-session.test.ts",
+        "frontend/app/aipanel/acp-chat-controls.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/aipanel/acp-chat-controls.tsx",
+        "frontend/app/aipanel/ChatMessageListV2.tsx",
+        "frontend/app/aipanel/AcpPreviewPane.tsx",
+        "frontend/app/aipanel/acp-chat-panel.tsx",
+        "frontend/app/aipanel/use-acp-session.test.ts",
+        "frontend/app/aipanel/kronoscode-v2/utils/adapter.ts",
+        "frontend/app/aipanel/acp-chat-controls.test.ts",
+        "frontend/app/aipanel/kronos-chat-components.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/acp-agent-mark.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/app/aipanel/acp-chat-controls.tsx"
+      ],
+      "incoming": [
+        "frontend/app/aipanel/acp-chat-controls.tsx",
+        "frontend/app/aipanel/acp-chat-panel.tsx",
+        "frontend/app/aipanel/kronos-chat-components.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/aitooluse.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aimessage.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/ChatMessageListV2.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/acp-chat-panel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/AcpPreviewPane.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/aimessage.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanelmessages.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/siri-button.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanel.tsx",
+        "frontend/app/aipanel/aipanelheader.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronos-chat-hub.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/chat-cards.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronos-chat-components.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/aipanelmessages.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronos-chat-hub.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/telemetryrequired.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/acp-agent-selector.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/aidroppedfiles.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/acp-chat-panel.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/restorebackupmodal.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aitooluse.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/element/ansiline.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/modal.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/flickering-grid.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/chat/activity-timer.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/chat/activity-timer-text.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/chat/zoomable-image.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/progressbar.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/multilineinput.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/element/emojipalette.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/chat/diff-lines.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/chat/activity-timer-text.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/chat/disclosure-row.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/chat/image-generation-placeholder.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/use-resize-observer.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/chat/image-generation-placeholder.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/model-picker.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/prompt-overlays.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/shadcn/lib/utils.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/pane-shell/index.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/pane-shell/pane-shell.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/pane-shell/index.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/pane-shell/context.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/pane-shell/pane-shell.tsx",
+        "frontend/app/components/hermes-ui/pane-shell/index.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/quick-entry/quick-entry-app.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/app/quick-entry/quick-entry-root.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/quick-entry/quick-entry-root.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/hooks/useChatScrollManager.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/hooks/useProviderLogo.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageHeader.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/dialog.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/chat/zoomable-image.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/search-field.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/tool-icon.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/kbd.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/segmented-control.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/switch.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/disclosure-caret.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/components/hermes-ui/chat/disclosure-row.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/hermes-ui/ui/action-status.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/kronos-chat-components.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/acp-chat-panel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/agent-run-strip.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/improved-chat-input-integration.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/ui/ScrollableOverlay.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/ui/settings-primitives.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/settings-panel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/ui/input.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/ui/dropdown-menu.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/ui/button.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/shared-buttons.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/shared-buttons.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/components/ui/switch.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/ui/tooltip.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/components/ui/modern-stunning-sign-in.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/modern-stunning-sign-in.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/modern-stunning-sign-in.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/right-sidebar/review/churn-bar.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/sandbox/SandboxView.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/lib/desktop.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/lib/device.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/panel-tabs.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/settings-panel.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/aimode.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanelmessages.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/airatelimitstrip.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/components/ui/pagination.tsx",
+      "decision": "keep",
+      "reason": "used by Artifacts UI source in a gitignored directory; actual Vite build consumer",
+      "incoming": [
+        "frontend/hermes/app/artifacts/index.tsx"
+      ],
+      "references": [
+        "frontend/hermes/app/artifacts/index.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/native-browser-tools.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/workspace/agent-plan.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/os-connected-frame.preview.tsx",
+        "frontend/app/workspace/agent-plan-ui.test.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/os-connected-frame.preview.tsx",
+        "frontend/app/workspace/agent-plan-ui.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/web-mode.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/workspace/web-mode.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/workspace/web-mode.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/project-environment.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/workspace/project-environment.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/workspace/project-environment.test.ts",
+        "frontend/app/workspace/project-environment-launcher.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/agent-plan-model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/workspace/agent-plan.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/workspace/agent-plan.tsx",
+        "frontend/app/workspace/agent-plan.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/project-environment-launcher.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/app/tab/workspace-canvas-workflows.tsx",
+        "frontend/app/tab/widget-tabs-layout.tsx"
+      ],
+      "incoming": [
+        "frontend/app/tab/workspace-canvas-workflows.tsx",
+        "frontend/app/tab/widget-tabs-layout.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/ade-project-tree.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/app/workspace/native-file-workbench.tsx"
+      ],
+      "incoming": [
+        "frontend/app/workspace/native-file-workbench.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/workspace-tab-manager.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/tiled-widgets.preview.tsx",
+        "frontend/app/workspace/workspace-tab-manager.test.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/tiled-widgets.preview.tsx",
+        "frontend/app/workspace/workspace-tab-manager.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/native-file-workbench.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/ade.preview.tsx",
+        "frontend/app/workspace/native-file-workbench.test.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/ade.preview.tsx",
+        "frontend/app/workspace/native-file-workbench.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/workspace/ade-diagnostics.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/workspace/ade-diagnostics.test.tsx",
+        "frontend/app/workspace/native-file-workbench.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/workspace/ade-diagnostics.test.tsx",
+        "frontend/app/workspace/native-file-workbench.test.tsx",
+        "frontend/app/workspace/native-file-workbench.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/bots/upstream/hermes-bot-mode.js",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/hermes/plugins/bots/plugin.test.tsx",
+        "frontend/hermes/plugins/bots/upstream.test.ts",
+        "frontend/hermes/app/chat/sidebar/index.tsx",
+        "frontend/app/tab/os-pen-editor.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/plugins/bots/plugin.test.tsx",
+        "frontend/hermes/plugins/bots/plugin.tsx",
+        "frontend/hermes/plugins/bots/upstream.test.ts",
+        "frontend/hermes/app/chat/sidebar/index.tsx",
+        "frontend/app/tab/os-pen-editor.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/bots/project-rooms.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/hermes/plugins/bots/project-rooms.test.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/plugins/bots/plugin.tsx",
+        "frontend/hermes/plugins/bots/project-rooms.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/plugins/bots/plugin.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/hermes-bots.preview.tsx",
+        "frontend/hermes/plugins/bots/plugin.test.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/hermes-bots.preview.tsx",
+        "frontend/hermes/plugins/bots/plugin.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/aipanel.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/floating-island.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/aipanelheader.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/byokannouncement.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/aipanel.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/floating-island.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/app/wake-indicator/wake-indicator-root.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/wake-indicator/wake-indicator-app.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/hermes/app/wake-indicator/wake-indicator-root.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/types/sdk.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/ChatMessageListV2.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/MarkdownRenderer.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/messageRole.ts",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ReasoningPart.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/UserTextPart.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ProgressiveGroup.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ToolPart.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/JustificationBlock.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/AssistantTextPart.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/partUtils.ts",
+        "frontend/app/aipanel/kronoscode-v2/utils/adapter.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/types/scroll.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ReasoningPart.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/JustificationBlock.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/AssistantTextPart.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/treeview/treeview.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/treeview.preview.tsx",
+        "frontend/app/treeview/treeview.test.ts"
+      ],
+      "incoming": [
+        "frontend/preview/previews/treeview.preview.tsx",
+        "frontend/app/treeview/treeview.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/plugins/manifest/plugin-consent.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts"
+      ],
+      "incoming": [
+        "emain/plugins/plugin-consent-fingerprint.ts",
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/plugins/manifest/plugin-path-safety.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts",
+        "frontend/app/plugins/manifest/plugin-manifest.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/plugins/manifest/plugin-manifest-validation.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": [
+        "frontend/app/plugins/manifest/plugin-manifest.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/plugins/manifest/plugin-capabilities.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts",
+        "frontend/app/plugins/manifest/plugin-manifest.ts",
+        "frontend/app/plugins/manifest/plugin-manifest-validation.ts",
+        "frontend/app/plugins/manifest/plugin-consent.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/plugins/manifest/plugin-manifest.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts",
+        "frontend/app/plugins/openhuman-workflow/manifest.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/plugins/manifest/plugin-manifest.test.ts",
+        "frontend/app/plugins/manifest/plugin-consent.ts",
+        "frontend/app/plugins/openhuman-workflow/manifest.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/utils/agentColors.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageHeader.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/utils/adapter.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/ChatMessageListV2.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/utils/chat-utils.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/stores/kronosChamberSettingsStore.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/view/webview/browser-annotation-tray.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/view/action-marker.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/view/waterflow-overlay.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/appstream/appstream-visibility.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/view/appstream/appstream-visibility.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/view/linux-vms/desktop-screen.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/linux-vms/desktop-screen.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/view/linux-vms/desktop-screen.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/view/term/ijson.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/plugins/openhuman-workflow/renderer.tsx",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/plugins/openhuman-workflow/build.mjs",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/tab/vtab.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/vtab.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/tab/vtabbar.tsx",
+        "frontend/app/tab/vtab.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-presentation-switcher.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/pen-navigation-only.html",
+        "frontend/app/tab/workspace-presentation-switcher.test.ts"
+      ],
+      "incoming": [
+        "frontend/preview/pen-navigation-only.html",
+        "frontend/app/tab/workspace-presentation-switcher.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/os-native-task-groups.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/os-overview.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/os-overview.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/os-pen-properties.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/os-pen-panel.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/tab/os-pen-panel.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/widget-picker-popover.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/workspace/workspace-tab-manager.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/tab/widget-tabs-layout.tsx",
+        "frontend/app/workspace/workspace-tab-manager.test.tsx",
+        "frontend/app/workspace/workspace-tab-manager.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas-workflows.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/canvas-workflows.preview.tsx",
+        "frontend/app/tab/workspace-canvas-workflows.test.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/canvas-workflows.preview.tsx",
+        "frontend/app/tab/workspace-canvas-workflows.test.tsx",
+        "frontend/app/tab/workspace-canvas.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas-drift.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/workspace-canvas-drift.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/workspace-canvas-drift.test.ts",
+        "frontend/app/tab/workspace-canvas.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/widget-sidebar-model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/widget-sidebar-model.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/widget-tabs-layout.tsx",
+        "frontend/app/tab/widget-sidebar-model.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas-task-graph.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/workspace-canvas-task-graph.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/workspace-canvas-task-graph.test.ts",
+        "frontend/app/tab/workspace-canvas.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas-workflow-model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "emain/canvas-workflow-contract.test.ts",
+        "frontend/app/tab/workspace-canvas-workflow-model.test.ts"
+      ],
+      "incoming": [
+        "emain/canvas-workflow-contract.test.ts",
+        "frontend/app/tab/workspace-canvas-workflows.tsx",
+        "frontend/app/tab/workspace-canvas-workflow-model.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/tabgroup.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/tab/widget-tabs-layout-utils.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/widget-tabs-layout.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/widget-tabs-layout.tsx",
+        "frontend/app/tab/widget-tabs-layout.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/vtabbarenv.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/vtabbar.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/vtabbar.preview.tsx",
+        "frontend/app/tab/vtabbar.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/os-pen-widget-layout.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/os-pen-widget-layout.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/os-pen-widget-layout.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/vtabbar.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/vtabbar.preview.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/vtabbar.preview.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/tabbar-model.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas-frame.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/workspace-canvas-frame.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/workspace-canvas-frame.test.ts",
+        "frontend/app/tab/workspace-canvas.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/vtab-block-tree.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/app/tab/vtabbar.tsx"
+      ],
+      "incoming": [
+        "frontend/app/tab/vtabbar.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/pen-chat-navigation-model.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/pen-chat-navigation-model.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/pen-chat-navigation-model.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/widget-tabs-layout.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/preview/previews/workspace-tabs.preview.tsx",
+        "frontend/preview/previews/workspace-tabs.preview.test.tsx",
+        "frontend/app/tab/widget-tabs-pane.test.tsx",
+        "frontend/app/tab/widget-tabs-layout.render.test.tsx"
+      ],
+      "incoming": [
+        "frontend/preview/previews/workspace-tabs.preview.tsx",
+        "frontend/preview/previews/workspace-tabs.preview.test.tsx",
+        "frontend/app/tab/widget-tabs-pane.test.tsx",
+        "frontend/app/tab/widget-tabs-layout.render.test.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/settings/billing/fixtures.test-util.ts",
+      "decision": "keep",
+      "reason": "runtime/plugin/standalone entry or test support; keep conservatively",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/view/hermes/mochi/mochi-canvas.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/view/hermes/mochi/bot-engine.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/hermes/mochi/bot-engine.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/view/hermes/mochi/mochi-canvas.tsx",
+        "frontend/app/view/hermes/mochi/bot-engine.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas-lineage.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/tab/workspace-canvas-lineage.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/tab/workspace-canvas-lineage.test.ts",
+        "frontend/app/tab/workspace-canvas.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/tab/workspace-canvas.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/ChatMessageListV2.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/MarkdownRenderer.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/AcpPreviewPane.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/AssistantTextPart.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/view/kronoscanvas/index.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/hermes/app/chat/perf-probe.tsx",
+      "decision": "keep",
+      "reason": "dependency of a retained candidate",
+      "references": [
+        "frontend/hermes/main.tsx"
+      ],
+      "incoming": [
+        "frontend/hermes/main.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/FadeInOnReveal.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/MarkdownRenderer.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ProgressiveGroup.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageHeader.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageHeader.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/InsertIntoCanvasButton.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/types.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/UserTextPart.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/AssistantTextPart.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/partUtils.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/messageRole.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/ChatMessage.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/view/kronoscanvas/canvas-cowork/canvas-attachments.ts",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/kronoscanvas/canvas-cowork/canvas-attachments.test.ts"
+      ],
+      "incoming": [
+        "frontend/app/view/kronoscanvas/canvas-cowork/canvas-attachments.test.ts"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/chat/short-session-hang-repro.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/AssistantTextPart.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/JustificationBlock.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ProgressiveGroup.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ToolPart.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ProgressiveGroup.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ScrollableOverlay.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ReasoningPart.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ReasoningPart.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ProgressiveGroup.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/JustificationBlock.tsx",
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/AssistantTextPart.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/UserTextPart.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx"
+      ]
+    },
+    {
+      "file": "frontend/app/aipanel/kronoscode-v2/components/chat/message/parts/ProgressiveGroup.tsx",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": [
+        "frontend/app/aipanel/kronoscode-v2/components/chat/message/MessageBody.tsx"
+      ]
+    },
+    {
+      "file": "frontend/hermes/app/chat/right-rail/index.ts",
+      "decision": "remove",
+      "reason": "closed unused source group; no imports or literal-path consumers outside removal set",
+      "incoming": []
+    },
+    {
+      "file": "frontend/app/view/medialibrary/media-library.tsx",
+      "decision": "keep",
+      "reason": "referenced outside the candidate set",
+      "references": [
+        "frontend/app/view/videostudio/video-studio.test.tsx"
+      ],
+      "incoming": [
+        "frontend/app/view/videostudio/video-studio.test.tsx"
+      ]
+    }
+  ]
+}

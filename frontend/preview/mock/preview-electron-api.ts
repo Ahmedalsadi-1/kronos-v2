@@ -227,8 +227,8 @@ const previewElectronApi: ElectronApi = {
     selectDirectory: () => Promise.resolve("/Users/albsheralsadi/kronterm"),
     selectFiles: () =>
         Promise.resolve([
-            "/Users/albsheralsadi/kronterm/frontend/app/aipanel/acp-chat-panel.tsx",
-            "/Users/albsheralsadi/kronterm/frontend/app/aipanel/use-acp-session.ts",
+            "/Users/albsheralsadi/kronterm/frontend/app/view/hermes/hermes-app.tsx",
+            "/Users/albsheralsadi/kronterm/frontend/hermes/app/chat/index.tsx",
         ]),
     getPathForFile: () => "",
     selectWallpaper: () => Promise.resolve(null),

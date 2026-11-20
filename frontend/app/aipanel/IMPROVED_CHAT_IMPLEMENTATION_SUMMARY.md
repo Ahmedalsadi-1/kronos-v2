@@ -1,5 +1,8 @@
 # Rich Composer Implementation Summary
 
+> Historical: the composer and panel described below were retired in the KronOS V2
+> cleanup. Use `IMPROVED_CHAT_README.md` for the current source locations.
+
 The original rich-input experiment is now part of a larger KronTerm AI system. The current implementation spans the
 compatibility AI panel, ACP sessions, Hermes, structured KronosCode message rendering, workspace context, agent
 activity overlays, approvals, artifacts, and experimental voice input.

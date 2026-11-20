@@ -15,6 +15,9 @@ bin/
 out/
 make/
 artifacts/
+# The bundled Artifacts screen is source code, not generated output.
+!/frontend/hermes/app/artifacts/
+!/frontend/hermes/app/artifacts/**
 mikework/
 aiplans/
 manifests/

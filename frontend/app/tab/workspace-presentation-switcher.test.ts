@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { UserFacingPresentations } from "./workspace-presentation-switcher";
 
 describe("workspace presentation switcher", () => {
-    it("offers every supported workspace presentation", () => {
-        expect(UserFacingPresentations).toEqual(["os", "canvas", "widgets", "tabs", "web"]);
+    it("offers the active V2 presentation without exposing migrated legacy layouts", () => {
+        expect(UserFacingPresentations).toEqual(["os"]);
     });
 });

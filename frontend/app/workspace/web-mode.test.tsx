@@ -54,7 +54,7 @@ describe("Hermes web mode surface", () => {
         expect(markup).toContain("Retry");
     });
 
-    it("uses the managed gateway and lets Hermes consume Escape before returning to the previous layout", async () => {
+    it("uses the managed gateway and lets Hermes consume Escape before returning to V2", async () => {
         vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
         vi.useFakeTimers();
         const element = document.createElement("div");
@@ -73,7 +73,7 @@ describe("Hermes web mode surface", () => {
             window.addEventListener("keydown", consumeEscape, { once: true });
             window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
             await vi.runAllTimersAsync();
-            expect(readWorkspacePresentation()).toBe("tabs");
+            expect(readWorkspacePresentation()).toBe("os");
             expect(mocks.setConfig).not.toHaveBeenCalled();
 
             window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));

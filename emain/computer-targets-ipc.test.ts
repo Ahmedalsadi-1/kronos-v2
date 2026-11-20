@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { registerComputerTargetsIpc } from "./computer-targets-ipc";
 
 const mocks = vi.hoisted(() => ({ handle: vi.fn(), trusted: vi.fn(), hudTrusted: vi.fn(), list: vi.fn() }));
-vi.mock("electron", () => ({ ipcMain: { handle: mocks.handle }, app: { on: vi.fn() } }));
+vi.mock("electron", () => ({ ipcMain: { handle: mocks.handle }, app: { on: vi.fn(), once: vi.fn() } }));
+vi.mock("./device-simulator/android/android-preview-server", () => ({
+    startAndroidPreviewServer: () => ({ server: { on: vi.fn() }, close: vi.fn() }),
+}));
 vi.mock("./emain-hud", () => ({ isTrustedNativeHudSender: mocks.hudTrusted }));
 vi.mock("./emain-tabview", () => ({ getWaveTabViewByWebContentsId: mocks.trusted }));
 vi.mock("./computer-targets-runtime", () => ({

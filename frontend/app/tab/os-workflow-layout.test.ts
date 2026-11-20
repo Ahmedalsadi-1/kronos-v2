@@ -25,7 +25,7 @@ it("keeps the workflow canvas freeform after widget selection and workspace rest
     const { activateOSWorkflowCanvas } = await import("./os-workflow-layout");
     const { makeInitialOSModeState } = await import("./os-workspace-model");
     const { selectOSSceneEntity } = await import("./os-scene-order");
-    const initial = makeInitialOSModeState({ meta: {} } as Tab, ["files"]);
+    const initial = { ...makeInitialOSModeState({ meta: {} } as Tab, ["files"]), view: "canvas" as const };
     const activated = activateOSWorkflowCanvas(initial);
     const focusedWidget = selectOSSceneEntity(activated, "files");
     const restored = makeInitialOSModeState({ meta: { "layout:os": focusedWidget } } as unknown as Tab, ["files"]);

@@ -6,7 +6,7 @@ import { setActiveTab } from "@/store/global";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { WorkspacePresentation } from "./workspace-presentation";
+import { WorkspacePresentations, type WorkspacePresentation } from "./workspace-presentation";
 import "./workspace-presentation-switcher.scss";
 
 const PresentationDetails: Record<WorkspacePresentation, { icon: string; label: string; description: string }> = {
@@ -17,7 +17,7 @@ const PresentationDetails: Record<WorkspacePresentation, { icon: string; label: 
     web: { icon: "fa-globe", label: "Web", description: "Full-screen web surface" },
 };
 
-const UserFacingPresentations = ["os", "widgets", "tabs"] as const satisfies readonly WorkspacePresentation[];
+const UserFacingPresentations = WorkspacePresentations;
 
 const SidePanelDetails: Record<SidePanelMode, { icon: string; label: string; description: string }> = {
     full: { icon: "fa-table-columns", label: "Full sidebar", description: "Names, workspace tree, and controls" },

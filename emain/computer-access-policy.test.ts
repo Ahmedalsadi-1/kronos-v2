@@ -97,9 +97,10 @@ it("advertises workspace and VM tools together only for an explicit Hybrid grant
             "n8n_edit_workflow",
             "sandbox_vm_exec",
             "sandbox_vm_desktop",
+            "device_control",
         ])
             expect(isToolAllowedBySurfaceCapability(name, capability as any)).toBe(true);
-        for (const name of ["kron_computer_click", "device_control", "linux_desktop_exec"])
+        for (const name of ["kron_computer_click", "linux_desktop_exec"])
             expect(isToolAllowedBySurfaceCapability(name, capability as any)).toBe(false);
         expect(
             isToolAllowedBySurfaceCapability("terminal_run", { ...capability, delegationScope: "sandbox" } as any)

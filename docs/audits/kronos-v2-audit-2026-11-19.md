@@ -119,10 +119,14 @@ invalidate updates while a read is pending, reconcile after reconnect, and dispo
 - Live V2 app inspection confirmed the compact silver mark. The app was actively being used, so
   expanded interaction was not forced while other activity was ongoing.
 - `npm run check:ts` passed (exit 0).
-- Development main, preload and renderer builds completed; renderer transformed 22,770 modules.
+- `npm run build:dev` passed (exit 0); renderer transformed 22,770 modules.
   Vite reported existing browser-externalized Electron imports and mixed static/dynamic imports.
-  The build was run against a live shared checkout; subsequent Electron/preload wiring was
-  covered by the focused browser tests and requires a restart to exercise in the running app.
+  After the final browser wiring change, an additional main/preload build passed (exit 0) using
+  the same Electron Vite settings with the renderer omitted. The new IPC/preload requires
+  an application restart to exercise in the running desktop.
+- Additional edits from concurrent work appeared after the initial checkpoint. They were left
+  outside the audit commits, including a partial staging of only this audit's private-partition
+  registration in `emain.ts`. The shared working tree is not claimed to be clean.
 - No Go production code was changed; no `go build` was run. Backend network/service integration,
   signed installer creation, DMG installation and published release replacement were not performed.
 

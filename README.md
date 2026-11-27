@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://ahmedalsadi-1.github.io/kronos-releases/">
-    <img alt="KronOS icon" src="./website/public/assets/product/kronterm-cat-mark.png" width="96">
+    <img alt="KronOS icon" src="./website/public/assets/kronos-compact.svg" width="96">
   </a>
 </p>
 
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img alt="KronOS workspace with terminal, browser, files, and KronOS Agent" src="./website/public/assets/product/kronterm-homepage.png" width="95%">
+  <img alt="KronOS development build with expanded workspace navigation and agent composer" src="./assets/readme/workspace.png" width="95%">
 </p>
 
 KronOS is a persistent desktop workspace for your apps, agents, and models. Keep terminals, browser pages,
@@ -102,6 +102,55 @@ unless the release notes explicitly include them.
 The repository also contains creative studios, productivity surfaces, desktop pets, and device-session integrations.
 Registration in source is not evidence that a surface is ready for release. The
 [feature reference](./docs/motion-designer/FEATURES.md) records development status and visual examples.
+
+## See the workspace
+
+These screenshots and the recording show the November 2026 development build. Device control and creative integrations
+require their configured local runtimes; the iPhone work remains Labs.
+
+### Chat beside your work
+
+Keep the agent conversation beside a browser or workspace start page. Expanded navigation brings conversations,
+artifacts, tasks, projects, documents, and planning surfaces into the same frame.
+
+![KronOS Agent beside the workspace start page, with app shortcuts and browser suggestions](./assets/readme/chat-and-browser.png)
+
+### Live surfaces on the canvas
+
+Arrange browser pages, device views, and editable designs on a shared canvas. The layer tree provides another way to
+find and select content while the agent composer stays within reach.
+
+![Spatial canvas with a layer tree, browser surfaces, an Android view, and an editable interface design](./assets/readme/canvas.png)
+
+### From a conversation to an editable design
+
+The recording shows an agent-created social interface mockup in the Designer, with tool activity and the resulting
+editable canvas in view. The sample is a visual design, with no live social-network connection.
+
+[![Watch the agent design walkthrough](./assets/readme/agent-design.png)](./assets/readme/agent-design-demo.mp4)
+
+[Watch the 34-second design walkthrough](./assets/readme/agent-design-demo.mp4).
+
+### Inspect a 3D scene
+
+The Blend surface places a scene viewport, object hierarchy, and transform and lighting controls inside the workspace.
+This capture shows a simple cube scene in the development integration.
+
+![Blend scene viewport with a cube, scene tree, and light properties](./assets/readme/blend.png)
+
+### Keep a computer and browser together
+
+View a configured Linux desktop beside an embedded browser. The visible **Take over** control provides a handoff point
+for the computer session.
+
+![Linux computer viewer beside an embedded browser in a split workspace](./assets/readme/computer-and-browser.png)
+
+### Inspect mobile devices beside the agent
+
+Android emulator and iPhone Simulator views can sit beside the conversation. These are developer device-control
+surfaces; the screenshot does not establish availability of a released mobile client.
+
+![Android emulator and iPhone Simulator displayed beside KronOS Agent](./assets/readme/devices.png)
 
 ## Develop from source
 

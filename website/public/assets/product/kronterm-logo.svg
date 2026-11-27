@@ -1,11 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="450" height="100" viewBox="0 0 450 100">
-
-    <g transform="translate(4 8) scale(1.75)" class="kronterm-cube" stroke="#d8dfe8" stroke-width="1.65" stroke-linejoin="round">
-        <path d="M5.5 13.4 24 24.1v21.3L5.5 34.7Z" fill="#1b1f26"/>
-        <path d="M24 24.1 42.5 13.4v21.3L24 45.4Z" fill="#242a32"/>
-        <path d="M24 2.7 42.5 13.4 24 24.1 5.5 13.4Z" fill="#30353d"/>
-        <path d="M24 7.4 34.2 13.3 24 19.2 13.8 13.3Zm0 2.8-5.4 3.1 5.4 3.1 5.4-3.1Z"
-              fill="#abb6c4" fill-rule="evenodd" stroke="none"/>
-    </g>
-    <text x="99" y="70" font-family="Arial, sans-serif" font-size="61" font-weight="600" fill="#f1f4f8">KronTerm</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 240"><style>.orbit-wordmark{fill:#19181b}@media(prefers-color-scheme:dark){.orbit-wordmark{fill:#f1e5d5}}</style><g class="orbit-wordmark"><g transform="translate(-60 -100)"><path d="M186 155 C215 192 211 209 180 219 C219 218 232 236 275 277 C252 240 250 225 288 218 C248 215 231 215 186 155Z"/><path d="M116 238 C146 209 231 155 263 155 C287 154 256 183 247 190 C260 172 260 166 248 169 C214 178 149 219 125 240 C102 261 132 251 153 246 C123 261 91 263 116 238Z"/></g><text x="238" y="152" font-family="Arial,Helvetica,sans-serif" font-size="92" font-weight="600" letter-spacing="-4">KronOS</text></g></svg>

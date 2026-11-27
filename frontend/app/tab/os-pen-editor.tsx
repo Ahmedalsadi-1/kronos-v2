@@ -1,6 +1,10 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import OrbitLightAnimation from "@/app/asset/orbit-logo-animation-light.mp4";
+import OrbitDarkAnimation from "@/app/asset/orbit-logo-animation.mp4";
+import OrbitDarkLogo from "@/app/asset/orbit-logo-dark.png";
+import OrbitLightLogo from "@/app/asset/orbit-logo.png";
 import { useSystemAppearance } from "@/app/components/system-ui";
 import { SystemCenterOpenEvent } from "@/app/workspace/command-center-events";
 import { usePenPaletteCommands, type PenCanvasCommand } from "@/app/workspace/kronterm-pen-palette";
@@ -26,7 +30,7 @@ import type { ChatMessage } from "@hermes/lib/chat-messages";
 import { $activeSessionId, $connection, $currentCwd, $messagingSessions, $sessions } from "@hermes/store/session";
 import { $subagentsBySession } from "@hermes/store/subagents";
 import { $sessionStates, sessionTileDelegate } from "@hermes/store/session-states";
-import { Download, LoaderCircle, RotateCcw } from "lucide-react";
+import { Download, RotateCcw } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { preparePenAgentPrompt } from "./os-pen-agent-prompt";
 import { KronOSV2AgentFollowPauseEvent } from "./os-kronos-v2-agent-pointer-event";
@@ -1099,12 +1103,29 @@ export function OSPenEditor({
             {status !== "ready" && (
                 <div className="os-pen-editor-startup" role="status">
                     {status === "loading" ? (
-                        <LoaderCircle className="os-pen-editor-spinner" size={24} />
+                        <div className="os-pen-editor-loading-logo" data-color-scheme={appearance.colorScheme}>
+                            {appearance.reducedMotion ? (
+                                <img src={appearance.colorScheme === "light" ? OrbitDarkLogo : OrbitLightLogo} alt="" />
+                            ) : (
+                                <video
+                                    src={appearance.colorScheme === "light" ? OrbitLightAnimation : OrbitDarkAnimation}
+                                    poster={appearance.colorScheme === "light" ? OrbitDarkLogo : OrbitLightLogo}
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                    aria-hidden="true"
+                                />
+                            )}
+                            <span className="sr-only">Opening your canvas</span>
+                        </div>
                     ) : (
-                        <RotateCcw size={24} />
+                        <>
+                            <RotateCcw size={24} />
+                            <h2>Canvas needs attention</h2>
+                            <p>{error}</p>
+                        </>
                     )}
-                    <h2>{status === "loading" ? "Opening your canvas" : "Canvas needs attention"}</h2>
-                    <p>{status === "loading" ? "Loading your layers and design tools." : error}</p>
                     {status === "error" && (
                         <button type="button" onClick={() => setAttempt((value) => value + 1)}>
                             Retry canvas

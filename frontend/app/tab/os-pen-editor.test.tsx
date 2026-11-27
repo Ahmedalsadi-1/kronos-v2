@@ -643,3 +643,38 @@ it("routes Pen composer controls and closes the shared inspector", async () => {
         host.remove();
     }
 });
+
+it("uses theme-aware orbital motion for canvas loading and a still mark for reduced motion", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+        Appearance.reducedMotion = false;
+        Appearance.colorScheme = "dark";
+        await act(async () => root.render(<OSPenEditor tabId="orbit-loading" visible />));
+        const video = host.querySelector(".os-pen-editor-loading-logo video") as HTMLVideoElement;
+        expect(video).not.toBeNull();
+        expect(video.getAttribute("src")).toContain("orbit-logo-animation.mp4");
+        expect(video.autoplay).toBe(true);
+        expect(video.loop).toBe(true);
+        expect(video.muted).toBe(true);
+        expect(host.querySelector(".os-pen-editor-startup h2")).toBeNull();
+        expect(host.querySelector(".sr-only")?.textContent).toBe("Opening your canvas");
+
+        Appearance.colorScheme = "light";
+        await act(async () => root.render(<OSPenEditor tabId="orbit-loading" visible />));
+        expect(host.querySelector("video")?.getAttribute("src")).toContain("orbit-logo-animation-light.mp4");
+
+        Appearance.reducedMotion = true;
+        await act(async () => root.render(<OSPenEditor tabId="orbit-loading" visible />));
+        expect(host.querySelector(".os-pen-editor-loading-logo video")).toBeNull();
+        expect(host.querySelector(".os-pen-editor-loading-logo img")?.getAttribute("src")).toContain(
+            "orbit-logo-dark.png"
+        );
+    } finally {
+        Appearance.colorScheme = "dark";
+        Appearance.reducedMotion = true;
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});

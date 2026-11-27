@@ -1,10 +1,17 @@
 <p align="center">
   <a href="https://ahmedalsadi-1.github.io/kronos-releases/">
-    <img alt="KronOS icon" src="./website/public/assets/kronos-compact.svg" width="96">
+    <img alt="KronOS icon" src="./assets/brand/favicon.svg" width="96">
   </a>
 </p>
 
 <h1 align="center">KronOS</h1>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/brand/logo-animation.gif">
+    <img src="./assets/brand/logo-animation-light.gif" alt="KronOS orbital star animation" width="180">
+  </picture>
+</p>
 
 <p align="center">
   <strong>A living workspace for human + agent development.</strong><br>
